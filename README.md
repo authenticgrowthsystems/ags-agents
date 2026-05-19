@@ -1,46 +1,63 @@
 # AGS Agents
 
-**Authentic Growth Systems - Agent Factory**
+**Authentic Growth Systems - Documentation hub + n8n workflow version control + lightweight CLI utilities**
 
-Build in public. Real-time. Zero stock photos, zero "we did this 6 months ago" - everything you see here was built today, this week, this month.
+This repo is the source of truth for AGS agent infrastructure. The agents themselves run on Mikrus ivy147 (n8n self-hosted) and Anthropic Console workspaces. This repo holds:
 
----
+- **Brand canons** (AGS, TNM, RDC, Personal) - the voice + positioning every agent must respect
+- **Versioned system prompts** for each agent (audit trail for what changed when)
+- **n8n workflow JSON exports** (version control for production workflows)
+- **Anti-pattern library** (lessons learned, screened against during agent generation)
+- **Build log** (chronological session notes, decisions, problems hit)
+- **Lightweight TS utilities** for CLI tasks (brand screening, content drafting, prompt versioning)
 
-## What is this?
-
-This repo is where AGS (Authentic Growth Systems) builds AI agents for solo founders. The goal: prove that a one-person operation can run a multi-agent system that handles content publishing, lead capture, voice conversations, and more.
-
-Agents currently in build:
-
-- **Manager Agent** - orchestrator + brand canon enforcement + decision support
-- **X Agent** - autonomous X/Twitter content engine with Telegram HITL approval
-- **LinkedIn Agent** - multi-brand content + comment monitoring + DM triage (PL/EN routing)
-- **IG Agent** - planned, Phase 3
-- **FB Agent** - planned, Phase 3
-
-Voice Agent (Paweł) for Royal Dance Center lives separately in GHL - that's documented in the parent AGS workspace.
+What this repo is NOT: a runtime for autonomous agents. The runtime is n8n + AA agent hierarchy.
 
 ---
 
-## Why build in public?
+## Agent hierarchy
 
-Two reasons:
+```
+Tomasz Nawrocki (decision maker)
+  ↓
+MANAGER AGS (Cowork mode - strategist + brand enforcer + brake on heavy decisions)
+  ↓
+AA - 00 - AGS Core (operational - n8n / GHL / Notion infra builds)
+  ↓ ↓
+AA X Agent Builder      AA TNM Builder         AA Voice Agent Builder
+(X workflows in n8n)    (TNM site + content)   (Pawel RDC voice agent)
+```
 
-1. **Proof.** AGS sells AI agent implementation services. If I cannot run agents for my own business, what proof do I have for clients? This repo is the proof.
-
-2. **Content engine.** Every build session generates posts, videos, decisions, lessons learned. Build in public turns the system-building work into marketing reach. No separate content production overhead.
+Each AA agent operates in its own scope. MANAGER AGS coordinates + enforces brand canon. This repo is the shared library they all read from.
 
 ---
 
-## Stack
+## Build in public
 
-- **Runtime:** Node.js 22 LTS + TypeScript 5.x
+Every significant build session generates content (X post + LinkedIn post + article excerpt). The infrastructure here IS the product demo for AGS Voice AI Builder + future agent productization. Build in public = sales proof.
+
+Live tracker: [Notion AGS Build in Public Tracker - TBD link]
+
+---
+
+## Stack (production)
+
+- **Runtime:** n8n self-hosted on Mikrus ivy147 (https://ivy147-20147.mikrus.cloud)
+- **Database:** PostgreSQL (containerized alongside n8n)
+- **Auto-update:** Watchtower (Docker)
+- **Monitoring:** Uptime Kuma (http://ivy147.mikrus.xyz:30147) + Telegram alerts
+- **LLM:** Anthropic Claude (Haiku 4.5 default, Sonnet for complex tasks) - workspace "AGS", auto-reload $10/$2/$30 cap
+- **Telegram bot:** @ags_alerts_bot (Chat ID 2106351328) for alerts + HITL approvals
+- **Backups:** Backblaze B2 cloud (rclone v1.74.1) - currently BLOCKED on SSL cert ticket
+- **CRM:** GHL (shared sub-account AGS + RDC)
+- **Payments:** GHL Payments → Stripe (under Royal Dance Company, temporary until US AGS entity)
+
+## Stack (this repo)
+
+- **Language:** TypeScript 5.x (for utilities only)
+- **Runtime:** Node.js 22 LTS
 - **Package manager:** pnpm (monorepo workspaces)
-- **LLM:** Anthropic Claude (Sonnet 4.6 for reasoning, Haiku 4.5 for high-volume)
-- **Orchestration:** n8n self-hosted (v2.5+)
-- **HITL approval:** Telegram bots per agent
-- **Platforms:** X API v2, LinkedIn (via Closely), Meta Graph API
-- **Memory:** JSON files in repo + Notion mirror for human-readable view
+- **Used for:** CLI tools, parsers, screening utilities - NOT full agent runtimes
 
 ---
 
@@ -48,56 +65,48 @@ Two reasons:
 
 ```
 ags-agents/
-├── packages/              monorepo per agent
-│   ├── manager/           Agent Factory orchestrator
-│   ├── x-agent/           X / Twitter publishing agent
-│   ├── linkedin-agent/    LinkedIn content + comment + DM agent
-│   └── shared/            shared types, utilities, brand canon loaders
-├── prompts/               versioned prompt files per agent (v1.0 → v2.0 etc.)
-├── brand-canon/           source of truth for each brand (AGS, TNM, RDC, Personal)
-├── memory/                per-agent persistent memory (JSON + learnings.md)
-├── anti-patterns/         lessons learned library across all agents
-├── skills/                custom Anthropic Skills per agent
-├── mcps/                  custom MCP servers if needed (e.g., Closely wrapper)
-├── scripts/               one-off scripts (migrations, exports, backups)
-├── n8n-workflows/         exported n8n JSON workflows for version control
-└── CLAUDE.md              root Cowork mode context
+├── brand-canon/           # Source of truth: AGS, TNM, RDC, Personal voice canons
+├── prompts/               # Versioned system prompts per agent (v1.0 → v2.0)
+├── n8n-workflows/         # JSON exports of production workflows (version control)
+├── anti-patterns/         # Lessons learned across all agents
+├── memory/                # Build log + per-agent persistent state
+├── skills/                # Custom Anthropic Skills (if we build any)
+├── mcps/                  # Custom MCP servers (if we build any)
+├── scripts/               # One-off scripts (workflow export automation, migrations)
+├── packages/
+│   ├── manager/           # Lightweight CLI utilities for MANAGER AGS
+│   └── shared/            # Shared parsers / validators
+└── CLAUDE.md              # Cowork mode context for this repo
 ```
 
 ---
 
-## Status
+## Status (19/05/2026)
 
-| Component | Status | Phase |
-|-----------|--------|-------|
-| Repo scaffold | DONE | Phase 0 |
-| Brand canon centralized | DONE | Phase 0 |
-| Anti-pattern library seeded | DONE | Phase 0 |
-| Anthropic API setup | TBD | Phase 0 |
-| n8n update v2.5+ | TBD | Phase 0 |
-| X Agent MVP | TBD | Phase 1 |
-| LinkedIn Agent | TBD | Phase 2 |
-| IG / FB Agents | TBD | Phase 3 |
+| Component | Status |
+|-----------|--------|
+| Repo scaffold | DONE |
+| AGS Brand Canon v1.2 centralized | DONE |
+| Anti-pattern library seeded (11 entries) | DONE |
+| Build log started | DONE |
+| n8n production infrastructure | DONE (managed by AA AGS Core, runs on Mikrus) |
+| AGS Apply Intake v1 + Error Handler v1 | DONE (published in n8n, JSON export TBD) |
+| Wave 0.5 GHL Pipeline Rebuild | IN PROGRESS (Faza 0, Tomasz building products in GHL Payments) |
+| X Agent build | PARKED (AA X Agent Builder Charter v1.2, reactivation pending) |
+| LinkedIn Agent build | BACKLOG |
+| Voice AI Pawel (Royal Dance) | DEPLOYED (separate from this repo, lives in GHL) |
 
 ---
 
-## Build log
+## Active priorities
 
-Started: 19/05/2026.
-
-Each significant build session is logged in `memory/build-log.md` with date, decisions made, problems hit, lessons.
+1. **P0 Wave 0.5 GHL Pipeline Rebuild** - 4-tier funnel (Free Guide / $97 / $297 / $2K+). Direct revenue path.
+2. **P1 AGS Agent Factory (this repo + AA X Agent Builder reactivation)** - parallel system-as-content track
+3. **P2 Free Guide + $97 product content** (PL for TNM, EN for AGS) - feeds Wave 0.5
+4. **P3 Backup strategy** - BLOCKED on Backblaze SSL ticket
 
 ---
 
 ## License
 
-TBD (likely MIT or Apache 2.0 once stable).
-
----
-
-## Want updates?
-
-Live tracker: [AGS Build in Public Tracker on Notion](https://notion.so/[TO-BE-ADDED])
-
-X: [@authenticgrowsys](https://x.com/authenticgrowsys) (or your handle)
-LinkedIn: [linkedin.com/company/authentic-growth-systems](https://linkedin.com/company/authentic-growth-systems)
+UNLICENSED (private until stable, then likely MIT or Apache 2.0).

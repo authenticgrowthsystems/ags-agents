@@ -1,26 +1,20 @@
-# Shared
+# Shared - Lightweight TS Utilities
 
-Shared types, utilities, brand canon loaders, anti-pattern screening logic, common LLM client wrappers.
+Shared TypeScript code used by `packages/manager/` CLI tools. Reusable parsers, validators, type definitions.
 
-Used by all agents (manager, x-agent, linkedin-agent, future ig-agent / fb-agent).
+NOT shared by full agents (X Agent / LinkedIn Agent live in n8n, see `n8n-workflows/`). Shared is for CLI tooling.
+
+## Planned modules (build only when needed)
+
+- `brand-canon/` - parser for `../../brand-canon/*.md` to typed object (BrandCanon with positioning, voice, anti-patterns, examples)
+- `anti-patterns/` - string screener against `../../anti-patterns/library.md` rules
+- `prompts/` - prompt file parser + version bumper logic
+- `markdown/` - utilities for markdown parsing common to all packages
 
 ## Status
 
-Phase 0 - scaffold only.
+Phase 0 - scaffold only. Build modules when CLI tools in `packages/manager/` need them.
 
-## What lives here (when implemented)
+## Why TS not Python
 
-- `types/` - TypeScript types for common entities (Post, Comment, BrandCanon, AntiPattern, etc.)
-- `brand-canon/` - loader utility reads `../../brand-canon/*.md` and parses to typed object
-- `anti-patterns/` - screener that checks string against `../../anti-patterns/library.md`
-- `llm/` - thin wrapper around Anthropic SDK with default config (model, temperature, max tokens)
-- `telegram/` - reusable Telegram bot client for HITL flows
-- `analytics/` - common logging interface to per-agent JSON memory
-
-## TODO
-
-- [ ] TypeScript scaffold
-- [ ] Brand canon parser
-- [ ] Anti-pattern screener
-- [ ] Anthropic SDK wrapper with retry + cost logging
-- [ ] Telegram HITL helper
+Per decision 19/05/2026 - TypeScript stack chosen for consistency with Node.js ecosystem (n8n custom nodes, Anthropic TS SDK, pnpm monorepo).
