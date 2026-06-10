@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-10T06:29:56.329Z",
+  "updatedAt": "2026-06-10T09:29:16.009Z",
   "createdAt": "2026-06-01T07:10:00.198Z",
   "id": "TbHt6ZwfqmMarx18",
   "name": "AGS X Agent v1.0",
@@ -504,7 +504,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Generate callback ID for HITL session tracking\nconst executionId = $execution.id || 'exec-' + Date.now();\nconst callbackId = executionId + '_hitl';\n\nlet draft = $json.draft || '';\nlet topic = $json.topic || 'General';\nlet notionBlockId = $json.notionBlockId || '';\nlet charCount = draft.length;\nlet queueRemaining = $json.queueRemaining || 0;\n\nif (!draft) {\n  try {\n    const extractData = $('Extract Draft').first().json;\n    draft = extractData.draft || '';\n    topic = extractData.topic || topic;\n    notionBlockId = extractData.notionBlockId || notionBlockId;\n    charCount = draft.length;\n    queueRemaining = extractData.queueRemaining || 0;\n  } catch(e) {}\n}\n\nconst queueInfo = queueRemaining > 0\n  ? 'Queue: ' + queueRemaining + ' remaining'\n  : 'Queue: this is the last item';\n\nconst previewText = 'X DRAFT - ' + topic + '\\n\\n' + (draft || '[BRAK DRAFTU]') + '\\n\\nChars: ' + charCount + ' | ' + queueInfo + '\\nApprove to publish.';\n\nconst tgBody = {\n  chat_id: $json.telegramChatId || '2106351328',\n  text: previewText,\n  disable_web_page_preview: true,\n  reply_markup: {\n    inline_keyboard: [[\n      { text: '\\u2705 Approve', callback_data: callbackId + ':approve' },\n      { text: '\\u274c Reject', callback_data: callbackId + ':reject' },\n      { text: '\\u270f\\ufe0f Edit', callback_data: callbackId + ':edit' }\n    ]]\n  }\n};\n\nreturn [{\n  json: {\n    ...$json,\n    draft,\n    topic,\n    notionBlockId,\n    charCount,\n    callbackId,\n    executionId,\n    resumeUrl: $execution.resumeUrl || '',\n    tgBodyStr: JSON.stringify(tgBody)\n  }\n}];\n"
+        "jsCode": "// Generate callback ID for HITL session tracking\nconst executionId = $execution.id || 'exec-' + Date.now();\nconst callbackId = executionId + '_hitl';\n\nlet draft = $json.draft || '';\nlet topic = $json.topic || 'General';\nlet priority = $json.priority || 'normal';\nlet notionBlockId = $json.notionBlockId || '';\nlet charCount = draft.length;\nlet queueRemaining = $json.queueRemaining || 0;\n\nif (!draft) {\n  try {\n    const extractData = $('Extract Draft').first().json;\n    draft = extractData.draft || '';\n    topic = extractData.topic || topic;\n    priority = extractData.priority || priority;\n    notionBlockId = extractData.notionBlockId || notionBlockId;\n    charCount = draft.length;\n    queueRemaining = extractData.queueRemaining || 0;\n  } catch(e) {}\n}\n\nconst queueInfo = queueRemaining > 0\n  ? 'Queue: ' + queueRemaining + ' remaining'\n  : 'Queue: this is the last item';\n\nconst previewText = 'X DRAFT - ' + topic + '\\n\\n' + (draft || '[BRAK DRAFTU]') + '\\n\\nChars: ' + charCount + ' | ' + queueInfo + '\\nApprove to publish.';\n\nconst tgBody = {\n  chat_id: $json.telegramChatId || '2106351328',\n  text: previewText,\n  disable_web_page_preview: true,\n  reply_markup: {\n    inline_keyboard: [[\n      { text: '\\u2705 Approve', callback_data: callbackId + ':approve' },\n      { text: '\\u274c Reject', callback_data: callbackId + ':reject' },\n      { text: '\\u270f\\ufe0f Edit', callback_data: callbackId + ':edit' }\n    ]]\n  }\n};\n\nreturn [{\n  json: {\n    ...$json,\n    draft,\n    topic,\n    priority,\n    notionBlockId,\n    charCount,\n    callbackId,\n    executionId,\n    resumeUrl: $execution.resumeUrl || '',\n    tgBodyStr: JSON.stringify(tgBody)\n  }\n}];\n"
       },
       "id": "node-prepare-hitl-preview",
       "name": "Prepare HITL Preview",
@@ -605,7 +605,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Prepare data for hitl_sessions INSERT\n// Escape single quotes for SQL safety\nconst prev = $('Prepare HITL Preview').first().json;\nconst callbackId = prev.callbackId || '';\nconst executionId = prev.executionId || '';\nconst draft = (prev.draft || '').replace(/'/g, \"''\");  // SQL escape: ' -> ''\nconst notionBlockId = (prev.notionBlockId || '').replace(/'/g, \"''\");\nconst topic = (prev.topic || 'General').replace(/'/g, \"''\");\n\nreturn [{ json: { callbackId, executionId, draft_esc: draft, notionBlockId_esc: notionBlockId, topic_esc: topic } }];"
+        "jsCode": "// Prepare data for hitl_sessions INSERT\n// Escape single quotes for SQL safety\nconst prev = $('Prepare HITL Preview').first().json;\nconst callbackId = prev.callbackId || '';\nconst executionId = prev.executionId || '';\nconst draft = (prev.draft || '').replace(/'/g, \"''\");  // SQL escape: ' -> ''\nconst notionBlockId = (prev.notionBlockId || '').replace(/'/g, \"''\");\nconst topic = (prev.topic || 'General').replace(/'/g, \"''\");\nconst priority = (prev.priority || 'normal').replace(/'/g, \"''\");\n\nreturn [{ json: { callbackId, executionId, draft_esc: draft, notionBlockId_esc: notionBlockId, topic_esc: topic, priority_esc: priority } }];"
       },
       "id": "node-prepare-hitl-insert",
       "name": "Prepare HITL Insert Data",
@@ -619,7 +619,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO hitl_sessions (callback_id, execution_id, resume_url, workflow_name, status, expires_at, chat_id, payload)\nVALUES (\n  '{{ $json.callbackId }}',\n  '{{ $json.executionId }}',\n  '',\n  'AGS X Agent v1.0',\n  'pending',\n  NOW() + INTERVAL '1 hour',\n  2106351328,\n  jsonb_build_object(\n    'notionBlockId', '{{ $json.notionBlockId_esc }}'::text,\n    'topic', '{{ $json.topic_esc }}'::text,\n    'draft', '{{ $json.draft_esc }}'::text\n  )\n)\nON CONFLICT (callback_id) DO UPDATE\n  SET status = 'pending',\n      expires_at = EXCLUDED.expires_at,\n      payload = EXCLUDED.payload\nRETURNING id, callback_id;",
+        "query": "INSERT INTO hitl_sessions (callback_id, execution_id, resume_url, workflow_name, status, expires_at, chat_id, payload)\nVALUES (\n  '{{ $json.callbackId }}',\n  '{{ $json.executionId }}',\n  '',\n  'AGS X Agent v1.0',\n  'pending',\n  NOW() + (CASE WHEN '{{ $json.priority_esc }}' = 'high' THEN INTERVAL '30 minutes' ELSE INTERVAL '12 hours' END),\n  2106351328,\n  jsonb_build_object(\n    'notionBlockId', '{{ $json.notionBlockId_esc }}'::text,\n    'topic', '{{ $json.topic_esc }}'::text,\n    'draft', '{{ $json.draft_esc }}'::text,\n    'priority', '{{ $json.priority_esc }}'::text\n  )\n)\nON CONFLICT (callback_id) DO UPDATE\n  SET status = 'pending',\n      expires_at = EXCLUDED.expires_at,\n      payload = EXCLUDED.payload\nRETURNING id, callback_id;",
         "options": {}
       },
       "id": "node-pg-insert-hitl-session",
@@ -1182,9 +1182,9 @@
   "meta": null,
   "nodeGroups": [],
   "pinData": {},
-  "versionId": "f033c864-6aab-42fc-aca5-1c06e758d779",
-  "activeVersionId": "f033c864-6aab-42fc-aca5-1c06e758d779",
-  "versionCounter": 200,
+  "versionId": "fc8bcfed-d106-486b-8534-1d6a8a9acb73",
+  "activeVersionId": "fc8bcfed-d106-486b-8534-1d6a8a9acb73",
+  "versionCounter": 201,
   "triggerCount": 1,
   "shared": [
     {
@@ -1207,9 +1207,9 @@
   ],
   "tags": [],
   "activeVersion": {
-    "updatedAt": "2026-06-10T07:14:57.501Z",
-    "createdAt": "2026-06-10T06:29:56.331Z",
-    "versionId": "f033c864-6aab-42fc-aca5-1c06e758d779",
+    "updatedAt": "2026-06-10T09:29:16.086Z",
+    "createdAt": "2026-06-10T09:29:16.086Z",
+    "versionId": "fc8bcfed-d106-486b-8534-1d6a8a9acb73",
     "workflowId": "TbHt6ZwfqmMarx18",
     "nodes": [
       {
@@ -1709,7 +1709,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Generate callback ID for HITL session tracking\nconst executionId = $execution.id || 'exec-' + Date.now();\nconst callbackId = executionId + '_hitl';\n\nlet draft = $json.draft || '';\nlet topic = $json.topic || 'General';\nlet notionBlockId = $json.notionBlockId || '';\nlet charCount = draft.length;\nlet queueRemaining = $json.queueRemaining || 0;\n\nif (!draft) {\n  try {\n    const extractData = $('Extract Draft').first().json;\n    draft = extractData.draft || '';\n    topic = extractData.topic || topic;\n    notionBlockId = extractData.notionBlockId || notionBlockId;\n    charCount = draft.length;\n    queueRemaining = extractData.queueRemaining || 0;\n  } catch(e) {}\n}\n\nconst queueInfo = queueRemaining > 0\n  ? 'Queue: ' + queueRemaining + ' remaining'\n  : 'Queue: this is the last item';\n\nconst previewText = 'X DRAFT - ' + topic + '\\n\\n' + (draft || '[BRAK DRAFTU]') + '\\n\\nChars: ' + charCount + ' | ' + queueInfo + '\\nApprove to publish.';\n\nconst tgBody = {\n  chat_id: $json.telegramChatId || '2106351328',\n  text: previewText,\n  disable_web_page_preview: true,\n  reply_markup: {\n    inline_keyboard: [[\n      { text: '\\u2705 Approve', callback_data: callbackId + ':approve' },\n      { text: '\\u274c Reject', callback_data: callbackId + ':reject' },\n      { text: '\\u270f\\ufe0f Edit', callback_data: callbackId + ':edit' }\n    ]]\n  }\n};\n\nreturn [{\n  json: {\n    ...$json,\n    draft,\n    topic,\n    notionBlockId,\n    charCount,\n    callbackId,\n    executionId,\n    resumeUrl: $execution.resumeUrl || '',\n    tgBodyStr: JSON.stringify(tgBody)\n  }\n}];\n"
+          "jsCode": "// Generate callback ID for HITL session tracking\nconst executionId = $execution.id || 'exec-' + Date.now();\nconst callbackId = executionId + '_hitl';\n\nlet draft = $json.draft || '';\nlet topic = $json.topic || 'General';\nlet priority = $json.priority || 'normal';\nlet notionBlockId = $json.notionBlockId || '';\nlet charCount = draft.length;\nlet queueRemaining = $json.queueRemaining || 0;\n\nif (!draft) {\n  try {\n    const extractData = $('Extract Draft').first().json;\n    draft = extractData.draft || '';\n    topic = extractData.topic || topic;\n    priority = extractData.priority || priority;\n    notionBlockId = extractData.notionBlockId || notionBlockId;\n    charCount = draft.length;\n    queueRemaining = extractData.queueRemaining || 0;\n  } catch(e) {}\n}\n\nconst queueInfo = queueRemaining > 0\n  ? 'Queue: ' + queueRemaining + ' remaining'\n  : 'Queue: this is the last item';\n\nconst previewText = 'X DRAFT - ' + topic + '\\n\\n' + (draft || '[BRAK DRAFTU]') + '\\n\\nChars: ' + charCount + ' | ' + queueInfo + '\\nApprove to publish.';\n\nconst tgBody = {\n  chat_id: $json.telegramChatId || '2106351328',\n  text: previewText,\n  disable_web_page_preview: true,\n  reply_markup: {\n    inline_keyboard: [[\n      { text: '\\u2705 Approve', callback_data: callbackId + ':approve' },\n      { text: '\\u274c Reject', callback_data: callbackId + ':reject' },\n      { text: '\\u270f\\ufe0f Edit', callback_data: callbackId + ':edit' }\n    ]]\n  }\n};\n\nreturn [{\n  json: {\n    ...$json,\n    draft,\n    topic,\n    priority,\n    notionBlockId,\n    charCount,\n    callbackId,\n    executionId,\n    resumeUrl: $execution.resumeUrl || '',\n    tgBodyStr: JSON.stringify(tgBody)\n  }\n}];\n"
         },
         "id": "node-prepare-hitl-preview",
         "name": "Prepare HITL Preview",
@@ -1810,7 +1810,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Prepare data for hitl_sessions INSERT\n// Escape single quotes for SQL safety\nconst prev = $('Prepare HITL Preview').first().json;\nconst callbackId = prev.callbackId || '';\nconst executionId = prev.executionId || '';\nconst draft = (prev.draft || '').replace(/'/g, \"''\");  // SQL escape: ' -> ''\nconst notionBlockId = (prev.notionBlockId || '').replace(/'/g, \"''\");\nconst topic = (prev.topic || 'General').replace(/'/g, \"''\");\n\nreturn [{ json: { callbackId, executionId, draft_esc: draft, notionBlockId_esc: notionBlockId, topic_esc: topic } }];"
+          "jsCode": "// Prepare data for hitl_sessions INSERT\n// Escape single quotes for SQL safety\nconst prev = $('Prepare HITL Preview').first().json;\nconst callbackId = prev.callbackId || '';\nconst executionId = prev.executionId || '';\nconst draft = (prev.draft || '').replace(/'/g, \"''\");  // SQL escape: ' -> ''\nconst notionBlockId = (prev.notionBlockId || '').replace(/'/g, \"''\");\nconst topic = (prev.topic || 'General').replace(/'/g, \"''\");\nconst priority = (prev.priority || 'normal').replace(/'/g, \"''\");\n\nreturn [{ json: { callbackId, executionId, draft_esc: draft, notionBlockId_esc: notionBlockId, topic_esc: topic, priority_esc: priority } }];"
         },
         "id": "node-prepare-hitl-insert",
         "name": "Prepare HITL Insert Data",
@@ -1824,7 +1824,7 @@
       {
         "parameters": {
           "operation": "executeQuery",
-          "query": "INSERT INTO hitl_sessions (callback_id, execution_id, resume_url, workflow_name, status, expires_at, chat_id, payload)\nVALUES (\n  '{{ $json.callbackId }}',\n  '{{ $json.executionId }}',\n  '',\n  'AGS X Agent v1.0',\n  'pending',\n  NOW() + INTERVAL '1 hour',\n  2106351328,\n  jsonb_build_object(\n    'notionBlockId', '{{ $json.notionBlockId_esc }}'::text,\n    'topic', '{{ $json.topic_esc }}'::text,\n    'draft', '{{ $json.draft_esc }}'::text\n  )\n)\nON CONFLICT (callback_id) DO UPDATE\n  SET status = 'pending',\n      expires_at = EXCLUDED.expires_at,\n      payload = EXCLUDED.payload\nRETURNING id, callback_id;",
+          "query": "INSERT INTO hitl_sessions (callback_id, execution_id, resume_url, workflow_name, status, expires_at, chat_id, payload)\nVALUES (\n  '{{ $json.callbackId }}',\n  '{{ $json.executionId }}',\n  '',\n  'AGS X Agent v1.0',\n  'pending',\n  NOW() + (CASE WHEN '{{ $json.priority_esc }}' = 'high' THEN INTERVAL '30 minutes' ELSE INTERVAL '12 hours' END),\n  2106351328,\n  jsonb_build_object(\n    'notionBlockId', '{{ $json.notionBlockId_esc }}'::text,\n    'topic', '{{ $json.topic_esc }}'::text,\n    'draft', '{{ $json.draft_esc }}'::text,\n    'priority', '{{ $json.priority_esc }}'::text\n  )\n)\nON CONFLICT (callback_id) DO UPDATE\n  SET status = 'pending',\n      expires_at = EXCLUDED.expires_at,\n      payload = EXCLUDED.payload\nRETURNING id, callback_id;",
           "options": {}
         },
         "id": "node-pg-insert-hitl-session",
@@ -2373,15 +2373,23 @@
     },
     "nodeGroups": [],
     "authors": "Tomasz Nawrocki",
-    "name": "AGS X AGENT - po poprawkach 10.06.2026",
-    "description": "",
-    "autosaved": true,
+    "name": null,
+    "description": null,
+    "autosaved": false,
     "workflowPublishHistory": [
       {
-        "createdAt": "2026-06-10T07:14:57.484Z",
-        "id": 265,
+        "createdAt": "2026-06-10T09:29:16.496Z",
+        "id": 266,
         "workflowId": "TbHt6ZwfqmMarx18",
-        "versionId": "f033c864-6aab-42fc-aca5-1c06e758d779",
+        "versionId": "fc8bcfed-d106-486b-8534-1d6a8a9acb73",
+        "event": "deactivated",
+        "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
+      },
+      {
+        "createdAt": "2026-06-10T09:29:16.609Z",
+        "id": 267,
+        "workflowId": "TbHt6ZwfqmMarx18",
+        "versionId": "fc8bcfed-d106-486b-8534-1d6a8a9acb73",
         "event": "activated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       }

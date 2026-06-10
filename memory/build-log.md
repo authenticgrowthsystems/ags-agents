@@ -114,8 +114,31 @@ This file is the canonical "what happened when" - update it after every signific
 
 **Next:**
 - P3a: PostgreSQL source-of-truth migration (repoint Notion Get X Queue to SELECT from post_queue)
-- P3b: auto-publish (Content Manager pre-approves at queue entry)
 - P3c: expand publisher to full "X worker" (feed/buyer-lane, comment proposals, insight gathering)
+
+---
+
+## 2026-06-10 (later) - Auto-publish for HIGH priority enabled
+
+**What happened:**
+- Tomasz directive: reduce his clicking to zero, his role = decisions from manager reports, not button-clicking. Future: approval moves to Content Manager.
+- Enabled auto-publish but scoped to [HIGH] priority only (his choice from 4 options): HIGH auto-publishes 30 min after preview if not approved; MED/LOW require manual Approve (12h window) and never auto-publish.
+- Implementation: threaded `priority` ('high'/'normal'/'low') through Prepare HITL Preview -> Prepare HITL Insert Data -> hitl_sessions.payload. Conditional TTL in PostgreSQL Insert (HIGH=30min, else=12h). Timeout Checker "Fetch Expired Sessions" query filtered to `payload->>'priority' = 'high'`. Activated HITL Timeout Checker (runs every 5 min).
+
+**Decisions:**
+- HIGH only for auto-publish (safest insights auto, control retained on rest). Brand canon check already gates BEFORE the session exists, so auto-published content has passed canon.
+- TTL: HIGH 30min, MED/LOW 12h manual window.
+
+**Conflict surfaced (per doctrine):**
+- CM had disabled auto-publish "until clean cycles." Surfaced to Tomasz; he confirmed proceed given recent clean cycles + Input Guard now blocking the undefined-content bug class. Chose HIGH-only as the safe middle path.
+
+**Lessons:**
+- In Prepare HITL Preview, `extractData` is const-scoped inside a try block - cannot reference it in the return. Declare `let priority` at top level, assign inside try (mirror how `topic` is handled).
+- n8n public-API PUT rejects `settings.callerPolicy` / `settings.binaryMode` (not in PUT schema). Send only executionOrder/saveManualExecutions/errorWorkflow/timezone; n8n re-applies the rest server-side.
+
+**Next:**
+- Watch first HIGH auto-publish cycle. If clean over several days, consider widening or moving approval to Content Manager.
+- P3b superseded: auto-publish now live (HIGH); full "CM pre-approves at queue entry" model still future.
 
 ---
 
