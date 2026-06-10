@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-10T09:29:16.009Z",
+  "updatedAt": "2026-06-10T10:25:11.672Z",
   "createdAt": "2026-06-01T07:10:00.198Z",
   "id": "TbHt6ZwfqmMarx18",
   "name": "AGS X Agent v1.0",
@@ -619,7 +619,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO hitl_sessions (callback_id, execution_id, resume_url, workflow_name, status, expires_at, chat_id, payload)\nVALUES (\n  '{{ $json.callbackId }}',\n  '{{ $json.executionId }}',\n  '',\n  'AGS X Agent v1.0',\n  'pending',\n  NOW() + (CASE WHEN '{{ $json.priority_esc }}' = 'high' THEN INTERVAL '30 minutes' ELSE INTERVAL '12 hours' END),\n  2106351328,\n  jsonb_build_object(\n    'notionBlockId', '{{ $json.notionBlockId_esc }}'::text,\n    'topic', '{{ $json.topic_esc }}'::text,\n    'draft', '{{ $json.draft_esc }}'::text,\n    'priority', '{{ $json.priority_esc }}'::text\n  )\n)\nON CONFLICT (callback_id) DO UPDATE\n  SET status = 'pending',\n      expires_at = EXCLUDED.expires_at,\n      payload = EXCLUDED.payload\nRETURNING id, callback_id;",
+        "query": "INSERT INTO hitl_sessions (callback_id, execution_id, resume_url, workflow_name, status, expires_at, chat_id, payload)\nVALUES (\n  '{{ $json.callbackId }}',\n  '{{ $json.executionId }}',\n  '',\n  'AGS X Agent v1.0',\n  'pending',\n  NOW() + (COALESCE((SELECT (config_value::jsonb ->> '{{ $json.priority_esc }}')::int FROM brand_config WHERE brand_id='AGS' AND config_key='auto_publish_timeout_min'), 720) * INTERVAL '1 minute'),\n  2106351328,\n  jsonb_build_object(\n    'notionBlockId', '{{ $json.notionBlockId_esc }}'::text,\n    'topic', '{{ $json.topic_esc }}'::text,\n    'draft', '{{ $json.draft_esc }}'::text,\n    'priority', '{{ $json.priority_esc }}'::text\n  )\n)\nON CONFLICT (callback_id) DO UPDATE\n  SET status = 'pending',\n      expires_at = EXCLUDED.expires_at,\n      payload = EXCLUDED.payload\nRETURNING id, callback_id;",
         "options": {}
       },
       "id": "node-pg-insert-hitl-session",
@@ -1182,9 +1182,9 @@
   "meta": null,
   "nodeGroups": [],
   "pinData": {},
-  "versionId": "fc8bcfed-d106-486b-8534-1d6a8a9acb73",
-  "activeVersionId": "fc8bcfed-d106-486b-8534-1d6a8a9acb73",
-  "versionCounter": 201,
+  "versionId": "156710d9-ab5d-48a1-86c1-bdd811f0bdd3",
+  "activeVersionId": "156710d9-ab5d-48a1-86c1-bdd811f0bdd3",
+  "versionCounter": 202,
   "triggerCount": 1,
   "shared": [
     {
@@ -1207,9 +1207,9 @@
   ],
   "tags": [],
   "activeVersion": {
-    "updatedAt": "2026-06-10T09:29:16.086Z",
-    "createdAt": "2026-06-10T09:29:16.086Z",
-    "versionId": "fc8bcfed-d106-486b-8534-1d6a8a9acb73",
+    "updatedAt": "2026-06-10T10:25:11.674Z",
+    "createdAt": "2026-06-10T10:25:11.674Z",
+    "versionId": "156710d9-ab5d-48a1-86c1-bdd811f0bdd3",
     "workflowId": "TbHt6ZwfqmMarx18",
     "nodes": [
       {
@@ -1824,7 +1824,7 @@
       {
         "parameters": {
           "operation": "executeQuery",
-          "query": "INSERT INTO hitl_sessions (callback_id, execution_id, resume_url, workflow_name, status, expires_at, chat_id, payload)\nVALUES (\n  '{{ $json.callbackId }}',\n  '{{ $json.executionId }}',\n  '',\n  'AGS X Agent v1.0',\n  'pending',\n  NOW() + (CASE WHEN '{{ $json.priority_esc }}' = 'high' THEN INTERVAL '30 minutes' ELSE INTERVAL '12 hours' END),\n  2106351328,\n  jsonb_build_object(\n    'notionBlockId', '{{ $json.notionBlockId_esc }}'::text,\n    'topic', '{{ $json.topic_esc }}'::text,\n    'draft', '{{ $json.draft_esc }}'::text,\n    'priority', '{{ $json.priority_esc }}'::text\n  )\n)\nON CONFLICT (callback_id) DO UPDATE\n  SET status = 'pending',\n      expires_at = EXCLUDED.expires_at,\n      payload = EXCLUDED.payload\nRETURNING id, callback_id;",
+          "query": "INSERT INTO hitl_sessions (callback_id, execution_id, resume_url, workflow_name, status, expires_at, chat_id, payload)\nVALUES (\n  '{{ $json.callbackId }}',\n  '{{ $json.executionId }}',\n  '',\n  'AGS X Agent v1.0',\n  'pending',\n  NOW() + (COALESCE((SELECT (config_value::jsonb ->> '{{ $json.priority_esc }}')::int FROM brand_config WHERE brand_id='AGS' AND config_key='auto_publish_timeout_min'), 720) * INTERVAL '1 minute'),\n  2106351328,\n  jsonb_build_object(\n    'notionBlockId', '{{ $json.notionBlockId_esc }}'::text,\n    'topic', '{{ $json.topic_esc }}'::text,\n    'draft', '{{ $json.draft_esc }}'::text,\n    'priority', '{{ $json.priority_esc }}'::text\n  )\n)\nON CONFLICT (callback_id) DO UPDATE\n  SET status = 'pending',\n      expires_at = EXCLUDED.expires_at,\n      payload = EXCLUDED.payload\nRETURNING id, callback_id;",
           "options": {}
         },
         "id": "node-pg-insert-hitl-session",
@@ -2378,18 +2378,18 @@
     "autosaved": false,
     "workflowPublishHistory": [
       {
-        "createdAt": "2026-06-10T09:29:16.496Z",
-        "id": 266,
+        "createdAt": "2026-06-10T10:25:11.740Z",
+        "id": 269,
         "workflowId": "TbHt6ZwfqmMarx18",
-        "versionId": "fc8bcfed-d106-486b-8534-1d6a8a9acb73",
+        "versionId": "156710d9-ab5d-48a1-86c1-bdd811f0bdd3",
         "event": "deactivated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       },
       {
-        "createdAt": "2026-06-10T09:29:16.609Z",
-        "id": 267,
+        "createdAt": "2026-06-10T10:25:11.836Z",
+        "id": 270,
         "workflowId": "TbHt6ZwfqmMarx18",
-        "versionId": "fc8bcfed-d106-486b-8534-1d6a8a9acb73",
+        "versionId": "156710d9-ab5d-48a1-86c1-bdd811f0bdd3",
         "event": "activated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       }

@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-10T07:13:13.382Z",
+  "updatedAt": "2026-06-10T10:34:24.517Z",
   "createdAt": "2026-06-01T07:09:59.480Z",
   "id": "U5pUZjy2yAhR1sWg",
   "name": "AGS HITL Handler v1.0",
@@ -33,7 +33,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const item = items[0].json;\n\nif (item.callback_query) {\n  return [{ json: { type: 'callback', data: item.callback_query } }];\n}\n\nif (item.message?.text?.startsWith('/queue')) {\n  return [{ json: { type: 'queue_command', chat_id: item.message.chat.id } }];\n}\n\nif (item.message?.text && !item.message?.text?.startsWith('/')) {\n  // Plain text - could be edit_submit, will check conversation_state next\n  return [{ json: {\n    type: 'plain_text',\n    chat_id: item.message.chat.id,\n    text: item.message.text\n  }}];\n}\n\nreturn [{ json: { type: 'other' } }];"
+        "jsCode": "const item = items[0].json;\nif (item.callback_query) { return [{ json: { type: 'callback', data: item.callback_query } }]; }\nconst txt = item.message?.text || '';\nconst chatId = item.message?.chat?.id;\nif (txt.startsWith('/queue')) { return [{ json: { type: 'queue_command', chat_id: chatId } }]; }\nif (txt.startsWith('/settings')) { return [{ json: { type: 'settings_command', chat_id: chatId, text: txt } }]; }\nif (txt.startsWith('/get')) { return [{ json: { type: 'get_command', chat_id: chatId, text: txt } }]; }\nif (txt.startsWith('/set')) { return [{ json: { type: 'set_command', chat_id: chatId, text: txt } }]; }\nif (txt && !txt.startsWith('/')) { return [{ json: { type: 'plain_text', chat_id: chatId, text: txt } }]; }\nreturn [{ json: { type: 'other' } }];"
       },
       "id": "node-detect-update-type",
       "name": "Detect Update Type",
@@ -143,6 +143,78 @@
               },
               "renameOutput": true,
               "outputKey": "other"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-settings",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "settings_command",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "settings_command"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-get",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "get_command",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "get_command"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-set",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "set_command",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "set_command"
             }
           ]
         },
@@ -943,6 +1015,263 @@
         }
       },
       "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT config_key, config_value FROM brand_config WHERE brand_id='AGS' AND config_key LIKE 'auto_publish%' ORDER BY config_key;",
+        "options": {}
+      },
+      "id": "hitl-pg-load-settings",
+      "name": "PG Load Settings",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        620,
+        1200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows=$input.all(); const chatId=$('Route By Update Type').first().json.chat_id; let L=['Auto-publish ustawienia:','']; for(const r of rows){ if(r.json.config_key) L.push(r.json.config_key+' = '+r.json.config_value); } L.push(''); L.push('Zmiana: /set <klucz> <wartosc>'); return [{json:{chatId,reply:L.join('\\n')}}];"
+      },
+      "id": "hitl-format-settings",
+      "name": "Format Settings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.reply }}",
+        "additionalFields": {}
+      },
+      "id": "hitl-tg-settings-reply",
+      "name": "Telegram Settings Reply",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        1200
+      ],
+      "webhookId": "c1670f34-661c-4a27-801b-ec11bba1110f",
+      "credentials": {
+        "telegramApi": {
+          "id": "cOUqADDFf7oDwlJ0",
+          "name": "Telegram @ags_social_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const text=$json.text||''; const parts=text.trim().split(/\\s+/); return [{json:{key:parts[1]||'', chatId:$json.chat_id}}];"
+      },
+      "id": "hitl-parse-get-key",
+      "name": "Parse Get Key",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        1450
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT config_value FROM brand_config WHERE brand_id='AGS' AND config_key = '{{ $json.key }}';",
+        "options": {}
+      },
+      "id": "hitl-pg-get-value",
+      "name": "PG Get Value",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        860,
+        1450
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows=$input.all(); const key=$('Parse Get Key').first().json.key; const chatId=$('Parse Get Key').first().json.chatId; const val=(rows[0]&&rows[0].json&&rows[0].json.config_value)?rows[0].json.config_value:'(nie znaleziono)'; return [{json:{chatId,reply:key+' = '+val}}];"
+      },
+      "id": "hitl-format-get",
+      "name": "Format Get",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        1450
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.reply }}",
+        "additionalFields": {}
+      },
+      "id": "hitl-tg-get-reply",
+      "name": "Telegram Get Reply",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1340,
+        1450
+      ],
+      "webhookId": "14440a1d-9f3e-4fcd-b1a8-9b5986eb9ef0",
+      "credentials": {
+        "telegramApi": {
+          "id": "cOUqADDFf7oDwlJ0",
+          "name": "Telegram @ags_social_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT config_value FROM brand_config WHERE brand_id='AGS' AND config_key='admin_chat_ids';",
+        "options": {}
+      },
+      "id": "hitl-pg-load-admin-list",
+      "name": "PG Load Admin List",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        620,
+        1700
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const adminRow=$input.first().json; let adminList=[]; try{adminList=JSON.parse(adminRow.config_value||'[]');}catch(e){} const reqText=$('Route By Update Type').first().json.text||''; const chatId=$('Route By Update Type').first().json.chat_id; const authorized=adminList.map(String).includes(String(chatId)); const m=reqText.trim().match(/^\\/set\\s+(\\S+)\\s+([\\s\\S]+)$/); let key='',value='',ok=false,error=''; if(!authorized){error='Brak uprawnien. Tylko admin moze zmieniac ustawienia.';} else if(!m){error='Format: /set <klucz> <wartosc>';} else { key=m[1]; value=m[2].trim(); const allowed=['auto_publish_enabled','auto_publish_priorities','auto_publish_timeout_min']; if(!allowed.includes(key)){error='Nieznany klucz. Dozwolone: '+allowed.join(', ');} else if(key==='auto_publish_enabled'){ if(value!=='true'&&value!=='false')error='Wartosc musi byc true lub false'; else ok=true; } else if(key==='auto_publish_priorities'){ try{const a=JSON.parse(value); if(!Array.isArray(a)||!a.every(x=>['high','normal','low'].includes(x)))error='Tablica JSON z high/normal/low, np. [\"high\"]'; else ok=true;}catch(e){error='Niepoprawny JSON. Przyklad: [\"high\"]';} } else if(key==='auto_publish_timeout_min'){ try{const o=JSON.parse(value); if(typeof o!=='object'||Array.isArray(o)||!Object.values(o).every(v=>typeof v==='number'))error='Obiekt JSON z liczbami, np. {\"high\":30}'; else ok=true;}catch(e){error='Niepoprawny JSON. Przyklad: {\"high\":30}';} } } const valueEsc=value.replace(/'/g,\"''\"); return [{json:{ok,key,value,valueEsc,chatId,error}}];"
+      },
+      "id": "hitl-parse-authorize-set",
+      "name": "Parse And Authorize Set",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        1700
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-hitl-set-auth-valid",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "hitl-set-auth-valid",
+      "name": "Set Authorized And Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        1700
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO brand_config (brand_id, config_key, config_value, version, updated_by, updated_at) VALUES ('AGS', '{{ $json.key }}', '{{ $json.valueEsc }}', 1, 'telegram:{{ $json.chatId }}', NOW()) ON CONFLICT (brand_id, config_key) DO UPDATE SET config_value=EXCLUDED.config_value, version=brand_config.version+1, updated_by=EXCLUDED.updated_by, updated_at=NOW() RETURNING config_key, config_value;",
+        "options": {}
+      },
+      "id": "hitl-pg-upsert-config",
+      "name": "PG Upsert Config",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1340,
+        1600
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Parse And Authorize Set').first().json.chatId }}",
+        "text": "={{ 'Ustawione: ' + $('Parse And Authorize Set').first().json.key + ' = ' + $('Parse And Authorize Set').first().json.value }}",
+        "additionalFields": {}
+      },
+      "id": "hitl-tg-set-confirm",
+      "name": "Telegram Set Confirm",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1580,
+        1600
+      ],
+      "webhookId": "dcb6b0f3-060c-4fa1-ac11-b841005773e8",
+      "credentials": {
+        "telegramApi": {
+          "id": "cOUqADDFf7oDwlJ0",
+          "name": "Telegram @ags_social_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Parse And Authorize Set').first().json.chatId }}",
+        "text": "={{ 'Odrzucone: ' + $('Parse And Authorize Set').first().json.error }}",
+        "additionalFields": {}
+      },
+      "id": "hitl-tg-set-rejected",
+      "name": "Telegram Set Rejected",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1340,
+        1820
+      ],
+      "webhookId": "55e1d34d-025c-4efb-af58-f477f5d27fe0",
+      "credentials": {
+        "telegramApi": {
+          "id": "cOUqADDFf7oDwlJ0",
+          "name": "Telegram @ags_social_bot"
+        }
+      }
     }
   ],
   "connections": {
@@ -999,6 +1328,27 @@
         [
           {
             "node": "NoOp Other Updates",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PG Load Settings",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Parse Get Key",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PG Load Admin List",
             "type": "main",
             "index": 0
           }
@@ -1283,6 +1633,112 @@
           }
         ]
       ]
+    },
+    "PG Load Settings": {
+      "main": [
+        [
+          {
+            "node": "Format Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Settings": {
+      "main": [
+        [
+          {
+            "node": "Telegram Settings Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Get Key": {
+      "main": [
+        [
+          {
+            "node": "PG Get Value",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PG Get Value": {
+      "main": [
+        [
+          {
+            "node": "Format Get",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Get": {
+      "main": [
+        [
+          {
+            "node": "Telegram Get Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PG Load Admin List": {
+      "main": [
+        [
+          {
+            "node": "Parse And Authorize Set",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse And Authorize Set": {
+      "main": [
+        [
+          {
+            "node": "Set Authorized And Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Authorized And Valid?": {
+      "main": [
+        [
+          {
+            "node": "PG Upsert Config",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram Set Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PG Upsert Config": {
+      "main": [
+        [
+          {
+            "node": "Telegram Set Confirm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -1296,9 +1752,9 @@
   "meta": null,
   "nodeGroups": [],
   "pinData": {},
-  "versionId": "2a65bac7-18f7-4317-bc7f-3b81abd5e56a",
-  "activeVersionId": "2a65bac7-18f7-4317-bc7f-3b81abd5e56a",
-  "versionCounter": 71,
+  "versionId": "9d8e9631-3f22-47e3-aa8c-781e2be14c31",
+  "activeVersionId": "9d8e9631-3f22-47e3-aa8c-781e2be14c31",
+  "versionCounter": 72,
   "triggerCount": 1,
   "shared": [
     {
@@ -1321,9 +1777,9 @@
   ],
   "tags": [],
   "activeVersion": {
-    "updatedAt": "2026-06-10T07:14:23.072Z",
-    "createdAt": "2026-06-10T07:13:13.389Z",
-    "versionId": "2a65bac7-18f7-4317-bc7f-3b81abd5e56a",
+    "updatedAt": "2026-06-10T10:34:24.520Z",
+    "createdAt": "2026-06-10T10:34:24.520Z",
+    "versionId": "9d8e9631-3f22-47e3-aa8c-781e2be14c31",
     "workflowId": "U5pUZjy2yAhR1sWg",
     "nodes": [
       {
@@ -1352,7 +1808,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const item = items[0].json;\n\nif (item.callback_query) {\n  return [{ json: { type: 'callback', data: item.callback_query } }];\n}\n\nif (item.message?.text?.startsWith('/queue')) {\n  return [{ json: { type: 'queue_command', chat_id: item.message.chat.id } }];\n}\n\nif (item.message?.text && !item.message?.text?.startsWith('/')) {\n  // Plain text - could be edit_submit, will check conversation_state next\n  return [{ json: {\n    type: 'plain_text',\n    chat_id: item.message.chat.id,\n    text: item.message.text\n  }}];\n}\n\nreturn [{ json: { type: 'other' } }];"
+          "jsCode": "const item = items[0].json;\nif (item.callback_query) { return [{ json: { type: 'callback', data: item.callback_query } }]; }\nconst txt = item.message?.text || '';\nconst chatId = item.message?.chat?.id;\nif (txt.startsWith('/queue')) { return [{ json: { type: 'queue_command', chat_id: chatId } }]; }\nif (txt.startsWith('/settings')) { return [{ json: { type: 'settings_command', chat_id: chatId, text: txt } }]; }\nif (txt.startsWith('/get')) { return [{ json: { type: 'get_command', chat_id: chatId, text: txt } }]; }\nif (txt.startsWith('/set')) { return [{ json: { type: 'set_command', chat_id: chatId, text: txt } }]; }\nif (txt && !txt.startsWith('/')) { return [{ json: { type: 'plain_text', chat_id: chatId, text: txt } }]; }\nreturn [{ json: { type: 'other' } }];"
         },
         "id": "node-detect-update-type",
         "name": "Detect Update Type",
@@ -1462,6 +1918,78 @@
                 },
                 "renameOutput": true,
                 "outputKey": "other"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "sw-settings",
+                      "leftValue": "={{ $json.type }}",
+                      "rightValue": "settings_command",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "settings_command"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "sw-get",
+                      "leftValue": "={{ $json.type }}",
+                      "rightValue": "get_command",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "get_command"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "sw-set",
+                      "leftValue": "={{ $json.type }}",
+                      "rightValue": "set_command",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "set_command"
               }
             ]
           },
@@ -2262,6 +2790,263 @@
           }
         },
         "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT config_key, config_value FROM brand_config WHERE brand_id='AGS' AND config_key LIKE 'auto_publish%' ORDER BY config_key;",
+          "options": {}
+        },
+        "id": "hitl-pg-load-settings",
+        "name": "PG Load Settings",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          620,
+          1200
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const rows=$input.all(); const chatId=$('Route By Update Type').first().json.chat_id; let L=['Auto-publish ustawienia:','']; for(const r of rows){ if(r.json.config_key) L.push(r.json.config_key+' = '+r.json.config_value); } L.push(''); L.push('Zmiana: /set <klucz> <wartosc>'); return [{json:{chatId,reply:L.join('\\n')}}];"
+        },
+        "id": "hitl-format-settings",
+        "name": "Format Settings",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          860,
+          1200
+        ]
+      },
+      {
+        "parameters": {
+          "chatId": "={{ $json.chatId }}",
+          "text": "={{ $json.reply }}",
+          "additionalFields": {}
+        },
+        "id": "hitl-tg-settings-reply",
+        "name": "Telegram Settings Reply",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          1100,
+          1200
+        ],
+        "webhookId": "c1670f34-661c-4a27-801b-ec11bba1110f",
+        "credentials": {
+          "telegramApi": {
+            "id": "cOUqADDFf7oDwlJ0",
+            "name": "Telegram @ags_social_bot"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const text=$json.text||''; const parts=text.trim().split(/\\s+/); return [{json:{key:parts[1]||'', chatId:$json.chat_id}}];"
+        },
+        "id": "hitl-parse-get-key",
+        "name": "Parse Get Key",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          620,
+          1450
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT config_value FROM brand_config WHERE brand_id='AGS' AND config_key = '{{ $json.key }}';",
+          "options": {}
+        },
+        "id": "hitl-pg-get-value",
+        "name": "PG Get Value",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          860,
+          1450
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const rows=$input.all(); const key=$('Parse Get Key').first().json.key; const chatId=$('Parse Get Key').first().json.chatId; const val=(rows[0]&&rows[0].json&&rows[0].json.config_value)?rows[0].json.config_value:'(nie znaleziono)'; return [{json:{chatId,reply:key+' = '+val}}];"
+        },
+        "id": "hitl-format-get",
+        "name": "Format Get",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1100,
+          1450
+        ]
+      },
+      {
+        "parameters": {
+          "chatId": "={{ $json.chatId }}",
+          "text": "={{ $json.reply }}",
+          "additionalFields": {}
+        },
+        "id": "hitl-tg-get-reply",
+        "name": "Telegram Get Reply",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          1340,
+          1450
+        ],
+        "webhookId": "14440a1d-9f3e-4fcd-b1a8-9b5986eb9ef0",
+        "credentials": {
+          "telegramApi": {
+            "id": "cOUqADDFf7oDwlJ0",
+            "name": "Telegram @ags_social_bot"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT config_value FROM brand_config WHERE brand_id='AGS' AND config_key='admin_chat_ids';",
+          "options": {}
+        },
+        "id": "hitl-pg-load-admin-list",
+        "name": "PG Load Admin List",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          620,
+          1700
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const adminRow=$input.first().json; let adminList=[]; try{adminList=JSON.parse(adminRow.config_value||'[]');}catch(e){} const reqText=$('Route By Update Type').first().json.text||''; const chatId=$('Route By Update Type').first().json.chat_id; const authorized=adminList.map(String).includes(String(chatId)); const m=reqText.trim().match(/^\\/set\\s+(\\S+)\\s+([\\s\\S]+)$/); let key='',value='',ok=false,error=''; if(!authorized){error='Brak uprawnien. Tylko admin moze zmieniac ustawienia.';} else if(!m){error='Format: /set <klucz> <wartosc>';} else { key=m[1]; value=m[2].trim(); const allowed=['auto_publish_enabled','auto_publish_priorities','auto_publish_timeout_min']; if(!allowed.includes(key)){error='Nieznany klucz. Dozwolone: '+allowed.join(', ');} else if(key==='auto_publish_enabled'){ if(value!=='true'&&value!=='false')error='Wartosc musi byc true lub false'; else ok=true; } else if(key==='auto_publish_priorities'){ try{const a=JSON.parse(value); if(!Array.isArray(a)||!a.every(x=>['high','normal','low'].includes(x)))error='Tablica JSON z high/normal/low, np. [\"high\"]'; else ok=true;}catch(e){error='Niepoprawny JSON. Przyklad: [\"high\"]';} } else if(key==='auto_publish_timeout_min'){ try{const o=JSON.parse(value); if(typeof o!=='object'||Array.isArray(o)||!Object.values(o).every(v=>typeof v==='number'))error='Obiekt JSON z liczbami, np. {\"high\":30}'; else ok=true;}catch(e){error='Niepoprawny JSON. Przyklad: {\"high\":30}';} } } const valueEsc=value.replace(/'/g,\"''\"); return [{json:{ok,key,value,valueEsc,chatId,error}}];"
+        },
+        "id": "hitl-parse-authorize-set",
+        "name": "Parse And Authorize Set",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          860,
+          1700
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "id": "cond-hitl-set-auth-valid",
+                "leftValue": "={{ $json.ok }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "hitl-set-auth-valid",
+        "name": "Set Authorized And Valid?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1100,
+          1700
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO brand_config (brand_id, config_key, config_value, version, updated_by, updated_at) VALUES ('AGS', '{{ $json.key }}', '{{ $json.valueEsc }}', 1, 'telegram:{{ $json.chatId }}', NOW()) ON CONFLICT (brand_id, config_key) DO UPDATE SET config_value=EXCLUDED.config_value, version=brand_config.version+1, updated_by=EXCLUDED.updated_by, updated_at=NOW() RETURNING config_key, config_value;",
+          "options": {}
+        },
+        "id": "hitl-pg-upsert-config",
+        "name": "PG Upsert Config",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          1340,
+          1600
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "chatId": "={{ $('Parse And Authorize Set').first().json.chatId }}",
+          "text": "={{ 'Ustawione: ' + $('Parse And Authorize Set').first().json.key + ' = ' + $('Parse And Authorize Set').first().json.value }}",
+          "additionalFields": {}
+        },
+        "id": "hitl-tg-set-confirm",
+        "name": "Telegram Set Confirm",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          1580,
+          1600
+        ],
+        "webhookId": "dcb6b0f3-060c-4fa1-ac11-b841005773e8",
+        "credentials": {
+          "telegramApi": {
+            "id": "cOUqADDFf7oDwlJ0",
+            "name": "Telegram @ags_social_bot"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "chatId": "={{ $('Parse And Authorize Set').first().json.chatId }}",
+          "text": "={{ 'Odrzucone: ' + $('Parse And Authorize Set').first().json.error }}",
+          "additionalFields": {}
+        },
+        "id": "hitl-tg-set-rejected",
+        "name": "Telegram Set Rejected",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          1340,
+          1820
+        ],
+        "webhookId": "55e1d34d-025c-4efb-af58-f477f5d27fe0",
+        "credentials": {
+          "telegramApi": {
+            "id": "cOUqADDFf7oDwlJ0",
+            "name": "Telegram @ags_social_bot"
+          }
+        }
       }
     ],
     "connections": {
@@ -2318,6 +3103,27 @@
           [
             {
               "node": "NoOp Other Updates",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "PG Load Settings",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Parse Get Key",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "PG Load Admin List",
               "type": "main",
               "index": 0
             }
@@ -2602,19 +3408,133 @@
             }
           ]
         ]
+      },
+      "PG Load Settings": {
+        "main": [
+          [
+            {
+              "node": "Format Settings",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format Settings": {
+        "main": [
+          [
+            {
+              "node": "Telegram Settings Reply",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse Get Key": {
+        "main": [
+          [
+            {
+              "node": "PG Get Value",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PG Get Value": {
+        "main": [
+          [
+            {
+              "node": "Format Get",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format Get": {
+        "main": [
+          [
+            {
+              "node": "Telegram Get Reply",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PG Load Admin List": {
+        "main": [
+          [
+            {
+              "node": "Parse And Authorize Set",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse And Authorize Set": {
+        "main": [
+          [
+            {
+              "node": "Set Authorized And Valid?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Set Authorized And Valid?": {
+        "main": [
+          [
+            {
+              "node": "PG Upsert Config",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Telegram Set Rejected",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PG Upsert Config": {
+        "main": [
+          [
+            {
+              "node": "Telegram Set Confirm",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       }
     },
     "nodeGroups": [],
     "authors": "Tomasz Nawrocki",
-    "name": "AGS HILT HANDELR - poprawka 10.06.2026",
-    "description": "",
-    "autosaved": true,
+    "name": null,
+    "description": null,
+    "autosaved": false,
     "workflowPublishHistory": [
       {
-        "createdAt": "2026-06-10T07:14:22.978Z",
-        "id": 263,
+        "createdAt": "2026-06-10T10:34:24.745Z",
+        "id": 273,
         "workflowId": "U5pUZjy2yAhR1sWg",
-        "versionId": "2a65bac7-18f7-4317-bc7f-3b81abd5e56a",
+        "versionId": "9d8e9631-3f22-47e3-aa8c-781e2be14c31",
+        "event": "deactivated",
+        "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
+      },
+      {
+        "createdAt": "2026-06-10T10:34:25.031Z",
+        "id": 274,
+        "workflowId": "U5pUZjy2yAhR1sWg",
+        "versionId": "9d8e9631-3f22-47e3-aa8c-781e2be14c31",
         "event": "activated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       }

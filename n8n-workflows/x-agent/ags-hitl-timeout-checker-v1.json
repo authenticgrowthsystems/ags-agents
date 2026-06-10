@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-10T09:31:17.725Z",
+  "updatedAt": "2026-06-10T10:26:31.434Z",
   "createdAt": "2026-06-06T20:08:19.202Z",
   "id": "GauYOvKSrhnPgI8R",
   "name": "HITL Timeout Checker",
@@ -38,7 +38,7 @@
       ],
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT id, callback_id, execution_id, chat_id, expires_at, payload, payload->>'draft' as payload_draft, payload->>'notionBlockId' as payload_notion_block_id, payload->>'topic' as payload_topic FROM hitl_sessions WHERE status = 'pending' AND expires_at < NOW() AND payload->>'priority' = 'high' ORDER BY expires_at ASC LIMIT 10;",
+        "query": "SELECT id, callback_id, execution_id, chat_id, expires_at, payload, payload->>'draft' as payload_draft, payload->>'notionBlockId' as payload_notion_block_id, payload->>'topic' as payload_topic FROM hitl_sessions WHERE status = 'pending' AND expires_at < NOW() AND COALESCE((SELECT config_value FROM brand_config WHERE brand_id='AGS' AND config_key='auto_publish_enabled'),'false') = 'true' AND payload->>'priority' = ANY(SELECT jsonb_array_elements_text(COALESCE((SELECT config_value::jsonb FROM brand_config WHERE brand_id='AGS' AND config_key='auto_publish_priorities'),'[]'::jsonb))) ORDER BY expires_at ASC LIMIT 10;",
         "options": {}
       },
       "credentials": {
@@ -363,9 +363,9 @@
   "meta": null,
   "nodeGroups": [],
   "pinData": null,
-  "versionId": "9162aacf-e442-4539-ba12-6d13dd243f8f",
-  "activeVersionId": "9162aacf-e442-4539-ba12-6d13dd243f8f",
-  "versionCounter": 4,
+  "versionId": "81380787-cfdd-4194-b6ba-0a43c1610fdd",
+  "activeVersionId": "81380787-cfdd-4194-b6ba-0a43c1610fdd",
+  "versionCounter": 5,
   "triggerCount": 1,
   "shared": [
     {
@@ -388,9 +388,9 @@
   ],
   "tags": [],
   "activeVersion": {
-    "updatedAt": "2026-06-10T09:31:17.726Z",
-    "createdAt": "2026-06-10T09:31:17.726Z",
-    "versionId": "9162aacf-e442-4539-ba12-6d13dd243f8f",
+    "updatedAt": "2026-06-10T10:26:31.435Z",
+    "createdAt": "2026-06-10T10:26:31.435Z",
+    "versionId": "81380787-cfdd-4194-b6ba-0a43c1610fdd",
     "workflowId": "GauYOvKSrhnPgI8R",
     "nodes": [
       {
@@ -424,7 +424,7 @@
         ],
         "parameters": {
           "operation": "executeQuery",
-          "query": "SELECT id, callback_id, execution_id, chat_id, expires_at, payload, payload->>'draft' as payload_draft, payload->>'notionBlockId' as payload_notion_block_id, payload->>'topic' as payload_topic FROM hitl_sessions WHERE status = 'pending' AND expires_at < NOW() AND payload->>'priority' = 'high' ORDER BY expires_at ASC LIMIT 10;",
+          "query": "SELECT id, callback_id, execution_id, chat_id, expires_at, payload, payload->>'draft' as payload_draft, payload->>'notionBlockId' as payload_notion_block_id, payload->>'topic' as payload_topic FROM hitl_sessions WHERE status = 'pending' AND expires_at < NOW() AND COALESCE((SELECT config_value FROM brand_config WHERE brand_id='AGS' AND config_key='auto_publish_enabled'),'false') = 'true' AND payload->>'priority' = ANY(SELECT jsonb_array_elements_text(COALESCE((SELECT config_value::jsonb FROM brand_config WHERE brand_id='AGS' AND config_key='auto_publish_priorities'),'[]'::jsonb))) ORDER BY expires_at ASC LIMIT 10;",
           "options": {}
         },
         "credentials": {
@@ -743,10 +743,18 @@
     "autosaved": false,
     "workflowPublishHistory": [
       {
-        "createdAt": "2026-06-10T09:31:26.294Z",
-        "id": 268,
+        "createdAt": "2026-06-10T10:26:31.529Z",
+        "id": 271,
         "workflowId": "GauYOvKSrhnPgI8R",
-        "versionId": "9162aacf-e442-4539-ba12-6d13dd243f8f",
+        "versionId": "81380787-cfdd-4194-b6ba-0a43c1610fdd",
+        "event": "deactivated",
+        "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
+      },
+      {
+        "createdAt": "2026-06-10T10:26:31.609Z",
+        "id": 272,
+        "workflowId": "GauYOvKSrhnPgI8R",
+        "versionId": "81380787-cfdd-4194-b6ba-0a43c1610fdd",
         "event": "activated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       }
