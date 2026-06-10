@@ -1,0 +1,743 @@
+{
+  "updatedAt": "2026-06-01T08:50:10.608Z",
+  "createdAt": "2026-06-01T07:09:59.851Z",
+  "id": "DrJgmAHGRp99fw1l",
+  "name": "AGS Analytics Daily Digest v1.0",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "node-schedule-trigger",
+      "name": "Schedule Trigger 10:00 CET",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, platform_id, content, created_at FROM engagement_log WHERE action_type = 'x_post' AND created_at >= NOW() - INTERVAL '25 hours' AND created_at < NOW() - INTERVAL '1 hour' AND platform_id IS NOT NULL ORDER BY created_at DESC;",
+        "options": {}
+      },
+      "id": "node-postgres-get-yesterdays-posts",
+      "name": "PostgreSQL Get Yesterday Posts",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        224,
+        208
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-has-posts",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-if-posts-found",
+      "name": "Posts Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        208
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "node-noop-no-posts",
+      "name": "NoOp No Posts Yesterday",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        672,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "node-split-in-batches",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        672,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.twitter.com/2/tweets/{{ $json.platform_id }}?tweet.fields=public_metrics",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "node-x-api-get-metrics",
+      "name": "X API Get Tweet Metrics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract public_metrics from X API v2 response and merge with engagement_log row\nconst xResponse = $input.first().json;\nconst tweetData = xResponse.data || {};\nconst publicMetrics = tweetData.public_metrics || {};\n\n// Retrieve the engagement_log row that was passed through the batch\nconst batchItem = $('Split In Batches').first().json;\n\nconst impressionCount = parseInt(publicMetrics.impression_count || 0);\nconst likeCount = parseInt(publicMetrics.like_count || 0);\nconst replyCount = parseInt(publicMetrics.reply_count || 0);\nconst retweetCount = parseInt(publicMetrics.retweet_count || 0);\n\nconst metricsJson = JSON.stringify({\n  impression_count: impressionCount,\n  like_count: likeCount,\n  reply_count: replyCount,\n  retweet_count: retweetCount,\n  fetched_at: new Date().toISOString()\n});\n\nreturn [{\n  json: {\n    engagementId: batchItem.id,\n    platformId: batchItem.platform_id,\n    content: batchItem.content,\n    createdAt: batchItem.created_at,\n    impressionCount,\n    likeCount,\n    replyCount,\n    retweetCount,\n    metricsJson\n  }\n}];\n"
+      },
+      "id": "node-extract-metrics",
+      "name": "Extract Public Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE engagement_log SET metrics = '{{ $json.metricsJson }}'::jsonb WHERE id = {{ $json.engagementId }};",
+        "options": {}
+      },
+      "id": "node-postgres-update-metrics",
+      "name": "PostgreSQL Update Metrics",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1328,
+        320
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "node-loop-back-to-batches",
+      "name": "Loop Back Or Continue",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1552,
+        320
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "node-merge-all-results",
+      "name": "Merge All Batch Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        928,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate metrics across all posts and find top performer\nconst allItems = $input.all();\n\nif (allItems.length === 0) {\n  return [{ json: { error: 'no_data' } }];\n}\n\nlet totalImpressions = 0;\nlet totalLikes = 0;\nlet totalReplies = 0;\nlet totalRetweets = 0;\nlet bestPost = null;\nlet bestImpressions = -1;\n\nfor (const item of allItems) {\n  const data = item.json;\n  totalImpressions += data.impressionCount || 0;\n  totalLikes += data.likeCount || 0;\n  totalReplies += data.replyCount || 0;\n  totalRetweets += data.retweetCount || 0;\n\n  if ((data.impressionCount || 0) > bestImpressions) {\n    bestImpressions = data.impressionCount || 0;\n    bestPost = data;\n  }\n}\n\nconst postCount = allItems.length;\nconst bestPostExcerpt = bestPost?.content\n  ? bestPost.content.substring(0, 60) + (bestPost.content.length > 60 ? '...' : '')\n  : 'N/A';\n\nconst digestDate = new Date();\ndigestDate.setDate(digestDate.getDate() - 1);\nconst dateStr = digestDate.toISOString().split('T')[0];\n\nconst digestText = `Yesterday X performance (${dateStr}):\\n${postCount} post${postCount !== 1 ? 's' : ''} published\\nTotal impressions: ${totalImpressions}\\nTotal likes: ${totalLikes}\\nTotal replies: ${totalReplies}\\nTotal retweets: ${totalRetweets}\\n\\nTop post: ${bestPostExcerpt} (${bestImpressions} impressions)`;\n\nreturn [{\n  json: {\n    digestText,\n    postCount,\n    totalImpressions,\n    totalLikes,\n    totalReplies,\n    totalRetweets,\n    bestImpressions,\n    bestPostExcerpt,\n    dateStr\n  }\n}];\n"
+      },
+      "id": "node-calculate-digest",
+      "name": "Calculate Digest Totals",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1472,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "2106351328",
+        "text": "={{ $json.digestText }}",
+        "additionalFields": {}
+      },
+      "id": "node-telegram-send-digest",
+      "name": "Telegram Send Digest",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2096,
+        624
+      ],
+      "webhookId": "efbbf6ab-eeba-484b-aaa2-3cbb8865c21f",
+      "credentials": {
+        "telegramApi": {
+          "id": "cOUqADDFf7oDwlJ0",
+          "name": "Telegram @ags_social_bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger 10:00 CET": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL Get Yesterday Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL Get Yesterday Posts": {
+      "main": [
+        [
+          {
+            "node": "Posts Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Posts Found?": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "NoOp No Posts Yesterday",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "X API Get Tweet Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge All Batch Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "X API Get Tweet Metrics": {
+      "main": [
+        [
+          {
+            "node": "Extract Public Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Public Metrics": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL Update Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL Update Metrics": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge All Batch Results": {
+      "main": [
+        [
+          {
+            "node": "Calculate Digest Totals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Digest Totals": {
+      "main": [
+        [
+          {
+            "node": "Telegram Send Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "",
+    "binaryMode": "separate"
+  },
+  "staticData": {
+    "node:Schedule Trigger 10:00 CET": {
+      "recurrenceRules": []
+    }
+  },
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "d92384cc-2dd9-47bc-b80d-337a989363f9",
+  "activeVersionId": "838754da-3f95-4610-8e33-8a8bdbf2ba6f",
+  "versionCounter": 4,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-06-01T07:09:59.851Z",
+      "createdAt": "2026-06-01T07:09:59.851Z",
+      "role": "workflow:owner",
+      "workflowId": "DrJgmAHGRp99fw1l",
+      "projectId": "AVGJSTgEgAPPwXHX",
+      "project": {
+        "updatedAt": "2026-04-18T08:31:32.266Z",
+        "createdAt": "2026-04-18T08:22:28.807Z",
+        "id": "AVGJSTgEgAPPwXHX",
+        "name": "Tomasz Nawrocki <mr.tomasz.nawrocki@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "c804b804-01e6-4f71-83c2-0494b200789b"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-06-01T07:09:59.851Z",
+    "createdAt": "2026-06-01T07:09:59.851Z",
+    "versionId": "838754da-3f95-4610-8e33-8a8bdbf2ba6f",
+    "workflowId": "DrJgmAHGRp99fw1l",
+    "nodes": [
+      {
+        "id": "node-schedule-trigger",
+        "name": "Schedule Trigger 10:00 CET",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          200
+        ],
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "cronExpression",
+                "expression": "0 9 * * *"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "node-postgres-get-yesterdays-posts",
+        "name": "PostgreSQL Get Yesterday Posts",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          220,
+          200
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT id, platform_id, content, created_at FROM engagement_log WHERE action_type = 'x_post' AND created_at >= NOW() - INTERVAL '25 hours' AND created_at < NOW() - INTERVAL '1 hour' AND platform_id IS NOT NULL ORDER BY created_at DESC;",
+          "options": {}
+        },
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "id": "node-if-posts-found",
+        "name": "Posts Found?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          440,
+          200
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "id": "cond-has-posts",
+                "leftValue": "={{ $json.id }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        }
+      },
+      {
+        "id": "node-noop-no-posts",
+        "name": "NoOp No Posts Yesterday",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          660,
+          80
+        ],
+        "parameters": {}
+      },
+      {
+        "id": "node-split-in-batches",
+        "name": "Split In Batches",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          660,
+          320
+        ],
+        "parameters": {
+          "batchSize": 1,
+          "options": {}
+        }
+      },
+      {
+        "id": "node-x-api-get-metrics",
+        "name": "X API Get Tweet Metrics",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          880,
+          320
+        ],
+        "parameters": {
+          "method": "GET",
+          "url": "=https://api.twitter.com/2/tweets/{{ $json.platform_id }}?tweet.fields=public_metrics",
+          "options": {
+            "timeout": 15000
+          }
+        },
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "vU3391IKq7Ul8qLY",
+            "name": "X API Bearer AGS"
+          }
+        }
+      },
+      {
+        "id": "node-extract-metrics",
+        "name": "Extract Public Metrics",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1100,
+          320
+        ],
+        "parameters": {
+          "jsCode": "// Extract public_metrics from X API v2 response and merge with engagement_log row\nconst xResponse = $input.first().json;\nconst tweetData = xResponse.data || {};\nconst publicMetrics = tweetData.public_metrics || {};\n\n// Retrieve the engagement_log row that was passed through the batch\nconst batchItem = $('Split In Batches').first().json;\n\nconst impressionCount = parseInt(publicMetrics.impression_count || 0);\nconst likeCount = parseInt(publicMetrics.like_count || 0);\nconst replyCount = parseInt(publicMetrics.reply_count || 0);\nconst retweetCount = parseInt(publicMetrics.retweet_count || 0);\n\nconst metricsJson = JSON.stringify({\n  impression_count: impressionCount,\n  like_count: likeCount,\n  reply_count: replyCount,\n  retweet_count: retweetCount,\n  fetched_at: new Date().toISOString()\n});\n\nreturn [{\n  json: {\n    engagementId: batchItem.id,\n    platformId: batchItem.platform_id,\n    content: batchItem.content,\n    createdAt: batchItem.created_at,\n    impressionCount,\n    likeCount,\n    replyCount,\n    retweetCount,\n    metricsJson\n  }\n}];\n"
+        }
+      },
+      {
+        "id": "node-postgres-update-metrics",
+        "name": "PostgreSQL Update Metrics",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          1320,
+          320
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE engagement_log SET metrics = '{{ $json.metricsJson }}'::jsonb WHERE id = {{ $json.engagementId }};",
+          "options": {}
+        },
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "id": "node-loop-back-to-batches",
+        "name": "Loop Back Or Continue",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          1540,
+          320
+        ],
+        "parameters": {
+          "batchSize": 1,
+          "options": {}
+        }
+      },
+      {
+        "id": "node-merge-all-results",
+        "name": "Merge All Batch Results",
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 3,
+        "position": [
+          1760,
+          200
+        ],
+        "parameters": {
+          "mode": "append",
+          "options": {}
+        }
+      },
+      {
+        "id": "node-calculate-digest",
+        "name": "Calculate Digest Totals",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1980,
+          200
+        ],
+        "parameters": {
+          "jsCode": "// Aggregate metrics across all posts and find top performer\nconst allItems = $input.all();\n\nif (allItems.length === 0) {\n  return [{ json: { error: 'no_data' } }];\n}\n\nlet totalImpressions = 0;\nlet totalLikes = 0;\nlet totalReplies = 0;\nlet totalRetweets = 0;\nlet bestPost = null;\nlet bestImpressions = -1;\n\nfor (const item of allItems) {\n  const data = item.json;\n  totalImpressions += data.impressionCount || 0;\n  totalLikes += data.likeCount || 0;\n  totalReplies += data.replyCount || 0;\n  totalRetweets += data.retweetCount || 0;\n\n  if ((data.impressionCount || 0) > bestImpressions) {\n    bestImpressions = data.impressionCount || 0;\n    bestPost = data;\n  }\n}\n\nconst postCount = allItems.length;\nconst bestPostExcerpt = bestPost?.content\n  ? bestPost.content.substring(0, 60) + (bestPost.content.length > 60 ? '...' : '')\n  : 'N/A';\n\nconst digestDate = new Date();\ndigestDate.setDate(digestDate.getDate() - 1);\nconst dateStr = digestDate.toISOString().split('T')[0];\n\nconst digestText = `Yesterday X performance (${dateStr}):\\n${postCount} post${postCount !== 1 ? 's' : ''} published\\nTotal impressions: ${totalImpressions}\\nTotal likes: ${totalLikes}\\nTotal replies: ${totalReplies}\\nTotal retweets: ${totalRetweets}\\n\\nTop post: ${bestPostExcerpt} (${bestImpressions} impressions)`;\n\nreturn [{\n  json: {\n    digestText,\n    postCount,\n    totalImpressions,\n    totalLikes,\n    totalReplies,\n    totalRetweets,\n    bestImpressions,\n    bestPostExcerpt,\n    dateStr\n  }\n}];\n"
+        }
+      },
+      {
+        "id": "node-telegram-send-digest",
+        "name": "Telegram Send Digest",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          2200,
+          200
+        ],
+        "parameters": {
+          "chatId": "2106351328",
+          "text": "={{ $json.digestText }}",
+          "additionalFields": {}
+        },
+        "credentials": {
+          "telegramApi": {
+            "id": "cOUqADDFf7oDwlJ0",
+            "name": "Telegram @ags_social_bot"
+          }
+        },
+        "webhookId": "efbbf6ab-eeba-484b-aaa2-3cbb8865c21f"
+      }
+    ],
+    "connections": {
+      "Schedule Trigger 10:00 CET": {
+        "main": [
+          [
+            {
+              "node": "PostgreSQL Get Yesterday Posts",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PostgreSQL Get Yesterday Posts": {
+        "main": [
+          [
+            {
+              "node": "Posts Found?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Posts Found?": {
+        "main": [
+          [
+            {
+              "node": "Split In Batches",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "NoOp No Posts Yesterday",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Split In Batches": {
+        "main": [
+          [
+            {
+              "node": "X API Get Tweet Metrics",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Merge All Batch Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "X API Get Tweet Metrics": {
+        "main": [
+          [
+            {
+              "node": "Extract Public Metrics",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Extract Public Metrics": {
+        "main": [
+          [
+            {
+              "node": "PostgreSQL Update Metrics",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PostgreSQL Update Metrics": {
+        "main": [
+          [
+            {
+              "node": "Split In Batches",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Merge All Batch Results": {
+        "main": [
+          [
+            {
+              "node": "Calculate Digest Totals",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Calculate Digest Totals": {
+        "main": [
+          [
+            {
+              "node": "Telegram Send Digest",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Tomasz Nawrocki",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-06-01T07:10:18.162Z",
+        "id": 22,
+        "workflowId": "DrJgmAHGRp99fw1l",
+        "versionId": "838754da-3f95-4610-8e33-8a8bdbf2ba6f",
+        "event": "activated",
+        "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
+      },
+      {
+        "createdAt": "2026-06-01T08:50:05.218Z",
+        "id": 28,
+        "workflowId": "DrJgmAHGRp99fw1l",
+        "versionId": "838754da-3f95-4610-8e33-8a8bdbf2ba6f",
+        "event": "deactivated",
+        "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
+      },
+      {
+        "createdAt": "2026-06-01T08:50:05.306Z",
+        "id": 29,
+        "workflowId": "DrJgmAHGRp99fw1l",
+        "versionId": "838754da-3f95-4610-8e33-8a8bdbf2ba6f",
+        "event": "activated",
+        "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
+      }
+    ]
+  }
+}

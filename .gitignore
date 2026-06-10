@@ -42,3 +42,8 @@ n8n-workflows/**/*-with-credentials.json
 .Trashes
 .AppleDouble
 .LSOverride
+
+# Credentials and secrets (NEVER commit)
+.claude/
+n8n-workflows/x-agent/N8N_CREDENTIALS_SETUP.md
+**/AGS_Credentials_Internal.md

@@ -1,0 +1,391 @@
+{
+  "updatedAt": "2026-06-07T15:17:23.097Z",
+  "createdAt": "2026-06-06T20:08:19.202Z",
+  "id": "GauYOvKSrhnPgI8R",
+  "name": "HITL Timeout Checker",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "timeout-schedule",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -400,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "timeout-fetch-expired",
+      "name": "Fetch Expired Sessions",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -200,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, callback_id, execution_id, chat_id, expires_at, payload, payload->>'draft' as payload_draft, payload->>'notionBlockId' as payload_notion_block_id, payload->>'topic' as payload_topic FROM hitl_sessions WHERE status = 'pending' AND expires_at < NOW() ORDER BY expires_at ASC LIMIT 10;",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "id": "timeout-has-expired",
+      "name": "Has Expired Sessions?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-has-expired",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "timeout-post-to-x",
+      "name": "Post To X Auto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        -100
+      ],
+      "parameters": {
+        "jsCode": "// HITL Timeout Auto-Publish: post to X via OAuth 1.0a\nconst crypto = require(\"crypto\");\nconst https = require(\"https\");\n\nconst sessionData = $input.first().json;\nconst tweetText = sessionData.payload_draft || '';\nconst notionBlockId = sessionData.payload_notion_block_id || '';\nconst topic = sessionData.payload_topic || 'General';\nconst callbackId = sessionData.callback_id || '';\nconst sessionId = sessionData.id || '';\n\nif (!tweetText) {\n  return [{ json: { error: 'No draft in session', callbackId } }];\n}\n\nconst consumerKey = \"__X_CONSUMER_KEY__\";\nconst consumerSecret = \"__X_CONSUMER_SECRET__\";\nconst accessToken = \"__X_ACCESS_TOKEN__\";\nconst accessTokenSecret = \"__X_ACCESS_TOKEN_SECRET__\";\n\nconst method = \"POST\";\nconst url = \"https://api.twitter.com/2/tweets\";\nconst oauthTimestamp = Math.floor(Date.now() / 1000).toString();\nconst oauthNonce = crypto.randomBytes(16).toString(\"hex\");\n\nconst oauthParams = {\n  oauth_consumer_key: consumerKey,\n  oauth_nonce: oauthNonce,\n  oauth_signature_method: \"HMAC-SHA1\",\n  oauth_timestamp: oauthTimestamp,\n  oauth_token: accessToken,\n  oauth_version: \"1.0\"\n};\n\nconst sortedParams = Object.keys(oauthParams).sort().map(k =>\n  `${encodeURIComponent(k)}=${encodeURIComponent(oauthParams[k])}`\n).join(\"&\");\n\nconst sigBase = `${method}&${encodeURIComponent(url)}&${encodeURIComponent(sortedParams)}`;\nconst sigKey = `${encodeURIComponent(consumerSecret)}&${encodeURIComponent(accessTokenSecret)}`;\nconst signature = crypto.createHmac(\"sha1\", sigKey).update(sigBase).digest(\"base64\");\n\nconst authHeader = \"OAuth \" + [...Object.keys(oauthParams).sort().map(k =>\n  `${encodeURIComponent(k)}=\"${encodeURIComponent(oauthParams[k])}\"`)\n  , `oauth_signature=\"${encodeURIComponent(signature)}\"`].join(\", \");\n\nreturn new Promise((resolve, reject) => {\n  const body = JSON.stringify({ text: tweetText });\n  const options = {\n    method,\n    headers: {\n      \"Authorization\": authHeader,\n      \"Content-Type\": \"application/json\",\n      \"Content-Length\": Buffer.byteLength(body)\n    }\n  };\n  const req = https.request(url, options, (res) => {\n    let data = \"\";\n    res.on(\"data\", chunk => data += chunk);\n    res.on(\"end\", () => {\n      try {\n        const parsed = JSON.parse(data);\n        if (parsed.data && parsed.data.id) {\n          resolve([{ json: {\n            tweet_id: parsed.data.id,\n            tweet_text: tweetText,\n            tweet_url: `https://x.com/i/web/status/${parsed.data.id}`,\n            topic,\n            notionBlockId,\n            callbackId,\n            sessionId,\n            auto_published: true,\n            published_at: new Date().toISOString()\n          } }]);\n        } else {\n          resolve([{ json: { error: JSON.stringify(parsed), tweetText, callbackId } }]);\n        }\n      } catch(e) {\n        resolve([{ json: { error: data, callbackId } }]);\n      }\n    });\n  });\n  req.on(\"error\", reject);\n  req.write(body);\n  req.end();\n});"
+      }
+    },
+    {
+      "id": "timeout-save-published",
+      "name": "Save Published Auto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        -100
+      ],
+      "parameters": {
+        "jsCode": "// Prepare data for published_posts INSERT\n// Sprawdz czy post zostal opublikowany (tweet_id musi istniec)\nconst data = $input.first().json;\n\nif (!data.tweet_id || data.error) {\n  const errMsg = data.error || 'No tweet_id returned from X API';\n  throw new Error('X API error: ' + errMsg);\n}\n\nconst tweetText = (data.tweet_text || '').replace(/'/g, \"''\");\nconst topic = (data.topic || 'General').replace(/'/g, \"''\");\nconst notionBlockId = (data.notionBlockId || '').replace(/'/g, \"''\");\nconst tweetUrl = (data.tweet_url || '').replace(/'/g, \"''\");\nconst tweetId = (data.tweet_id || '').replace(/'/g, \"''\");\nconst callbackId = (data.callbackId || '').replace(/'/g, \"''\");\nreturn [{ json: {\n  tweet_text_esc: tweetText,\n  topic_esc: topic,\n  notionBlockId_esc: notionBlockId,\n  tweet_url_esc: tweetUrl,\n  tweet_id_esc: tweetId,\n  callbackId_esc: callbackId,\n  tweet_id: data.tweet_id,\n  tweet_url: data.tweet_url,\n  tweet_text: data.tweet_text,\n  notionBlockId: data.notionBlockId,\n  callbackId: data.callbackId\n} }];"
+      }
+    },
+    {
+      "id": "timeout-pg-save-published",
+      "name": "PostgreSQL Save Published Auto PG",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        600,
+        -100
+      ],
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "value": "public",
+          "__rl": true,
+          "mode": "list",
+          "cachedResultName": "public"
+        },
+        "table": {
+          "value": "published_posts",
+          "__rl": true,
+          "mode": "list",
+          "cachedResultName": "published_posts"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "platform": "x",
+            "brand": "AGS",
+            "content": "={{ $json.tweet_text_esc }}",
+            "post_id": "={{ $json.tweet_id_esc }}",
+            "post_url": "={{ $json.tweet_url_esc }}",
+            "notion_block_id": "={{ $json.notionBlockId_esc }}",
+            "topic": "={{ $json.topic_esc }}",
+            "hitl_action": "auto_timeout",
+            "metadata": "={{ JSON.stringify({callbackId: $json.callbackId, auto_published: true}) }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "id": "timeout-mark-resolved",
+      "name": "Mark Session Resolved Auto",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        800,
+        -100
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE hitl_sessions SET status = 'auto_published', resolved_at = NOW() WHERE callback_id = '{{ $('Save Published Auto').first().json.callbackId }}' RETURNING id, callback_id, status;",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "id": "timeout-telegram-notify",
+      "name": "Telegram Auto Published Notify",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1000,
+        -100
+      ],
+      "parameters": {
+        "chatId": "2106351328",
+        "text": "=Auto-opublikowano na X (timeout 1h):\n\n{{ $('Post To X Auto').first().json.tweet_text.substring(0,120) }}...\n\n{{ $('Post To X Auto').first().json.tweet_url }}",
+        "additionalFields": {}
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "cOUqADDFf7oDwlJ0",
+          "name": "Telegram @ags_social_bot"
+        }
+      },
+      "webhookId": "226951d6-363c-4038-a26c-e878c5542ae0"
+    },
+    {
+      "id": "timeout-notion-mark",
+      "name": "Notion Mark Auto Published",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        -100
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://api.notion.com/v1/blocks/' + $('Post To X Auto').first().json.notionBlockId }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "paragraph",
+              "value": "={{ JSON.stringify({rich_text: [{type: 'text', text: {content: '[AUTO-PUBLISHED: ' + new Date().toISOString().substring(0,10) + ']'}}]}) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "b3LFS2HWlkA9CZ9L",
+          "name": "Notion Bearer Direct"
+        }
+      }
+    },
+    {
+      "id": "timeout-noop",
+      "name": "NoOp No Expired",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        200,
+        100
+      ],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Expired Sessions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Expired Sessions": {
+      "main": [
+        [
+          {
+            "node": "Has Expired Sessions?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Expired Sessions?": {
+      "main": [
+        [
+          {
+            "node": "Post To X Auto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "NoOp No Expired",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post To X Auto": {
+      "main": [
+        [
+          {
+            "node": "Save Published Auto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Published Auto": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL Save Published Auto PG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL Save Published Auto PG": {
+      "main": [
+        [
+          {
+            "node": "Mark Session Resolved Auto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Session Resolved Auto": {
+      "main": [
+        [
+          {
+            "node": "Telegram Auto Published Notify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Auto Published Notify": {
+      "main": [
+        [
+          {
+            "node": "Notion Mark Auto Published",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "timezone": "Europe/Warsaw"
+  },
+  "staticData": {
+    "node:Schedule Trigger": {
+      "recurrenceRules": []
+    }
+  },
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": null,
+  "versionId": "ef3e9b94-e1e4-4004-b116-a9527a252266",
+  "activeVersionId": null,
+  "versionCounter": 3,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-06-06T20:08:19.202Z",
+      "createdAt": "2026-06-06T20:08:19.202Z",
+      "role": "workflow:owner",
+      "workflowId": "GauYOvKSrhnPgI8R",
+      "projectId": "AVGJSTgEgAPPwXHX",
+      "project": {
+        "updatedAt": "2026-04-18T08:31:32.266Z",
+        "createdAt": "2026-04-18T08:22:28.807Z",
+        "id": "AVGJSTgEgAPPwXHX",
+        "name": "Tomasz Nawrocki <mr.tomasz.nawrocki@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "c804b804-01e6-4f71-83c2-0494b200789b"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": null
+}

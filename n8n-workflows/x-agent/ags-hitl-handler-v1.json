@@ -1,0 +1,2623 @@
+{
+  "updatedAt": "2026-06-10T07:13:13.382Z",
+  "createdAt": "2026-06-01T07:09:59.480Z",
+  "id": "U5pUZjy2yAhR1sWg",
+  "name": "AGS HITL Handler v1.0",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "callback_query",
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "node-telegram-trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -208,
+        0
+      ],
+      "webhookId": "eb7b6eb4-1cf3-4f98-bff8-4a0db532bddc",
+      "credentials": {
+        "telegramApi": {
+          "id": "cOUqADDFf7oDwlJ0",
+          "name": "Telegram @ags_social_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = items[0].json;\n\nif (item.callback_query) {\n  return [{ json: { type: 'callback', data: item.callback_query } }];\n}\n\nif (item.message?.text?.startsWith('/queue')) {\n  return [{ json: { type: 'queue_command', chat_id: item.message.chat.id } }];\n}\n\nif (item.message?.text && !item.message?.text?.startsWith('/')) {\n  // Plain text - could be edit_submit, will check conversation_state next\n  return [{ json: {\n    type: 'plain_text',\n    chat_id: item.message.chat.id,\n    text: item.message.text\n  }}];\n}\n\nreturn [{ json: { type: 'other' } }];"
+      },
+      "id": "node-detect-update-type",
+      "name": "Detect Update Type",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-callback",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "callback",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "callback"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-queue",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "queue_command",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "queue_command"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-plain",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "plain_text",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "plain_text"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-other",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "other",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "other"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-switch-update-type",
+      "name": "Route By Update Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        224,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const callbackQuery = $json.data;\nconst callbackData = callbackQuery.data || '';\nconst callbackQueryId = callbackQuery.id || '';\nconst chatId = callbackQuery.message?.chat?.id || '';\nconst messageId = callbackQuery.message?.message_id || '';\nconst separatorIndex = callbackData.lastIndexOf(':');\nlet callbackId = '';\nlet action = '';\nif (separatorIndex !== -1) {\n  callbackId = callbackData.substring(0, separatorIndex);\n  action = callbackData.substring(separatorIndex + 1);\n} else {\n  callbackId = callbackData;\n  action = 'unknown';\n}\nreturn [{\n  json: {\n    callbackId,\n    action,\n    callbackQueryId,\n    chatId,\n    messageId,\n    rawCallbackData: callbackData\n  }\n}];"
+      },
+      "id": "node-extract-callback-parts",
+      "name": "Extract Callback Parts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        -368
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, callback_id, execution_id, resume_url, status, expires_at, payload FROM hitl_sessions WHERE callback_id = '{{ $json.callbackId }}' AND status = 'pending' LIMIT 1;",
+        "options": {
+          "queryReplacement": "={{ $json.callbackId }},pending"
+        }
+      },
+      "id": "node-postgres-lookup-session",
+      "name": "PostgreSQL Lookup Session",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        672,
+        -288
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const sessionRows = $input.all();\nconst callbackContext = $('Extract Callback Parts').first().json;\nlet sessionFound = false;\nlet sessionValid = false;\nlet resumeUrl = '';\nlet sessionId = '';\nlet expiresAt = null;\nlet payload = {};\nif (sessionRows.length > 0 && sessionRows[0].json.id) {\n  const session = sessionRows[0].json;\n  sessionFound = true;\n  resumeUrl = session.resume_url || '';\n  sessionId = session.id;\n  expiresAt = session.expires_at ? new Date(session.expires_at) : null;\n  payload = session.payload || {};\n  // Session is valid if status=pending (already filtered in SQL query)\n  // Timeout: 8 hours from expires_at (which was set to 30min, so add 7.5h buffer)\n  // Simpler: if session was found with status=pending, it's valid\n  sessionValid = true;\n}\nreturn [{\n  json: {\n    ...callbackContext,\n    sessionFound,\n    sessionValid,\n    sessionId,\n    resumeUrl,\n    payload,\n    expiresAt: expiresAt ? expiresAt.toISOString() : null,\n    resolvedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "node-merge-session-and-callback",
+      "name": "Merge Session And Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -288
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-session-valid",
+              "leftValue": "={{ $json.sessionValid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-if-session-valid",
+      "name": "Session Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1072,
+        -288
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-approve",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "approve",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "approve"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-reject",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "reject",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "reject"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-edit",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "edit",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "edit"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-route-callback-action",
+      "name": "Route Callback Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1344,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.resumeUrl }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "action",
+              "value": "={{ $json.action || \"approve\" }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "node-http-resume-workflow",
+      "name": "HTTP Resume Main Workflow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1152,
+        -576
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE hitl_sessions SET status = 'resolved', resolved_at = NOW() WHERE callback_id = '{{ $('Merge Session And Callback').first().json.callbackId }}' RETURNING id, callback_id, status;",
+        "options": {}
+      },
+      "id": "node-postgres-mark-resolved",
+      "name": "PostgreSQL Mark Resolved",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1824,
+        -400
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO conversation_state (chat_id, state, payload, updated_at) VALUES ({{ $json.chatId }}, 'awaiting_edit', jsonb_build_object('draft', {{ JSON.stringify($json.payload && $json.payload.draft ? $json.payload.draft : '') }}::text, 'notionBlockId', {{ JSON.stringify($json.payload && $json.payload.notionBlockId ? $json.payload.notionBlockId : '') }}::text, 'topic', {{ JSON.stringify($json.payload && $json.payload.topic ? $json.payload.topic : 'General') }}::text, 'callbackId', {{ JSON.stringify($json.callbackId) }}::text), NOW()) ON CONFLICT (chat_id) DO UPDATE SET state = 'awaiting_edit', payload = EXCLUDED.payload, updated_at = NOW() RETURNING id, chat_id, state;",
+        "options": {}
+      },
+      "id": "node-pg-set-awaiting-edit",
+      "name": "PostgreSQL Set Awaiting Edit",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1824,
+        -176
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Merge Session And Callback').first().json.chatId }}",
+        "text": "=Oto obecna wersja:\n\n{{ $('Merge Session And Callback').first().json.payload.draft || '[brak draftu]' }}\n\nWyslij edytowana wersje:",
+        "additionalFields": {}
+      },
+      "id": "node-telegram-send-draft-for-edit",
+      "name": "Telegram Send Draft For Edit",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2288,
+        -176
+      ],
+      "webhookId": "929facb2-8f63-401a-b592-dd2dcc3ddcdd",
+      "credentials": {
+        "telegramApi": {
+          "id": "cOUqADDFf7oDwlJ0",
+          "name": "Telegram @ags_social_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, state, payload FROM conversation_state WHERE chat_id = {{ $json.chat_id }} AND state = 'awaiting_edit' LIMIT 1;",
+        "options": {}
+      },
+      "id": "node-pg-check-edit-state",
+      "name": "PostgreSQL Check Edit State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        672,
+        352
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-edit-state",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-if-edit-state-valid",
+      "name": "Edit State Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        864,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge edited text with state payload\nconst stateRow = $input.first().json;\nconst editedText = $('Route By Update Type').first().json.text || '';\nconst chatId = $('Route By Update Type').first().json.chat_id;\nconst payload = stateRow.payload || {};\n\n// Basic validation\nconst charCount = editedText.length;\nconst hasEmDash = editedText.includes('\\u2014');\nconst canonPass = !hasEmDash && charCount <= 280 && charCount > 0;\n\nreturn [{\n  json: {\n    editedText,\n    chatId,\n    notionBlockId: payload.notionBlockId || '',\n    topic: payload.topic || 'General',\n    callbackId: payload.callbackId || '',\n    charCount,\n    canonPass,\n    violations: [\n      ...(hasEmDash ? ['em_dash'] : []),\n      ...(charCount > 280 ? ['too_long'] : []),\n      ...(charCount === 0 ? ['empty'] : [])\n    ]\n  }\n}];"
+      },
+      "id": "node-prepare-edit-publish",
+      "name": "Prepare Edit Publish",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-canon",
+              "leftValue": "={{ $json.canonPass }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-if-edit-canon-pass",
+      "name": "Edit Canon Pass?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1312,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Post edited text to X via OAuth 1.0a\nconst crypto = require(\"crypto\");\nconst https = require(\"https\");\nconst tweetText = $json.editedText || '';\nconst consumerKey = \"__X_CONSUMER_KEY__\";\nconst consumerSecret = \"__X_CONSUMER_SECRET__\";\nconst accessToken = \"__X_ACCESS_TOKEN__\";\nconst accessTokenSecret = \"__X_ACCESS_TOKEN_SECRET__\";\nconst method = \"POST\";\nconst url = \"https://api.twitter.com/2/tweets\";\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst nonce = crypto.randomBytes(16).toString(\"hex\");\nconst oauthParams = {\n  oauth_consumer_key: consumerKey,\n  oauth_nonce: nonce,\n  oauth_signature_method: \"HMAC-SHA1\",\n  oauth_timestamp: timestamp,\n  oauth_token: accessToken,\n  oauth_version: \"1.0\"\n};\nconst sortedParams = Object.keys(oauthParams).sort().map(k =>\n  encodeURIComponent(k) + \"=\" + encodeURIComponent(oauthParams[k])\n).join(\"&\");\nconst signingKey = encodeURIComponent(consumerSecret) + \"&\" + encodeURIComponent(accessTokenSecret);\nconst baseString = method + \"&\" + encodeURIComponent(url) + \"&\" + encodeURIComponent(sortedParams);\nconst signature = crypto.createHmac(\"sha1\", signingKey).update(baseString).digest(\"base64\");\noauthParams.oauth_signature = signature;\nconst authHeader = \"OAuth \" + Object.keys(oauthParams).sort().map(k =>\n  encodeURIComponent(k) + '=\"' + encodeURIComponent(oauthParams[k]) + '\"'\n).join(\", \");\nconst body = JSON.stringify({ text: tweetText });\nconst result = await new Promise((resolve, reject) => {\n  const req = https.request({\n    hostname: \"api.twitter.com\",\n    path: \"/2/tweets\",\n    method: \"POST\",\n    headers: {\n      \"Authorization\": authHeader,\n      \"Content-Type\": \"application/json\",\n      \"Content-Length\": Buffer.byteLength(body)\n    }\n  }, (res) => {\n    let data = \"\";\n    res.on(\"data\", chunk => data += chunk);\n    res.on(\"end\", () => {\n      try { resolve({ statusCode: res.statusCode, body: JSON.parse(data) }); }\n      catch(e) { resolve({ statusCode: res.statusCode, body: data }); }\n    });\n  });\n  req.on(\"error\", reject);\n  req.write(body);\n  req.end();\n});\nconst tweetId = result.body?.data?.id || null;\nreturn [{\n  json: {\n    ...$json,\n    tweet_id: tweetId,\n    tweet_text: tweetText,\n    tweet_url: tweetId ? \"https://x.com/i/web/status/\" + tweetId : null,\n    status_code: result.statusCode,\n    response: result.body\n  }\n}];"
+      },
+      "id": "node-post-edited-to-x",
+      "name": "Post Edited To X",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE conversation_state SET state = 'idle', payload = '{}', updated_at = NOW() WHERE chat_id = {{ $('Prepare Edit Publish').first().json.chatId }};",
+        "options": {}
+      },
+      "id": "node-pg-clear-edit-state",
+      "name": "PostgreSQL Clear Edit State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        2080,
+        48
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Prepare Edit Publish').first().json.chatId }}",
+        "text": "=Opublikowano (edytowany):\n{{ $('Post Edited To X').first().json.tweet_url }}\n\n{{ $('Post Edited To X').first().json.tweet_text }}",
+        "additionalFields": {}
+      },
+      "id": "node-telegram-confirm-edit-published",
+      "name": "Telegram Confirm Edit Published",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2288,
+        48
+      ],
+      "webhookId": "6875db92-7cfd-4447-a2be-0b37ce6ba7ad",
+      "credentials": {
+        "telegramApi": {
+          "id": "cOUqADDFf7oDwlJ0",
+          "name": "Telegram @ags_social_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "=Blad: {{ $json.violations.join(', ') }}. Popraw i wyslij ponownie.",
+        "additionalFields": {}
+      },
+      "id": "node-telegram-canon-fail-edit",
+      "name": "Telegram Canon Fail Edit",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1520,
+        224
+      ],
+      "webhookId": "60b065ca-7d4b-4058-9359-50e608c099d6",
+      "credentials": {
+        "telegramApi": {
+          "id": "cOUqADDFf7oDwlJ0",
+          "name": "Telegram @ags_social_bot"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "node-noop-no-edit-state",
+      "name": "NoOp No Edit State",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COUNT(*) AS posts_today FROM published_posts WHERE platform = 'x' AND published_at::date = CURRENT_DATE;",
+        "options": {}
+      },
+      "id": "node-postgres-count-posts-today",
+      "name": "PostgreSQL Count Posts Today",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        672,
+        144
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COUNT(*) AS pending_count FROM hitl_sessions WHERE status = 'pending' AND expires_at > NOW();",
+        "options": {}
+      },
+      "id": "node-postgres-count-pending",
+      "name": "PostgreSQL Count Pending Approvals",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        672,
+        -64
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const allInputs = $input.all();\nlet postsToday = 0;\nlet pendingCount = 0;\nfor (const item of allInputs) {\n  if (item.json.posts_today !== undefined) postsToday = parseInt(item.json.posts_today) || 0;\n  if (item.json.pending_count !== undefined) pendingCount = parseInt(item.json.pending_count) || 0;\n}\nconst chatId = $('Route By Update Type').first().json.chat_id || '2106351328';\nreturn [{ json: { postsToday, pendingCount, chatId } }];"
+      },
+      "id": "node-merge-queue-stats",
+      "name": "Merge Queue Stats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        864,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "=X Agent Status:\n- Posts today: {{ $json.postsToday }}/5\n- Pending approvals: {{ $json.pendingCount }}",
+        "additionalFields": {}
+      },
+      "id": "node-telegram-queue-status",
+      "name": "Telegram Queue Status",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1088,
+        -48
+      ],
+      "webhookId": "eb7b6eb4-1cf3-4f98-bff8-4a0db532bddc",
+      "credentials": {
+        "telegramApi": {
+          "id": "cOUqADDFf7oDwlJ0",
+          "name": "Telegram @ags_social_bot"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "node-noop-other",
+      "name": "NoOp Other Updates",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        672,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Post to X via OAuth 1.0a\nconst crypto = require(\"crypto\");\nconst https = require(\"https\");\n\n// Get draft from session payload\nconst sessionData = $('Merge Session And Callback').first().json;\nconst tweetText = sessionData.payload?.draft || sessionData.draft || '';\nconst notionBlockId = sessionData.payload?.notionBlockId || sessionData.notionBlockId || '';\nconst topic = sessionData.payload?.topic || sessionData.topic || 'General';\nconst callbackId = sessionData.callbackId || '';\n\nif (!tweetText) {\n  return [{ json: { error: 'No draft in session payload', callbackId } }];\n}\n\nconst consumerKey = \"__X_CONSUMER_KEY__\";\nconst consumerSecret = \"__X_CONSUMER_SECRET__\";\nconst accessToken = \"__X_ACCESS_TOKEN__\";\nconst accessTokenSecret = \"__X_ACCESS_TOKEN_SECRET__\";\n\nconst method = \"POST\";\nconst url = \"https://api.twitter.com/2/tweets\";\nconst oauthTimestamp = Math.floor(Date.now() / 1000).toString();\nconst oauthNonce = crypto.randomBytes(16).toString(\"hex\");\n\nconst oauthParams = {\n  oauth_consumer_key: consumerKey,\n  oauth_nonce: oauthNonce,\n  oauth_signature_method: \"HMAC-SHA1\",\n  oauth_timestamp: oauthTimestamp,\n  oauth_token: accessToken,\n  oauth_version: \"1.0\"\n};\n\nconst sortedParams = Object.keys(oauthParams).sort().map(k =>\n  `${encodeURIComponent(k)}=${encodeURIComponent(oauthParams[k])}`\n).join(\"&\");\n\nconst sigBase = `${method}&${encodeURIComponent(url)}&${encodeURIComponent(sortedParams)}`;\nconst sigKey = `${encodeURIComponent(consumerSecret)}&${encodeURIComponent(accessTokenSecret)}`;\nconst signature = crypto.createHmac(\"sha1\", sigKey).update(sigBase).digest(\"base64\");\n\nconst authHeader = \"OAuth \" + Object.keys(oauthParams).sort().map(k =>\n  `${encodeURIComponent(k)}=\"${encodeURIComponent(oauthParams[k])}\"`\n).join(\", \") + `, oauth_signature=\"${encodeURIComponent(signature)}\"`;\n\nconst body = JSON.stringify({ text: tweetText });\n\nconst result = await new Promise((resolve, reject) => {\n  const req = https.request({\n    hostname: \"api.twitter.com\",\n    path: \"/2/tweets\",\n    method: \"POST\",\n    headers: {\n      \"Authorization\": authHeader,\n      \"Content-Type\": \"application/json\",\n      \"Content-Length\": Buffer.byteLength(body)\n    }\n  }, (res) => {\n    let data = \"\";\n    res.on(\"data\", chunk => data += chunk);\n    res.on(\"end\", () => resolve({ status: res.statusCode, body: JSON.parse(data) }));\n  });\n  req.on(\"error\", reject);\n  req.write(body);\n  req.end();\n});\n\nconst tweetId = result.body?.data?.id || \"\";\nconst tweetUrl = tweetId ? `https://x.com/i/web/status/${tweetId}` : \"\";\n\nreturn [{ json: {\n  tweet_id: tweetId,\n  tweet_url: tweetUrl,\n  tweet_text: tweetText,\n  notionBlockId,\n  topic,\n  callbackId,\n  x_status: result.status\n}}];"
+      },
+      "id": "hitl-post-to-x-approve",
+      "name": "Post To X Approve",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        -608
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "2106351328",
+        "text": "=Opublikowano na X!\n\n{{ $('Post To X Approve').first().json.tweet_text.substring(0,100) }}...\n\n{{ $('Post To X Approve').first().json.tweet_url }}",
+        "additionalFields": {}
+      },
+      "id": "hitl-tg-published-confirm",
+      "name": "Telegram Published Confirm Approve",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2272,
+        -496
+      ],
+      "webhookId": "925dd21c-be82-4659-9064-b7a2ad47c715",
+      "credentials": {
+        "telegramApi": {
+          "id": "cOUqADDFf7oDwlJ0",
+          "name": "Telegram @ags_social_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "2106351328",
+        "text": "=Post odrzucony. Temat: {{ $('Merge Session And Callback').first().json.payload?.topic || 'General' }}",
+        "additionalFields": {}
+      },
+      "id": "hitl-tg-rejected-confirm",
+      "name": "Telegram Rejected Confirm Handler",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2080,
+        -304
+      ],
+      "webhookId": "15de8336-f913-4701-afaf-557c3e4515f8",
+      "credentials": {
+        "telegramApi": {
+          "id": "cOUqADDFf7oDwlJ0",
+          "name": "Telegram @ags_social_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/answerCallbackQuery",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ callback_query_id: $json.callbackQueryId, text: '' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 5000
+        }
+      },
+      "id": "hitl-tg-answer-immediate",
+      "name": "Telegram Answer Callback Immediate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        -528
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Save published post - escape apostrophes for SQL safety\nconst data = $input.first().json;\nconst tweetText = (data.tweet_text || data.editedText || '').replace(/'/g, \"''\");\nconst topic = (data.topic || 'General').replace(/'/g, \"''\");\nconst notionBlockId = (data.notionBlockId || '').replace(/'/g, \"''\");\nconst tweetUrl = (data.tweet_url || '').replace(/'/g, \"''\");\nconst tweetId = (data.tweet_id || '').replace(/'/g, \"''\");\n\nreturn [{ json: {\n  content_esc: tweetText,\n  topic_esc: topic,\n  notion_block_id_esc: notionBlockId,\n  post_url_esc: tweetUrl,\n  post_id_esc: tweetId,\n  tweet_text: data.tweet_text || data.editedText || '',\n  tweet_url: data.tweet_url || '',\n  tweet_id: data.tweet_id || '',\n  notionBlockId: data.notionBlockId || '',\n  topic: data.topic || 'General'\n}}];"
+      },
+      "id": "hitl-save-published-post-code",
+      "name": "PostgreSQL Save Published Post",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1696,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "schema": {
+          "value": "public",
+          "__rl": true,
+          "mode": "list",
+          "cachedResultName": "public"
+        },
+        "table": {
+          "value": "published_posts",
+          "__rl": true,
+          "mode": "list",
+          "cachedResultName": "published_posts"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "platform": "x",
+            "brand": "AGS",
+            "content": "={{ $json.content_esc }}",
+            "topic": "={{ $json.topic_esc }}",
+            "notion_block_id": "={{ $json.notion_block_id_esc }}",
+            "post_url": "={{ $json.post_url_esc }}",
+            "post_id": "={{ $json.post_id_esc }}",
+            "hitl_action": "edit"
+          },
+          "matchingColumns": [
+            "post_id"
+          ],
+          "schema": []
+        },
+        "options": {
+          "skipOnConflict": true
+        }
+      },
+      "id": "hitl-save-published-post-pg",
+      "name": "PostgreSQL Save Published Post PG",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1888,
+        48
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Save published post (approve flow) - escape apostrophes for SQL safety\nconst data = $input.first().json;\nconst tweetText = (data.tweet_text || '').replace(/'/g, \"''\");\nconst topic = (data.topic || 'General').replace(/'/g, \"''\");\nconst notionBlockId = (data.notionBlockId || '').replace(/'/g, \"''\");\nconst tweetUrl = (data.tweet_url || '').replace(/'/g, \"''\");\nconst tweetId = (data.tweet_id || '').replace(/'/g, \"''\");\n\nreturn [{ json: {\n  content_esc: tweetText,\n  topic_esc: topic,\n  notion_block_id_esc: notionBlockId,\n  post_url_esc: tweetUrl,\n  post_id_esc: tweetId,\n  tweet_text: data.tweet_text || '',\n  tweet_url: data.tweet_url || '',\n  tweet_id: data.tweet_id || ''\n}}];"
+      },
+      "id": "hitl-save-published-approve-code",
+      "name": "PostgreSQL Save Published Approve",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        -608
+      ]
+    },
+    {
+      "parameters": {
+        "schema": {
+          "value": "public",
+          "__rl": true,
+          "mode": "list",
+          "cachedResultName": "public"
+        },
+        "table": {
+          "value": "published_posts",
+          "__rl": true,
+          "mode": "list",
+          "cachedResultName": "published_posts"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "platform": "x",
+            "brand": "AGS",
+            "content": "={{ $json.content_esc }}",
+            "topic": "={{ $json.topic_esc }}",
+            "notion_block_id": "={{ $json.notion_block_id_esc }}",
+            "post_url": "={{ $json.post_url_esc }}",
+            "post_id": "={{ $json.post_id_esc }}",
+            "hitl_action": "approve"
+          },
+          "matchingColumns": [
+            "post_id"
+          ],
+          "schema": []
+        },
+        "options": {
+          "skipOnConflict": true
+        }
+      },
+      "id": "hitl-save-published-approve-pg",
+      "name": "PostgreSQL Save Published Approve PG",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2080,
+        -496
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://api.notion.com/v1/blocks/' + $json.notion_block_id_esc }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ bulleted_list_item: { rich_text: [{ type: 'text', text: { content: ($('PostgreSQL Lookup Session').item.json[0].payload.rawText || $('PostgreSQL Lookup Session').item.json[0].payload.text || '') + ' [PUBLISHED: ' + new Date().toISOString().slice(0,10) + ']' } }] } }) }}",
+        "options": {}
+      },
+      "id": "notion-mark-published-h001",
+      "name": "Notion Mark Published",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2080,
+        -656
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "b3LFS2HWlkA9CZ9L",
+          "name": "Notion Bearer Direct"
+        }
+      },
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Detect Update Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Update Type": {
+      "main": [
+        [
+          {
+            "node": "Route By Update Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route By Update Type": {
+      "main": [
+        [
+          {
+            "node": "Extract Callback Parts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PostgreSQL Count Posts Today",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "PostgreSQL Count Pending Approvals",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PostgreSQL Check Edit State",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "NoOp Other Updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Callback Parts": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL Lookup Session",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Telegram Answer Callback Immediate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL Lookup Session": {
+      "main": [
+        [
+          {
+            "node": "Merge Session And Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Session And Callback": {
+      "main": [
+        [
+          {
+            "node": "Session Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Session Valid?": {
+      "main": [
+        [
+          {
+            "node": "Route Callback Action",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Route Callback Action": {
+      "main": [
+        [
+          {
+            "node": "Post To X Approve",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram Rejected Confirm Handler",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "PostgreSQL Mark Resolved",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PostgreSQL Set Awaiting Edit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL Mark Resolved": {
+      "main": [
+        []
+      ]
+    },
+    "PostgreSQL Set Awaiting Edit": {
+      "main": [
+        [
+          {
+            "node": "Telegram Send Draft For Edit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL Check Edit State": {
+      "main": [
+        [
+          {
+            "node": "Edit State Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit State Valid?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Edit Publish",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "NoOp No Edit State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Edit Publish": {
+      "main": [
+        [
+          {
+            "node": "Edit Canon Pass?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Canon Pass?": {
+      "main": [
+        [
+          {
+            "node": "Post Edited To X",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram Canon Fail Edit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Edited To X": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL Save Published Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL Clear Edit State": {
+      "main": [
+        [
+          {
+            "node": "Telegram Confirm Edit Published",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL Count Posts Today": {
+      "main": [
+        [
+          {
+            "node": "Merge Queue Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL Count Pending Approvals": {
+      "main": [
+        [
+          {
+            "node": "Merge Queue Stats",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Queue Stats": {
+      "main": [
+        [
+          {
+            "node": "Telegram Queue Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post To X Approve": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL Save Published Approve",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "PostgreSQL Mark Resolved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Answer Callback Immediate": {
+      "main": [
+        []
+      ]
+    },
+    "PostgreSQL Save Published Post": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL Save Published Post PG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL Save Published Post PG": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL Clear Edit State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL Save Published Approve": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL Save Published Approve PG",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Notion Mark Published",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL Save Published Approve PG": {
+      "main": [
+        [
+          {
+            "node": "Telegram Published Confirm Approve",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "2a65bac7-18f7-4317-bc7f-3b81abd5e56a",
+  "activeVersionId": "2a65bac7-18f7-4317-bc7f-3b81abd5e56a",
+  "versionCounter": 71,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-06-01T07:09:59.480Z",
+      "createdAt": "2026-06-01T07:09:59.480Z",
+      "role": "workflow:owner",
+      "workflowId": "U5pUZjy2yAhR1sWg",
+      "projectId": "AVGJSTgEgAPPwXHX",
+      "project": {
+        "updatedAt": "2026-04-18T08:31:32.266Z",
+        "createdAt": "2026-04-18T08:22:28.807Z",
+        "id": "AVGJSTgEgAPPwXHX",
+        "name": "Tomasz Nawrocki <mr.tomasz.nawrocki@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "c804b804-01e6-4f71-83c2-0494b200789b"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-06-10T07:14:23.072Z",
+    "createdAt": "2026-06-10T07:13:13.389Z",
+    "versionId": "2a65bac7-18f7-4317-bc7f-3b81abd5e56a",
+    "workflowId": "U5pUZjy2yAhR1sWg",
+    "nodes": [
+      {
+        "parameters": {
+          "updates": [
+            "callback_query",
+            "message"
+          ],
+          "additionalFields": {}
+        },
+        "id": "node-telegram-trigger",
+        "name": "Telegram Trigger",
+        "type": "n8n-nodes-base.telegramTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          -208,
+          0
+        ],
+        "webhookId": "eb7b6eb4-1cf3-4f98-bff8-4a0db532bddc",
+        "credentials": {
+          "telegramApi": {
+            "id": "cOUqADDFf7oDwlJ0",
+            "name": "Telegram @ags_social_bot"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const item = items[0].json;\n\nif (item.callback_query) {\n  return [{ json: { type: 'callback', data: item.callback_query } }];\n}\n\nif (item.message?.text?.startsWith('/queue')) {\n  return [{ json: { type: 'queue_command', chat_id: item.message.chat.id } }];\n}\n\nif (item.message?.text && !item.message?.text?.startsWith('/')) {\n  // Plain text - could be edit_submit, will check conversation_state next\n  return [{ json: {\n    type: 'plain_text',\n    chat_id: item.message.chat.id,\n    text: item.message.text\n  }}];\n}\n\nreturn [{ json: { type: 'other' } }];"
+        },
+        "id": "node-detect-update-type",
+        "name": "Detect Update Type",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          0,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "sw-callback",
+                      "leftValue": "={{ $json.type }}",
+                      "rightValue": "callback",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "callback"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "sw-queue",
+                      "leftValue": "={{ $json.type }}",
+                      "rightValue": "queue_command",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "queue_command"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "sw-plain",
+                      "leftValue": "={{ $json.type }}",
+                      "rightValue": "plain_text",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "plain_text"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "sw-other",
+                      "leftValue": "={{ $json.type }}",
+                      "rightValue": "other",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "other"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "node-switch-update-type",
+        "name": "Route By Update Type",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.2,
+        "position": [
+          224,
+          -32
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const callbackQuery = $json.data;\nconst callbackData = callbackQuery.data || '';\nconst callbackQueryId = callbackQuery.id || '';\nconst chatId = callbackQuery.message?.chat?.id || '';\nconst messageId = callbackQuery.message?.message_id || '';\nconst separatorIndex = callbackData.lastIndexOf(':');\nlet callbackId = '';\nlet action = '';\nif (separatorIndex !== -1) {\n  callbackId = callbackData.substring(0, separatorIndex);\n  action = callbackData.substring(separatorIndex + 1);\n} else {\n  callbackId = callbackData;\n  action = 'unknown';\n}\nreturn [{\n  json: {\n    callbackId,\n    action,\n    callbackQueryId,\n    chatId,\n    messageId,\n    rawCallbackData: callbackData\n  }\n}];"
+        },
+        "id": "node-extract-callback-parts",
+        "name": "Extract Callback Parts",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          448,
+          -368
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT id, callback_id, execution_id, resume_url, status, expires_at, payload FROM hitl_sessions WHERE callback_id = '{{ $json.callbackId }}' AND status = 'pending' LIMIT 1;",
+          "options": {
+            "queryReplacement": "={{ $json.callbackId }},pending"
+          }
+        },
+        "id": "node-postgres-lookup-session",
+        "name": "PostgreSQL Lookup Session",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          672,
+          -288
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const sessionRows = $input.all();\nconst callbackContext = $('Extract Callback Parts').first().json;\nlet sessionFound = false;\nlet sessionValid = false;\nlet resumeUrl = '';\nlet sessionId = '';\nlet expiresAt = null;\nlet payload = {};\nif (sessionRows.length > 0 && sessionRows[0].json.id) {\n  const session = sessionRows[0].json;\n  sessionFound = true;\n  resumeUrl = session.resume_url || '';\n  sessionId = session.id;\n  expiresAt = session.expires_at ? new Date(session.expires_at) : null;\n  payload = session.payload || {};\n  // Session is valid if status=pending (already filtered in SQL query)\n  // Timeout: 8 hours from expires_at (which was set to 30min, so add 7.5h buffer)\n  // Simpler: if session was found with status=pending, it's valid\n  sessionValid = true;\n}\nreturn [{\n  json: {\n    ...callbackContext,\n    sessionFound,\n    sessionValid,\n    sessionId,\n    resumeUrl,\n    payload,\n    expiresAt: expiresAt ? expiresAt.toISOString() : null,\n    resolvedAt: new Date().toISOString()\n  }\n}];"
+        },
+        "id": "node-merge-session-and-callback",
+        "name": "Merge Session And Callback",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          880,
+          -288
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "id": "cond-session-valid",
+                "leftValue": "={{ $json.sessionValid }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "node-if-session-valid",
+        "name": "Session Valid?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1072,
+          -288
+        ]
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "sw-approve",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "approve",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "approve"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "sw-reject",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "reject",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "reject"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "sw-edit",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "edit",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "edit"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "node-route-callback-action",
+        "name": "Route Callback Action",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.2,
+        "position": [
+          1344,
+          -320
+        ]
+      },
+      {
+        "parameters": {
+          "url": "={{ $json.resumeUrl }}",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "action",
+                "value": "={{ $json.action || \"approve\" }}"
+              }
+            ]
+          },
+          "options": {
+            "timeout": 10000
+          }
+        },
+        "id": "node-http-resume-workflow",
+        "name": "HTTP Resume Main Workflow",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1152,
+          -576
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE hitl_sessions SET status = 'resolved', resolved_at = NOW() WHERE callback_id = '{{ $('Merge Session And Callback').first().json.callbackId }}' RETURNING id, callback_id, status;",
+          "options": {}
+        },
+        "id": "node-postgres-mark-resolved",
+        "name": "PostgreSQL Mark Resolved",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          1824,
+          -400
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO conversation_state (chat_id, state, payload, updated_at) VALUES ({{ $json.chatId }}, 'awaiting_edit', jsonb_build_object('draft', {{ JSON.stringify($json.payload && $json.payload.draft ? $json.payload.draft : '') }}::text, 'notionBlockId', {{ JSON.stringify($json.payload && $json.payload.notionBlockId ? $json.payload.notionBlockId : '') }}::text, 'topic', {{ JSON.stringify($json.payload && $json.payload.topic ? $json.payload.topic : 'General') }}::text, 'callbackId', {{ JSON.stringify($json.callbackId) }}::text), NOW()) ON CONFLICT (chat_id) DO UPDATE SET state = 'awaiting_edit', payload = EXCLUDED.payload, updated_at = NOW() RETURNING id, chat_id, state;",
+          "options": {}
+        },
+        "id": "node-pg-set-awaiting-edit",
+        "name": "PostgreSQL Set Awaiting Edit",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          1824,
+          -176
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "chatId": "={{ $('Merge Session And Callback').first().json.chatId }}",
+          "text": "=Oto obecna wersja:\n\n{{ $('Merge Session And Callback').first().json.payload.draft || '[brak draftu]' }}\n\nWyslij edytowana wersje:",
+          "additionalFields": {}
+        },
+        "id": "node-telegram-send-draft-for-edit",
+        "name": "Telegram Send Draft For Edit",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          2288,
+          -176
+        ],
+        "webhookId": "929facb2-8f63-401a-b592-dd2dcc3ddcdd",
+        "credentials": {
+          "telegramApi": {
+            "id": "cOUqADDFf7oDwlJ0",
+            "name": "Telegram @ags_social_bot"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT id, state, payload FROM conversation_state WHERE chat_id = {{ $json.chat_id }} AND state = 'awaiting_edit' LIMIT 1;",
+          "options": {}
+        },
+        "id": "node-pg-check-edit-state",
+        "name": "PostgreSQL Check Edit State",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          672,
+          352
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "id": "cond-edit-state",
+                "leftValue": "={{ $json.id }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "node-if-edit-state-valid",
+        "name": "Edit State Valid?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          864,
+          352
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Merge edited text with state payload\nconst stateRow = $input.first().json;\nconst editedText = $('Route By Update Type').first().json.text || '';\nconst chatId = $('Route By Update Type').first().json.chat_id;\nconst payload = stateRow.payload || {};\n\n// Basic validation\nconst charCount = editedText.length;\nconst hasEmDash = editedText.includes('\\u2014');\nconst canonPass = !hasEmDash && charCount <= 280 && charCount > 0;\n\nreturn [{\n  json: {\n    editedText,\n    chatId,\n    notionBlockId: payload.notionBlockId || '',\n    topic: payload.topic || 'General',\n    callbackId: payload.callbackId || '',\n    charCount,\n    canonPass,\n    violations: [\n      ...(hasEmDash ? ['em_dash'] : []),\n      ...(charCount > 280 ? ['too_long'] : []),\n      ...(charCount === 0 ? ['empty'] : [])\n    ]\n  }\n}];"
+        },
+        "id": "node-prepare-edit-publish",
+        "name": "Prepare Edit Publish",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1104,
+          208
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "id": "cond-canon",
+                "leftValue": "={{ $json.canonPass }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "node-if-edit-canon-pass",
+        "name": "Edit Canon Pass?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1312,
+          208
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Post edited text to X via OAuth 1.0a\nconst crypto = require(\"crypto\");\nconst https = require(\"https\");\nconst tweetText = $json.editedText || '';\nconst consumerKey = \"__X_CONSUMER_KEY__\";\nconst consumerSecret = \"__X_CONSUMER_SECRET__\";\nconst accessToken = \"__X_ACCESS_TOKEN__\";\nconst accessTokenSecret = \"__X_ACCESS_TOKEN_SECRET__\";\nconst method = \"POST\";\nconst url = \"https://api.twitter.com/2/tweets\";\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst nonce = crypto.randomBytes(16).toString(\"hex\");\nconst oauthParams = {\n  oauth_consumer_key: consumerKey,\n  oauth_nonce: nonce,\n  oauth_signature_method: \"HMAC-SHA1\",\n  oauth_timestamp: timestamp,\n  oauth_token: accessToken,\n  oauth_version: \"1.0\"\n};\nconst sortedParams = Object.keys(oauthParams).sort().map(k =>\n  encodeURIComponent(k) + \"=\" + encodeURIComponent(oauthParams[k])\n).join(\"&\");\nconst signingKey = encodeURIComponent(consumerSecret) + \"&\" + encodeURIComponent(accessTokenSecret);\nconst baseString = method + \"&\" + encodeURIComponent(url) + \"&\" + encodeURIComponent(sortedParams);\nconst signature = crypto.createHmac(\"sha1\", signingKey).update(baseString).digest(\"base64\");\noauthParams.oauth_signature = signature;\nconst authHeader = \"OAuth \" + Object.keys(oauthParams).sort().map(k =>\n  encodeURIComponent(k) + '=\"' + encodeURIComponent(oauthParams[k]) + '\"'\n).join(\", \");\nconst body = JSON.stringify({ text: tweetText });\nconst result = await new Promise((resolve, reject) => {\n  const req = https.request({\n    hostname: \"api.twitter.com\",\n    path: \"/2/tweets\",\n    method: \"POST\",\n    headers: {\n      \"Authorization\": authHeader,\n      \"Content-Type\": \"application/json\",\n      \"Content-Length\": Buffer.byteLength(body)\n    }\n  }, (res) => {\n    let data = \"\";\n    res.on(\"data\", chunk => data += chunk);\n    res.on(\"end\", () => {\n      try { resolve({ statusCode: res.statusCode, body: JSON.parse(data) }); }\n      catch(e) { resolve({ statusCode: res.statusCode, body: data }); }\n    });\n  });\n  req.on(\"error\", reject);\n  req.write(body);\n  req.end();\n});\nconst tweetId = result.body?.data?.id || null;\nreturn [{\n  json: {\n    ...$json,\n    tweet_id: tweetId,\n    tweet_text: tweetText,\n    tweet_url: tweetId ? \"https://x.com/i/web/status/\" + tweetId : null,\n    status_code: result.statusCode,\n    response: result.body\n  }\n}];"
+        },
+        "id": "node-post-edited-to-x",
+        "name": "Post Edited To X",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1520,
+          48
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE conversation_state SET state = 'idle', payload = '{}', updated_at = NOW() WHERE chat_id = {{ $('Prepare Edit Publish').first().json.chatId }};",
+          "options": {}
+        },
+        "id": "node-pg-clear-edit-state",
+        "name": "PostgreSQL Clear Edit State",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          2080,
+          48
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "chatId": "={{ $('Prepare Edit Publish').first().json.chatId }}",
+          "text": "=Opublikowano (edytowany):\n{{ $('Post Edited To X').first().json.tweet_url }}\n\n{{ $('Post Edited To X').first().json.tweet_text }}",
+          "additionalFields": {}
+        },
+        "id": "node-telegram-confirm-edit-published",
+        "name": "Telegram Confirm Edit Published",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          2288,
+          48
+        ],
+        "webhookId": "6875db92-7cfd-4447-a2be-0b37ce6ba7ad",
+        "credentials": {
+          "telegramApi": {
+            "id": "cOUqADDFf7oDwlJ0",
+            "name": "Telegram @ags_social_bot"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "chatId": "={{ $json.chatId }}",
+          "text": "=Blad: {{ $json.violations.join(', ') }}. Popraw i wyslij ponownie.",
+          "additionalFields": {}
+        },
+        "id": "node-telegram-canon-fail-edit",
+        "name": "Telegram Canon Fail Edit",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          1520,
+          224
+        ],
+        "webhookId": "60b065ca-7d4b-4058-9359-50e608c099d6",
+        "credentials": {
+          "telegramApi": {
+            "id": "cOUqADDFf7oDwlJ0",
+            "name": "Telegram @ags_social_bot"
+          }
+        }
+      },
+      {
+        "parameters": {},
+        "id": "node-noop-no-edit-state",
+        "name": "NoOp No Edit State",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          1104,
+          368
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT COUNT(*) AS posts_today FROM published_posts WHERE platform = 'x' AND published_at::date = CURRENT_DATE;",
+          "options": {}
+        },
+        "id": "node-postgres-count-posts-today",
+        "name": "PostgreSQL Count Posts Today",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          672,
+          144
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT COUNT(*) AS pending_count FROM hitl_sessions WHERE status = 'pending' AND expires_at > NOW();",
+          "options": {}
+        },
+        "id": "node-postgres-count-pending",
+        "name": "PostgreSQL Count Pending Approvals",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          672,
+          -64
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const allInputs = $input.all();\nlet postsToday = 0;\nlet pendingCount = 0;\nfor (const item of allInputs) {\n  if (item.json.posts_today !== undefined) postsToday = parseInt(item.json.posts_today) || 0;\n  if (item.json.pending_count !== undefined) pendingCount = parseInt(item.json.pending_count) || 0;\n}\nconst chatId = $('Route By Update Type').first().json.chat_id || '2106351328';\nreturn [{ json: { postsToday, pendingCount, chatId } }];"
+        },
+        "id": "node-merge-queue-stats",
+        "name": "Merge Queue Stats",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          864,
+          144
+        ]
+      },
+      {
+        "parameters": {
+          "chatId": "={{ $json.chatId }}",
+          "text": "=X Agent Status:\n- Posts today: {{ $json.postsToday }}/5\n- Pending approvals: {{ $json.pendingCount }}",
+          "additionalFields": {}
+        },
+        "id": "node-telegram-queue-status",
+        "name": "Telegram Queue Status",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          1088,
+          -48
+        ],
+        "webhookId": "eb7b6eb4-1cf3-4f98-bff8-4a0db532bddc",
+        "credentials": {
+          "telegramApi": {
+            "id": "cOUqADDFf7oDwlJ0",
+            "name": "Telegram @ags_social_bot"
+          }
+        }
+      },
+      {
+        "parameters": {},
+        "id": "node-noop-other",
+        "name": "NoOp Other Updates",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          672,
+          576
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Post to X via OAuth 1.0a\nconst crypto = require(\"crypto\");\nconst https = require(\"https\");\n\n// Get draft from session payload\nconst sessionData = $('Merge Session And Callback').first().json;\nconst tweetText = sessionData.payload?.draft || sessionData.draft || '';\nconst notionBlockId = sessionData.payload?.notionBlockId || sessionData.notionBlockId || '';\nconst topic = sessionData.payload?.topic || sessionData.topic || 'General';\nconst callbackId = sessionData.callbackId || '';\n\nif (!tweetText) {\n  return [{ json: { error: 'No draft in session payload', callbackId } }];\n}\n\nconst consumerKey = \"__X_CONSUMER_KEY__\";\nconst consumerSecret = \"__X_CONSUMER_SECRET__\";\nconst accessToken = \"__X_ACCESS_TOKEN__\";\nconst accessTokenSecret = \"__X_ACCESS_TOKEN_SECRET__\";\n\nconst method = \"POST\";\nconst url = \"https://api.twitter.com/2/tweets\";\nconst oauthTimestamp = Math.floor(Date.now() / 1000).toString();\nconst oauthNonce = crypto.randomBytes(16).toString(\"hex\");\n\nconst oauthParams = {\n  oauth_consumer_key: consumerKey,\n  oauth_nonce: oauthNonce,\n  oauth_signature_method: \"HMAC-SHA1\",\n  oauth_timestamp: oauthTimestamp,\n  oauth_token: accessToken,\n  oauth_version: \"1.0\"\n};\n\nconst sortedParams = Object.keys(oauthParams).sort().map(k =>\n  `${encodeURIComponent(k)}=${encodeURIComponent(oauthParams[k])}`\n).join(\"&\");\n\nconst sigBase = `${method}&${encodeURIComponent(url)}&${encodeURIComponent(sortedParams)}`;\nconst sigKey = `${encodeURIComponent(consumerSecret)}&${encodeURIComponent(accessTokenSecret)}`;\nconst signature = crypto.createHmac(\"sha1\", sigKey).update(sigBase).digest(\"base64\");\n\nconst authHeader = \"OAuth \" + Object.keys(oauthParams).sort().map(k =>\n  `${encodeURIComponent(k)}=\"${encodeURIComponent(oauthParams[k])}\"`\n).join(\", \") + `, oauth_signature=\"${encodeURIComponent(signature)}\"`;\n\nconst body = JSON.stringify({ text: tweetText });\n\nconst result = await new Promise((resolve, reject) => {\n  const req = https.request({\n    hostname: \"api.twitter.com\",\n    path: \"/2/tweets\",\n    method: \"POST\",\n    headers: {\n      \"Authorization\": authHeader,\n      \"Content-Type\": \"application/json\",\n      \"Content-Length\": Buffer.byteLength(body)\n    }\n  }, (res) => {\n    let data = \"\";\n    res.on(\"data\", chunk => data += chunk);\n    res.on(\"end\", () => resolve({ status: res.statusCode, body: JSON.parse(data) }));\n  });\n  req.on(\"error\", reject);\n  req.write(body);\n  req.end();\n});\n\nconst tweetId = result.body?.data?.id || \"\";\nconst tweetUrl = tweetId ? `https://x.com/i/web/status/${tweetId}` : \"\";\n\nreturn [{ json: {\n  tweet_id: tweetId,\n  tweet_url: tweetUrl,\n  tweet_text: tweetText,\n  notionBlockId,\n  topic,\n  callbackId,\n  x_status: result.status\n}}];"
+        },
+        "id": "hitl-post-to-x-approve",
+        "name": "Post To X Approve",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1520,
+          -608
+        ]
+      },
+      {
+        "parameters": {
+          "chatId": "2106351328",
+          "text": "=Opublikowano na X!\n\n{{ $('Post To X Approve').first().json.tweet_text.substring(0,100) }}...\n\n{{ $('Post To X Approve').first().json.tweet_url }}",
+          "additionalFields": {}
+        },
+        "id": "hitl-tg-published-confirm",
+        "name": "Telegram Published Confirm Approve",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          2272,
+          -496
+        ],
+        "webhookId": "925dd21c-be82-4659-9064-b7a2ad47c715",
+        "credentials": {
+          "telegramApi": {
+            "id": "cOUqADDFf7oDwlJ0",
+            "name": "Telegram @ags_social_bot"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "chatId": "2106351328",
+          "text": "=Post odrzucony. Temat: {{ $('Merge Session And Callback').first().json.payload?.topic || 'General' }}",
+          "additionalFields": {}
+        },
+        "id": "hitl-tg-rejected-confirm",
+        "name": "Telegram Rejected Confirm Handler",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          2080,
+          -304
+        ],
+        "webhookId": "15de8336-f913-4701-afaf-557c3e4515f8",
+        "credentials": {
+          "telegramApi": {
+            "id": "cOUqADDFf7oDwlJ0",
+            "name": "Telegram @ags_social_bot"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/answerCallbackQuery",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ callback_query_id: $json.callbackQueryId, text: '' }) }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 5000
+          }
+        },
+        "id": "hitl-tg-answer-immediate",
+        "name": "Telegram Answer Callback Immediate",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          672,
+          -528
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Save published post - escape apostrophes for SQL safety\nconst data = $input.first().json;\nconst tweetText = (data.tweet_text || data.editedText || '').replace(/'/g, \"''\");\nconst topic = (data.topic || 'General').replace(/'/g, \"''\");\nconst notionBlockId = (data.notionBlockId || '').replace(/'/g, \"''\");\nconst tweetUrl = (data.tweet_url || '').replace(/'/g, \"''\");\nconst tweetId = (data.tweet_id || '').replace(/'/g, \"''\");\n\nreturn [{ json: {\n  content_esc: tweetText,\n  topic_esc: topic,\n  notion_block_id_esc: notionBlockId,\n  post_url_esc: tweetUrl,\n  post_id_esc: tweetId,\n  tweet_text: data.tweet_text || data.editedText || '',\n  tweet_url: data.tweet_url || '',\n  tweet_id: data.tweet_id || '',\n  notionBlockId: data.notionBlockId || '',\n  topic: data.topic || 'General'\n}}];"
+        },
+        "id": "hitl-save-published-post-code",
+        "name": "PostgreSQL Save Published Post",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1696,
+          48
+        ]
+      },
+      {
+        "parameters": {
+          "schema": {
+            "value": "public",
+            "__rl": true,
+            "mode": "list",
+            "cachedResultName": "public"
+          },
+          "table": {
+            "value": "published_posts",
+            "__rl": true,
+            "mode": "list",
+            "cachedResultName": "published_posts"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "platform": "x",
+              "brand": "AGS",
+              "content": "={{ $json.content_esc }}",
+              "topic": "={{ $json.topic_esc }}",
+              "notion_block_id": "={{ $json.notion_block_id_esc }}",
+              "post_url": "={{ $json.post_url_esc }}",
+              "post_id": "={{ $json.post_id_esc }}",
+              "hitl_action": "edit"
+            },
+            "matchingColumns": [
+              "post_id"
+            ],
+            "schema": []
+          },
+          "options": {
+            "skipOnConflict": true
+          }
+        },
+        "id": "hitl-save-published-post-pg",
+        "name": "PostgreSQL Save Published Post PG",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          1888,
+          48
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// Save published post (approve flow) - escape apostrophes for SQL safety\nconst data = $input.first().json;\nconst tweetText = (data.tweet_text || '').replace(/'/g, \"''\");\nconst topic = (data.topic || 'General').replace(/'/g, \"''\");\nconst notionBlockId = (data.notionBlockId || '').replace(/'/g, \"''\");\nconst tweetUrl = (data.tweet_url || '').replace(/'/g, \"''\");\nconst tweetId = (data.tweet_id || '').replace(/'/g, \"''\");\n\nreturn [{ json: {\n  content_esc: tweetText,\n  topic_esc: topic,\n  notion_block_id_esc: notionBlockId,\n  post_url_esc: tweetUrl,\n  post_id_esc: tweetId,\n  tweet_text: data.tweet_text || '',\n  tweet_url: data.tweet_url || '',\n  tweet_id: data.tweet_id || ''\n}}];"
+        },
+        "id": "hitl-save-published-approve-code",
+        "name": "PostgreSQL Save Published Approve",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1824,
+          -608
+        ]
+      },
+      {
+        "parameters": {
+          "schema": {
+            "value": "public",
+            "__rl": true,
+            "mode": "list",
+            "cachedResultName": "public"
+          },
+          "table": {
+            "value": "published_posts",
+            "__rl": true,
+            "mode": "list",
+            "cachedResultName": "published_posts"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "platform": "x",
+              "brand": "AGS",
+              "content": "={{ $json.content_esc }}",
+              "topic": "={{ $json.topic_esc }}",
+              "notion_block_id": "={{ $json.notion_block_id_esc }}",
+              "post_url": "={{ $json.post_url_esc }}",
+              "post_id": "={{ $json.post_id_esc }}",
+              "hitl_action": "approve"
+            },
+            "matchingColumns": [
+              "post_id"
+            ],
+            "schema": []
+          },
+          "options": {
+            "skipOnConflict": true
+          }
+        },
+        "id": "hitl-save-published-approve-pg",
+        "name": "PostgreSQL Save Published Approve PG",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          2080,
+          -496
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "PATCH",
+          "url": "={{ 'https://api.notion.com/v1/blocks/' + $json.notion_block_id_esc }}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Notion-Version",
+                "value": "2022-06-28"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "={{ JSON.stringify({ bulleted_list_item: { rich_text: [{ type: 'text', text: { content: ($('PostgreSQL Lookup Session').item.json[0].payload.rawText || $('PostgreSQL Lookup Session').item.json[0].payload.text || '') + ' [PUBLISHED: ' + new Date().toISOString().slice(0,10) + ']' } }] } }) }}",
+          "options": {}
+        },
+        "id": "notion-mark-published-h001",
+        "name": "Notion Mark Published",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2080,
+          -656
+        ],
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "b3LFS2HWlkA9CZ9L",
+            "name": "Notion Bearer Direct"
+          }
+        },
+        "continueOnFail": true
+      }
+    ],
+    "connections": {
+      "Telegram Trigger": {
+        "main": [
+          [
+            {
+              "node": "Detect Update Type",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Detect Update Type": {
+        "main": [
+          [
+            {
+              "node": "Route By Update Type",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Route By Update Type": {
+        "main": [
+          [
+            {
+              "node": "Extract Callback Parts",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "PostgreSQL Count Posts Today",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "PostgreSQL Count Pending Approvals",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "PostgreSQL Check Edit State",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "NoOp Other Updates",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Extract Callback Parts": {
+        "main": [
+          [
+            {
+              "node": "PostgreSQL Lookup Session",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Telegram Answer Callback Immediate",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PostgreSQL Lookup Session": {
+        "main": [
+          [
+            {
+              "node": "Merge Session And Callback",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Merge Session And Callback": {
+        "main": [
+          [
+            {
+              "node": "Session Valid?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Session Valid?": {
+        "main": [
+          [
+            {
+              "node": "Route Callback Action",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          []
+        ]
+      },
+      "Route Callback Action": {
+        "main": [
+          [
+            {
+              "node": "Post To X Approve",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Telegram Rejected Confirm Handler",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "PostgreSQL Mark Resolved",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "PostgreSQL Set Awaiting Edit",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PostgreSQL Mark Resolved": {
+        "main": [
+          []
+        ]
+      },
+      "PostgreSQL Set Awaiting Edit": {
+        "main": [
+          [
+            {
+              "node": "Telegram Send Draft For Edit",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PostgreSQL Check Edit State": {
+        "main": [
+          [
+            {
+              "node": "Edit State Valid?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Edit State Valid?": {
+        "main": [
+          [
+            {
+              "node": "Prepare Edit Publish",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "NoOp No Edit State",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Edit Publish": {
+        "main": [
+          [
+            {
+              "node": "Edit Canon Pass?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Edit Canon Pass?": {
+        "main": [
+          [
+            {
+              "node": "Post Edited To X",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Telegram Canon Fail Edit",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Post Edited To X": {
+        "main": [
+          [
+            {
+              "node": "PostgreSQL Save Published Post",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PostgreSQL Clear Edit State": {
+        "main": [
+          [
+            {
+              "node": "Telegram Confirm Edit Published",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PostgreSQL Count Posts Today": {
+        "main": [
+          [
+            {
+              "node": "Merge Queue Stats",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PostgreSQL Count Pending Approvals": {
+        "main": [
+          [
+            {
+              "node": "Merge Queue Stats",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Merge Queue Stats": {
+        "main": [
+          [
+            {
+              "node": "Telegram Queue Status",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Post To X Approve": {
+        "main": [
+          [
+            {
+              "node": "PostgreSQL Save Published Approve",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "PostgreSQL Mark Resolved",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Telegram Answer Callback Immediate": {
+        "main": [
+          []
+        ]
+      },
+      "PostgreSQL Save Published Post": {
+        "main": [
+          [
+            {
+              "node": "PostgreSQL Save Published Post PG",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PostgreSQL Save Published Post PG": {
+        "main": [
+          [
+            {
+              "node": "PostgreSQL Clear Edit State",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PostgreSQL Save Published Approve": {
+        "main": [
+          [
+            {
+              "node": "PostgreSQL Save Published Approve PG",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Notion Mark Published",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PostgreSQL Save Published Approve PG": {
+        "main": [
+          [
+            {
+              "node": "Telegram Published Confirm Approve",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Tomasz Nawrocki",
+    "name": "AGS HILT HANDELR - poprawka 10.06.2026",
+    "description": "",
+    "autosaved": true,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-06-10T07:14:22.978Z",
+        "id": 263,
+        "workflowId": "U5pUZjy2yAhR1sWg",
+        "versionId": "2a65bac7-18f7-4317-bc7f-3b81abd5e56a",
+        "event": "activated",
+        "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
+      }
+    ]
+  }
+}
