@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-10T10:25:11.672Z",
+  "updatedAt": "2026-06-11T12:51:39.199Z",
   "createdAt": "2026-06-01T07:10:00.198Z",
   "id": "TbHt6ZwfqmMarx18",
   "name": "AGS X Agent v1.0",
@@ -81,7 +81,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const allItems = $input.all();\nconst insights = [];\nlet inQueueSection = false;\n\nfor (const item of allItems) {\n  const response = item.json;\n  const blocks = response.results || [];\n  \n  for (const block of blocks) {\n    if (!block) continue;\n    const blockType = block.type;\n    const blockContent = block[blockType];\n    \n    // 1. Wyciagnij tekst (obsuga roznych struktur Notion API)\n    let rawText = '';\n    if (blockContent && blockContent.rich_text) {\n      rawText = blockContent.rich_text.map(rt => rt.plain_text || rt.text?.content || '').join('').trim();\n    }\n    \n    if (!rawText) continue;\n\n    // 2. Logika sekcji\n    if (blockType.startsWith('heading_') && rawText.toUpperCase().includes('QUEUE')) {\n      inQueueSection = true;\n      continue;\n    }\n    \n    if (inQueueSection && blockType.startsWith('heading_')) {\n      inQueueSection = false;\n      continue;\n    }\n\n    // 3. Przetwarzaj tylko w sekcji QUEUE i tylko bullety\n    if (inQueueSection && blockType === 'bulleted_list_item') {\n      // Filtry statusu\n      if (rawText.indexOf('[PUBLISHED') !== -1) continue;\n      if (rawText.indexOf('[REJECTED') !== -1) continue;\n      if (rawText.indexOf('[ARCHIVED') !== -1) continue;\n      if (rawText.startsWith('//')) continue;\n      \n      var priority = 'normal';\n      if (rawText.indexOf('[HIGH]') !== -1) priority = 'high';\n      if (rawText.indexOf('[LOW]') !== -1) priority = 'low';\n      \n      var topic = 'General';\n      var topicMatch = rawText.match(/\\[([^\\]]+)\\]/g) || [];\n      for (var t = 0; t < topicMatch.length; t++) {\n        var inner = topicMatch[t].slice(1, -1).trim().toUpperCase();\n        if (inner !== 'HIGH' && inner !== 'MED' && inner !== 'LOW' && inner !== 'MEDIUM') {\n          topic = topicMatch[t].slice(1, -1).trim();\n          break;\n        }\n      }\n      \n      // Czyszczenie tekstu z tagow [TAG]\n      var cleanText = rawText.replace(/\\[[^\\]]*\\]/g, '').replace(/\\s+/g, ' ').trim();\n      if (!cleanText) cleanText = rawText;\n      \n      insights.push({\n        text: cleanText, // Mapowanie do text (KLUCZOWE)\n        rawText: rawText,\n        priority: priority,\n        topic: topic,\n        notionBlockId: block.id,\n        status: 'queued',\n        blockType: blockType\n      });\n    }\n  }\n}\n\n// Sortowanie\ninsights.sort((a, b) => {\n  const order = { high: 0, normal: 1, low: 2 };\n  return (order[a.priority] || 1) - (order[b.priority] || 1);\n});\n\nif (insights.length === 0) {\n  return [{ json: { isEmpty: true, message: 'Brak insightów w sekcji ## QUEUE', count: 0 } }];\n}\n\nreturn insights.map(i => ({ json: i }));"
+        "jsCode": "const allItems = $input.all();\nconst insights = [];\nlet inQueueSection = false;\n\nfor (const item of allItems) {\n  const response = item.json;\n  const blocks = response.results || [];\n  \n  for (const block of blocks) {\n    if (!block) continue;\n    const blockType = block.type;\n    const blockContent = block[blockType];\n    \n    // 1. Wyciagnij tekst (obsuga roznych struktur Notion API)\n    let rawText = '';\n    if (blockContent && blockContent.rich_text) {\n      rawText = blockContent.rich_text.map(rt => rt.plain_text || rt.text?.content || '').join('').trim();\n    }\n    \n    if (!rawText) continue;\n\n    // 2. Logika sekcji\n    if (blockType.startsWith('heading_') && rawText.toUpperCase().includes('QUEUE')) {\n      inQueueSection = true;\n      continue;\n    }\n    \n    if (inQueueSection && blockType.startsWith('heading_')) {\n      inQueueSection = false;\n      continue;\n    }\n\n    // 3. Przetwarzaj tylko w sekcji QUEUE i tylko bullety\n    if (inQueueSection && blockType === 'bulleted_list_item') {\n      // Filtry statusu\n      if (rawText.indexOf('[PUBLISHED') !== -1) continue;\n      if (rawText.indexOf('[REJECTED') !== -1) continue;\n      if (rawText.indexOf('[ARCHIVED') !== -1) continue;\n      if (rawText.startsWith('//')) continue;\n      \n      var priority = 'normal';\n      if (rawText.indexOf('[HIGH]') !== -1) priority = 'high';\n      if (rawText.indexOf('[LOW]') !== -1) priority = 'low';\n      \n      var topic = 'General';\n      var topicMatch = rawText.match(/\\[([^\\]]+)\\]/g) || [];\n      for (var t = 0; t < topicMatch.length; t++) {\n        var inner = topicMatch[t].slice(1, -1).trim().toUpperCase();\n        if (inner !== 'HIGH' && inner !== 'MED' && inner !== 'LOW' && inner !== 'MEDIUM') {\n          topic = topicMatch[t].slice(1, -1).trim();\n          break;\n        }\n      }\n      \n      // Czyszczenie tekstu z tagow [TAG]\n      var cleanText = rawText.replace(/\\[[^\\]]*\\]/g, '').replace(/\\s+/g, ' ').trim();\n      if (!cleanText) cleanText = rawText;\n      \n      insights.push({\n        text: cleanText, // Mapowanie do text (KLUCZOWE)\n        rawText: rawText,\n        priority: priority,\n        topic: topic,\n        notionBlockId: block.id,\n        status: 'queued',\n        blockType: blockType\n      });\n    }\n  }\n}\n\n// Sortowanie\ninsights.sort((a, b) => {\n  const order = { high: 0, normal: 1, low: 2 };\n  return (order[a.priority] || 1) - (order[b.priority] || 1);\n});\n\nif (insights.length === 0) {\n  return [{ json: { isEmpty: true, message: 'Brak insight\u00f3w w sekcji ## QUEUE', count: 0 } }];\n}\n\nreturn insights.map(i => ({ json: i }));"
       },
       "id": "node-parse-insights",
       "name": "Parse Queue Items",
@@ -332,7 +332,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\"model\": \"claude-haiku-4-5-20251001\", \"max_tokens\": 300, \"system\": \"Check this X post for brand canon compliance. Return JSON only, no markdown: {pass: boolean, violations: string[], em_dash_detected: boolean, char_count: number, reasoning: string}. Violations: em_dash (â€”), empty_enthusiasm (amazing/fantastic/game-changer), fabricated_metrics, over_280_chars, hashtag_overuse, generic_opener, guru_posture. Pass=true only if violations empty AND char_count<=280.\", \"messages\": [{\"role\": \"user\", \"content\": \"Check this post: \" + $json.draft + \"\\n\\nSource insight: \" + $json.rawText}]}) }}",
+        "jsonBody": "={{ JSON.stringify({\"model\": \"claude-haiku-4-5-20251001\", \"max_tokens\": 300, \"system\": \"Check this X post for brand canon compliance. Return JSON only, no markdown: {pass: boolean, violations: string[], em_dash_detected: boolean, char_count: number, reasoning: string}. Violations: em_dash (\u00e2\u20ac\u201d), empty_enthusiasm (amazing/fantastic/game-changer), fabricated_metrics, over_280_chars, hashtag_overuse, generic_opener, guru_posture. Pass=true only if violations empty AND char_count<=280.\", \"messages\": [{\"role\": \"user\", \"content\": \"Check this post: \" + $json.draft + \"\\n\\nSource insight: \" + $json.rawText}]}) }}",
         "options": {
           "redirect": {
             "redirect": {
@@ -504,7 +504,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Generate callback ID for HITL session tracking\nconst executionId = $execution.id || 'exec-' + Date.now();\nconst callbackId = executionId + '_hitl';\n\nlet draft = $json.draft || '';\nlet topic = $json.topic || 'General';\nlet priority = $json.priority || 'normal';\nlet notionBlockId = $json.notionBlockId || '';\nlet charCount = draft.length;\nlet queueRemaining = $json.queueRemaining || 0;\n\nif (!draft) {\n  try {\n    const extractData = $('Extract Draft').first().json;\n    draft = extractData.draft || '';\n    topic = extractData.topic || topic;\n    priority = extractData.priority || priority;\n    notionBlockId = extractData.notionBlockId || notionBlockId;\n    charCount = draft.length;\n    queueRemaining = extractData.queueRemaining || 0;\n  } catch(e) {}\n}\n\nconst queueInfo = queueRemaining > 0\n  ? 'Queue: ' + queueRemaining + ' remaining'\n  : 'Queue: this is the last item';\n\nconst previewText = 'X DRAFT - ' + topic + '\\n\\n' + (draft || '[BRAK DRAFTU]') + '\\n\\nChars: ' + charCount + ' | ' + queueInfo + '\\nApprove to publish.';\n\nconst tgBody = {\n  chat_id: $json.telegramChatId || '2106351328',\n  text: previewText,\n  disable_web_page_preview: true,\n  reply_markup: {\n    inline_keyboard: [[\n      { text: '\\u2705 Approve', callback_data: callbackId + ':approve' },\n      { text: '\\u274c Reject', callback_data: callbackId + ':reject' },\n      { text: '\\u270f\\ufe0f Edit', callback_data: callbackId + ':edit' }\n    ]]\n  }\n};\n\nreturn [{\n  json: {\n    ...$json,\n    draft,\n    topic,\n    priority,\n    notionBlockId,\n    charCount,\n    callbackId,\n    executionId,\n    resumeUrl: $execution.resumeUrl || '',\n    tgBodyStr: JSON.stringify(tgBody)\n  }\n}];\n"
+        "jsCode": "// Generate callback ID for HITL session tracking\nconst executionId = $execution.id || 'exec-' + Date.now();\nconst callbackId = executionId + '_hitl';\n\nlet draft = $json.draft || '';\nlet topic = $json.topic || 'General';\nlet priority = $json.priority || 'normal';\nlet notionBlockId = $json.notionBlockId || '';\nlet charCount = draft.length;\nlet queueRemaining = $json.queueRemaining || 0;\n\nif (!draft) {\n  try {\n    const extractData = $('Extract Draft').first().json;\n    draft = extractData.draft || '';\n    topic = extractData.topic || topic;\n    priority = extractData.priority || priority;\n    notionBlockId = extractData.notionBlockId || notionBlockId;\n    charCount = draft.length;\n    queueRemaining = extractData.queueRemaining || 0;\n  } catch(e) {}\n}\n\nconst queueInfo = queueRemaining > 0\n  ? 'Queue: ' + queueRemaining + ' remaining'\n  : 'Queue: this is the last item';\n\nconst previewText = 'X DRAFT - ' + topic + '\\n\\n' + (draft || '[BRAK DRAFTU]') + '\\n\\nChars: ' + charCount + ' | ' + queueInfo + '\\nApprove to publish.';\n\nconst tgBody = {\n  chat_id: $json.telegramChatId || '2106351328',\n  text: previewText,\n  disable_web_page_preview: true,\n  reply_markup: {\n    inline_keyboard: [[\n      { text: '\\u2705 Approve', callback_data: callbackId + ':approve' },\n      { text: '\\u274c Reject', callback_data: callbackId + ':reject' },\n      { text: '\\u270f\\ufe0f Edit', callback_data: callbackId + ':edit' }\n    ], [\n      { text: '\\ud83d\\udd50 Zaplanuj', callback_data: callbackId + ':schedule' }\n    ]]\n  }\n};\n\nreturn [{\n  json: {\n    ...$json,\n    draft,\n    topic,\n    priority,\n    notionBlockId,\n    charCount,\n    callbackId,\n    executionId,\n    resumeUrl: $execution.resumeUrl || '',\n    tgBodyStr: JSON.stringify(tgBody)\n  }\n}];\n"
       },
       "id": "node-prepare-hitl-preview",
       "name": "Prepare HITL Preview",
@@ -639,7 +639,7 @@
     },
     {
       "parameters": {
-        "content": "## NOTION QUEUE ID\n**X Content Queue (AGS X Agent v1.0)**\n`371c00c9-0b93-81a0-bc29-e1dc22e5c244`\n\n⚠️ NIE mylić z Intel Brief:\n`371c00c9-0b93-8146-...` = Content Engine Intel Brief\n\nBlok API URL:\nhttps://api.notion.com/v1/blocks/371c00c90b9381a0bc29e1dc22e5c244/children",
+        "content": "## NOTION QUEUE ID\n**X Content Queue (AGS X Agent v1.0)**\n`371c00c9-0b93-81a0-bc29-e1dc22e5c244`\n\n\u26a0\ufe0f NIE myli\u0107 z Intel Brief:\n`371c00c9-0b93-8146-...` = Content Engine Intel Brief\n\nBlok API URL:\nhttps://api.notion.com/v1/blocks/371c00c90b9381a0bc29e1dc22e5c244/children",
         "height": 200,
         "width": 380,
         "color": 4
@@ -1182,9 +1182,9 @@
   "meta": null,
   "nodeGroups": [],
   "pinData": {},
-  "versionId": "156710d9-ab5d-48a1-86c1-bdd811f0bdd3",
-  "activeVersionId": "156710d9-ab5d-48a1-86c1-bdd811f0bdd3",
-  "versionCounter": 202,
+  "versionId": "9794c9e4-3370-4e15-8b08-21d52fad3ee5",
+  "activeVersionId": "9794c9e4-3370-4e15-8b08-21d52fad3ee5",
+  "versionCounter": 203,
   "triggerCount": 1,
   "shared": [
     {
@@ -1207,9 +1207,9 @@
   ],
   "tags": [],
   "activeVersion": {
-    "updatedAt": "2026-06-10T10:25:11.674Z",
-    "createdAt": "2026-06-10T10:25:11.674Z",
-    "versionId": "156710d9-ab5d-48a1-86c1-bdd811f0bdd3",
+    "updatedAt": "2026-06-11T12:51:39.202Z",
+    "createdAt": "2026-06-11T12:51:39.202Z",
+    "versionId": "9794c9e4-3370-4e15-8b08-21d52fad3ee5",
     "workflowId": "TbHt6ZwfqmMarx18",
     "nodes": [
       {
@@ -1286,7 +1286,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const allItems = $input.all();\nconst insights = [];\nlet inQueueSection = false;\n\nfor (const item of allItems) {\n  const response = item.json;\n  const blocks = response.results || [];\n  \n  for (const block of blocks) {\n    if (!block) continue;\n    const blockType = block.type;\n    const blockContent = block[blockType];\n    \n    // 1. Wyciagnij tekst (obsuga roznych struktur Notion API)\n    let rawText = '';\n    if (blockContent && blockContent.rich_text) {\n      rawText = blockContent.rich_text.map(rt => rt.plain_text || rt.text?.content || '').join('').trim();\n    }\n    \n    if (!rawText) continue;\n\n    // 2. Logika sekcji\n    if (blockType.startsWith('heading_') && rawText.toUpperCase().includes('QUEUE')) {\n      inQueueSection = true;\n      continue;\n    }\n    \n    if (inQueueSection && blockType.startsWith('heading_')) {\n      inQueueSection = false;\n      continue;\n    }\n\n    // 3. Przetwarzaj tylko w sekcji QUEUE i tylko bullety\n    if (inQueueSection && blockType === 'bulleted_list_item') {\n      // Filtry statusu\n      if (rawText.indexOf('[PUBLISHED') !== -1) continue;\n      if (rawText.indexOf('[REJECTED') !== -1) continue;\n      if (rawText.indexOf('[ARCHIVED') !== -1) continue;\n      if (rawText.startsWith('//')) continue;\n      \n      var priority = 'normal';\n      if (rawText.indexOf('[HIGH]') !== -1) priority = 'high';\n      if (rawText.indexOf('[LOW]') !== -1) priority = 'low';\n      \n      var topic = 'General';\n      var topicMatch = rawText.match(/\\[([^\\]]+)\\]/g) || [];\n      for (var t = 0; t < topicMatch.length; t++) {\n        var inner = topicMatch[t].slice(1, -1).trim().toUpperCase();\n        if (inner !== 'HIGH' && inner !== 'MED' && inner !== 'LOW' && inner !== 'MEDIUM') {\n          topic = topicMatch[t].slice(1, -1).trim();\n          break;\n        }\n      }\n      \n      // Czyszczenie tekstu z tagow [TAG]\n      var cleanText = rawText.replace(/\\[[^\\]]*\\]/g, '').replace(/\\s+/g, ' ').trim();\n      if (!cleanText) cleanText = rawText;\n      \n      insights.push({\n        text: cleanText, // Mapowanie do text (KLUCZOWE)\n        rawText: rawText,\n        priority: priority,\n        topic: topic,\n        notionBlockId: block.id,\n        status: 'queued',\n        blockType: blockType\n      });\n    }\n  }\n}\n\n// Sortowanie\ninsights.sort((a, b) => {\n  const order = { high: 0, normal: 1, low: 2 };\n  return (order[a.priority] || 1) - (order[b.priority] || 1);\n});\n\nif (insights.length === 0) {\n  return [{ json: { isEmpty: true, message: 'Brak insightów w sekcji ## QUEUE', count: 0 } }];\n}\n\nreturn insights.map(i => ({ json: i }));"
+          "jsCode": "const allItems = $input.all();\nconst insights = [];\nlet inQueueSection = false;\n\nfor (const item of allItems) {\n  const response = item.json;\n  const blocks = response.results || [];\n  \n  for (const block of blocks) {\n    if (!block) continue;\n    const blockType = block.type;\n    const blockContent = block[blockType];\n    \n    // 1. Wyciagnij tekst (obsuga roznych struktur Notion API)\n    let rawText = '';\n    if (blockContent && blockContent.rich_text) {\n      rawText = blockContent.rich_text.map(rt => rt.plain_text || rt.text?.content || '').join('').trim();\n    }\n    \n    if (!rawText) continue;\n\n    // 2. Logika sekcji\n    if (blockType.startsWith('heading_') && rawText.toUpperCase().includes('QUEUE')) {\n      inQueueSection = true;\n      continue;\n    }\n    \n    if (inQueueSection && blockType.startsWith('heading_')) {\n      inQueueSection = false;\n      continue;\n    }\n\n    // 3. Przetwarzaj tylko w sekcji QUEUE i tylko bullety\n    if (inQueueSection && blockType === 'bulleted_list_item') {\n      // Filtry statusu\n      if (rawText.indexOf('[PUBLISHED') !== -1) continue;\n      if (rawText.indexOf('[REJECTED') !== -1) continue;\n      if (rawText.indexOf('[ARCHIVED') !== -1) continue;\n      if (rawText.startsWith('//')) continue;\n      \n      var priority = 'normal';\n      if (rawText.indexOf('[HIGH]') !== -1) priority = 'high';\n      if (rawText.indexOf('[LOW]') !== -1) priority = 'low';\n      \n      var topic = 'General';\n      var topicMatch = rawText.match(/\\[([^\\]]+)\\]/g) || [];\n      for (var t = 0; t < topicMatch.length; t++) {\n        var inner = topicMatch[t].slice(1, -1).trim().toUpperCase();\n        if (inner !== 'HIGH' && inner !== 'MED' && inner !== 'LOW' && inner !== 'MEDIUM') {\n          topic = topicMatch[t].slice(1, -1).trim();\n          break;\n        }\n      }\n      \n      // Czyszczenie tekstu z tagow [TAG]\n      var cleanText = rawText.replace(/\\[[^\\]]*\\]/g, '').replace(/\\s+/g, ' ').trim();\n      if (!cleanText) cleanText = rawText;\n      \n      insights.push({\n        text: cleanText, // Mapowanie do text (KLUCZOWE)\n        rawText: rawText,\n        priority: priority,\n        topic: topic,\n        notionBlockId: block.id,\n        status: 'queued',\n        blockType: blockType\n      });\n    }\n  }\n}\n\n// Sortowanie\ninsights.sort((a, b) => {\n  const order = { high: 0, normal: 1, low: 2 };\n  return (order[a.priority] || 1) - (order[b.priority] || 1);\n});\n\nif (insights.length === 0) {\n  return [{ json: { isEmpty: true, message: 'Brak insight\u00f3w w sekcji ## QUEUE', count: 0 } }];\n}\n\nreturn insights.map(i => ({ json: i }));"
         },
         "id": "node-parse-insights",
         "name": "Parse Queue Items",
@@ -1537,7 +1537,7 @@
           },
           "sendBody": true,
           "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({\"model\": \"claude-haiku-4-5-20251001\", \"max_tokens\": 300, \"system\": \"Check this X post for brand canon compliance. Return JSON only, no markdown: {pass: boolean, violations: string[], em_dash_detected: boolean, char_count: number, reasoning: string}. Violations: em_dash (â€”), empty_enthusiasm (amazing/fantastic/game-changer), fabricated_metrics, over_280_chars, hashtag_overuse, generic_opener, guru_posture. Pass=true only if violations empty AND char_count<=280.\", \"messages\": [{\"role\": \"user\", \"content\": \"Check this post: \" + $json.draft + \"\\n\\nSource insight: \" + $json.rawText}]}) }}",
+          "jsonBody": "={{ JSON.stringify({\"model\": \"claude-haiku-4-5-20251001\", \"max_tokens\": 300, \"system\": \"Check this X post for brand canon compliance. Return JSON only, no markdown: {pass: boolean, violations: string[], em_dash_detected: boolean, char_count: number, reasoning: string}. Violations: em_dash (\u00e2\u20ac\u201d), empty_enthusiasm (amazing/fantastic/game-changer), fabricated_metrics, over_280_chars, hashtag_overuse, generic_opener, guru_posture. Pass=true only if violations empty AND char_count<=280.\", \"messages\": [{\"role\": \"user\", \"content\": \"Check this post: \" + $json.draft + \"\\n\\nSource insight: \" + $json.rawText}]}) }}",
           "options": {
             "redirect": {
               "redirect": {
@@ -1709,7 +1709,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Generate callback ID for HITL session tracking\nconst executionId = $execution.id || 'exec-' + Date.now();\nconst callbackId = executionId + '_hitl';\n\nlet draft = $json.draft || '';\nlet topic = $json.topic || 'General';\nlet priority = $json.priority || 'normal';\nlet notionBlockId = $json.notionBlockId || '';\nlet charCount = draft.length;\nlet queueRemaining = $json.queueRemaining || 0;\n\nif (!draft) {\n  try {\n    const extractData = $('Extract Draft').first().json;\n    draft = extractData.draft || '';\n    topic = extractData.topic || topic;\n    priority = extractData.priority || priority;\n    notionBlockId = extractData.notionBlockId || notionBlockId;\n    charCount = draft.length;\n    queueRemaining = extractData.queueRemaining || 0;\n  } catch(e) {}\n}\n\nconst queueInfo = queueRemaining > 0\n  ? 'Queue: ' + queueRemaining + ' remaining'\n  : 'Queue: this is the last item';\n\nconst previewText = 'X DRAFT - ' + topic + '\\n\\n' + (draft || '[BRAK DRAFTU]') + '\\n\\nChars: ' + charCount + ' | ' + queueInfo + '\\nApprove to publish.';\n\nconst tgBody = {\n  chat_id: $json.telegramChatId || '2106351328',\n  text: previewText,\n  disable_web_page_preview: true,\n  reply_markup: {\n    inline_keyboard: [[\n      { text: '\\u2705 Approve', callback_data: callbackId + ':approve' },\n      { text: '\\u274c Reject', callback_data: callbackId + ':reject' },\n      { text: '\\u270f\\ufe0f Edit', callback_data: callbackId + ':edit' }\n    ]]\n  }\n};\n\nreturn [{\n  json: {\n    ...$json,\n    draft,\n    topic,\n    priority,\n    notionBlockId,\n    charCount,\n    callbackId,\n    executionId,\n    resumeUrl: $execution.resumeUrl || '',\n    tgBodyStr: JSON.stringify(tgBody)\n  }\n}];\n"
+          "jsCode": "// Generate callback ID for HITL session tracking\nconst executionId = $execution.id || 'exec-' + Date.now();\nconst callbackId = executionId + '_hitl';\n\nlet draft = $json.draft || '';\nlet topic = $json.topic || 'General';\nlet priority = $json.priority || 'normal';\nlet notionBlockId = $json.notionBlockId || '';\nlet charCount = draft.length;\nlet queueRemaining = $json.queueRemaining || 0;\n\nif (!draft) {\n  try {\n    const extractData = $('Extract Draft').first().json;\n    draft = extractData.draft || '';\n    topic = extractData.topic || topic;\n    priority = extractData.priority || priority;\n    notionBlockId = extractData.notionBlockId || notionBlockId;\n    charCount = draft.length;\n    queueRemaining = extractData.queueRemaining || 0;\n  } catch(e) {}\n}\n\nconst queueInfo = queueRemaining > 0\n  ? 'Queue: ' + queueRemaining + ' remaining'\n  : 'Queue: this is the last item';\n\nconst previewText = 'X DRAFT - ' + topic + '\\n\\n' + (draft || '[BRAK DRAFTU]') + '\\n\\nChars: ' + charCount + ' | ' + queueInfo + '\\nApprove to publish.';\n\nconst tgBody = {\n  chat_id: $json.telegramChatId || '2106351328',\n  text: previewText,\n  disable_web_page_preview: true,\n  reply_markup: {\n    inline_keyboard: [[\n      { text: '\\u2705 Approve', callback_data: callbackId + ':approve' },\n      { text: '\\u274c Reject', callback_data: callbackId + ':reject' },\n      { text: '\\u270f\\ufe0f Edit', callback_data: callbackId + ':edit' }\n    ], [\n      { text: '\\ud83d\\udd50 Zaplanuj', callback_data: callbackId + ':schedule' }\n    ]]\n  }\n};\n\nreturn [{\n  json: {\n    ...$json,\n    draft,\n    topic,\n    priority,\n    notionBlockId,\n    charCount,\n    callbackId,\n    executionId,\n    resumeUrl: $execution.resumeUrl || '',\n    tgBodyStr: JSON.stringify(tgBody)\n  }\n}];\n"
         },
         "id": "node-prepare-hitl-preview",
         "name": "Prepare HITL Preview",
@@ -1844,7 +1844,7 @@
       },
       {
         "parameters": {
-          "content": "## NOTION QUEUE ID\n**X Content Queue (AGS X Agent v1.0)**\n`371c00c9-0b93-81a0-bc29-e1dc22e5c244`\n\n⚠️ NIE mylić z Intel Brief:\n`371c00c9-0b93-8146-...` = Content Engine Intel Brief\n\nBlok API URL:\nhttps://api.notion.com/v1/blocks/371c00c90b9381a0bc29e1dc22e5c244/children",
+          "content": "## NOTION QUEUE ID\n**X Content Queue (AGS X Agent v1.0)**\n`371c00c9-0b93-81a0-bc29-e1dc22e5c244`\n\n\u26a0\ufe0f NIE myli\u0107 z Intel Brief:\n`371c00c9-0b93-8146-...` = Content Engine Intel Brief\n\nBlok API URL:\nhttps://api.notion.com/v1/blocks/371c00c90b9381a0bc29e1dc22e5c244/children",
           "height": 200,
           "width": 380,
           "color": 4
@@ -2378,18 +2378,18 @@
     "autosaved": false,
     "workflowPublishHistory": [
       {
-        "createdAt": "2026-06-10T10:25:11.740Z",
-        "id": 269,
+        "createdAt": "2026-06-11T12:51:39.300Z",
+        "id": 345,
         "workflowId": "TbHt6ZwfqmMarx18",
-        "versionId": "156710d9-ab5d-48a1-86c1-bdd811f0bdd3",
+        "versionId": "9794c9e4-3370-4e15-8b08-21d52fad3ee5",
         "event": "deactivated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       },
       {
-        "createdAt": "2026-06-10T10:25:11.836Z",
-        "id": 270,
+        "createdAt": "2026-06-11T12:51:39.397Z",
+        "id": 346,
         "workflowId": "TbHt6ZwfqmMarx18",
-        "versionId": "156710d9-ab5d-48a1-86c1-bdd811f0bdd3",
+        "versionId": "9794c9e4-3370-4e15-8b08-21d52fad3ee5",
         "event": "activated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       }

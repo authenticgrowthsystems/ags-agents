@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-11T08:46:13.004Z",
+  "updatedAt": "2026-06-11T12:51:40.043Z",
   "createdAt": "2026-06-01T07:09:59.480Z",
   "id": "U5pUZjy2yAhR1sWg",
   "name": "AGS HITL Handler v1.0",
@@ -458,6 +458,30 @@
               },
               "renameOutput": true,
               "outputKey": "edit"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-schedule",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "schedule",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "schedule"
             }
           ]
         },
@@ -3545,6 +3569,228 @@
         480,
         640
       ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cb = $json.callbackId;\nconst body = { chat_id: $json.chatId, message_id: $json.messageId, reply_markup: { inline_keyboard: [ [ { text: '14:00', callback_data: 'schedhr:'+cb+':14' }, { text: '18:00', callback_data: 'schedhr:'+cb+':18' } ], [ { text: '22:00', callback_data: 'schedhr:'+cb+':22' }, { text: '\\uD83D\\uDE80 Teraz', callback_data: 'schedhr:'+cb+':now' } ], [ { text: '\\u21A9 Anuluj', callback_data: 'schedhr:'+cb+':cancel' } ] ] } };\nreturn [{ json: { hoursBodyStr: JSON.stringify(body) } }];"
+      },
+      "id": "n-prepare-hours-menu",
+      "name": "Prepare Hours Menu",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        -700
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/editMessageReplyMarkup",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.hoursBodyStr }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "n-telegram-show-hours",
+      "name": "Telegram Show Hours",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        -700
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.callbackId }}",
+              "rightValue": "schedhr:",
+              "operator": {
+                "type": "string",
+                "operation": "startsWith"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n-is-sched-hour",
+      "name": "Is Sched Hour?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1180,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const c = $json;\nconst cb = c.callbackId || '';\nconst sessionRef = cb.indexOf('schedhr:')===0 ? cb.substring(8) : cb;\nreturn [{ json: { sessionRef: sessionRef, hour: c.action, chatId: c.chatId, messageId: c.messageId, callbackQueryId: c.callbackQueryId } }];"
+      },
+      "id": "n-parse-sched-hour",
+      "name": "Parse Sched Hour",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.hour }}",
+              "rightValue": "cancel",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n-sched-is-cancel",
+      "name": "Sched Is Cancel?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1620,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $('Parse Sched Hour').first().json;\nconst cb = p.sessionRef;\nconst body = { chat_id: p.chatId, message_id: p.messageId, reply_markup: { inline_keyboard: [ [ { text: '\\u2705 Approve', callback_data: cb+':approve' }, { text: '\\u274C Reject', callback_data: cb+':reject' }, { text: '\\u270F\\uFE0F Edit', callback_data: cb+':edit' } ], [ { text: '\\uD83D\\uDD50 Zaplanuj', callback_data: cb+':schedule' } ] ] } };\nreturn [{ json: { restoreBodyStr: JSON.stringify(body) } }];"
+      },
+      "id": "n-prepare-restore-menu",
+      "name": "Prepare Restore Menu",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1840,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/editMessageReplyMarkup",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.restoreBodyStr }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "n-telegram-restore",
+      "name": "Telegram Restore",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2060,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO post_queue (content, platform, status, scheduled_for) SELECT s.payload->>'draft', 'x', 'scheduled', CASE WHEN '{{ $json.hour }}' = 'now' THEN NOW() + INTERVAL '2 minutes' WHEN (CURRENT_DATE + (('{{ $json.hour }}' || ':00:00')::time)) AT TIME ZONE 'Europe/Warsaw' > NOW() THEN (CURRENT_DATE + (('{{ $json.hour }}' || ':00:00')::time)) AT TIME ZONE 'Europe/Warsaw' ELSE ((CURRENT_DATE + 1) + (('{{ $json.hour }}' || ':00:00')::time)) AT TIME ZONE 'Europe/Warsaw' END FROM hitl_sessions s WHERE s.callback_id = '{{ $json.sessionRef }}' RETURNING id, to_char(scheduled_for AT TIME ZONE 'Europe/Warsaw','YYYY-MM-DD HH24:MI') AS sched_local, left(content,90) AS content_head;",
+        "options": {}
+      },
+      "id": "n-insert-scheduled",
+      "name": "Insert Scheduled",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1840,
+        180
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE hitl_sessions SET status='resolved' WHERE callback_id = '{{ $('Parse Sched Hour').first().json.sessionRef }}';",
+        "options": {}
+      },
+      "id": "n-mark-session-scheduled",
+      "name": "Mark Session Scheduled",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        2060,
+        180
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/editMessageText",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Sched Hour').first().json.chatId, message_id: $('Parse Sched Hour').first().json.messageId, text: '\\uD83D\\uDD50 Zaplanowano na ' + $('Insert Scheduled').first().json.sched_local + ' (CET):\\n\\n' + ($('Insert Scheduled').first().json.content_head || '') }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "n-telegram-schedule-confirm",
+      "name": "Telegram Schedule Confirm",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2280,
+        180
+      ]
     }
   ],
   "connections": {
@@ -3733,6 +3979,13 @@
         [
           {
             "node": "PostgreSQL Set Awaiting Edit",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Hours Menu",
             "type": "main",
             "index": 0
           }
@@ -4708,7 +4961,7 @@
         ],
         [
           {
-            "node": "PostgreSQL Lookup Session",
+            "node": "Is Sched Hour?",
             "type": "main",
             "index": 0
           }
@@ -4889,6 +5142,97 @@
           }
         ]
       ]
+    },
+    "Prepare Hours Menu": {
+      "main": [
+        [
+          {
+            "node": "Telegram Show Hours",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Sched Hour?": {
+      "main": [
+        [
+          {
+            "node": "Parse Sched Hour",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PostgreSQL Lookup Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Sched Hour": {
+      "main": [
+        [
+          {
+            "node": "Sched Is Cancel?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sched Is Cancel?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Restore Menu",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Insert Scheduled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Restore Menu": {
+      "main": [
+        [
+          {
+            "node": "Telegram Restore",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Scheduled": {
+      "main": [
+        [
+          {
+            "node": "Mark Session Scheduled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Session Scheduled": {
+      "main": [
+        [
+          {
+            "node": "Telegram Schedule Confirm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -4902,9 +5246,9 @@
   "meta": null,
   "nodeGroups": [],
   "pinData": {},
-  "versionId": "60c796f7-605e-425a-9736-25f1aac87770",
-  "activeVersionId": "60c796f7-605e-425a-9736-25f1aac87770",
-  "versionCounter": 90,
+  "versionId": "fab5206a-b155-459f-85b2-0620eab3aa54",
+  "activeVersionId": "fab5206a-b155-459f-85b2-0620eab3aa54",
+  "versionCounter": 91,
   "triggerCount": 1,
   "shared": [
     {
@@ -4927,9 +5271,9 @@
   ],
   "tags": [],
   "activeVersion": {
-    "updatedAt": "2026-06-11T08:46:13.007Z",
-    "createdAt": "2026-06-11T08:46:13.007Z",
-    "versionId": "60c796f7-605e-425a-9736-25f1aac87770",
+    "updatedAt": "2026-06-11T12:51:40.045Z",
+    "createdAt": "2026-06-11T12:51:40.045Z",
+    "versionId": "fab5206a-b155-459f-85b2-0620eab3aa54",
     "workflowId": "U5pUZjy2yAhR1sWg",
     "nodes": [
       {
@@ -5383,6 +5727,30 @@
                 },
                 "renameOutput": true,
                 "outputKey": "edit"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "sw-schedule",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "schedule",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "schedule"
               }
             ]
           },
@@ -8470,6 +8838,228 @@
           480,
           640
         ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const cb = $json.callbackId;\nconst body = { chat_id: $json.chatId, message_id: $json.messageId, reply_markup: { inline_keyboard: [ [ { text: '14:00', callback_data: 'schedhr:'+cb+':14' }, { text: '18:00', callback_data: 'schedhr:'+cb+':18' } ], [ { text: '22:00', callback_data: 'schedhr:'+cb+':22' }, { text: '\\uD83D\\uDE80 Teraz', callback_data: 'schedhr:'+cb+':now' } ], [ { text: '\\u21A9 Anuluj', callback_data: 'schedhr:'+cb+':cancel' } ] ] } };\nreturn [{ json: { hoursBodyStr: JSON.stringify(body) } }];"
+        },
+        "id": "n-prepare-hours-menu",
+        "name": "Prepare Hours Menu",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1100,
+          -700
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/editMessageReplyMarkup",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.hoursBodyStr }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "n-telegram-show-hours",
+        "name": "Telegram Show Hours",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1320,
+          -700
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ $json.callbackId }}",
+                "rightValue": "schedhr:",
+                "operator": {
+                  "type": "string",
+                  "operation": "startsWith"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "n-is-sched-hour",
+        "name": "Is Sched Hour?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1180,
+          120
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const c = $json;\nconst cb = c.callbackId || '';\nconst sessionRef = cb.indexOf('schedhr:')===0 ? cb.substring(8) : cb;\nreturn [{ json: { sessionRef: sessionRef, hour: c.action, chatId: c.chatId, messageId: c.messageId, callbackQueryId: c.callbackQueryId } }];"
+        },
+        "id": "n-parse-sched-hour",
+        "name": "Parse Sched Hour",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1400,
+          60
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ $json.hour }}",
+                "rightValue": "cancel",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "n-sched-is-cancel",
+        "name": "Sched Is Cancel?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1620,
+          60
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const p = $('Parse Sched Hour').first().json;\nconst cb = p.sessionRef;\nconst body = { chat_id: p.chatId, message_id: p.messageId, reply_markup: { inline_keyboard: [ [ { text: '\\u2705 Approve', callback_data: cb+':approve' }, { text: '\\u274C Reject', callback_data: cb+':reject' }, { text: '\\u270F\\uFE0F Edit', callback_data: cb+':edit' } ], [ { text: '\\uD83D\\uDD50 Zaplanuj', callback_data: cb+':schedule' } ] ] } };\nreturn [{ json: { restoreBodyStr: JSON.stringify(body) } }];"
+        },
+        "id": "n-prepare-restore-menu",
+        "name": "Prepare Restore Menu",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1840,
+          -60
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/editMessageReplyMarkup",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.restoreBodyStr }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "n-telegram-restore",
+        "name": "Telegram Restore",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2060,
+          -60
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO post_queue (content, platform, status, scheduled_for) SELECT s.payload->>'draft', 'x', 'scheduled', CASE WHEN '{{ $json.hour }}' = 'now' THEN NOW() + INTERVAL '2 minutes' WHEN (CURRENT_DATE + (('{{ $json.hour }}' || ':00:00')::time)) AT TIME ZONE 'Europe/Warsaw' > NOW() THEN (CURRENT_DATE + (('{{ $json.hour }}' || ':00:00')::time)) AT TIME ZONE 'Europe/Warsaw' ELSE ((CURRENT_DATE + 1) + (('{{ $json.hour }}' || ':00:00')::time)) AT TIME ZONE 'Europe/Warsaw' END FROM hitl_sessions s WHERE s.callback_id = '{{ $json.sessionRef }}' RETURNING id, to_char(scheduled_for AT TIME ZONE 'Europe/Warsaw','YYYY-MM-DD HH24:MI') AS sched_local, left(content,90) AS content_head;",
+          "options": {}
+        },
+        "id": "n-insert-scheduled",
+        "name": "Insert Scheduled",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          1840,
+          180
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE hitl_sessions SET status='resolved' WHERE callback_id = '{{ $('Parse Sched Hour').first().json.sessionRef }}';",
+          "options": {}
+        },
+        "id": "n-mark-session-scheduled",
+        "name": "Mark Session Scheduled",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          2060,
+          180
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/editMessageText",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Sched Hour').first().json.chatId, message_id: $('Parse Sched Hour').first().json.messageId, text: '\\uD83D\\uDD50 Zaplanowano na ' + $('Insert Scheduled').first().json.sched_local + ' (CET):\\n\\n' + ($('Insert Scheduled').first().json.content_head || '') }) }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "n-telegram-schedule-confirm",
+        "name": "Telegram Schedule Confirm",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2280,
+          180
+        ]
       }
     ],
     "connections": {
@@ -8658,6 +9248,13 @@
           [
             {
               "node": "PostgreSQL Set Awaiting Edit",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Prepare Hours Menu",
               "type": "main",
               "index": 0
             }
@@ -9633,7 +10230,7 @@
           ],
           [
             {
-              "node": "PostgreSQL Lookup Session",
+              "node": "Is Sched Hour?",
               "type": "main",
               "index": 0
             }
@@ -9814,6 +10411,97 @@
             }
           ]
         ]
+      },
+      "Prepare Hours Menu": {
+        "main": [
+          [
+            {
+              "node": "Telegram Show Hours",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is Sched Hour?": {
+        "main": [
+          [
+            {
+              "node": "Parse Sched Hour",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "PostgreSQL Lookup Session",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse Sched Hour": {
+        "main": [
+          [
+            {
+              "node": "Sched Is Cancel?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Sched Is Cancel?": {
+        "main": [
+          [
+            {
+              "node": "Prepare Restore Menu",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Insert Scheduled",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Restore Menu": {
+        "main": [
+          [
+            {
+              "node": "Telegram Restore",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Insert Scheduled": {
+        "main": [
+          [
+            {
+              "node": "Mark Session Scheduled",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Mark Session Scheduled": {
+        "main": [
+          [
+            {
+              "node": "Telegram Schedule Confirm",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       }
     },
     "nodeGroups": [],
@@ -9823,18 +10511,18 @@
     "autosaved": false,
     "workflowPublishHistory": [
       {
-        "createdAt": "2026-06-11T08:46:13.884Z",
-        "id": 339,
+        "createdAt": "2026-06-11T12:51:40.859Z",
+        "id": 347,
         "workflowId": "U5pUZjy2yAhR1sWg",
-        "versionId": "60c796f7-605e-425a-9736-25f1aac87770",
+        "versionId": "fab5206a-b155-459f-85b2-0620eab3aa54",
         "event": "deactivated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       },
       {
-        "createdAt": "2026-06-11T08:46:14.203Z",
-        "id": 340,
+        "createdAt": "2026-06-11T12:51:41.152Z",
+        "id": 348,
         "workflowId": "U5pUZjy2yAhR1sWg",
-        "versionId": "60c796f7-605e-425a-9736-25f1aac87770",
+        "versionId": "fab5206a-b155-459f-85b2-0620eab3aa54",
         "event": "activated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       }
