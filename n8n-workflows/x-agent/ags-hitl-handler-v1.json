@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-11T06:39:23.186Z",
+  "updatedAt": "2026-06-11T07:28:27.812Z",
   "createdAt": "2026-06-01T07:09:59.480Z",
   "id": "U5pUZjy2yAhR1sWg",
   "name": "AGS HITL Handler v1.0",
@@ -1276,7 +1276,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT (SELECT id FROM conversation_state WHERE chat_id = {{ $json.chat_id }} AND state = 'awaiting_edit' LIMIT 1) AS edit_id;",
+        "query": "SELECT (SELECT id FROM conversation_state WHERE chat_id = {{ $json.chat_id }} AND state IN ('awaiting_edit','awaiting_synth_edit','awaiting_synth_angle') LIMIT 1) AS edit_id;",
         "options": {}
       },
       "id": "node-idea-gate-check",
@@ -1784,8 +1784,9 @@
         }
       },
       "retryOnFail": true,
-      "maxTries": 4,
-      "waitBetweenTries": 2500
+      "maxTries": 5,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -1906,8 +1907,9 @@
         }
       },
       "retryOnFail": true,
-      "maxTries": 4,
-      "waitBetweenTries": 2500
+      "maxTries": 5,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -1926,7 +1928,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const brief = $('Extract Claude Brief').first().json.brief || '';\nconst chatId = $('Idea Set Researching').first().json.chat_id;\nconst id = $('Parse Idea Callback').first().json.ideaId;\nconst header = '\\uD83D\\uDCDA Synteza gotowa:\\n\\n';\nconst full = header + brief;\nconst max = 3800;\nconst parts = [];\nfor (let i = 0; i < full.length; i += max) { parts.push(full.substring(i, i + max)); }\nif (parts.length === 0) { parts.push(header + '(pusto)'); }\nconst kb = { inline_keyboard: [[ { text: '\\uD83D\\uDCBE Zapisz', callback_data: 'synth:' + id + ':save' }, { text: '\\uD83D\\uDDD1 Usun', callback_data: 'synth:' + id + ':del' } ]] };\nreturn parts.map((p, idx) => { const b = { chat_id: chatId, text: p, disable_web_page_preview: true }; if (idx === parts.length - 1) { b.reply_markup = kb; } return { json: { tgBodyStr: JSON.stringify(b) } }; });"
+        "jsCode": "const brief = $('Extract Claude Brief').first().json.brief || '';\nconst chatId = $('Idea Set Researching').first().json.chat_id;\nconst id = $('Parse Idea Callback').first().json.ideaId;\nconst header = '\\uD83D\\uDCDA Synteza gotowa:\\n\\n';\nconst full = header + brief; const max = 3800; const parts = [];\nfor (let i = 0; i < full.length; i += max) { parts.push(full.substring(i, i + max)); }\nif (parts.length === 0) { parts.push(header + '(pusto)'); }\nconst kb = { inline_keyboard: [ [ { text: '\\uD83D\\uDCBE Zapisz', callback_data: 'synth:'+id+':save' }, { text: '\\u270F\\uFE0F Edytuj', callback_data: 'synth:'+id+':edit' } ], [ { text: '\\uD83D\\uDD01 Powtorz pod katem', callback_data: 'synth:'+id+':angle' }, { text: '\\uD83D\\uDDD1 Usun', callback_data: 'synth:'+id+':del' } ] ] };\nreturn parts.map((p, idx) => { const b = { chat_id: chatId, text: p, disable_web_page_preview: true }; if (idx === parts.length - 1) { b.reply_markup = kb; } return { json: { tgBodyStr: JSON.stringify(b) } }; });"
       },
       "id": "node-prepare-synthesis-reply",
       "name": "Prepare Synthesis Reply",
@@ -2035,6 +2037,54 @@
               },
               "renameOutput": true,
               "outputKey": "save"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-edit",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "edit",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "edit"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-angle",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "angle",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "angle"
             },
             {
               "conditions": {
@@ -2164,6 +2214,373 @@
         1700,
         -280
       ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO conversation_state (chat_id, state, payload, updated_at) VALUES ({{ $json.chatId }}, 'awaiting_synth_edit', jsonb_build_object('idea_id', '{{ $json.ideaId }}'), NOW()) ON CONFLICT (chat_id) DO UPDATE SET state='awaiting_synth_edit', payload=EXCLUDED.payload, updated_at=NOW();",
+        "options": {}
+      },
+      "id": "n-synth-edit-prompt",
+      "name": "Synth Edit Prompt",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1480,
+        -120
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Synth Callback').first().json.chatId, text: '\\u270F\\uFE0F Wyslij poprawiona wersje syntezy (caly tekst).' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "n-telegram-synth-edit-prompt",
+      "name": "Telegram Synth Edit Prompt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1700,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT cs.state AS synth_state, (cs.payload->>'idea_id') AS idea_id, i.content AS content, i.research_result AS research_result FROM conversation_state cs JOIN inspirations i ON i.id = (cs.payload->>'idea_id')::bigint WHERE cs.chat_id = {{ $json.chat_id }} AND cs.state IN ('awaiting_synth_edit','awaiting_synth_angle') LIMIT 1;",
+        "options": {}
+      },
+      "id": "n-synth-state-gate",
+      "name": "Synth State Gate",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        448,
+        760
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "ss-edit",
+                    "leftValue": "={{ $json.synth_state }}",
+                    "rightValue": "awaiting_synth_edit",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "edit"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "ss-angle",
+                    "leftValue": "={{ $json.synth_state }}",
+                    "rightValue": "awaiting_synth_angle",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "angle"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n-route-synth-state",
+      "name": "Route Synth State",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        672,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('Detect Update Type').first().json;\nconst g = $('Synth State Gate').first().json;\nreturn [{ json: { textEsc: (d.text || '').toString().replace(/'/g, \"''\"), idea_id: g.idea_id, chat_id: d.chat_id } }];"
+      },
+      "id": "n-prepare-synth-edit",
+      "name": "Prepare Synth Edit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE inspirations SET research_result='{{ $json.textEsc }}', status='researched', processed_at=NOW() WHERE id = {{ $json.idea_id }}; DELETE FROM conversation_state WHERE chat_id = {{ $json.chat_id }} AND state IN ('awaiting_synth_edit','awaiting_synth_angle');",
+        "options": {}
+      },
+      "id": "n-save-synth-edit",
+      "name": "Save Synth Edit",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1120,
+        760
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Detect Update Type').first().json.chat_id, text: '\\u270F\\uFE0F Zapisane (Twoja wersja).' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "n-telegram-synth-edit-saved",
+      "name": "Telegram Synth Edit Saved",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1344,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO conversation_state (chat_id, state, payload, updated_at) VALUES ({{ $json.chatId }}, 'awaiting_synth_angle', jsonb_build_object('idea_id', '{{ $json.ideaId }}'), NOW()) ON CONFLICT (chat_id) DO UPDATE SET state='awaiting_synth_angle', payload=EXCLUDED.payload, updated_at=NOW();",
+        "options": {}
+      },
+      "id": "n-synth-angle-prompt",
+      "name": "Synth Angle Prompt",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1480,
+        40
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Synth Callback').first().json.chatId, text: '\\uD83D\\uDD01 Pod jakim katem powtorzyc? Napisz kat lub temat na ktorym mam sie skupic.' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "n-telegram-synth-angle-prompt",
+      "name": "Telegram Synth Angle Prompt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1700,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const g = $('Synth State Gate').first().json;\nconst angle = ($('Detect Update Type').first().json.text || '').toString();\nconst content = (g.content || '').toString();\nconst prev = (g.research_result || '').toString();\nconst system = 'Jestes strategiem tresci AGS. Masz pomysl, dotychczasowa synteze i KAT na ktorym Tomasz chce sie skupic. Przepisz synteze MOCNO pod tym katem: (1) co to jest, (2) dlaczego wazne, (3) najlepsze ujecia, (4) haki na posty X i LinkedIn - wszystko przez pryzmat tego kata. Zwiezle. Zero myslnikow em. Po polsku, poprawna pisownia.';\nconst user = 'POMYSL:\\n' + content + '\\n\\nDOTYCHCZASOWA SYNTEZA:\\n' + prev + '\\n\\nKAT (skup sie na tym):\\n' + angle;\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: g.idea_id, chatId: $('Detect Update Type').first().json.chat_id } }];"
+      },
+      "id": "n-prepare-angle-resynth",
+      "name": "Prepare Angle Resynth",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        920
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.claudeBodyStr }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "n-claude-angle-synth",
+      "name": "Claude Angle Synth",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        920
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "w2iuB1ttk7ekS2ix",
+          "name": "Anthropic API AGS-n8n"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 2500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nlet brief = '';\ntry { brief = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { brief = ''; }\nif (!brief) { brief = '(Powtorka pod katem nie zwrocila wyniku)'; }\nbrief = brief.replace(/\\u2014/g, '-');\nconst p = $('Prepare Angle Resynth').first().json;\nreturn [{ json: { brief: brief, briefEsc: brief.replace(/'/g, \"''\"), ideaId: p.ideaId, chatId: p.chatId } }];"
+      },
+      "id": "n-extract-angle-brief",
+      "name": "Extract Angle Brief",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        920
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE inspirations SET research_result='{{ $json.briefEsc }}', status='researching' WHERE id = {{ $json.ideaId }}; DELETE FROM conversation_state WHERE chat_id = {{ $json.chatId }} AND state IN ('awaiting_synth_edit','awaiting_synth_angle');",
+        "options": {}
+      },
+      "id": "n-save-angle-research",
+      "name": "Save Angle Research",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1568,
+        920
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const e = $('Extract Angle Brief').first().json;\nconst brief = e.brief || ''; const chatId = e.chatId; const id = e.ideaId;\nconst header = '\\uD83D\\uDCDA Synteza pod katem gotowa:\\n\\n';\nconst full = header + brief; const max = 3800; const parts = [];\nfor (let i = 0; i < full.length; i += max) { parts.push(full.substring(i, i + max)); }\nif (parts.length === 0) { parts.push(header + '(pusto)'); }\nconst kb = { inline_keyboard: [ [ { text: '\\uD83D\\uDCBE Zapisz', callback_data: 'synth:'+id+':save' }, { text: '\\u270F\\uFE0F Edytuj', callback_data: 'synth:'+id+':edit' } ], [ { text: '\\uD83D\\uDD01 Powtorz pod katem', callback_data: 'synth:'+id+':angle' }, { text: '\\uD83D\\uDDD1 Usun', callback_data: 'synth:'+id+':del' } ] ] };\nreturn parts.map((p, idx) => { const b = { chat_id: chatId, text: p, disable_web_page_preview: true }; if (idx === parts.length - 1) { b.reply_markup = kb; } return { json: { tgBodyStr: JSON.stringify(b) } }; });"
+      },
+      "id": "n-prepare-angle-reply",
+      "name": "Prepare Angle Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        920
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.tgBodyStr }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "n-telegram-send-angle-synthesis",
+      "name": "Telegram Send Angle Synthesis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2016,
+        920
+      ]
     }
   ],
   "connections": {
@@ -2218,6 +2635,11 @@
           },
           {
             "node": "Idea Gate Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Synth State Gate",
             "type": "main",
             "index": 0
           }
@@ -2761,11 +3183,6 @@
             "node": "Telegram Idea Researching",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Prepare Research Prompt",
-            "type": "main",
-            "index": 0
           }
         ]
       ]
@@ -2947,6 +3364,20 @@
         ],
         [
           {
+            "node": "Synth Edit Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Synth Angle Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Synth Set Discarded",
             "type": "main",
             "index": 0
@@ -2975,6 +3406,145 @@
           }
         ]
       ]
+    },
+    "Telegram Idea Researching": {
+      "main": [
+        [
+          {
+            "node": "Prepare Research Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Synth Edit Prompt": {
+      "main": [
+        [
+          {
+            "node": "Telegram Synth Edit Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Synth State Gate": {
+      "main": [
+        [
+          {
+            "node": "Route Synth State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Synth State": {
+      "main": [
+        [
+          {
+            "node": "Prepare Synth Edit",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Angle Resynth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Synth Edit": {
+      "main": [
+        [
+          {
+            "node": "Save Synth Edit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Synth Edit": {
+      "main": [
+        [
+          {
+            "node": "Telegram Synth Edit Saved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Synth Angle Prompt": {
+      "main": [
+        [
+          {
+            "node": "Telegram Synth Angle Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Angle Resynth": {
+      "main": [
+        [
+          {
+            "node": "Claude Angle Synth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Angle Synth": {
+      "main": [
+        [
+          {
+            "node": "Extract Angle Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Angle Brief": {
+      "main": [
+        [
+          {
+            "node": "Save Angle Research",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Angle Research": {
+      "main": [
+        [
+          {
+            "node": "Prepare Angle Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Angle Reply": {
+      "main": [
+        [
+          {
+            "node": "Telegram Send Angle Synthesis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -2988,9 +3558,9 @@
   "meta": null,
   "nodeGroups": [],
   "pinData": {},
-  "versionId": "f8d0aee0-de50-406e-b0bb-4915d5595053",
-  "activeVersionId": "f8d0aee0-de50-406e-b0bb-4915d5595053",
-  "versionCounter": 80,
+  "versionId": "0852b806-3707-4ae2-af59-33db2d9e6bab",
+  "activeVersionId": "0852b806-3707-4ae2-af59-33db2d9e6bab",
+  "versionCounter": 83,
   "triggerCount": 1,
   "shared": [
     {
@@ -3013,9 +3583,9 @@
   ],
   "tags": [],
   "activeVersion": {
-    "updatedAt": "2026-06-11T06:39:23.196Z",
-    "createdAt": "2026-06-11T06:39:23.196Z",
-    "versionId": "f8d0aee0-de50-406e-b0bb-4915d5595053",
+    "updatedAt": "2026-06-11T07:28:27.818Z",
+    "createdAt": "2026-06-11T07:28:27.818Z",
+    "versionId": "0852b806-3707-4ae2-af59-33db2d9e6bab",
     "workflowId": "U5pUZjy2yAhR1sWg",
     "nodes": [
       {
@@ -4287,7 +4857,7 @@
       {
         "parameters": {
           "operation": "executeQuery",
-          "query": "SELECT (SELECT id FROM conversation_state WHERE chat_id = {{ $json.chat_id }} AND state = 'awaiting_edit' LIMIT 1) AS edit_id;",
+          "query": "SELECT (SELECT id FROM conversation_state WHERE chat_id = {{ $json.chat_id }} AND state IN ('awaiting_edit','awaiting_synth_edit','awaiting_synth_angle') LIMIT 1) AS edit_id;",
           "options": {}
         },
         "id": "node-idea-gate-check",
@@ -4795,8 +5365,9 @@
           }
         },
         "retryOnFail": true,
-        "maxTries": 4,
-        "waitBetweenTries": 2500
+        "maxTries": 5,
+        "waitBetweenTries": 3000,
+        "onError": "continueRegularOutput"
       },
       {
         "parameters": {
@@ -4917,8 +5488,9 @@
           }
         },
         "retryOnFail": true,
-        "maxTries": 4,
-        "waitBetweenTries": 2500
+        "maxTries": 5,
+        "waitBetweenTries": 3000,
+        "onError": "continueRegularOutput"
       },
       {
         "parameters": {
@@ -4937,7 +5509,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const brief = $('Extract Claude Brief').first().json.brief || '';\nconst chatId = $('Idea Set Researching').first().json.chat_id;\nconst id = $('Parse Idea Callback').first().json.ideaId;\nconst header = '\\uD83D\\uDCDA Synteza gotowa:\\n\\n';\nconst full = header + brief;\nconst max = 3800;\nconst parts = [];\nfor (let i = 0; i < full.length; i += max) { parts.push(full.substring(i, i + max)); }\nif (parts.length === 0) { parts.push(header + '(pusto)'); }\nconst kb = { inline_keyboard: [[ { text: '\\uD83D\\uDCBE Zapisz', callback_data: 'synth:' + id + ':save' }, { text: '\\uD83D\\uDDD1 Usun', callback_data: 'synth:' + id + ':del' } ]] };\nreturn parts.map((p, idx) => { const b = { chat_id: chatId, text: p, disable_web_page_preview: true }; if (idx === parts.length - 1) { b.reply_markup = kb; } return { json: { tgBodyStr: JSON.stringify(b) } }; });"
+          "jsCode": "const brief = $('Extract Claude Brief').first().json.brief || '';\nconst chatId = $('Idea Set Researching').first().json.chat_id;\nconst id = $('Parse Idea Callback').first().json.ideaId;\nconst header = '\\uD83D\\uDCDA Synteza gotowa:\\n\\n';\nconst full = header + brief; const max = 3800; const parts = [];\nfor (let i = 0; i < full.length; i += max) { parts.push(full.substring(i, i + max)); }\nif (parts.length === 0) { parts.push(header + '(pusto)'); }\nconst kb = { inline_keyboard: [ [ { text: '\\uD83D\\uDCBE Zapisz', callback_data: 'synth:'+id+':save' }, { text: '\\u270F\\uFE0F Edytuj', callback_data: 'synth:'+id+':edit' } ], [ { text: '\\uD83D\\uDD01 Powtorz pod katem', callback_data: 'synth:'+id+':angle' }, { text: '\\uD83D\\uDDD1 Usun', callback_data: 'synth:'+id+':del' } ] ] };\nreturn parts.map((p, idx) => { const b = { chat_id: chatId, text: p, disable_web_page_preview: true }; if (idx === parts.length - 1) { b.reply_markup = kb; } return { json: { tgBodyStr: JSON.stringify(b) } }; });"
         },
         "id": "node-prepare-synthesis-reply",
         "name": "Prepare Synthesis Reply",
@@ -5046,6 +5618,54 @@
                 },
                 "renameOutput": true,
                 "outputKey": "save"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "sw-edit",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "edit",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "edit"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "sw-angle",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "angle",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "angle"
               },
               {
                 "conditions": {
@@ -5175,6 +5795,373 @@
           1700,
           -280
         ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO conversation_state (chat_id, state, payload, updated_at) VALUES ({{ $json.chatId }}, 'awaiting_synth_edit', jsonb_build_object('idea_id', '{{ $json.ideaId }}'), NOW()) ON CONFLICT (chat_id) DO UPDATE SET state='awaiting_synth_edit', payload=EXCLUDED.payload, updated_at=NOW();",
+          "options": {}
+        },
+        "id": "n-synth-edit-prompt",
+        "name": "Synth Edit Prompt",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          1480,
+          -120
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Synth Callback').first().json.chatId, text: '\\u270F\\uFE0F Wyslij poprawiona wersje syntezy (caly tekst).' }) }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "n-telegram-synth-edit-prompt",
+        "name": "Telegram Synth Edit Prompt",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1700,
+          -120
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT cs.state AS synth_state, (cs.payload->>'idea_id') AS idea_id, i.content AS content, i.research_result AS research_result FROM conversation_state cs JOIN inspirations i ON i.id = (cs.payload->>'idea_id')::bigint WHERE cs.chat_id = {{ $json.chat_id }} AND cs.state IN ('awaiting_synth_edit','awaiting_synth_angle') LIMIT 1;",
+          "options": {}
+        },
+        "id": "n-synth-state-gate",
+        "name": "Synth State Gate",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          448,
+          760
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "ss-edit",
+                      "leftValue": "={{ $json.synth_state }}",
+                      "rightValue": "awaiting_synth_edit",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "edit"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "ss-angle",
+                      "leftValue": "={{ $json.synth_state }}",
+                      "rightValue": "awaiting_synth_angle",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "angle"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "n-route-synth-state",
+        "name": "Route Synth State",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.2,
+        "position": [
+          672,
+          760
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const d = $('Detect Update Type').first().json;\nconst g = $('Synth State Gate').first().json;\nreturn [{ json: { textEsc: (d.text || '').toString().replace(/'/g, \"''\"), idea_id: g.idea_id, chat_id: d.chat_id } }];"
+        },
+        "id": "n-prepare-synth-edit",
+        "name": "Prepare Synth Edit",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          896,
+          760
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE inspirations SET research_result='{{ $json.textEsc }}', status='researched', processed_at=NOW() WHERE id = {{ $json.idea_id }}; DELETE FROM conversation_state WHERE chat_id = {{ $json.chat_id }} AND state IN ('awaiting_synth_edit','awaiting_synth_angle');",
+          "options": {}
+        },
+        "id": "n-save-synth-edit",
+        "name": "Save Synth Edit",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          1120,
+          760
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Detect Update Type').first().json.chat_id, text: '\\u270F\\uFE0F Zapisane (Twoja wersja).' }) }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "n-telegram-synth-edit-saved",
+        "name": "Telegram Synth Edit Saved",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1344,
+          760
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO conversation_state (chat_id, state, payload, updated_at) VALUES ({{ $json.chatId }}, 'awaiting_synth_angle', jsonb_build_object('idea_id', '{{ $json.ideaId }}'), NOW()) ON CONFLICT (chat_id) DO UPDATE SET state='awaiting_synth_angle', payload=EXCLUDED.payload, updated_at=NOW();",
+          "options": {}
+        },
+        "id": "n-synth-angle-prompt",
+        "name": "Synth Angle Prompt",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          1480,
+          40
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Synth Callback').first().json.chatId, text: '\\uD83D\\uDD01 Pod jakim katem powtorzyc? Napisz kat lub temat na ktorym mam sie skupic.' }) }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "n-telegram-synth-angle-prompt",
+        "name": "Telegram Synth Angle Prompt",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1700,
+          40
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const g = $('Synth State Gate').first().json;\nconst angle = ($('Detect Update Type').first().json.text || '').toString();\nconst content = (g.content || '').toString();\nconst prev = (g.research_result || '').toString();\nconst system = 'Jestes strategiem tresci AGS. Masz pomysl, dotychczasowa synteze i KAT na ktorym Tomasz chce sie skupic. Przepisz synteze MOCNO pod tym katem: (1) co to jest, (2) dlaczego wazne, (3) najlepsze ujecia, (4) haki na posty X i LinkedIn - wszystko przez pryzmat tego kata. Zwiezle. Zero myslnikow em. Po polsku, poprawna pisownia.';\nconst user = 'POMYSL:\\n' + content + '\\n\\nDOTYCHCZASOWA SYNTEZA:\\n' + prev + '\\n\\nKAT (skup sie na tym):\\n' + angle;\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: g.idea_id, chatId: $('Detect Update Type').first().json.chat_id } }];"
+        },
+        "id": "n-prepare-angle-resynth",
+        "name": "Prepare Angle Resynth",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          896,
+          920
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.anthropic.com/v1/messages",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "anthropic-version",
+                "value": "2023-06-01"
+              },
+              {
+                "name": "content-type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.claudeBodyStr }}",
+          "options": {
+            "timeout": 60000
+          }
+        },
+        "id": "n-claude-angle-synth",
+        "name": "Claude Angle Synth",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1120,
+          920
+        ],
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "w2iuB1ttk7ekS2ix",
+            "name": "Anthropic API AGS-n8n"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 4,
+        "waitBetweenTries": 2500,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const resp = $json;\nlet brief = '';\ntry { brief = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { brief = ''; }\nif (!brief) { brief = '(Powtorka pod katem nie zwrocila wyniku)'; }\nbrief = brief.replace(/\\u2014/g, '-');\nconst p = $('Prepare Angle Resynth').first().json;\nreturn [{ json: { brief: brief, briefEsc: brief.replace(/'/g, \"''\"), ideaId: p.ideaId, chatId: p.chatId } }];"
+        },
+        "id": "n-extract-angle-brief",
+        "name": "Extract Angle Brief",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1344,
+          920
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE inspirations SET research_result='{{ $json.briefEsc }}', status='researching' WHERE id = {{ $json.ideaId }}; DELETE FROM conversation_state WHERE chat_id = {{ $json.chatId }} AND state IN ('awaiting_synth_edit','awaiting_synth_angle');",
+          "options": {}
+        },
+        "id": "n-save-angle-research",
+        "name": "Save Angle Research",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          1568,
+          920
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const e = $('Extract Angle Brief').first().json;\nconst brief = e.brief || ''; const chatId = e.chatId; const id = e.ideaId;\nconst header = '\\uD83D\\uDCDA Synteza pod katem gotowa:\\n\\n';\nconst full = header + brief; const max = 3800; const parts = [];\nfor (let i = 0; i < full.length; i += max) { parts.push(full.substring(i, i + max)); }\nif (parts.length === 0) { parts.push(header + '(pusto)'); }\nconst kb = { inline_keyboard: [ [ { text: '\\uD83D\\uDCBE Zapisz', callback_data: 'synth:'+id+':save' }, { text: '\\u270F\\uFE0F Edytuj', callback_data: 'synth:'+id+':edit' } ], [ { text: '\\uD83D\\uDD01 Powtorz pod katem', callback_data: 'synth:'+id+':angle' }, { text: '\\uD83D\\uDDD1 Usun', callback_data: 'synth:'+id+':del' } ] ] };\nreturn parts.map((p, idx) => { const b = { chat_id: chatId, text: p, disable_web_page_preview: true }; if (idx === parts.length - 1) { b.reply_markup = kb; } return { json: { tgBodyStr: JSON.stringify(b) } }; });"
+        },
+        "id": "n-prepare-angle-reply",
+        "name": "Prepare Angle Reply",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1792,
+          920
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.tgBodyStr }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "n-telegram-send-angle-synthesis",
+        "name": "Telegram Send Angle Synthesis",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2016,
+          920
+        ]
       }
     ],
     "connections": {
@@ -5229,6 +6216,11 @@
             },
             {
               "node": "Idea Gate Check",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Synth State Gate",
               "type": "main",
               "index": 0
             }
@@ -5772,11 +6764,6 @@
               "node": "Telegram Idea Researching",
               "type": "main",
               "index": 0
-            },
-            {
-              "node": "Prepare Research Prompt",
-              "type": "main",
-              "index": 0
             }
           ]
         ]
@@ -5958,6 +6945,20 @@
           ],
           [
             {
+              "node": "Synth Edit Prompt",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Synth Angle Prompt",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
               "node": "Synth Set Discarded",
               "type": "main",
               "index": 0
@@ -5986,6 +6987,145 @@
             }
           ]
         ]
+      },
+      "Telegram Idea Researching": {
+        "main": [
+          [
+            {
+              "node": "Prepare Research Prompt",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Synth Edit Prompt": {
+        "main": [
+          [
+            {
+              "node": "Telegram Synth Edit Prompt",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Synth State Gate": {
+        "main": [
+          [
+            {
+              "node": "Route Synth State",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Route Synth State": {
+        "main": [
+          [
+            {
+              "node": "Prepare Synth Edit",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Prepare Angle Resynth",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Synth Edit": {
+        "main": [
+          [
+            {
+              "node": "Save Synth Edit",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save Synth Edit": {
+        "main": [
+          [
+            {
+              "node": "Telegram Synth Edit Saved",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Synth Angle Prompt": {
+        "main": [
+          [
+            {
+              "node": "Telegram Synth Angle Prompt",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Angle Resynth": {
+        "main": [
+          [
+            {
+              "node": "Claude Angle Synth",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Claude Angle Synth": {
+        "main": [
+          [
+            {
+              "node": "Extract Angle Brief",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Extract Angle Brief": {
+        "main": [
+          [
+            {
+              "node": "Save Angle Research",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save Angle Research": {
+        "main": [
+          [
+            {
+              "node": "Prepare Angle Reply",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Angle Reply": {
+        "main": [
+          [
+            {
+              "node": "Telegram Send Angle Synthesis",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       }
     },
     "nodeGroups": [],
@@ -5995,18 +7135,18 @@
     "autosaved": false,
     "workflowPublishHistory": [
       {
-        "createdAt": "2026-06-11T06:39:23.559Z",
-        "id": 303,
+        "createdAt": "2026-06-11T07:28:28.183Z",
+        "id": 311,
         "workflowId": "U5pUZjy2yAhR1sWg",
-        "versionId": "f8d0aee0-de50-406e-b0bb-4915d5595053",
+        "versionId": "0852b806-3707-4ae2-af59-33db2d9e6bab",
         "event": "deactivated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       },
       {
-        "createdAt": "2026-06-11T06:39:23.836Z",
-        "id": 304,
+        "createdAt": "2026-06-11T07:28:28.494Z",
+        "id": 312,
         "workflowId": "U5pUZjy2yAhR1sWg",
-        "versionId": "f8d0aee0-de50-406e-b0bb-4915d5595053",
+        "versionId": "0852b806-3707-4ae2-af59-33db2d9e6bab",
         "event": "activated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       }
