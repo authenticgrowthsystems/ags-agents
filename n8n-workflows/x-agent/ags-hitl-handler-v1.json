@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-11T12:51:40.043Z",
+  "updatedAt": "2026-06-11T13:10:06.609Z",
   "createdAt": "2026-06-01T07:09:59.480Z",
   "id": "U5pUZjy2yAhR1sWg",
   "name": "AGS HITL Handler v1.0",
@@ -1135,7 +1135,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const rows=$input.all(); const chatId=$('Route By Update Type').first().json.chat_id; let L=['Auto-publish ustawienia:','']; for(const r of rows){ if(r.json.config_key) L.push(r.json.config_key+' = '+r.json.config_value); } L.push(''); L.push('Zmiana: /set <klucz> <wartosc>'); return [{json:{chatId,reply:L.join('\\n')}}];"
+        "jsCode": "const rows=$input.all(); const chatId=$('Route By Update Type').first().json.chat_id; let L=['Auto-publish ustawie\u0144ia:','']; for(const r of rows){ if(r.json.config_key) L.push(r.json.config_key+' = '+r.json.config_value); } L.push(''); L.push('Zmiana: /set <klucz> <warto\u015b\u0107>'); return [{json:{chatId,reply:L.join('\\n')}}];"
       },
       "id": "hitl-format-settings",
       "name": "Format Settings",
@@ -1260,7 +1260,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const adminRow=$input.first().json; let adminList=[]; try{adminList=JSON.parse(adminRow.config_value||'[]');}catch(e){} const reqText=$('Route By Update Type').first().json.text||''; const chatId=$('Route By Update Type').first().json.chat_id; const authorized=adminList.map(String).includes(String(chatId)); const m=reqText.trim().match(/^\\/set\\s+(\\S+)\\s+([\\s\\S]+)$/); let key='',value='',ok=false,error=''; if(!authorized){error='Brak uprawnien. Tylko admin moze zmieniac ustawienia.';} else if(!m){error='Format: /set <klucz> <wartosc>';} else { key=m[1]; value=m[2].trim(); const allowed=['auto_publish_enabled','auto_publish_priorities','auto_publish_timeout_min']; if(!allowed.includes(key)){error='Nieznany klucz. Dozwolone: '+allowed.join(', ');} else if(key==='auto_publish_enabled'){ if(value!=='true'&&value!=='false')error='Wartosc musi byc true lub false'; else ok=true; } else if(key==='auto_publish_priorities'){ try{const a=JSON.parse(value); if(!Array.isArray(a)||!a.every(x=>['high','normal','low'].includes(x)))error='Tablica JSON z high/normal/low, np. [\"high\"]'; else ok=true;}catch(e){error='Niepoprawny JSON. Przyklad: [\"high\"]';} } else if(key==='auto_publish_timeout_min'){ try{const o=JSON.parse(value); if(typeof o!=='object'||Array.isArray(o)||!Object.values(o).every(v=>typeof v==='number'))error='Obiekt JSON z liczbami, np. {\"high\":30}'; else ok=true;}catch(e){error='Niepoprawny JSON. Przyklad: {\"high\":30}';} } } const valueEsc=value.replace(/'/g,\"''\"); return [{json:{ok,key,value,valueEsc,chatId,error}}];"
+        "jsCode": "const adminRow=$input.first().json; let adminList=[]; try{adminList=JSON.parse(adminRow.config_value||'[]');}catch(e){} const reqText=$('Route By Update Type').first().json.text||''; const chatId=$('Route By Update Type').first().json.chat_id; const authorized=adminList.map(String).includes(String(chatId)); const m=reqText.trim().match(/^\\/set\\s+(\\S+)\\s+([\\s\\S]+)$/); let key='',value='',ok=false,error=''; if(!authorized){error='Brak uprawnie\u0144. Tylko admin mo\u017ce zmienia\u0107 ustawie\u0144ia.';} else if(!m){error='Format: /set <klucz> <warto\u015b\u0107>';} else { key=m[1]; value=m[2].trim(); const allowed=['auto_publish_enabled','auto_publish_priorities','auto_publish_timeout_min']; if(!allowed.includes(key)){error='Nieznany klucz. Dozwolone: '+allowed.join(', ');} else if(key==='auto_publish_enabled'){ if(value!=='true'&&value!=='false')error='Warto\u015b\u0107 musi by\u0107 true lub false'; else ok=true; } else if(key==='auto_publish_priorities'){ try{const a=JSON.parse(value); if(!Array.isArray(a)||!a.every(x=>['high','normal','low'].includes(x)))error='Tablica JSON z high/normal/low, np. [\"high\"]'; else ok=true;}catch(e){error='Niepoprawny JSON. Przyklad: [\"high\"]';} } else if(key==='auto_publish_timeout_min'){ try{const o=JSON.parse(value); if(typeof o!=='object'||Array.isArray(o)||!Object.values(o).every(v=>typeof v==='number'))error='Obiekt JSON z liczbami, np. {\"high\":30}'; else ok=true;}catch(e){error='Niepoprawny JSON. Przyklad: {\"high\":30}';} } } const valueEsc=value.replace(/'/g,\"''\"); return [{json:{ok,key,value,valueEsc,chatId,error}}];"
       },
       "id": "hitl-parse-authorize-set",
       "name": "Parse And Authorize Set",
@@ -1820,7 +1820,7 @@
         "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Idea Callback').first().json.chatId, text: '\\uD83D\\uDDD1 Odrzucone.' }) }}",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Idea Callback').first().json.chatId, text: '\\uD83D\\uDDD1 Odrzu\u0107one.' }) }}",
         "options": {
           "response": {
             "response": {
@@ -1841,7 +1841,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const content = ($('Idea Set Researching').first().json.content || '').toString();\nconst rp = 'Jestes analitykiem researchu. Zrob zwiezly deep-research pomyslu:\\n1. O co chodzi (1-2 zdania)\\n2. Dlaczego wazne teraz\\n3. 3-5 katow ujecia\\n4. Mozliwe zrodla lub dane\\n5. Ryzyka.\\nOdpowiedz w jezyku pomyslu, poprawna pisownia (polskie znaki jesli po polsku), bez myslnikow em.\\n\\nPOMYSL:\\n' + content;\nconst gemBody = { contents: [{ parts: [{ text: rp }] }], generationConfig: { temperature: 0.7, maxOutputTokens: 4096 } };\nconst dsBody = { model: 'deepseek-chat', messages: [{ role: 'user', content: rp }], max_tokens: 1500, temperature: 0.7 };\nreturn [{ json: { geminiBodyStr: JSON.stringify(gemBody), deepseekBodyStr: JSON.stringify(dsBody) } }];"
+        "jsCode": "const content = ($('Idea Set Researching').first().json.content || '').toString();\nconst rp = 'Jeste\u015b analitykiem researchu. Zrob zwiezly deep-research pomys\u0142u:\\n1. O co chodzi (1-2 zdania)\\n2. Dlaczego wazne teraz\\n3. 3-5 katow ujecia\\n4. Mozliwe \u017ar\u00f3d\u0142a lub dane\\n5. Ryzyka.\\nOdpowiedz w jezyku pomys\u0142u, poprawna pisownia (polskie znaki jesli po polsku), bez myslnikow em.\\n\\nPOMYSL:\\n' + content;\nconst gemBody = { contents: [{ parts: [{ text: rp }] }], generationConfig: { temperature: 0.7, maxOutputTokens: 4096 } };\nconst dsBody = { model: 'deepseek-chat', messages: [{ role: 'user', content: rp }], max_tokens: 1500, temperature: 0.7 };\nreturn [{ json: { geminiBodyStr: JSON.stringify(gemBody), deepseekBodyStr: JSON.stringify(dsBody) } }];"
       },
       "id": "node-prepare-research-prompt",
       "name": "Prepare Research Prompt",
@@ -1886,7 +1886,7 @@
     },
     {
       "parameters": {
-        "jsCode": "let gem = '';\ntry { gem = ($('Gemini Research').first().json.candidates[0].content.parts || []).map(p => p.text || '').join('\\n'); } catch (e) { gem = ''; }\nif (!gem) { gem = '(Gemini nie zwrocil researchu)'; }\nlet ds = '';\ntry { ds = ($('DeepSeek Research').first().json.choices || []).map(c => (c.message && c.message.content) || '').join('\\n').trim(); } catch (e) { ds = ''; }\nif (!ds) { ds = '(DeepSeek nie zwrocil researchu)'; }\nconst content = ($('Idea Set Researching').first().json.content || '').toString();\nconst system = 'Jestes strategiem tresci AGS. Dostajesz pomysl i DWA niezalezne researche (Gemini, DeepSeek). Zsyntetyzuj je w jeden zwarty brief: (1) co to jest, (2) dlaczego wazne, (3) najlepsze katy ujecia, (4) sugerowane haki na posty X i LinkedIn. Polacz wnioski, usun powtorzenia. Zwiezle. ZASADA: zero myslnikow em, uzywaj dywizow lub przebuduj zdanie. Odpowiedz w jezyku pomyslu, poprawna pisownia. JEZYK: jesli pomysl po polsku - pisz CZYSTA polszczyzna, ZERO anglicyzmow, zargonu i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). Zawsze pisz jak czlowiek do czlowieka, NIE jak maszyna: zero korpo-mowy, zero pustych frazesow i hype, naturalny rytm, konkret.';\nconst user = 'POMYSL:\\n' + content + '\\n\\nRESEARCH GEMINI:\\n' + gem + '\\n\\nRESEARCH DEEPSEEK:\\n' + ds;\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), geminiText: gem, deepseekText: ds } }];"
+        "jsCode": "let gem = '';\ntry { gem = ($('Gemini Research').first().json.candidates[0].content.parts || []).map(p => p.text || '').join('\\n'); } catch (e) { gem = ''; }\nif (!gem) { gem = '(Gemini nie zwrocil researchu)'; }\nlet ds = '';\ntry { ds = ($('DeepSeek Research').first().json.choices || []).map(c => (c.message && c.message.content) || '').join('\\n').trim(); } catch (e) { ds = ''; }\nif (!ds) { ds = '(DeepSeek nie zwrocil researchu)'; }\nconst content = ($('Idea Set Researching').first().json.content || '').toString();\nconst system = 'Jeste\u015b strategiem tresci AGS. Dostajesz pomys\u0142 i DWA niezalezne researche (Gemini, DeepSeek). Zsyntetyzuj je w jeden zwarty brief: (1) co to jest, (2) dlaczego wazne, (3) najlepsze katy ujecia, (4) sugerowane haki na posty X i LinkedIn. Polacz wnioski, usun powtorzenia. Zwiezle. ZASADA: zero myslnikow em, uzywaj dywizow lub przebuduj zdanie. Odpowiedz w jezyku pomys\u0142u, poprawna pisownia. JEZYK: jesli pomys\u0142 po polsku - pisz CZYSTA polszczyzna, ZERO anglicyzmow, zargonu i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). Zawsze pisz jak czlowiek do czlowieka, NIE jak maszyna: zero korpo-mowy, zero pustych frazesow i hype, naturalny rytm, konkret.';\nconst user = 'POMYSL:\\n' + content + '\\n\\nRESEARCH GEMINI:\\n' + gem + '\\n\\nRESEARCH DEEPSEEK:\\n' + ds;\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), geminiText: gem, deepseekText: ds } }];"
       },
       "id": "node-prepare-claude-synthesis",
       "name": "Prepare Claude Synthesis",
@@ -2024,7 +2024,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const brief = $('Extract Claude Brief').first().json.brief || '';\nconst chatId = $('Idea Set Researching').first().json.chat_id;\nconst id = $('Parse Idea Callback').first().json.ideaId;\nconst header = '\\uD83D\\uDCDA Synteza gotowa:\\n\\n';\nconst full = header + brief; const max = 3800; const parts = [];\nfor (let i = 0; i < full.length; i += max) { parts.push(full.substring(i, i + max)); }\nif (parts.length === 0) { parts.push(header + '(pusto)'); }\nconst kb = { inline_keyboard: [ [ { text: '\\uD83D\\uDCBE Zapisz', callback_data: 'synth:'+id+':save' }, { text: '\\u270F\\uFE0F Edytuj', callback_data: 'synth:'+id+':edit' } ], [ { text: '\\uD83D\\uDD01 Powtorz pod katem', callback_data: 'synth:'+id+':angle' }, { text: '\\uD83D\\uDDD1 Usun', callback_data: 'synth:'+id+':del' } ] ] };\nreturn parts.map((p, idx) => { const b = { chat_id: chatId, text: p, disable_web_page_preview: true }; if (idx === parts.length - 1) { b.reply_markup = kb; } return { json: { tgBodyStr: JSON.stringify(b) } }; });"
+        "jsCode": "const brief = $('Extract Claude Brief').first().json.brief || '';\nconst chatId = $('Idea Set Researching').first().json.chat_id;\nconst id = $('Parse Idea Callback').first().json.ideaId;\nconst header = '\\uD83D\\uDCDA Synteza gotowa:\\n\\n';\nconst full = header + brief; const max = 3800; const parts = [];\nfor (let i = 0; i < full.length; i += max) { parts.push(full.substring(i, i + max)); }\nif (parts.length === 0) { parts.push(header + '(pusto)'); }\nconst kb = { inline_keyboard: [ [ { text: '\\uD83D\\uDCBE Zapisz', callback_data: 'synth:'+id+':save' }, { text: '\\u270F\\uFE0F Edytuj', callback_data: 'synth:'+id+':edit' } ], [ { text: '\\uD83D\\uDD01 Powt\u00f3rz pod k\u0105tem', callback_data: 'synth:'+id+':angle' }, { text: '\\uD83D\\uDDD1 Usun', callback_data: 'synth:'+id+':del' } ] ] };\nreturn parts.map((p, idx) => { const b = { chat_id: chatId, text: p, disable_web_page_preview: true }; if (idx === parts.length - 1) { b.reply_markup = kb; } return { json: { tgBodyStr: JSON.stringify(b) } }; });"
       },
       "id": "node-prepare-synthesis-reply",
       "name": "Prepare Synthesis Reply",
@@ -2292,7 +2292,7 @@
         "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Synth Callback').first().json.chatId, text: '\\uD83D\\uDDD1 Usuniete.' }) }}",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Synth Callback').first().json.chatId, text: '\\uD83D\\uDDD1 Usuni\u0119te.' }) }}",
         "options": {
           "response": {
             "response": {
@@ -2338,7 +2338,7 @@
         "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Synth Callback').first().json.chatId, text: '\\u270F\\uFE0F Wyslij poprawiona wersje syntezy (caly tekst).' }) }}",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Synth Callback').first().json.chatId, text: '\\u270F\\uFE0F Wy\u015blij poprawion\u0105 wersj\u0119 syntezy (caly tekst).' }) }}",
         "options": {
           "response": {
             "response": {
@@ -2529,7 +2529,7 @@
         "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Synth Callback').first().json.chatId, text: '\\uD83D\\uDD01 Pod jakim katem powtorzyc? Napisz kat lub temat na ktorym mam sie skupic.' }) }}",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Synth Callback').first().json.chatId, text: '\\uD83D\\uDD01 Pod jakim k\u0105tem powt\u00f3rzy\u0107? Napisz kat lub temat na ktorym mam si\u0119 skupic.' }) }}",
         "options": {
           "response": {
             "response": {
@@ -2550,7 +2550,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const g = $('Synth State Gate').first().json;\nconst angle = ($('Detect Update Type').first().json.text || '').toString();\nconst content = (g.content || '').toString();\nconst prev = (g.research_result || '').toString();\nconst system = 'Jestes strategiem tresci AGS. Masz pomysl, dotychczasowa synteze i KAT na ktorym Tomasz chce sie skupic. Przepisz synteze MOCNO pod tym katem: (1) co to jest, (2) dlaczego wazne, (3) najlepsze ujecia, (4) haki na posty X i LinkedIn - wszystko przez pryzmat tego kata. Zwiezle. Zero myslnikow em. Po polsku, poprawna pisownia. JEZYK: jesli pomysl po polsku - pisz CZYSTA polszczyzna, ZERO anglicyzmow, zargonu i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). Zawsze pisz jak czlowiek do czlowieka, NIE jak maszyna: zero korpo-mowy, zero pustych frazesow i hype, naturalny rytm, konkret.';\nconst user = 'POMYSL:\\n' + content + '\\n\\nDOTYCHCZASOWA SYNTEZA:\\n' + prev + '\\n\\nKAT (skup sie na tym):\\n' + angle;\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: g.idea_id, chatId: $('Detect Update Type').first().json.chat_id } }];"
+        "jsCode": "const g = $('Synth State Gate').first().json;\nconst angle = ($('Detect Update Type').first().json.text || '').toString();\nconst content = (g.content || '').toString();\nconst prev = (g.research_result || '').toString();\nconst system = 'Jeste\u015b strategiem tresci AGS. Masz pomys\u0142, dotychczasowa synteze i KAT na ktorym Tomasz chce si\u0119 skupic. Przepisz synteze MOCNO pod tym k\u0105tem: (1) co to jest, (2) dlaczego wazne, (3) najlepsze ujecia, (4) haki na posty X i LinkedIn - wszystko przez pryzmat tego kata. Zwiezle. Zero myslnikow em. Po polsku, poprawna pisownia. JEZYK: jesli pomys\u0142 po polsku - pisz CZYSTA polszczyzna, ZERO anglicyzmow, zargonu i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). Zawsze pisz jak czlowiek do czlowieka, NIE jak maszyna: zero korpo-mowy, zero pustych frazesow i hype, naturalny rytm, konkret.';\nconst user = 'POMYSL:\\n' + content + '\\n\\nDOTYCHCZASOWA SYNTEZA:\\n' + prev + '\\n\\nKAT (skup si\u0119 na tym):\\n' + angle;\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: g.idea_id, chatId: $('Detect Update Type').first().json.chat_id } }];"
       },
       "id": "n-prepare-angle-resynth",
       "name": "Prepare Angle Resynth",
@@ -2608,7 +2608,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const resp = $json;\nlet brief = '';\ntry { brief = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { brief = ''; }\nif (!brief) { brief = '(Powtorka pod katem nie zwrocila wyniku)'; }\nbrief = brief.replace(/[\\u2014\\u2013\\u2212]/g, '-');\nconst p = $('Prepare Angle Resynth').first().json;\nreturn [{ json: { brief: brief, briefEsc: brief.replace(/'/g, \"''\"), ideaId: p.ideaId, chatId: p.chatId } }];"
+        "jsCode": "const resp = $json;\nlet brief = '';\ntry { brief = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { brief = ''; }\nif (!brief) { brief = '(Powtorka pod k\u0105tem nie zwrocila wyniku)'; }\nbrief = brief.replace(/[\\u2014\\u2013\\u2212]/g, '-');\nconst p = $('Prepare Angle Resynth').first().json;\nreturn [{ json: { brief: brief, briefEsc: brief.replace(/'/g, \"''\"), ideaId: p.ideaId, chatId: p.chatId } }];"
       },
       "id": "n-extract-angle-brief",
       "name": "Extract Angle Brief",
@@ -2642,7 +2642,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const e = $('Extract Angle Brief').first().json;\nconst brief = e.brief || ''; const chatId = e.chatId; const id = e.ideaId;\nconst header = '\\uD83D\\uDCDA Synteza pod katem gotowa:\\n\\n';\nconst full = header + brief; const max = 3800; const parts = [];\nfor (let i = 0; i < full.length; i += max) { parts.push(full.substring(i, i + max)); }\nif (parts.length === 0) { parts.push(header + '(pusto)'); }\nconst kb = { inline_keyboard: [ [ { text: '\\uD83D\\uDCBE Zapisz', callback_data: 'synth:'+id+':save' }, { text: '\\u270F\\uFE0F Edytuj', callback_data: 'synth:'+id+':edit' } ], [ { text: '\\uD83D\\uDD01 Powtorz pod katem', callback_data: 'synth:'+id+':angle' }, { text: '\\uD83D\\uDDD1 Usun', callback_data: 'synth:'+id+':del' } ] ] };\nreturn parts.map((p, idx) => { const b = { chat_id: chatId, text: p, disable_web_page_preview: true }; if (idx === parts.length - 1) { b.reply_markup = kb; } return { json: { tgBodyStr: JSON.stringify(b) } }; });"
+        "jsCode": "const e = $('Extract Angle Brief').first().json;\nconst brief = e.brief || ''; const chatId = e.chatId; const id = e.ideaId;\nconst header = '\\uD83D\\uDCDA Synteza pod k\u0105tem gotowa:\\n\\n';\nconst full = header + brief; const max = 3800; const parts = [];\nfor (let i = 0; i < full.length; i += max) { parts.push(full.substring(i, i + max)); }\nif (parts.length === 0) { parts.push(header + '(pusto)'); }\nconst kb = { inline_keyboard: [ [ { text: '\\uD83D\\uDCBE Zapisz', callback_data: 'synth:'+id+':save' }, { text: '\\u270F\\uFE0F Edytuj', callback_data: 'synth:'+id+':edit' } ], [ { text: '\\uD83D\\uDD01 Powt\u00f3rz pod k\u0105tem', callback_data: 'synth:'+id+':angle' }, { text: '\\uD83D\\uDDD1 Usun', callback_data: 'synth:'+id+':del' } ] ] };\nreturn parts.map((p, idx) => { const b = { chat_id: chatId, text: p, disable_web_page_preview: true }; if (idx === parts.length - 1) { b.reply_markup = kb; } return { json: { tgBodyStr: JSON.stringify(b) } }; });"
       },
       "id": "n-prepare-angle-reply",
       "name": "Prepare Angle Reply",
@@ -2701,7 +2701,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const ctx = $json;\nconst research = (ctx.research_result || '').toString();\nconst recent = Array.isArray(ctx.recent_posts) ? ctx.recent_posts.filter(Boolean).join('\\n---\\n') : '';\nconst system = 'Jestes Content Creatorem AGS. Cel: maksymalizowac zasieg i liczbe followersow marki. Masz research pomyslu oraz ostatnie opublikowane posty (co juz poszlo). Zarekomenduj JEDEN najlepszy format na teraz: post / seria / artykul. Napisz 2-3 zdania: ktory format i DLACZEGO - na bazie researchu i tego co juz publikowano (nie powtarzaj, buduj na tym co dziala). Zwiezle. Po polsku, zero myslnikow em. JEZYK: jesli pomysl po polsku - pisz CZYSTA polszczyzna, ZERO anglicyzmow, zargonu i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). Zawsze pisz jak czlowiek do czlowieka, NIE jak maszyna: zero korpo-mowy, zero pustych frazesow i hype, naturalny rytm, konkret.';\nconst user = 'RESEARCH:\\n' + research + '\\n\\nOSTATNIE PUBLIKACJE:\\n' + (recent || '(brak historii)');\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: $('Parse Synth Callback').first().json.ideaId, chatId: $('Parse Synth Callback').first().json.chatId } }];"
+        "jsCode": "const ctx = $json;\nconst research = (ctx.research_result || '').toString();\nconst recent = Array.isArray(ctx.recent_posts) ? ctx.recent_posts.filter(Boolean).join('\\n---\\n') : '';\nconst system = 'Jeste\u015b Content Creatorem AGS. Cel: maksymalizowac zasieg i liczbe followersow marki. Masz research pomys\u0142u oraz ostatnie opublikowane posty (co juz poszlo). Zarekomenduj JEDEN najlepszy format na teraz: post / seria / artykul. Napisz 2-3 zdania: kt\u00f3ry format i DLACZEGO - na bazie researchu i tego co juz publikowano (nie powtarzaj, buduj na tym co dziala). Zwiezle. Po polsku, zero myslnikow em. JEZYK: jesli pomys\u0142 po polsku - pisz CZYSTA polszczyzna, ZERO anglicyzmow, zargonu i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). Zawsze pisz jak czlowiek do czlowieka, NIE jak maszyna: zero korpo-mowy, zero pustych frazesow i hype, naturalny rytm, konkret.';\nconst user = 'RESEARCH:\\n' + research + '\\n\\nOSTATNIE PUBLIKACJE:\\n' + (recent || '(brak historii)');\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: $('Parse Synth Callback').first().json.ideaId, chatId: $('Parse Synth Callback').first().json.chatId } }];"
       },
       "id": "n-prepare-decision-prompt",
       "name": "Prepare Decision Prompt",
@@ -2759,7 +2759,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const resp = $json;\nlet rec = '';\ntry { rec = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { rec = ''; }\nif (!rec) { rec = 'Wybierz format ktory chcesz wygenerowac:'; }\nrec = rec.replace(/[\\u2014\\u2013\\u2212]/g, '-');\nconst id = $('Prepare Decision Prompt').first().json.ideaId;\nconst chatId = $('Prepare Decision Prompt').first().json.chatId;\nconst tgBody = { chat_id: chatId, text: '\\uD83E\\uDDE0 Content Creator:\\n\\n' + rec + '\\n\\nCo robimy?', disable_web_page_preview: true, reply_markup: { inline_keyboard: [ [ { text: '\\u270D\\uFE0F Jeden post', callback_data: 'make:' + id + ':post' }, { text: '\\uD83D\\uDCDA Seria', callback_data: 'make:' + id + ':series' } ], [ { text: '\\uD83D\\uDCC4 Artykul', callback_data: 'make:' + id + ':article' } ] ] } };\nreturn [{ json: { tgBodyStr: JSON.stringify(tgBody) } }];"
+        "jsCode": "const resp = $json;\nlet rec = '';\ntry { rec = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { rec = ''; }\nif (!rec) { rec = 'Wybierz format kt\u00f3ry chcesz wygenerowa\u0107:'; }\nrec = rec.replace(/[\\u2014\\u2013\\u2212]/g, '-');\nconst id = $('Prepare Decision Prompt').first().json.ideaId;\nconst chatId = $('Prepare Decision Prompt').first().json.chatId;\nconst tgBody = { chat_id: chatId, text: '\\uD83E\\uDDE0 Content Creator:\\n\\n' + rec + '\\n\\nCo robimy?', disable_web_page_preview: true, reply_markup: { inline_keyboard: [ [ { text: '\\u270D\\uFE0F Jeden post', callback_data: 'make:' + id + ':post' }, { text: '\\uD83D\\uDCDA Seria', callback_data: 'make:' + id + ':series' } ], [ { text: '\\uD83D\\uDCC4 Artykul', callback_data: 'make:' + id + ':article' } ] ] } };\nreturn [{ json: { tgBodyStr: JSON.stringify(tgBody) } }];"
       },
       "id": "n-prepare-decision-reply",
       "name": "Prepare Decision Reply",
@@ -2847,7 +2847,7 @@
         "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Make Callback').first().json.chatId, text: '\\u270D\\uFE0F Pisze draft, chwila...' }) }}",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Make Callback').first().json.chatId, text: '\\u270D\\uFE0F Pisz\u0119 draft, chwila...' }) }}",
         "options": {
           "response": {
             "response": {
@@ -2889,7 +2889,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const format = $('Parse Make Callback').first().json.format;\nconst research = ($json.research_result || '').toString();\nlet instr, platform;\nif (format === 'post') { instr = 'Napisz JEDEN post na X, max 280 znakow. Hook plus jedna konkretna mysl z researchu.'; platform = 'x'; }\nelse if (format === 'series') { instr = 'Napisz serie 3-5 postow na X jako watek. Kazdy max 280 znakow, numeruj 1/ 2/ 3/. Spojny luk z researchu.'; platform = 'x'; }\nelse { instr = 'Napisz post na LinkedIn (1200-1400 znakow) plus krotki outline dluzszego artykulu (3-5 punktow) z researchu.'; platform = 'linkedin'; }\nconst system = 'Jestes Content Creatorem AGS. ' + instr + ' Zrob to w DWOCH wersjach jezykowych: najpierw polska, potem angielska. Oznacz kazda wyraznie naglowkiem na osobnej linii: === PL === oraz === EN ===. Kanon AGS: zero myslnikow em (uzywaj dywizow), bez frazesow i guru-jezyka, konkret, glos zalozyciela. WERSJA PL: czysta polszczyzna, ZERO anglicyzmow i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). WERSJA EN: naturalna angielszczyzna, nie tlumaczenie-kalka. Obie wersje: jak czlowiek do czlowieka, NIE jak maszyna, naturalny rytm, konkret. Zwroc TYLKO obie gotowe wersje.';\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 2000, system: system, messages: [{ role: 'user', content: 'RESEARCH:\n' + research }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: $('Parse Make Callback').first().json.ideaId, chatId: $('Parse Make Callback').first().json.chatId, format: format, platform: platform } }];"
+        "jsCode": "const format = $('Parse Make Callback').first().json.format;\nconst research = ($json.research_result || '').toString();\nlet instr, platform;\nif (format === 'post') { instr = 'Napisz JEDEN post na X, max 280 znakow. Hook plus jedna konkretna mysl z researchu.'; platform = 'x'; }\nelse if (format === 'series') { instr = 'Napisz serie 3-5 postow na X jako watek. Kazdy max 280 znakow, numeruj 1/ 2/ 3/. Spojny luk z researchu.'; platform = 'x'; }\nelse { instr = 'Napisz post na LinkedIn (1200-1400 znakow) plus krotki outline dluzszego artykulu (3-5 punktow) z researchu.'; platform = 'linkedin'; }\nconst system = 'Jeste\u015b Content Creatorem AGS. ' + instr + ' Zrob to w DWOCH wersjach jezykowych: najpierw polska, potem angielska. Oznacz kazda wyraznie naglowkiem na osobnej linii: === PL === oraz === EN ===. Kanon AGS: zero myslnikow em (uzywaj dywizow), bez frazesow i guru-jezyka, konkret, glos zalozyciela. WERSJA PL: czysta polszczyzna, ZERO anglicyzmow i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). WERSJA EN: naturalna angielszczyzna, nie tlumaczenie-kalka. Obie wersj\u0119: jak czlowiek do czlowieka, NIE jak maszyna, naturalny rytm, konkret. Zwroc TYLKO obie gotowe wersj\u0119.';\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 2000, system: system, messages: [{ role: 'user', content: 'RESEARCH:\n' + research }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: $('Parse Make Callback').first().json.ideaId, chatId: $('Parse Make Callback').first().json.chatId, format: format, platform: platform } }];"
       },
       "id": "n-prepare-draft-prompt",
       "name": "Prepare Draft Prompt",
@@ -2947,7 +2947,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const resp = $json;\nlet draft = '';\ntry { draft = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { draft = ''; }\nif (!draft) { draft = '(Draft sie nie wygenerowal - sprobuj ponownie)'; }\ndraft = draft.replace(/[\\u2014\\u2013\\u2212]/g, '-');\nconst p = $('Prepare Draft Prompt').first().json;\nreturn [{ json: { draft: draft, draftEsc: draft.replace(/'/g, \"''\"), ideaId: p.ideaId, chatId: p.chatId, format: p.format, platform: p.platform } }];"
+        "jsCode": "const resp = $json;\nlet draft = '';\ntry { draft = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { draft = ''; }\nif (!draft) { draft = '(Draft si\u0119 nie wygenerowal - sprobuj ponownie)'; }\ndraft = draft.replace(/[\\u2014\\u2013\\u2212]/g, '-');\nconst p = $('Prepare Draft Prompt').first().json;\nreturn [{ json: { draft: draft, draftEsc: draft.replace(/'/g, \"''\"), ideaId: p.ideaId, chatId: p.chatId, format: p.format, platform: p.platform } }];"
       },
       "id": "n-extract-draft",
       "name": "Extract Draft",
@@ -3019,7 +3019,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const chatId = $json.chat_id;\nconst tgBody = { chat_id: chatId, text: '\\uD83E\\uDD16 AGS Social Bot\\n\\nWyslij pomysl tekstem, a zajme sie reszta. Albo wybierz:', reply_markup: { inline_keyboard: [ [ { text: '\\uD83D\\uDCE5 Moje pomysly', callback_data: 'menu:ideas' }, { text: '\\uD83D\\uDCCB Kolejka', callback_data: 'menu:queue' } ], [ { text: '\\u2699\\uFE0F Ustawienia', callback_data: 'menu:settings' }, { text: '\\u2753 Jak uzywac', callback_data: 'menu:help' } ] ] } };\nreturn [{ json: { tgBodyStr: JSON.stringify(tgBody) } }];"
+        "jsCode": "const chatId = $json.chat_id;\nconst tgBody = { chat_id: chatId, text: '\\uD83E\\uDD16 AGS Social Bot\\n\\nWy\u015blij pomys\u0142 tekstem, a zajm\u0119 si\u0119 reszt\u0105. Albo wybierz:', reply_markup: { inline_keyboard: [ [ { text: '\\uD83D\\uDCE5 Moje pomys\u0142y', callback_data: 'menu:ideas' }, { text: '\\uD83D\\uDCCB Kolejka', callback_data: 'menu:queue' } ], [ { text: '\\u2699\\uFE0F Ustawienia', callback_data: 'menu:settings' }, { text: '\\u2753 Jak u\u017cywa\u0107', callback_data: 'menu:help' } ] ] } };\nreturn [{ json: { tgBodyStr: JSON.stringify(tgBody) } }];"
       },
       "id": "n-build-menu",
       "name": "Build Menu",
@@ -3270,7 +3270,7 @@
         "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ chat_id: $('Extract Callback Parts').first().json.chatId, text: '\\uD83D\\uDCE5 Twoje pomysly:\\n\\n' + ($json.list || '(brak)') }) }}",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Extract Callback Parts').first().json.chatId, text: '\\uD83D\\uDCE5 Twoje pomys\u0142y:\\n\\n' + ($json.list || '(brak)') }) }}",
         "options": {
           "response": {
             "response": {
@@ -3345,7 +3345,7 @@
         "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ chat_id: $('Extract Callback Parts').first().json.chatId, text: '\\u2753 Jak uzywac:\\n\\n- Wyslij pomysl tekstem -> dostajesz guziki (Research / Zapisz / Post / Odrzuc)\\n- Research: dwa zrodla + synteza, ktora mozesz zapisac, edytowac lub powtorzyc pod katem\\n- Po zapisie Content Creator podpowie format i napisze draft do kolejki\\n- /menu - to menu\\n- /settings - ustawienia auto-publikacji' }) }}",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Extract Callback Parts').first().json.chatId, text: '\\u2753 Jak u\u017cywa\u0107:\\n\\n- Wy\u015blij pomys\u0142 tekstem -> dostajesz guziki (Research / Zapisz / Post / Odrzu\u0107)\\n- Research: dwa \u017ar\u00f3d\u0142a + synteza, kt\u00f3ra mo\u017cesz zapisa\u0107, edytowa\u0107 lub powt\u00f3rzy\u0107 pod k\u0105tem\\n- Po zapisie Content Creator podpowie format i napisze draft do kolejki\\n- /menu - to menu\\n- /settings - ustawie\u0144ia auto-publikacji' }) }}",
         "options": {
           "response": {
             "response": {
@@ -5246,9 +5246,9 @@
   "meta": null,
   "nodeGroups": [],
   "pinData": {},
-  "versionId": "fab5206a-b155-459f-85b2-0620eab3aa54",
-  "activeVersionId": "fab5206a-b155-459f-85b2-0620eab3aa54",
-  "versionCounter": 91,
+  "versionId": "35c66349-4471-4201-a4ba-0d9fde841639",
+  "activeVersionId": "35c66349-4471-4201-a4ba-0d9fde841639",
+  "versionCounter": 92,
   "triggerCount": 1,
   "shared": [
     {
@@ -5271,9 +5271,9 @@
   ],
   "tags": [],
   "activeVersion": {
-    "updatedAt": "2026-06-11T12:51:40.045Z",
-    "createdAt": "2026-06-11T12:51:40.045Z",
-    "versionId": "fab5206a-b155-459f-85b2-0620eab3aa54",
+    "updatedAt": "2026-06-11T13:10:06.612Z",
+    "createdAt": "2026-06-11T13:10:06.612Z",
+    "versionId": "35c66349-4471-4201-a4ba-0d9fde841639",
     "workflowId": "U5pUZjy2yAhR1sWg",
     "nodes": [
       {
@@ -6404,7 +6404,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const rows=$input.all(); const chatId=$('Route By Update Type').first().json.chat_id; let L=['Auto-publish ustawienia:','']; for(const r of rows){ if(r.json.config_key) L.push(r.json.config_key+' = '+r.json.config_value); } L.push(''); L.push('Zmiana: /set <klucz> <wartosc>'); return [{json:{chatId,reply:L.join('\\n')}}];"
+          "jsCode": "const rows=$input.all(); const chatId=$('Route By Update Type').first().json.chat_id; let L=['Auto-publish ustawie\u0144ia:','']; for(const r of rows){ if(r.json.config_key) L.push(r.json.config_key+' = '+r.json.config_value); } L.push(''); L.push('Zmiana: /set <klucz> <warto\u015b\u0107>'); return [{json:{chatId,reply:L.join('\\n')}}];"
         },
         "id": "hitl-format-settings",
         "name": "Format Settings",
@@ -6529,7 +6529,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const adminRow=$input.first().json; let adminList=[]; try{adminList=JSON.parse(adminRow.config_value||'[]');}catch(e){} const reqText=$('Route By Update Type').first().json.text||''; const chatId=$('Route By Update Type').first().json.chat_id; const authorized=adminList.map(String).includes(String(chatId)); const m=reqText.trim().match(/^\\/set\\s+(\\S+)\\s+([\\s\\S]+)$/); let key='',value='',ok=false,error=''; if(!authorized){error='Brak uprawnien. Tylko admin moze zmieniac ustawienia.';} else if(!m){error='Format: /set <klucz> <wartosc>';} else { key=m[1]; value=m[2].trim(); const allowed=['auto_publish_enabled','auto_publish_priorities','auto_publish_timeout_min']; if(!allowed.includes(key)){error='Nieznany klucz. Dozwolone: '+allowed.join(', ');} else if(key==='auto_publish_enabled'){ if(value!=='true'&&value!=='false')error='Wartosc musi byc true lub false'; else ok=true; } else if(key==='auto_publish_priorities'){ try{const a=JSON.parse(value); if(!Array.isArray(a)||!a.every(x=>['high','normal','low'].includes(x)))error='Tablica JSON z high/normal/low, np. [\"high\"]'; else ok=true;}catch(e){error='Niepoprawny JSON. Przyklad: [\"high\"]';} } else if(key==='auto_publish_timeout_min'){ try{const o=JSON.parse(value); if(typeof o!=='object'||Array.isArray(o)||!Object.values(o).every(v=>typeof v==='number'))error='Obiekt JSON z liczbami, np. {\"high\":30}'; else ok=true;}catch(e){error='Niepoprawny JSON. Przyklad: {\"high\":30}';} } } const valueEsc=value.replace(/'/g,\"''\"); return [{json:{ok,key,value,valueEsc,chatId,error}}];"
+          "jsCode": "const adminRow=$input.first().json; let adminList=[]; try{adminList=JSON.parse(adminRow.config_value||'[]');}catch(e){} const reqText=$('Route By Update Type').first().json.text||''; const chatId=$('Route By Update Type').first().json.chat_id; const authorized=adminList.map(String).includes(String(chatId)); const m=reqText.trim().match(/^\\/set\\s+(\\S+)\\s+([\\s\\S]+)$/); let key='',value='',ok=false,error=''; if(!authorized){error='Brak uprawnie\u0144. Tylko admin mo\u017ce zmienia\u0107 ustawie\u0144ia.';} else if(!m){error='Format: /set <klucz> <warto\u015b\u0107>';} else { key=m[1]; value=m[2].trim(); const allowed=['auto_publish_enabled','auto_publish_priorities','auto_publish_timeout_min']; if(!allowed.includes(key)){error='Nieznany klucz. Dozwolone: '+allowed.join(', ');} else if(key==='auto_publish_enabled'){ if(value!=='true'&&value!=='false')error='Warto\u015b\u0107 musi by\u0107 true lub false'; else ok=true; } else if(key==='auto_publish_priorities'){ try{const a=JSON.parse(value); if(!Array.isArray(a)||!a.every(x=>['high','normal','low'].includes(x)))error='Tablica JSON z high/normal/low, np. [\"high\"]'; else ok=true;}catch(e){error='Niepoprawny JSON. Przyklad: [\"high\"]';} } else if(key==='auto_publish_timeout_min'){ try{const o=JSON.parse(value); if(typeof o!=='object'||Array.isArray(o)||!Object.values(o).every(v=>typeof v==='number'))error='Obiekt JSON z liczbami, np. {\"high\":30}'; else ok=true;}catch(e){error='Niepoprawny JSON. Przyklad: {\"high\":30}';} } } const valueEsc=value.replace(/'/g,\"''\"); return [{json:{ok,key,value,valueEsc,chatId,error}}];"
         },
         "id": "hitl-parse-authorize-set",
         "name": "Parse And Authorize Set",
@@ -7089,7 +7089,7 @@
           "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
           "sendBody": true,
           "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Idea Callback').first().json.chatId, text: '\\uD83D\\uDDD1 Odrzucone.' }) }}",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Idea Callback').first().json.chatId, text: '\\uD83D\\uDDD1 Odrzu\u0107one.' }) }}",
           "options": {
             "response": {
               "response": {
@@ -7110,7 +7110,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const content = ($('Idea Set Researching').first().json.content || '').toString();\nconst rp = 'Jestes analitykiem researchu. Zrob zwiezly deep-research pomyslu:\\n1. O co chodzi (1-2 zdania)\\n2. Dlaczego wazne teraz\\n3. 3-5 katow ujecia\\n4. Mozliwe zrodla lub dane\\n5. Ryzyka.\\nOdpowiedz w jezyku pomyslu, poprawna pisownia (polskie znaki jesli po polsku), bez myslnikow em.\\n\\nPOMYSL:\\n' + content;\nconst gemBody = { contents: [{ parts: [{ text: rp }] }], generationConfig: { temperature: 0.7, maxOutputTokens: 4096 } };\nconst dsBody = { model: 'deepseek-chat', messages: [{ role: 'user', content: rp }], max_tokens: 1500, temperature: 0.7 };\nreturn [{ json: { geminiBodyStr: JSON.stringify(gemBody), deepseekBodyStr: JSON.stringify(dsBody) } }];"
+          "jsCode": "const content = ($('Idea Set Researching').first().json.content || '').toString();\nconst rp = 'Jeste\u015b analitykiem researchu. Zrob zwiezly deep-research pomys\u0142u:\\n1. O co chodzi (1-2 zdania)\\n2. Dlaczego wazne teraz\\n3. 3-5 katow ujecia\\n4. Mozliwe \u017ar\u00f3d\u0142a lub dane\\n5. Ryzyka.\\nOdpowiedz w jezyku pomys\u0142u, poprawna pisownia (polskie znaki jesli po polsku), bez myslnikow em.\\n\\nPOMYSL:\\n' + content;\nconst gemBody = { contents: [{ parts: [{ text: rp }] }], generationConfig: { temperature: 0.7, maxOutputTokens: 4096 } };\nconst dsBody = { model: 'deepseek-chat', messages: [{ role: 'user', content: rp }], max_tokens: 1500, temperature: 0.7 };\nreturn [{ json: { geminiBodyStr: JSON.stringify(gemBody), deepseekBodyStr: JSON.stringify(dsBody) } }];"
         },
         "id": "node-prepare-research-prompt",
         "name": "Prepare Research Prompt",
@@ -7155,7 +7155,7 @@
       },
       {
         "parameters": {
-          "jsCode": "let gem = '';\ntry { gem = ($('Gemini Research').first().json.candidates[0].content.parts || []).map(p => p.text || '').join('\\n'); } catch (e) { gem = ''; }\nif (!gem) { gem = '(Gemini nie zwrocil researchu)'; }\nlet ds = '';\ntry { ds = ($('DeepSeek Research').first().json.choices || []).map(c => (c.message && c.message.content) || '').join('\\n').trim(); } catch (e) { ds = ''; }\nif (!ds) { ds = '(DeepSeek nie zwrocil researchu)'; }\nconst content = ($('Idea Set Researching').first().json.content || '').toString();\nconst system = 'Jestes strategiem tresci AGS. Dostajesz pomysl i DWA niezalezne researche (Gemini, DeepSeek). Zsyntetyzuj je w jeden zwarty brief: (1) co to jest, (2) dlaczego wazne, (3) najlepsze katy ujecia, (4) sugerowane haki na posty X i LinkedIn. Polacz wnioski, usun powtorzenia. Zwiezle. ZASADA: zero myslnikow em, uzywaj dywizow lub przebuduj zdanie. Odpowiedz w jezyku pomyslu, poprawna pisownia. JEZYK: jesli pomysl po polsku - pisz CZYSTA polszczyzna, ZERO anglicyzmow, zargonu i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). Zawsze pisz jak czlowiek do czlowieka, NIE jak maszyna: zero korpo-mowy, zero pustych frazesow i hype, naturalny rytm, konkret.';\nconst user = 'POMYSL:\\n' + content + '\\n\\nRESEARCH GEMINI:\\n' + gem + '\\n\\nRESEARCH DEEPSEEK:\\n' + ds;\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), geminiText: gem, deepseekText: ds } }];"
+          "jsCode": "let gem = '';\ntry { gem = ($('Gemini Research').first().json.candidates[0].content.parts || []).map(p => p.text || '').join('\\n'); } catch (e) { gem = ''; }\nif (!gem) { gem = '(Gemini nie zwrocil researchu)'; }\nlet ds = '';\ntry { ds = ($('DeepSeek Research').first().json.choices || []).map(c => (c.message && c.message.content) || '').join('\\n').trim(); } catch (e) { ds = ''; }\nif (!ds) { ds = '(DeepSeek nie zwrocil researchu)'; }\nconst content = ($('Idea Set Researching').first().json.content || '').toString();\nconst system = 'Jeste\u015b strategiem tresci AGS. Dostajesz pomys\u0142 i DWA niezalezne researche (Gemini, DeepSeek). Zsyntetyzuj je w jeden zwarty brief: (1) co to jest, (2) dlaczego wazne, (3) najlepsze katy ujecia, (4) sugerowane haki na posty X i LinkedIn. Polacz wnioski, usun powtorzenia. Zwiezle. ZASADA: zero myslnikow em, uzywaj dywizow lub przebuduj zdanie. Odpowiedz w jezyku pomys\u0142u, poprawna pisownia. JEZYK: jesli pomys\u0142 po polsku - pisz CZYSTA polszczyzna, ZERO anglicyzmow, zargonu i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). Zawsze pisz jak czlowiek do czlowieka, NIE jak maszyna: zero korpo-mowy, zero pustych frazesow i hype, naturalny rytm, konkret.';\nconst user = 'POMYSL:\\n' + content + '\\n\\nRESEARCH GEMINI:\\n' + gem + '\\n\\nRESEARCH DEEPSEEK:\\n' + ds;\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), geminiText: gem, deepseekText: ds } }];"
         },
         "id": "node-prepare-claude-synthesis",
         "name": "Prepare Claude Synthesis",
@@ -7293,7 +7293,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const brief = $('Extract Claude Brief').first().json.brief || '';\nconst chatId = $('Idea Set Researching').first().json.chat_id;\nconst id = $('Parse Idea Callback').first().json.ideaId;\nconst header = '\\uD83D\\uDCDA Synteza gotowa:\\n\\n';\nconst full = header + brief; const max = 3800; const parts = [];\nfor (let i = 0; i < full.length; i += max) { parts.push(full.substring(i, i + max)); }\nif (parts.length === 0) { parts.push(header + '(pusto)'); }\nconst kb = { inline_keyboard: [ [ { text: '\\uD83D\\uDCBE Zapisz', callback_data: 'synth:'+id+':save' }, { text: '\\u270F\\uFE0F Edytuj', callback_data: 'synth:'+id+':edit' } ], [ { text: '\\uD83D\\uDD01 Powtorz pod katem', callback_data: 'synth:'+id+':angle' }, { text: '\\uD83D\\uDDD1 Usun', callback_data: 'synth:'+id+':del' } ] ] };\nreturn parts.map((p, idx) => { const b = { chat_id: chatId, text: p, disable_web_page_preview: true }; if (idx === parts.length - 1) { b.reply_markup = kb; } return { json: { tgBodyStr: JSON.stringify(b) } }; });"
+          "jsCode": "const brief = $('Extract Claude Brief').first().json.brief || '';\nconst chatId = $('Idea Set Researching').first().json.chat_id;\nconst id = $('Parse Idea Callback').first().json.ideaId;\nconst header = '\\uD83D\\uDCDA Synteza gotowa:\\n\\n';\nconst full = header + brief; const max = 3800; const parts = [];\nfor (let i = 0; i < full.length; i += max) { parts.push(full.substring(i, i + max)); }\nif (parts.length === 0) { parts.push(header + '(pusto)'); }\nconst kb = { inline_keyboard: [ [ { text: '\\uD83D\\uDCBE Zapisz', callback_data: 'synth:'+id+':save' }, { text: '\\u270F\\uFE0F Edytuj', callback_data: 'synth:'+id+':edit' } ], [ { text: '\\uD83D\\uDD01 Powt\u00f3rz pod k\u0105tem', callback_data: 'synth:'+id+':angle' }, { text: '\\uD83D\\uDDD1 Usun', callback_data: 'synth:'+id+':del' } ] ] };\nreturn parts.map((p, idx) => { const b = { chat_id: chatId, text: p, disable_web_page_preview: true }; if (idx === parts.length - 1) { b.reply_markup = kb; } return { json: { tgBodyStr: JSON.stringify(b) } }; });"
         },
         "id": "node-prepare-synthesis-reply",
         "name": "Prepare Synthesis Reply",
@@ -7561,7 +7561,7 @@
           "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
           "sendBody": true,
           "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Synth Callback').first().json.chatId, text: '\\uD83D\\uDDD1 Usuniete.' }) }}",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Synth Callback').first().json.chatId, text: '\\uD83D\\uDDD1 Usuni\u0119te.' }) }}",
           "options": {
             "response": {
               "response": {
@@ -7607,7 +7607,7 @@
           "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
           "sendBody": true,
           "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Synth Callback').first().json.chatId, text: '\\u270F\\uFE0F Wyslij poprawiona wersje syntezy (caly tekst).' }) }}",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Synth Callback').first().json.chatId, text: '\\u270F\\uFE0F Wy\u015blij poprawion\u0105 wersj\u0119 syntezy (caly tekst).' }) }}",
           "options": {
             "response": {
               "response": {
@@ -7798,7 +7798,7 @@
           "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
           "sendBody": true,
           "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Synth Callback').first().json.chatId, text: '\\uD83D\\uDD01 Pod jakim katem powtorzyc? Napisz kat lub temat na ktorym mam sie skupic.' }) }}",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Synth Callback').first().json.chatId, text: '\\uD83D\\uDD01 Pod jakim k\u0105tem powt\u00f3rzy\u0107? Napisz kat lub temat na ktorym mam si\u0119 skupic.' }) }}",
           "options": {
             "response": {
               "response": {
@@ -7819,7 +7819,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const g = $('Synth State Gate').first().json;\nconst angle = ($('Detect Update Type').first().json.text || '').toString();\nconst content = (g.content || '').toString();\nconst prev = (g.research_result || '').toString();\nconst system = 'Jestes strategiem tresci AGS. Masz pomysl, dotychczasowa synteze i KAT na ktorym Tomasz chce sie skupic. Przepisz synteze MOCNO pod tym katem: (1) co to jest, (2) dlaczego wazne, (3) najlepsze ujecia, (4) haki na posty X i LinkedIn - wszystko przez pryzmat tego kata. Zwiezle. Zero myslnikow em. Po polsku, poprawna pisownia. JEZYK: jesli pomysl po polsku - pisz CZYSTA polszczyzna, ZERO anglicyzmow, zargonu i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). Zawsze pisz jak czlowiek do czlowieka, NIE jak maszyna: zero korpo-mowy, zero pustych frazesow i hype, naturalny rytm, konkret.';\nconst user = 'POMYSL:\\n' + content + '\\n\\nDOTYCHCZASOWA SYNTEZA:\\n' + prev + '\\n\\nKAT (skup sie na tym):\\n' + angle;\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: g.idea_id, chatId: $('Detect Update Type').first().json.chat_id } }];"
+          "jsCode": "const g = $('Synth State Gate').first().json;\nconst angle = ($('Detect Update Type').first().json.text || '').toString();\nconst content = (g.content || '').toString();\nconst prev = (g.research_result || '').toString();\nconst system = 'Jeste\u015b strategiem tresci AGS. Masz pomys\u0142, dotychczasowa synteze i KAT na ktorym Tomasz chce si\u0119 skupic. Przepisz synteze MOCNO pod tym k\u0105tem: (1) co to jest, (2) dlaczego wazne, (3) najlepsze ujecia, (4) haki na posty X i LinkedIn - wszystko przez pryzmat tego kata. Zwiezle. Zero myslnikow em. Po polsku, poprawna pisownia. JEZYK: jesli pomys\u0142 po polsku - pisz CZYSTA polszczyzna, ZERO anglicyzmow, zargonu i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). Zawsze pisz jak czlowiek do czlowieka, NIE jak maszyna: zero korpo-mowy, zero pustych frazesow i hype, naturalny rytm, konkret.';\nconst user = 'POMYSL:\\n' + content + '\\n\\nDOTYCHCZASOWA SYNTEZA:\\n' + prev + '\\n\\nKAT (skup si\u0119 na tym):\\n' + angle;\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: g.idea_id, chatId: $('Detect Update Type').first().json.chat_id } }];"
         },
         "id": "n-prepare-angle-resynth",
         "name": "Prepare Angle Resynth",
@@ -7877,7 +7877,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const resp = $json;\nlet brief = '';\ntry { brief = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { brief = ''; }\nif (!brief) { brief = '(Powtorka pod katem nie zwrocila wyniku)'; }\nbrief = brief.replace(/[\\u2014\\u2013\\u2212]/g, '-');\nconst p = $('Prepare Angle Resynth').first().json;\nreturn [{ json: { brief: brief, briefEsc: brief.replace(/'/g, \"''\"), ideaId: p.ideaId, chatId: p.chatId } }];"
+          "jsCode": "const resp = $json;\nlet brief = '';\ntry { brief = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { brief = ''; }\nif (!brief) { brief = '(Powtorka pod k\u0105tem nie zwrocila wyniku)'; }\nbrief = brief.replace(/[\\u2014\\u2013\\u2212]/g, '-');\nconst p = $('Prepare Angle Resynth').first().json;\nreturn [{ json: { brief: brief, briefEsc: brief.replace(/'/g, \"''\"), ideaId: p.ideaId, chatId: p.chatId } }];"
         },
         "id": "n-extract-angle-brief",
         "name": "Extract Angle Brief",
@@ -7911,7 +7911,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const e = $('Extract Angle Brief').first().json;\nconst brief = e.brief || ''; const chatId = e.chatId; const id = e.ideaId;\nconst header = '\\uD83D\\uDCDA Synteza pod katem gotowa:\\n\\n';\nconst full = header + brief; const max = 3800; const parts = [];\nfor (let i = 0; i < full.length; i += max) { parts.push(full.substring(i, i + max)); }\nif (parts.length === 0) { parts.push(header + '(pusto)'); }\nconst kb = { inline_keyboard: [ [ { text: '\\uD83D\\uDCBE Zapisz', callback_data: 'synth:'+id+':save' }, { text: '\\u270F\\uFE0F Edytuj', callback_data: 'synth:'+id+':edit' } ], [ { text: '\\uD83D\\uDD01 Powtorz pod katem', callback_data: 'synth:'+id+':angle' }, { text: '\\uD83D\\uDDD1 Usun', callback_data: 'synth:'+id+':del' } ] ] };\nreturn parts.map((p, idx) => { const b = { chat_id: chatId, text: p, disable_web_page_preview: true }; if (idx === parts.length - 1) { b.reply_markup = kb; } return { json: { tgBodyStr: JSON.stringify(b) } }; });"
+          "jsCode": "const e = $('Extract Angle Brief').first().json;\nconst brief = e.brief || ''; const chatId = e.chatId; const id = e.ideaId;\nconst header = '\\uD83D\\uDCDA Synteza pod k\u0105tem gotowa:\\n\\n';\nconst full = header + brief; const max = 3800; const parts = [];\nfor (let i = 0; i < full.length; i += max) { parts.push(full.substring(i, i + max)); }\nif (parts.length === 0) { parts.push(header + '(pusto)'); }\nconst kb = { inline_keyboard: [ [ { text: '\\uD83D\\uDCBE Zapisz', callback_data: 'synth:'+id+':save' }, { text: '\\u270F\\uFE0F Edytuj', callback_data: 'synth:'+id+':edit' } ], [ { text: '\\uD83D\\uDD01 Powt\u00f3rz pod k\u0105tem', callback_data: 'synth:'+id+':angle' }, { text: '\\uD83D\\uDDD1 Usun', callback_data: 'synth:'+id+':del' } ] ] };\nreturn parts.map((p, idx) => { const b = { chat_id: chatId, text: p, disable_web_page_preview: true }; if (idx === parts.length - 1) { b.reply_markup = kb; } return { json: { tgBodyStr: JSON.stringify(b) } }; });"
         },
         "id": "n-prepare-angle-reply",
         "name": "Prepare Angle Reply",
@@ -7970,7 +7970,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const ctx = $json;\nconst research = (ctx.research_result || '').toString();\nconst recent = Array.isArray(ctx.recent_posts) ? ctx.recent_posts.filter(Boolean).join('\\n---\\n') : '';\nconst system = 'Jestes Content Creatorem AGS. Cel: maksymalizowac zasieg i liczbe followersow marki. Masz research pomyslu oraz ostatnie opublikowane posty (co juz poszlo). Zarekomenduj JEDEN najlepszy format na teraz: post / seria / artykul. Napisz 2-3 zdania: ktory format i DLACZEGO - na bazie researchu i tego co juz publikowano (nie powtarzaj, buduj na tym co dziala). Zwiezle. Po polsku, zero myslnikow em. JEZYK: jesli pomysl po polsku - pisz CZYSTA polszczyzna, ZERO anglicyzmow, zargonu i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). Zawsze pisz jak czlowiek do czlowieka, NIE jak maszyna: zero korpo-mowy, zero pustych frazesow i hype, naturalny rytm, konkret.';\nconst user = 'RESEARCH:\\n' + research + '\\n\\nOSTATNIE PUBLIKACJE:\\n' + (recent || '(brak historii)');\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: $('Parse Synth Callback').first().json.ideaId, chatId: $('Parse Synth Callback').first().json.chatId } }];"
+          "jsCode": "const ctx = $json;\nconst research = (ctx.research_result || '').toString();\nconst recent = Array.isArray(ctx.recent_posts) ? ctx.recent_posts.filter(Boolean).join('\\n---\\n') : '';\nconst system = 'Jeste\u015b Content Creatorem AGS. Cel: maksymalizowac zasieg i liczbe followersow marki. Masz research pomys\u0142u oraz ostatnie opublikowane posty (co juz poszlo). Zarekomenduj JEDEN najlepszy format na teraz: post / seria / artykul. Napisz 2-3 zdania: kt\u00f3ry format i DLACZEGO - na bazie researchu i tego co juz publikowano (nie powtarzaj, buduj na tym co dziala). Zwiezle. Po polsku, zero myslnikow em. JEZYK: jesli pomys\u0142 po polsku - pisz CZYSTA polszczyzna, ZERO anglicyzmow, zargonu i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). Zawsze pisz jak czlowiek do czlowieka, NIE jak maszyna: zero korpo-mowy, zero pustych frazesow i hype, naturalny rytm, konkret.';\nconst user = 'RESEARCH:\\n' + research + '\\n\\nOSTATNIE PUBLIKACJE:\\n' + (recent || '(brak historii)');\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: $('Parse Synth Callback').first().json.ideaId, chatId: $('Parse Synth Callback').first().json.chatId } }];"
         },
         "id": "n-prepare-decision-prompt",
         "name": "Prepare Decision Prompt",
@@ -8028,7 +8028,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const resp = $json;\nlet rec = '';\ntry { rec = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { rec = ''; }\nif (!rec) { rec = 'Wybierz format ktory chcesz wygenerowac:'; }\nrec = rec.replace(/[\\u2014\\u2013\\u2212]/g, '-');\nconst id = $('Prepare Decision Prompt').first().json.ideaId;\nconst chatId = $('Prepare Decision Prompt').first().json.chatId;\nconst tgBody = { chat_id: chatId, text: '\\uD83E\\uDDE0 Content Creator:\\n\\n' + rec + '\\n\\nCo robimy?', disable_web_page_preview: true, reply_markup: { inline_keyboard: [ [ { text: '\\u270D\\uFE0F Jeden post', callback_data: 'make:' + id + ':post' }, { text: '\\uD83D\\uDCDA Seria', callback_data: 'make:' + id + ':series' } ], [ { text: '\\uD83D\\uDCC4 Artykul', callback_data: 'make:' + id + ':article' } ] ] } };\nreturn [{ json: { tgBodyStr: JSON.stringify(tgBody) } }];"
+          "jsCode": "const resp = $json;\nlet rec = '';\ntry { rec = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { rec = ''; }\nif (!rec) { rec = 'Wybierz format kt\u00f3ry chcesz wygenerowa\u0107:'; }\nrec = rec.replace(/[\\u2014\\u2013\\u2212]/g, '-');\nconst id = $('Prepare Decision Prompt').first().json.ideaId;\nconst chatId = $('Prepare Decision Prompt').first().json.chatId;\nconst tgBody = { chat_id: chatId, text: '\\uD83E\\uDDE0 Content Creator:\\n\\n' + rec + '\\n\\nCo robimy?', disable_web_page_preview: true, reply_markup: { inline_keyboard: [ [ { text: '\\u270D\\uFE0F Jeden post', callback_data: 'make:' + id + ':post' }, { text: '\\uD83D\\uDCDA Seria', callback_data: 'make:' + id + ':series' } ], [ { text: '\\uD83D\\uDCC4 Artykul', callback_data: 'make:' + id + ':article' } ] ] } };\nreturn [{ json: { tgBodyStr: JSON.stringify(tgBody) } }];"
         },
         "id": "n-prepare-decision-reply",
         "name": "Prepare Decision Reply",
@@ -8116,7 +8116,7 @@
           "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
           "sendBody": true,
           "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Make Callback').first().json.chatId, text: '\\u270D\\uFE0F Pisze draft, chwila...' }) }}",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Make Callback').first().json.chatId, text: '\\u270D\\uFE0F Pisz\u0119 draft, chwila...' }) }}",
           "options": {
             "response": {
               "response": {
@@ -8158,7 +8158,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const format = $('Parse Make Callback').first().json.format;\nconst research = ($json.research_result || '').toString();\nlet instr, platform;\nif (format === 'post') { instr = 'Napisz JEDEN post na X, max 280 znakow. Hook plus jedna konkretna mysl z researchu.'; platform = 'x'; }\nelse if (format === 'series') { instr = 'Napisz serie 3-5 postow na X jako watek. Kazdy max 280 znakow, numeruj 1/ 2/ 3/. Spojny luk z researchu.'; platform = 'x'; }\nelse { instr = 'Napisz post na LinkedIn (1200-1400 znakow) plus krotki outline dluzszego artykulu (3-5 punktow) z researchu.'; platform = 'linkedin'; }\nconst system = 'Jestes Content Creatorem AGS. ' + instr + ' Zrob to w DWOCH wersjach jezykowych: najpierw polska, potem angielska. Oznacz kazda wyraznie naglowkiem na osobnej linii: === PL === oraz === EN ===. Kanon AGS: zero myslnikow em (uzywaj dywizow), bez frazesow i guru-jezyka, konkret, glos zalozyciela. WERSJA PL: czysta polszczyzna, ZERO anglicyzmow i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). WERSJA EN: naturalna angielszczyzna, nie tlumaczenie-kalka. Obie wersje: jak czlowiek do czlowieka, NIE jak maszyna, naturalny rytm, konkret. Zwroc TYLKO obie gotowe wersje.';\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 2000, system: system, messages: [{ role: 'user', content: 'RESEARCH:\n' + research }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: $('Parse Make Callback').first().json.ideaId, chatId: $('Parse Make Callback').first().json.chatId, format: format, platform: platform } }];"
+          "jsCode": "const format = $('Parse Make Callback').first().json.format;\nconst research = ($json.research_result || '').toString();\nlet instr, platform;\nif (format === 'post') { instr = 'Napisz JEDEN post na X, max 280 znakow. Hook plus jedna konkretna mysl z researchu.'; platform = 'x'; }\nelse if (format === 'series') { instr = 'Napisz serie 3-5 postow na X jako watek. Kazdy max 280 znakow, numeruj 1/ 2/ 3/. Spojny luk z researchu.'; platform = 'x'; }\nelse { instr = 'Napisz post na LinkedIn (1200-1400 znakow) plus krotki outline dluzszego artykulu (3-5 punktow) z researchu.'; platform = 'linkedin'; }\nconst system = 'Jeste\u015b Content Creatorem AGS. ' + instr + ' Zrob to w DWOCH wersjach jezykowych: najpierw polska, potem angielska. Oznacz kazda wyraznie naglowkiem na osobnej linii: === PL === oraz === EN ===. Kanon AGS: zero myslnikow em (uzywaj dywizow), bez frazesow i guru-jezyka, konkret, glos zalozyciela. WERSJA PL: czysta polszczyzna, ZERO anglicyzmow i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). WERSJA EN: naturalna angielszczyzna, nie tlumaczenie-kalka. Obie wersj\u0119: jak czlowiek do czlowieka, NIE jak maszyna, naturalny rytm, konkret. Zwroc TYLKO obie gotowe wersj\u0119.';\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 2000, system: system, messages: [{ role: 'user', content: 'RESEARCH:\n' + research }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: $('Parse Make Callback').first().json.ideaId, chatId: $('Parse Make Callback').first().json.chatId, format: format, platform: platform } }];"
         },
         "id": "n-prepare-draft-prompt",
         "name": "Prepare Draft Prompt",
@@ -8216,7 +8216,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const resp = $json;\nlet draft = '';\ntry { draft = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { draft = ''; }\nif (!draft) { draft = '(Draft sie nie wygenerowal - sprobuj ponownie)'; }\ndraft = draft.replace(/[\\u2014\\u2013\\u2212]/g, '-');\nconst p = $('Prepare Draft Prompt').first().json;\nreturn [{ json: { draft: draft, draftEsc: draft.replace(/'/g, \"''\"), ideaId: p.ideaId, chatId: p.chatId, format: p.format, platform: p.platform } }];"
+          "jsCode": "const resp = $json;\nlet draft = '';\ntry { draft = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { draft = ''; }\nif (!draft) { draft = '(Draft si\u0119 nie wygenerowal - sprobuj ponownie)'; }\ndraft = draft.replace(/[\\u2014\\u2013\\u2212]/g, '-');\nconst p = $('Prepare Draft Prompt').first().json;\nreturn [{ json: { draft: draft, draftEsc: draft.replace(/'/g, \"''\"), ideaId: p.ideaId, chatId: p.chatId, format: p.format, platform: p.platform } }];"
         },
         "id": "n-extract-draft",
         "name": "Extract Draft",
@@ -8288,7 +8288,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const chatId = $json.chat_id;\nconst tgBody = { chat_id: chatId, text: '\\uD83E\\uDD16 AGS Social Bot\\n\\nWyslij pomysl tekstem, a zajme sie reszta. Albo wybierz:', reply_markup: { inline_keyboard: [ [ { text: '\\uD83D\\uDCE5 Moje pomysly', callback_data: 'menu:ideas' }, { text: '\\uD83D\\uDCCB Kolejka', callback_data: 'menu:queue' } ], [ { text: '\\u2699\\uFE0F Ustawienia', callback_data: 'menu:settings' }, { text: '\\u2753 Jak uzywac', callback_data: 'menu:help' } ] ] } };\nreturn [{ json: { tgBodyStr: JSON.stringify(tgBody) } }];"
+          "jsCode": "const chatId = $json.chat_id;\nconst tgBody = { chat_id: chatId, text: '\\uD83E\\uDD16 AGS Social Bot\\n\\nWy\u015blij pomys\u0142 tekstem, a zajm\u0119 si\u0119 reszt\u0105. Albo wybierz:', reply_markup: { inline_keyboard: [ [ { text: '\\uD83D\\uDCE5 Moje pomys\u0142y', callback_data: 'menu:ideas' }, { text: '\\uD83D\\uDCCB Kolejka', callback_data: 'menu:queue' } ], [ { text: '\\u2699\\uFE0F Ustawienia', callback_data: 'menu:settings' }, { text: '\\u2753 Jak u\u017cywa\u0107', callback_data: 'menu:help' } ] ] } };\nreturn [{ json: { tgBodyStr: JSON.stringify(tgBody) } }];"
         },
         "id": "n-build-menu",
         "name": "Build Menu",
@@ -8539,7 +8539,7 @@
           "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
           "sendBody": true,
           "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ chat_id: $('Extract Callback Parts').first().json.chatId, text: '\\uD83D\\uDCE5 Twoje pomysly:\\n\\n' + ($json.list || '(brak)') }) }}",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Extract Callback Parts').first().json.chatId, text: '\\uD83D\\uDCE5 Twoje pomys\u0142y:\\n\\n' + ($json.list || '(brak)') }) }}",
           "options": {
             "response": {
               "response": {
@@ -8614,7 +8614,7 @@
           "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
           "sendBody": true,
           "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ chat_id: $('Extract Callback Parts').first().json.chatId, text: '\\u2753 Jak uzywac:\\n\\n- Wyslij pomysl tekstem -> dostajesz guziki (Research / Zapisz / Post / Odrzuc)\\n- Research: dwa zrodla + synteza, ktora mozesz zapisac, edytowac lub powtorzyc pod katem\\n- Po zapisie Content Creator podpowie format i napisze draft do kolejki\\n- /menu - to menu\\n- /settings - ustawienia auto-publikacji' }) }}",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Extract Callback Parts').first().json.chatId, text: '\\u2753 Jak u\u017cywa\u0107:\\n\\n- Wy\u015blij pomys\u0142 tekstem -> dostajesz guziki (Research / Zapisz / Post / Odrzu\u0107)\\n- Research: dwa \u017ar\u00f3d\u0142a + synteza, kt\u00f3ra mo\u017cesz zapisa\u0107, edytowa\u0107 lub powt\u00f3rzy\u0107 pod k\u0105tem\\n- Po zapisie Content Creator podpowie format i napisze draft do kolejki\\n- /menu - to menu\\n- /settings - ustawie\u0144ia auto-publikacji' }) }}",
           "options": {
             "response": {
               "response": {
@@ -10511,18 +10511,18 @@
     "autosaved": false,
     "workflowPublishHistory": [
       {
-        "createdAt": "2026-06-11T12:51:40.859Z",
-        "id": 347,
+        "createdAt": "2026-06-11T13:10:06.958Z",
+        "id": 354,
         "workflowId": "U5pUZjy2yAhR1sWg",
-        "versionId": "fab5206a-b155-459f-85b2-0620eab3aa54",
+        "versionId": "35c66349-4471-4201-a4ba-0d9fde841639",
         "event": "deactivated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       },
       {
-        "createdAt": "2026-06-11T12:51:41.152Z",
-        "id": 348,
+        "createdAt": "2026-06-11T13:10:07.319Z",
+        "id": 355,
         "workflowId": "U5pUZjy2yAhR1sWg",
-        "versionId": "fab5206a-b155-459f-85b2-0620eab3aa54",
+        "versionId": "35c66349-4471-4201-a4ba-0d9fde841639",
         "event": "activated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       }
