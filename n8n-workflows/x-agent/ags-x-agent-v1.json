@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-11T12:51:39.199Z",
+  "updatedAt": "2026-06-11T13:01:34.403Z",
   "createdAt": "2026-06-01T07:10:00.198Z",
   "id": "TbHt6ZwfqmMarx18",
   "name": "AGS X Agent v1.0",
@@ -800,6 +800,71 @@
           "name": "Telegram @ags_social_bot"
         }
       }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COUNT(*) AS n FROM post_queue WHERE status='scheduled' AND scheduled_for >= NOW() - INTERVAL '5 minutes' AND scheduled_for <= NOW() + INTERVAL '90 minutes';",
+        "options": {}
+      },
+      "id": "n-check-slot",
+      "name": "Check Scheduled Slot",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -200,
+        -200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ Number($json.n) }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n-slot-free",
+      "name": "Slot Free?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        20,
+        -200
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "n-slot-blocked",
+      "name": "Slot Blocked (scheduled exists)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        240,
+        -320
+      ]
     }
   ],
   "connections": {
@@ -807,7 +872,7 @@
       "main": [
         [
           {
-            "node": "Notion Get X Queue",
+            "node": "Check Scheduled Slot",
             "type": "main",
             "index": 0
           }
@@ -1164,6 +1229,35 @@
           }
         ]
       ]
+    },
+    "Check Scheduled Slot": {
+      "main": [
+        [
+          {
+            "node": "Slot Free?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slot Free?": {
+      "main": [
+        [
+          {
+            "node": "Notion Get X Queue",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slot Blocked (scheduled exists)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -1182,9 +1276,9 @@
   "meta": null,
   "nodeGroups": [],
   "pinData": {},
-  "versionId": "9794c9e4-3370-4e15-8b08-21d52fad3ee5",
-  "activeVersionId": "9794c9e4-3370-4e15-8b08-21d52fad3ee5",
-  "versionCounter": 203,
+  "versionId": "f8d94d00-2d77-4ae9-92b2-18d0a9332709",
+  "activeVersionId": "f8d94d00-2d77-4ae9-92b2-18d0a9332709",
+  "versionCounter": 204,
   "triggerCount": 1,
   "shared": [
     {
@@ -1207,9 +1301,9 @@
   ],
   "tags": [],
   "activeVersion": {
-    "updatedAt": "2026-06-11T12:51:39.202Z",
-    "createdAt": "2026-06-11T12:51:39.202Z",
-    "versionId": "9794c9e4-3370-4e15-8b08-21d52fad3ee5",
+    "updatedAt": "2026-06-11T13:01:34.408Z",
+    "createdAt": "2026-06-11T13:01:34.408Z",
+    "versionId": "f8d94d00-2d77-4ae9-92b2-18d0a9332709",
     "workflowId": "TbHt6ZwfqmMarx18",
     "nodes": [
       {
@@ -2005,6 +2099,71 @@
             "name": "Telegram @ags_social_bot"
           }
         }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT COUNT(*) AS n FROM post_queue WHERE status='scheduled' AND scheduled_for >= NOW() - INTERVAL '5 minutes' AND scheduled_for <= NOW() + INTERVAL '90 minutes';",
+          "options": {}
+        },
+        "id": "n-check-slot",
+        "name": "Check Scheduled Slot",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          -200,
+          -200
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ Number($json.n) }}",
+                "rightValue": 0,
+                "operator": {
+                  "type": "number",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "n-slot-free",
+        "name": "Slot Free?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          20,
+          -200
+        ]
+      },
+      {
+        "parameters": {},
+        "id": "n-slot-blocked",
+        "name": "Slot Blocked (scheduled exists)",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          240,
+          -320
+        ]
       }
     ],
     "connections": {
@@ -2012,7 +2171,7 @@
         "main": [
           [
             {
-              "node": "Notion Get X Queue",
+              "node": "Check Scheduled Slot",
               "type": "main",
               "index": 0
             }
@@ -2369,6 +2528,35 @@
             }
           ]
         ]
+      },
+      "Check Scheduled Slot": {
+        "main": [
+          [
+            {
+              "node": "Slot Free?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Slot Free?": {
+        "main": [
+          [
+            {
+              "node": "Notion Get X Queue",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Slot Blocked (scheduled exists)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       }
     },
     "nodeGroups": [],
@@ -2378,18 +2566,18 @@
     "autosaved": false,
     "workflowPublishHistory": [
       {
-        "createdAt": "2026-06-11T12:51:39.300Z",
-        "id": 345,
+        "createdAt": "2026-06-11T13:01:34.506Z",
+        "id": 352,
         "workflowId": "TbHt6ZwfqmMarx18",
-        "versionId": "9794c9e4-3370-4e15-8b08-21d52fad3ee5",
+        "versionId": "f8d94d00-2d77-4ae9-92b2-18d0a9332709",
         "event": "deactivated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       },
       {
-        "createdAt": "2026-06-11T12:51:39.397Z",
-        "id": 346,
+        "createdAt": "2026-06-11T13:01:34.599Z",
+        "id": 353,
         "workflowId": "TbHt6ZwfqmMarx18",
-        "versionId": "9794c9e4-3370-4e15-8b08-21d52fad3ee5",
+        "versionId": "f8d94d00-2d77-4ae9-92b2-18d0a9332709",
         "event": "activated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       }
