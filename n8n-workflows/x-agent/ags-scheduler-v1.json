@@ -1,0 +1,192 @@
+{
+  "updatedAt": "2026-06-11T09:31:02.515Z",
+  "createdAt": "2026-06-11T09:30:08.505Z",
+  "id": "x1jJEbcWAe3FnpCa",
+  "name": "AGS Scheduler v1",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "* * * * *"
+            }
+          ]
+        }
+      },
+      "id": "n-sched-trigger",
+      "name": "Every Minute",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, content, platform FROM post_queue WHERE status='scheduled' AND scheduled_for <= NOW() ORDER BY scheduled_for ASC LIMIT 5;",
+        "options": {}
+      },
+      "id": "n-fetch-due",
+      "name": "Fetch Due",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        220,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require(\"crypto\");\nconst https = require(\"https\");\nconst tweetText = ($json.content || '').toString();\nconst postId = $json.id;\nif (!tweetText) { return [{ json: { skipped: true, postId, error: 'empty content' } }]; }\n\nconst consumerKey = \"__X_CONSUMER_KEY__\";\nconst consumerSecret = \"__X_CONSUMER_SECRET__\";\nconst accessToken = \"__X_ACCESS_TOKEN__\";\nconst accessTokenSecret = \"__X_ACCESS_TOKEN_SECRET__\";\n\nconst method = \"POST\";\nconst url = \"https://api.twitter.com/2/tweets\";\nconst oauthTimestamp = Math.floor(Date.now() / 1000).toString();\nconst oauthNonce = crypto.randomBytes(16).toString(\"hex\");\n\nconst oauthParams = {\n  oauth_consumer_key: consumerKey,\n  oauth_nonce: oauthNonce,\n  oauth_signature_method: \"HMAC-SHA1\",\n  oauth_timestamp: oauthTimestamp,\n  oauth_token: accessToken,\n  oauth_version: \"1.0\"\n};\n\nconst sortedParams = Object.keys(oauthParams).sort().map(k =>\n  `${encodeURIComponent(k)}=${encodeURIComponent(oauthParams[k])}`\n).join(\"&\");\n\nconst sigBase = `${method}&${encodeURIComponent(url)}&${encodeURIComponent(sortedParams)}`;\nconst sigKey = `${encodeURIComponent(consumerSecret)}&${encodeURIComponent(accessTokenSecret)}`;\nconst signature = crypto.createHmac(\"sha1\", sigKey).update(sigBase).digest(\"base64\");\n\nconst authHeader = \"OAuth \" + Object.keys(oauthParams).sort().map(k =>\n  `${encodeURIComponent(k)}=\"${encodeURIComponent(oauthParams[k])}\"`\n).join(\", \") + `, oauth_signature=\"${encodeURIComponent(signature)}\"`;\n\nconst body = JSON.stringify({ text: tweetText });\n\nconst result = await new Promise((resolve, reject) => {\n  const req = https.request({\n    hostname: \"api.twitter.com\",\n    path: \"/2/tweets\",\n    method: \"POST\",\n    headers: {\n      \"Authorization\": authHeader,\n      \"Content-Type\": \"application/json\",\n      \"Content-Length\": Buffer.byteLength(body)\n    }\n  }, (res) => {\n    let data = \"\";\n    res.on(\"data\", chunk => data += chunk);\n    res.on(\"end\", () => resolve({ status: res.statusCode, body: JSON.parse(data) }));\n  });\n  req.on(\"error\", reject);\n  req.write(body);\n  req.end();\n});\n\nconst tweetId = result.body?.data?.id || \"\";\nconst tweetUrl = tweetId ? `https://x.com/i/web/status/${tweetId}` : \"\";\n\nreturn [{ json: { tweet_id: tweetId, tweet_url: tweetUrl, tweet_text: tweetText, postId: postId, x_status: result.status, ok: (result.status === 200 || result.status === 201) } }];"
+      },
+      "id": "n-publish-x",
+      "name": "Publish To X",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE post_queue SET status = CASE WHEN {{ $json.ok }} THEN 'published' ELSE 'failed' END, updated_at=NOW() WHERE id = {{ $json.postId }};",
+        "options": {}
+      },
+      "id": "n-mark-pub",
+      "name": "Mark Published",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        660,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: 2106351328, text: ($('Publish To X').item.json.ok ? '\\u2705 Opublikowano zaplanowany post:\\n' + $('Publish To X').item.json.tweet_url : '\\u26a0\\ufe0f Nie udalo sie opublikowac zaplanowanego posta (status ' + $('Publish To X').item.json.x_status + ')') }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "n-sched-confirm",
+      "name": "Scheduler Confirm",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Every Minute": {
+      "main": [
+        [
+          {
+            "node": "Fetch Due",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Due": {
+      "main": [
+        [
+          {
+            "node": "Publish To X",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish To X": {
+      "main": [
+        [
+          {
+            "node": "Mark Published",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Published": {
+      "main": [
+        [
+          {
+            "node": "Scheduler Confirm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": null,
+  "versionId": "9d93f540-63bc-4c2c-91e4-015e433c11f6",
+  "activeVersionId": null,
+  "versionCounter": 2,
+  "triggerCount": 0,
+  "shared": [
+    {
+      "updatedAt": "2026-06-11T09:30:08.505Z",
+      "createdAt": "2026-06-11T09:30:08.505Z",
+      "role": "workflow:owner",
+      "workflowId": "x1jJEbcWAe3FnpCa",
+      "projectId": "AVGJSTgEgAPPwXHX",
+      "project": {
+        "updatedAt": "2026-04-18T08:31:32.266Z",
+        "createdAt": "2026-04-18T08:22:28.807Z",
+        "id": "AVGJSTgEgAPPwXHX",
+        "name": "Tomasz Nawrocki <mr.tomasz.nawrocki@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "c804b804-01e6-4f71-83c2-0494b200789b"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": null
+}

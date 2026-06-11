@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-11T08:35:06.936Z",
+  "updatedAt": "2026-06-11T08:46:13.004Z",
   "createdAt": "2026-06-01T07:09:59.480Z",
   "id": "U5pUZjy2yAhR1sWg",
   "name": "AGS HITL Handler v1.0",
@@ -1919,7 +1919,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const resp = $json;\nlet brief = '';\ntry { brief = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { brief = ''; }\nif (!brief) { brief = $('Prepare Claude Synthesis').first().json.geminiText || '(Brak wyniku syntezy)'; }\nbrief = brief.replace(/\\u2014/g, '-');\nreturn [{ json: { brief: brief, briefEsc: brief.replace(/'/g, \"''\") } }];"
+        "jsCode": "const resp = $json;\nlet brief = '';\ntry { brief = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { brief = ''; }\nif (!brief) { brief = $('Prepare Claude Synthesis').first().json.geminiText || '(Brak wyniku syntezy)'; }\nbrief = brief.replace(/[\\u2014\\u2013\\u2212]/g, '-');\nreturn [{ json: { brief: brief, briefEsc: brief.replace(/'/g, \"''\") } }];"
       },
       "id": "node-extract-claude-brief",
       "name": "Extract Claude Brief",
@@ -2584,7 +2584,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const resp = $json;\nlet brief = '';\ntry { brief = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { brief = ''; }\nif (!brief) { brief = '(Powtorka pod katem nie zwrocila wyniku)'; }\nbrief = brief.replace(/\\u2014/g, '-');\nconst p = $('Prepare Angle Resynth').first().json;\nreturn [{ json: { brief: brief, briefEsc: brief.replace(/'/g, \"''\"), ideaId: p.ideaId, chatId: p.chatId } }];"
+        "jsCode": "const resp = $json;\nlet brief = '';\ntry { brief = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { brief = ''; }\nif (!brief) { brief = '(Powtorka pod katem nie zwrocila wyniku)'; }\nbrief = brief.replace(/[\\u2014\\u2013\\u2212]/g, '-');\nconst p = $('Prepare Angle Resynth').first().json;\nreturn [{ json: { brief: brief, briefEsc: brief.replace(/'/g, \"''\"), ideaId: p.ideaId, chatId: p.chatId } }];"
       },
       "id": "n-extract-angle-brief",
       "name": "Extract Angle Brief",
@@ -2735,7 +2735,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const resp = $json;\nlet rec = '';\ntry { rec = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { rec = ''; }\nif (!rec) { rec = 'Wybierz format ktory chcesz wygenerowac:'; }\nrec = rec.replace(/\\u2014/g, '-');\nconst id = $('Prepare Decision Prompt').first().json.ideaId;\nconst chatId = $('Prepare Decision Prompt').first().json.chatId;\nconst tgBody = { chat_id: chatId, text: '\\uD83E\\uDDE0 Content Creator:\\n\\n' + rec + '\\n\\nCo robimy?', disable_web_page_preview: true, reply_markup: { inline_keyboard: [ [ { text: '\\u270D\\uFE0F Jeden post', callback_data: 'make:' + id + ':post' }, { text: '\\uD83D\\uDCDA Seria', callback_data: 'make:' + id + ':series' } ], [ { text: '\\uD83D\\uDCC4 Artykul', callback_data: 'make:' + id + ':article' } ] ] } };\nreturn [{ json: { tgBodyStr: JSON.stringify(tgBody) } }];"
+        "jsCode": "const resp = $json;\nlet rec = '';\ntry { rec = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { rec = ''; }\nif (!rec) { rec = 'Wybierz format ktory chcesz wygenerowac:'; }\nrec = rec.replace(/[\\u2014\\u2013\\u2212]/g, '-');\nconst id = $('Prepare Decision Prompt').first().json.ideaId;\nconst chatId = $('Prepare Decision Prompt').first().json.chatId;\nconst tgBody = { chat_id: chatId, text: '\\uD83E\\uDDE0 Content Creator:\\n\\n' + rec + '\\n\\nCo robimy?', disable_web_page_preview: true, reply_markup: { inline_keyboard: [ [ { text: '\\u270D\\uFE0F Jeden post', callback_data: 'make:' + id + ':post' }, { text: '\\uD83D\\uDCDA Seria', callback_data: 'make:' + id + ':series' } ], [ { text: '\\uD83D\\uDCC4 Artykul', callback_data: 'make:' + id + ':article' } ] ] } };\nreturn [{ json: { tgBodyStr: JSON.stringify(tgBody) } }];"
       },
       "id": "n-prepare-decision-reply",
       "name": "Prepare Decision Reply",
@@ -2923,7 +2923,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const resp = $json;\nlet draft = '';\ntry { draft = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { draft = ''; }\nif (!draft) { draft = '(Draft sie nie wygenerowal - sprobuj ponownie)'; }\ndraft = draft.replace(/\\u2014/g, '-');\nconst p = $('Prepare Draft Prompt').first().json;\nreturn [{ json: { draft: draft, draftEsc: draft.replace(/'/g, \"''\"), ideaId: p.ideaId, chatId: p.chatId, format: p.format, platform: p.platform } }];"
+        "jsCode": "const resp = $json;\nlet draft = '';\ntry { draft = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { draft = ''; }\nif (!draft) { draft = '(Draft sie nie wygenerowal - sprobuj ponownie)'; }\ndraft = draft.replace(/[\\u2014\\u2013\\u2212]/g, '-');\nconst p = $('Prepare Draft Prompt').first().json;\nreturn [{ json: { draft: draft, draftEsc: draft.replace(/'/g, \"''\"), ideaId: p.ideaId, chatId: p.chatId, format: p.format, platform: p.platform } }];"
       },
       "id": "n-extract-draft",
       "name": "Extract Draft",
@@ -4902,9 +4902,9 @@
   "meta": null,
   "nodeGroups": [],
   "pinData": {},
-  "versionId": "8b4f73eb-4a07-419a-9ea5-85e9cc7a88d7",
-  "activeVersionId": "8b4f73eb-4a07-419a-9ea5-85e9cc7a88d7",
-  "versionCounter": 89,
+  "versionId": "60c796f7-605e-425a-9736-25f1aac87770",
+  "activeVersionId": "60c796f7-605e-425a-9736-25f1aac87770",
+  "versionCounter": 90,
   "triggerCount": 1,
   "shared": [
     {
@@ -4927,9 +4927,9 @@
   ],
   "tags": [],
   "activeVersion": {
-    "updatedAt": "2026-06-11T08:35:06.942Z",
-    "createdAt": "2026-06-11T08:35:06.942Z",
-    "versionId": "8b4f73eb-4a07-419a-9ea5-85e9cc7a88d7",
+    "updatedAt": "2026-06-11T08:46:13.007Z",
+    "createdAt": "2026-06-11T08:46:13.007Z",
+    "versionId": "60c796f7-605e-425a-9736-25f1aac87770",
     "workflowId": "U5pUZjy2yAhR1sWg",
     "nodes": [
       {
@@ -6844,7 +6844,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const resp = $json;\nlet brief = '';\ntry { brief = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { brief = ''; }\nif (!brief) { brief = $('Prepare Claude Synthesis').first().json.geminiText || '(Brak wyniku syntezy)'; }\nbrief = brief.replace(/\\u2014/g, '-');\nreturn [{ json: { brief: brief, briefEsc: brief.replace(/'/g, \"''\") } }];"
+          "jsCode": "const resp = $json;\nlet brief = '';\ntry { brief = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { brief = ''; }\nif (!brief) { brief = $('Prepare Claude Synthesis').first().json.geminiText || '(Brak wyniku syntezy)'; }\nbrief = brief.replace(/[\\u2014\\u2013\\u2212]/g, '-');\nreturn [{ json: { brief: brief, briefEsc: brief.replace(/'/g, \"''\") } }];"
         },
         "id": "node-extract-claude-brief",
         "name": "Extract Claude Brief",
@@ -7509,7 +7509,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const resp = $json;\nlet brief = '';\ntry { brief = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { brief = ''; }\nif (!brief) { brief = '(Powtorka pod katem nie zwrocila wyniku)'; }\nbrief = brief.replace(/\\u2014/g, '-');\nconst p = $('Prepare Angle Resynth').first().json;\nreturn [{ json: { brief: brief, briefEsc: brief.replace(/'/g, \"''\"), ideaId: p.ideaId, chatId: p.chatId } }];"
+          "jsCode": "const resp = $json;\nlet brief = '';\ntry { brief = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { brief = ''; }\nif (!brief) { brief = '(Powtorka pod katem nie zwrocila wyniku)'; }\nbrief = brief.replace(/[\\u2014\\u2013\\u2212]/g, '-');\nconst p = $('Prepare Angle Resynth').first().json;\nreturn [{ json: { brief: brief, briefEsc: brief.replace(/'/g, \"''\"), ideaId: p.ideaId, chatId: p.chatId } }];"
         },
         "id": "n-extract-angle-brief",
         "name": "Extract Angle Brief",
@@ -7660,7 +7660,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const resp = $json;\nlet rec = '';\ntry { rec = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { rec = ''; }\nif (!rec) { rec = 'Wybierz format ktory chcesz wygenerowac:'; }\nrec = rec.replace(/\\u2014/g, '-');\nconst id = $('Prepare Decision Prompt').first().json.ideaId;\nconst chatId = $('Prepare Decision Prompt').first().json.chatId;\nconst tgBody = { chat_id: chatId, text: '\\uD83E\\uDDE0 Content Creator:\\n\\n' + rec + '\\n\\nCo robimy?', disable_web_page_preview: true, reply_markup: { inline_keyboard: [ [ { text: '\\u270D\\uFE0F Jeden post', callback_data: 'make:' + id + ':post' }, { text: '\\uD83D\\uDCDA Seria', callback_data: 'make:' + id + ':series' } ], [ { text: '\\uD83D\\uDCC4 Artykul', callback_data: 'make:' + id + ':article' } ] ] } };\nreturn [{ json: { tgBodyStr: JSON.stringify(tgBody) } }];"
+          "jsCode": "const resp = $json;\nlet rec = '';\ntry { rec = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { rec = ''; }\nif (!rec) { rec = 'Wybierz format ktory chcesz wygenerowac:'; }\nrec = rec.replace(/[\\u2014\\u2013\\u2212]/g, '-');\nconst id = $('Prepare Decision Prompt').first().json.ideaId;\nconst chatId = $('Prepare Decision Prompt').first().json.chatId;\nconst tgBody = { chat_id: chatId, text: '\\uD83E\\uDDE0 Content Creator:\\n\\n' + rec + '\\n\\nCo robimy?', disable_web_page_preview: true, reply_markup: { inline_keyboard: [ [ { text: '\\u270D\\uFE0F Jeden post', callback_data: 'make:' + id + ':post' }, { text: '\\uD83D\\uDCDA Seria', callback_data: 'make:' + id + ':series' } ], [ { text: '\\uD83D\\uDCC4 Artykul', callback_data: 'make:' + id + ':article' } ] ] } };\nreturn [{ json: { tgBodyStr: JSON.stringify(tgBody) } }];"
         },
         "id": "n-prepare-decision-reply",
         "name": "Prepare Decision Reply",
@@ -7848,7 +7848,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const resp = $json;\nlet draft = '';\ntry { draft = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { draft = ''; }\nif (!draft) { draft = '(Draft sie nie wygenerowal - sprobuj ponownie)'; }\ndraft = draft.replace(/\\u2014/g, '-');\nconst p = $('Prepare Draft Prompt').first().json;\nreturn [{ json: { draft: draft, draftEsc: draft.replace(/'/g, \"''\"), ideaId: p.ideaId, chatId: p.chatId, format: p.format, platform: p.platform } }];"
+          "jsCode": "const resp = $json;\nlet draft = '';\ntry { draft = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { draft = ''; }\nif (!draft) { draft = '(Draft sie nie wygenerowal - sprobuj ponownie)'; }\ndraft = draft.replace(/[\\u2014\\u2013\\u2212]/g, '-');\nconst p = $('Prepare Draft Prompt').first().json;\nreturn [{ json: { draft: draft, draftEsc: draft.replace(/'/g, \"''\"), ideaId: p.ideaId, chatId: p.chatId, format: p.format, platform: p.platform } }];"
         },
         "id": "n-extract-draft",
         "name": "Extract Draft",
@@ -9823,18 +9823,18 @@
     "autosaved": false,
     "workflowPublishHistory": [
       {
-        "createdAt": "2026-06-11T08:35:07.250Z",
-        "id": 335,
+        "createdAt": "2026-06-11T08:46:13.884Z",
+        "id": 339,
         "workflowId": "U5pUZjy2yAhR1sWg",
-        "versionId": "8b4f73eb-4a07-419a-9ea5-85e9cc7a88d7",
+        "versionId": "60c796f7-605e-425a-9736-25f1aac87770",
         "event": "deactivated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       },
       {
-        "createdAt": "2026-06-11T08:35:07.612Z",
-        "id": 336,
+        "createdAt": "2026-06-11T08:46:14.203Z",
+        "id": 340,
         "workflowId": "U5pUZjy2yAhR1sWg",
-        "versionId": "8b4f73eb-4a07-419a-9ea5-85e9cc7a88d7",
+        "versionId": "60c796f7-605e-425a-9736-25f1aac87770",
         "event": "activated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       }
