@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-11T13:10:06.609Z",
+  "updatedAt": "2026-06-11T13:40:53.722Z",
   "createdAt": "2026-06-01T07:09:59.480Z",
   "id": "U5pUZjy2yAhR1sWg",
   "name": "AGS HITL Handler v1.0",
@@ -3411,52 +3411,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const bin = $input.first().binary;\nconst b64 = (bin && bin.data && bin.data.data) ? bin.data.data : '';\nconst body = { contents: [{ parts: [ { inline_data: { mime_type: 'audio/ogg', data: b64 } }, { text: 'Transkrybuj to nagranie doslownie. Zwroc TYLKO tekst transkrypcji, bez zadnych komentarzy.' } ] }] };\nreturn [{ json: { geminiBodyStr: JSON.stringify(body) } }];"
-      },
-      "id": "n-prepare-voice-gemini",
-      "name": "Prepare Voice Gemini",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        40,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ $json.geminiBodyStr }}",
-        "options": {
-          "timeout": 60000
-        }
-      },
-      "id": "n-gemini-transcribe",
-      "name": "Gemini Transcribe",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        260,
-        400
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "aJ6CuRlcNA5xVysJ",
-          "name": "Gemini API AGS (x-goog-api-key)"
-        }
-      },
-      "retryOnFail": true,
-      "maxTries": 4,
-      "waitBetweenTries": 2500,
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "let txt = '';\ntry { txt = ($json.candidates[0].content.parts || []).map(p => p.text || '').join(' ').trim(); } catch (e) { txt = ''; }\nif (!txt) { txt = '(transkrypcja nieudana - sprobuj ponownie)'; }\nconst d = $('Detect Update Type').first().json;\nconst t = $('Telegram Trigger').first().json;\nconst meta = { chat_id: d.chat_id, telegram_msg_id: (t.message && t.message.message_id) || null, idea_type: 'voice' };\nreturn [{ json: { contentEsc: txt.replace(/'/g, \"''\"), metadataEsc: JSON.stringify(meta).replace(/'/g, \"''\"), chat_id: d.chat_id } }];"
+        "jsCode": "let txt = ($json.text || '').toString().trim();\nif (!txt) { txt = '(transkrypcja nieudana - sprobuj ponownie)'; }\nconst d = $('Detect Update Type').first().json;\nconst t = $('Telegram Trigger').first().json;\nconst meta = { chat_id: d.chat_id, telegram_msg_id: (t.message && t.message.message_id) || null, idea_type: 'voice' };\nreturn [{ json: { contentEsc: txt.replace(/'/g, \"''\"), metadataEsc: JSON.stringify(meta).replace(/'/g, \"''\"), chat_id: d.chat_id } }];"
       },
       "id": "n-prepare-idea-voice",
       "name": "Prepare Idea Voice",
@@ -3791,6 +3746,72 @@
         2280,
         180
       ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const it = items[0];\nif (it.binary && it.binary.data) { it.binary.data.fileName = 'audio.ogg'; it.binary.data.fileExtension = 'ogg'; it.binary.data.mimeType = 'audio/ogg'; }\nreturn items;"
+      },
+      "id": "n-set-audio-filename",
+      "name": "Set Audio Filename",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/audio/transcriptions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "model",
+              "value": "whisper-1"
+            },
+            {
+              "name": "language",
+              "value": "pl"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "n-openai-transcribe",
+      "name": "OpenAI Transcribe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        400
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "8dfgnu2L2JxcMICs",
+          "name": "OpenAI API AGS (Bearer)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2500,
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {
@@ -5048,29 +5069,7 @@
       "main": [
         [
           {
-            "node": "Prepare Voice Gemini",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Prepare Voice Gemini": {
-      "main": [
-        [
-          {
-            "node": "Gemini Transcribe",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Gemini Transcribe": {
-      "main": [
-        [
-          {
-            "node": "Prepare Idea Voice",
+            "node": "Set Audio Filename",
             "type": "main",
             "index": 0
           }
@@ -5233,6 +5232,28 @@
           }
         ]
       ]
+    },
+    "Set Audio Filename": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Transcribe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Transcribe": {
+      "main": [
+        [
+          {
+            "node": "Prepare Idea Voice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -5246,9 +5267,9 @@
   "meta": null,
   "nodeGroups": [],
   "pinData": {},
-  "versionId": "35c66349-4471-4201-a4ba-0d9fde841639",
-  "activeVersionId": "35c66349-4471-4201-a4ba-0d9fde841639",
-  "versionCounter": 92,
+  "versionId": "5bd018f8-6eff-4f83-9a00-d48cb9fa5829",
+  "activeVersionId": "5bd018f8-6eff-4f83-9a00-d48cb9fa5829",
+  "versionCounter": 93,
   "triggerCount": 1,
   "shared": [
     {
@@ -5271,9 +5292,9 @@
   ],
   "tags": [],
   "activeVersion": {
-    "updatedAt": "2026-06-11T13:10:06.612Z",
-    "createdAt": "2026-06-11T13:10:06.612Z",
-    "versionId": "35c66349-4471-4201-a4ba-0d9fde841639",
+    "updatedAt": "2026-06-11T13:40:53.724Z",
+    "createdAt": "2026-06-11T13:40:53.724Z",
+    "versionId": "5bd018f8-6eff-4f83-9a00-d48cb9fa5829",
     "workflowId": "U5pUZjy2yAhR1sWg",
     "nodes": [
       {
@@ -8680,52 +8701,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const bin = $input.first().binary;\nconst b64 = (bin && bin.data && bin.data.data) ? bin.data.data : '';\nconst body = { contents: [{ parts: [ { inline_data: { mime_type: 'audio/ogg', data: b64 } }, { text: 'Transkrybuj to nagranie doslownie. Zwroc TYLKO tekst transkrypcji, bez zadnych komentarzy.' } ] }] };\nreturn [{ json: { geminiBodyStr: JSON.stringify(body) } }];"
-        },
-        "id": "n-prepare-voice-gemini",
-        "name": "Prepare Voice Gemini",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          40,
-          400
-        ]
-      },
-      {
-        "parameters": {
-          "method": "POST",
-          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-          "authentication": "genericCredentialType",
-          "genericAuthType": "httpHeaderAuth",
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ $json.geminiBodyStr }}",
-          "options": {
-            "timeout": 60000
-          }
-        },
-        "id": "n-gemini-transcribe",
-        "name": "Gemini Transcribe",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "position": [
-          260,
-          400
-        ],
-        "credentials": {
-          "httpHeaderAuth": {
-            "id": "aJ6CuRlcNA5xVysJ",
-            "name": "Gemini API AGS (x-goog-api-key)"
-          }
-        },
-        "retryOnFail": true,
-        "maxTries": 4,
-        "waitBetweenTries": 2500,
-        "onError": "continueRegularOutput"
-      },
-      {
-        "parameters": {
-          "jsCode": "let txt = '';\ntry { txt = ($json.candidates[0].content.parts || []).map(p => p.text || '').join(' ').trim(); } catch (e) { txt = ''; }\nif (!txt) { txt = '(transkrypcja nieudana - sprobuj ponownie)'; }\nconst d = $('Detect Update Type').first().json;\nconst t = $('Telegram Trigger').first().json;\nconst meta = { chat_id: d.chat_id, telegram_msg_id: (t.message && t.message.message_id) || null, idea_type: 'voice' };\nreturn [{ json: { contentEsc: txt.replace(/'/g, \"''\"), metadataEsc: JSON.stringify(meta).replace(/'/g, \"''\"), chat_id: d.chat_id } }];"
+          "jsCode": "let txt = ($json.text || '').toString().trim();\nif (!txt) { txt = '(transkrypcja nieudana - sprobuj ponownie)'; }\nconst d = $('Detect Update Type').first().json;\nconst t = $('Telegram Trigger').first().json;\nconst meta = { chat_id: d.chat_id, telegram_msg_id: (t.message && t.message.message_id) || null, idea_type: 'voice' };\nreturn [{ json: { contentEsc: txt.replace(/'/g, \"''\"), metadataEsc: JSON.stringify(meta).replace(/'/g, \"''\"), chat_id: d.chat_id } }];"
         },
         "id": "n-prepare-idea-voice",
         "name": "Prepare Idea Voice",
@@ -9060,6 +9036,72 @@
           2280,
           180
         ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const it = items[0];\nif (it.binary && it.binary.data) { it.binary.data.fileName = 'audio.ogg'; it.binary.data.fileExtension = 'ogg'; it.binary.data.mimeType = 'audio/ogg'; }\nreturn items;"
+        },
+        "id": "n-set-audio-filename",
+        "name": "Set Audio Filename",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          40,
+          400
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.openai.com/v1/audio/transcriptions",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "contentType": "multipart-form-data",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "parameterType": "formBinaryData",
+                "name": "file",
+                "inputDataFieldName": "data"
+              },
+              {
+                "name": "model",
+                "value": "whisper-1"
+              },
+              {
+                "name": "language",
+                "value": "pl"
+              }
+            ]
+          },
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 60000
+          }
+        },
+        "id": "n-openai-transcribe",
+        "name": "OpenAI Transcribe",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          260,
+          400
+        ],
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "8dfgnu2L2JxcMICs",
+            "name": "OpenAI API AGS (Bearer)"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2500,
+        "onError": "continueRegularOutput"
       }
     ],
     "connections": {
@@ -10317,29 +10359,7 @@
         "main": [
           [
             {
-              "node": "Prepare Voice Gemini",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Prepare Voice Gemini": {
-        "main": [
-          [
-            {
-              "node": "Gemini Transcribe",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Gemini Transcribe": {
-        "main": [
-          [
-            {
-              "node": "Prepare Idea Voice",
+              "node": "Set Audio Filename",
               "type": "main",
               "index": 0
             }
@@ -10502,6 +10522,28 @@
             }
           ]
         ]
+      },
+      "Set Audio Filename": {
+        "main": [
+          [
+            {
+              "node": "OpenAI Transcribe",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Transcribe": {
+        "main": [
+          [
+            {
+              "node": "Prepare Idea Voice",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       }
     },
     "nodeGroups": [],
@@ -10511,18 +10553,18 @@
     "autosaved": false,
     "workflowPublishHistory": [
       {
-        "createdAt": "2026-06-11T13:10:06.958Z",
-        "id": 354,
+        "createdAt": "2026-06-11T13:40:54.029Z",
+        "id": 356,
         "workflowId": "U5pUZjy2yAhR1sWg",
-        "versionId": "35c66349-4471-4201-a4ba-0d9fde841639",
+        "versionId": "5bd018f8-6eff-4f83-9a00-d48cb9fa5829",
         "event": "deactivated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       },
       {
-        "createdAt": "2026-06-11T13:10:07.319Z",
-        "id": 355,
+        "createdAt": "2026-06-11T13:40:54.352Z",
+        "id": 357,
         "workflowId": "U5pUZjy2yAhR1sWg",
-        "versionId": "35c66349-4471-4201-a4ba-0d9fde841639",
+        "versionId": "5bd018f8-6eff-4f83-9a00-d48cb9fa5829",
         "event": "activated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       }
