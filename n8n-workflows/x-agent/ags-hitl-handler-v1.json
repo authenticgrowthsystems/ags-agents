@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-11T07:28:27.812Z",
+  "updatedAt": "2026-06-11T08:05:11.483Z",
   "createdAt": "2026-06-01T07:09:59.480Z",
   "id": "U5pUZjy2yAhR1sWg",
   "name": "AGS HITL Handler v1.0",
@@ -1790,7 +1790,7 @@
     },
     {
       "parameters": {
-        "jsCode": "let gem = '';\ntry { gem = ($('Gemini Research').first().json.candidates[0].content.parts || []).map(p => p.text || '').join('\\n'); } catch (e) { gem = ''; }\nif (!gem) { gem = '(Gemini nie zwrocil researchu)'; }\nlet ds = '';\ntry { ds = ($('DeepSeek Research').first().json.choices || []).map(c => (c.message && c.message.content) || '').join('\\n').trim(); } catch (e) { ds = ''; }\nif (!ds) { ds = '(DeepSeek nie zwrocil researchu)'; }\nconst content = ($('Idea Set Researching').first().json.content || '').toString();\nconst system = 'Jestes strategiem tresci AGS. Dostajesz pomysl i DWA niezalezne researche (Gemini, DeepSeek). Zsyntetyzuj je w jeden zwarty brief: (1) co to jest, (2) dlaczego wazne, (3) najlepsze katy ujecia, (4) sugerowane haki na posty X i LinkedIn. Polacz wnioski, usun powtorzenia. Zwiezle. ZASADA: zero myslnikow em, uzywaj dywizow lub przebuduj zdanie. Odpowiedz w jezyku pomyslu, poprawna pisownia.';\nconst user = 'POMYSL:\\n' + content + '\\n\\nRESEARCH GEMINI:\\n' + gem + '\\n\\nRESEARCH DEEPSEEK:\\n' + ds;\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), geminiText: gem, deepseekText: ds } }];"
+        "jsCode": "let gem = '';\ntry { gem = ($('Gemini Research').first().json.candidates[0].content.parts || []).map(p => p.text || '').join('\\n'); } catch (e) { gem = ''; }\nif (!gem) { gem = '(Gemini nie zwrocil researchu)'; }\nlet ds = '';\ntry { ds = ($('DeepSeek Research').first().json.choices || []).map(c => (c.message && c.message.content) || '').join('\\n').trim(); } catch (e) { ds = ''; }\nif (!ds) { ds = '(DeepSeek nie zwrocil researchu)'; }\nconst content = ($('Idea Set Researching').first().json.content || '').toString();\nconst system = 'Jestes strategiem tresci AGS. Dostajesz pomysl i DWA niezalezne researche (Gemini, DeepSeek). Zsyntetyzuj je w jeden zwarty brief: (1) co to jest, (2) dlaczego wazne, (3) najlepsze katy ujecia, (4) sugerowane haki na posty X i LinkedIn. Polacz wnioski, usun powtorzenia. Zwiezle. ZASADA: zero myslnikow em, uzywaj dywizow lub przebuduj zdanie. Odpowiedz w jezyku pomyslu, poprawna pisownia. JEZYK: jesli pomysl po polsku - pisz CZYSTA polszczyzna, ZERO anglicyzmow, zargonu i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). Zawsze pisz jak czlowiek do czlowieka, NIE jak maszyna: zero korpo-mowy, zero pustych frazesow i hype, naturalny rytm, konkret.';\nconst user = 'POMYSL:\\n' + content + '\\n\\nRESEARCH GEMINI:\\n' + gem + '\\n\\nRESEARCH DEEPSEEK:\\n' + ds;\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), geminiText: gem, deepseekText: ds } }];"
       },
       "id": "node-prepare-claude-synthesis",
       "name": "Prepare Claude Synthesis",
@@ -2454,7 +2454,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const g = $('Synth State Gate').first().json;\nconst angle = ($('Detect Update Type').first().json.text || '').toString();\nconst content = (g.content || '').toString();\nconst prev = (g.research_result || '').toString();\nconst system = 'Jestes strategiem tresci AGS. Masz pomysl, dotychczasowa synteze i KAT na ktorym Tomasz chce sie skupic. Przepisz synteze MOCNO pod tym katem: (1) co to jest, (2) dlaczego wazne, (3) najlepsze ujecia, (4) haki na posty X i LinkedIn - wszystko przez pryzmat tego kata. Zwiezle. Zero myslnikow em. Po polsku, poprawna pisownia.';\nconst user = 'POMYSL:\\n' + content + '\\n\\nDOTYCHCZASOWA SYNTEZA:\\n' + prev + '\\n\\nKAT (skup sie na tym):\\n' + angle;\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: g.idea_id, chatId: $('Detect Update Type').first().json.chat_id } }];"
+        "jsCode": "const g = $('Synth State Gate').first().json;\nconst angle = ($('Detect Update Type').first().json.text || '').toString();\nconst content = (g.content || '').toString();\nconst prev = (g.research_result || '').toString();\nconst system = 'Jestes strategiem tresci AGS. Masz pomysl, dotychczasowa synteze i KAT na ktorym Tomasz chce sie skupic. Przepisz synteze MOCNO pod tym katem: (1) co to jest, (2) dlaczego wazne, (3) najlepsze ujecia, (4) haki na posty X i LinkedIn - wszystko przez pryzmat tego kata. Zwiezle. Zero myslnikow em. Po polsku, poprawna pisownia. JEZYK: jesli pomysl po polsku - pisz CZYSTA polszczyzna, ZERO anglicyzmow, zargonu i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). Zawsze pisz jak czlowiek do czlowieka, NIE jak maszyna: zero korpo-mowy, zero pustych frazesow i hype, naturalny rytm, konkret.';\nconst user = 'POMYSL:\\n' + content + '\\n\\nDOTYCHCZASOWA SYNTEZA:\\n' + prev + '\\n\\nKAT (skup sie na tym):\\n' + angle;\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: g.idea_id, chatId: $('Detect Update Type').first().json.chat_id } }];"
       },
       "id": "n-prepare-angle-resynth",
       "name": "Prepare Angle Resynth",
@@ -2580,6 +2580,345 @@
       "position": [
         2016,
         920
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT i.research_result, i.content, (SELECT json_agg(c) FROM (SELECT content AS c FROM published_posts WHERE content IS NOT NULL ORDER BY created_at DESC LIMIT 8) t) AS recent_posts FROM inspirations i WHERE i.id = {{ $('Parse Synth Callback').first().json.ideaId }};",
+        "options": {}
+      },
+      "id": "n-load-creator-context",
+      "name": "Load Creator Context",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1700,
+        -560
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $json;\nconst research = (ctx.research_result || '').toString();\nconst recent = Array.isArray(ctx.recent_posts) ? ctx.recent_posts.filter(Boolean).join('\\n---\\n') : '';\nconst system = 'Jestes Content Creatorem AGS. Cel: maksymalizowac zasieg i liczbe followersow marki. Masz research pomyslu oraz ostatnie opublikowane posty (co juz poszlo). Zarekomenduj JEDEN najlepszy format na teraz: post / seria / artykul. Napisz 2-3 zdania: ktory format i DLACZEGO - na bazie researchu i tego co juz publikowano (nie powtarzaj, buduj na tym co dziala). Zwiezle. Po polsku, zero myslnikow em. JEZYK: jesli pomysl po polsku - pisz CZYSTA polszczyzna, ZERO anglicyzmow, zargonu i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). Zawsze pisz jak czlowiek do czlowieka, NIE jak maszyna: zero korpo-mowy, zero pustych frazesow i hype, naturalny rytm, konkret.';\nconst user = 'RESEARCH:\\n' + research + '\\n\\nOSTATNIE PUBLIKACJE:\\n' + (recent || '(brak historii)');\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: $('Parse Synth Callback').first().json.ideaId, chatId: $('Parse Synth Callback').first().json.chatId } }];"
+      },
+      "id": "n-prepare-decision-prompt",
+      "name": "Prepare Decision Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        -560
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.claudeBodyStr }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "n-claude-decision",
+      "name": "Claude Decision",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2140,
+        -560
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "w2iuB1ttk7ekS2ix",
+          "name": "Anthropic API AGS-n8n"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 2500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nlet rec = '';\ntry { rec = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { rec = ''; }\nif (!rec) { rec = 'Wybierz format ktory chcesz wygenerowac:'; }\nrec = rec.replace(/\\u2014/g, '-');\nconst id = $('Prepare Decision Prompt').first().json.ideaId;\nconst chatId = $('Prepare Decision Prompt').first().json.chatId;\nconst tgBody = { chat_id: chatId, text: '\\uD83E\\uDDE0 Content Creator:\\n\\n' + rec + '\\n\\nCo robimy?', disable_web_page_preview: true, reply_markup: { inline_keyboard: [ [ { text: '\\u270D\\uFE0F Jeden post', callback_data: 'make:' + id + ':post' }, { text: '\\uD83D\\uDCDA Seria', callback_data: 'make:' + id + ':series' } ], [ { text: '\\uD83D\\uDCC4 Artykul', callback_data: 'make:' + id + ':article' } ] ] } };\nreturn [{ json: { tgBodyStr: JSON.stringify(tgBody) } }];"
+      },
+      "id": "n-prepare-decision-reply",
+      "name": "Prepare Decision Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2360,
+        -560
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.tgBodyStr }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "n-send-decision",
+      "name": "Send Decision",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2580,
+        -560
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.callbackId }}",
+              "rightValue": "make:",
+              "operator": {
+                "type": "string",
+                "operation": "startsWith"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n-is-make-callback",
+      "name": "Is Make Callback?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1000,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const c = $json;\nconst id = (c.callbackId || '').split(':')[1] || '';\nreturn [{ json: { ideaId: id, format: c.action, chatId: c.chatId, callbackQueryId: c.callbackQueryId } }];"
+      },
+      "id": "n-parse-make-callback",
+      "name": "Parse Make Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Make Callback').first().json.chatId, text: '\\u270D\\uFE0F Pisze draft, chwila...' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "n-telegram-make-ack",
+      "name": "Telegram Make Ack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT research_result, content FROM inspirations WHERE id = {{ $('Parse Make Callback').first().json.ideaId }};",
+        "options": {}
+      },
+      "id": "n-load-draft-context",
+      "name": "Load Draft Context",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1660,
+        -240
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const format = $('Parse Make Callback').first().json.format;\nconst research = ($json.research_result || '').toString();\nlet instr, platform;\nif (format === 'post') { instr = 'Napisz JEDEN post na X, max 280 znakow. Hook plus jedna konkretna mysl z researchu.'; platform = 'x'; }\nelse if (format === 'series') { instr = 'Napisz serie 3-5 postow na X jako watek. Kazdy max 280 znakow, numeruj 1/ 2/ 3/. Spojny luk z researchu.'; platform = 'x'; }\nelse { instr = 'Napisz post na LinkedIn (1200-1400 znakow) plus krotki outline dluzszego artykulu (3-5 punktow) z researchu.'; platform = 'linkedin'; }\nconst system = 'Jestes Content Creatorem AGS. ' + instr + ' Kanon AGS: zero myslnikow em (uzywaj dywizow), bez frazesow i guru-jezyka, konkret, glos zalozyciela. Po polsku, poprawna pisownia. JEZYK: jesli pomysl po polsku - pisz CZYSTA polszczyzna, ZERO anglicyzmow, zargonu i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). Zawsze pisz jak czlowiek do czlowieka, NIE jak maszyna: zero korpo-mowy, zero pustych frazesow i hype, naturalny rytm, konkret. Zwroc TYLKO gotowa tresc.';\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1200, system: system, messages: [{ role: 'user', content: 'RESEARCH:\\n' + research }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: $('Parse Make Callback').first().json.ideaId, chatId: $('Parse Make Callback').first().json.chatId, format: format, platform: platform } }];"
+      },
+      "id": "n-prepare-draft-prompt",
+      "name": "Prepare Draft Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1880,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.claudeBodyStr }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "n-claude-draft",
+      "name": "Claude Draft",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2100,
+        -240
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "w2iuB1ttk7ekS2ix",
+          "name": "Anthropic API AGS-n8n"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 2500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nlet draft = '';\ntry { draft = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { draft = ''; }\nif (!draft) { draft = '(Draft sie nie wygenerowal - sprobuj ponownie)'; }\ndraft = draft.replace(/\\u2014/g, '-');\nconst p = $('Prepare Draft Prompt').first().json;\nreturn [{ json: { draft: draft, draftEsc: draft.replace(/'/g, \"''\"), ideaId: p.ideaId, chatId: p.chatId, format: p.format, platform: p.platform } }];"
+      },
+      "id": "n-extract-draft",
+      "name": "Extract Draft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2320,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO post_queue (content, platform, topic, status) VALUES ('{{ $json.draftEsc }}', '{{ $json.platform }}', 'idea:{{ $json.ideaId }}:{{ $json.format }}', 'queued') RETURNING id;",
+        "options": {}
+      },
+      "id": "n-save-to-queue",
+      "name": "Save To Queue",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        2540,
+        -240
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const e = $('Extract Draft').first().json;\nconst draft = e.draft || ''; const chatId = e.chatId;\nconst header = '\\u270D\\uFE0F Draft (' + e.format + ', ' + e.platform + ') - dodany do kolejki:\\n\\n';\nconst full = header + draft; const max = 3800; const parts = [];\nfor (let i = 0; i < full.length; i += max) { parts.push(full.substring(i, i + max)); }\nif (parts.length === 0) { parts.push(header + '(pusto)'); }\nreturn parts.map(p => ({ json: { tgBodyStr: JSON.stringify({ chat_id: chatId, text: p, disable_web_page_preview: true }) } }));"
+      },
+      "id": "n-prepare-draft-reply",
+      "name": "Prepare Draft Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2760,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.tgBodyStr }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "n-send-draft",
+      "name": "Send Draft",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2980,
+        -240
       ]
     }
   ],
@@ -3335,7 +3674,7 @@
         ],
         [
           {
-            "node": "PostgreSQL Lookup Session",
+            "node": "Is Make Callback?",
             "type": "main",
             "index": 0
           }
@@ -3390,6 +3729,11 @@
         [
           {
             "node": "Telegram Synth Saved",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Load Creator Context",
             "type": "main",
             "index": 0
           }
@@ -3545,6 +3889,156 @@
           }
         ]
       ]
+    },
+    "Load Creator Context": {
+      "main": [
+        [
+          {
+            "node": "Prepare Decision Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Decision Prompt": {
+      "main": [
+        [
+          {
+            "node": "Claude Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Decision": {
+      "main": [
+        [
+          {
+            "node": "Prepare Decision Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Decision Reply": {
+      "main": [
+        [
+          {
+            "node": "Send Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Make Callback?": {
+      "main": [
+        [
+          {
+            "node": "Parse Make Callback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PostgreSQL Lookup Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Make Callback": {
+      "main": [
+        [
+          {
+            "node": "Telegram Make Ack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Make Ack": {
+      "main": [
+        [
+          {
+            "node": "Load Draft Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Draft Context": {
+      "main": [
+        [
+          {
+            "node": "Prepare Draft Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Draft Prompt": {
+      "main": [
+        [
+          {
+            "node": "Claude Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Draft": {
+      "main": [
+        [
+          {
+            "node": "Extract Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Draft": {
+      "main": [
+        [
+          {
+            "node": "Save To Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save To Queue": {
+      "main": [
+        [
+          {
+            "node": "Prepare Draft Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Draft Reply": {
+      "main": [
+        [
+          {
+            "node": "Send Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -3558,9 +4052,9 @@
   "meta": null,
   "nodeGroups": [],
   "pinData": {},
-  "versionId": "0852b806-3707-4ae2-af59-33db2d9e6bab",
-  "activeVersionId": "0852b806-3707-4ae2-af59-33db2d9e6bab",
-  "versionCounter": 83,
+  "versionId": "02ba04f1-4da5-4fe2-9caf-fda1c4b073b3",
+  "activeVersionId": "02ba04f1-4da5-4fe2-9caf-fda1c4b073b3",
+  "versionCounter": 86,
   "triggerCount": 1,
   "shared": [
     {
@@ -3583,9 +4077,9 @@
   ],
   "tags": [],
   "activeVersion": {
-    "updatedAt": "2026-06-11T07:28:27.818Z",
-    "createdAt": "2026-06-11T07:28:27.818Z",
-    "versionId": "0852b806-3707-4ae2-af59-33db2d9e6bab",
+    "updatedAt": "2026-06-11T08:05:11.488Z",
+    "createdAt": "2026-06-11T08:05:11.488Z",
+    "versionId": "02ba04f1-4da5-4fe2-9caf-fda1c4b073b3",
     "workflowId": "U5pUZjy2yAhR1sWg",
     "nodes": [
       {
@@ -5371,7 +5865,7 @@
       },
       {
         "parameters": {
-          "jsCode": "let gem = '';\ntry { gem = ($('Gemini Research').first().json.candidates[0].content.parts || []).map(p => p.text || '').join('\\n'); } catch (e) { gem = ''; }\nif (!gem) { gem = '(Gemini nie zwrocil researchu)'; }\nlet ds = '';\ntry { ds = ($('DeepSeek Research').first().json.choices || []).map(c => (c.message && c.message.content) || '').join('\\n').trim(); } catch (e) { ds = ''; }\nif (!ds) { ds = '(DeepSeek nie zwrocil researchu)'; }\nconst content = ($('Idea Set Researching').first().json.content || '').toString();\nconst system = 'Jestes strategiem tresci AGS. Dostajesz pomysl i DWA niezalezne researche (Gemini, DeepSeek). Zsyntetyzuj je w jeden zwarty brief: (1) co to jest, (2) dlaczego wazne, (3) najlepsze katy ujecia, (4) sugerowane haki na posty X i LinkedIn. Polacz wnioski, usun powtorzenia. Zwiezle. ZASADA: zero myslnikow em, uzywaj dywizow lub przebuduj zdanie. Odpowiedz w jezyku pomyslu, poprawna pisownia.';\nconst user = 'POMYSL:\\n' + content + '\\n\\nRESEARCH GEMINI:\\n' + gem + '\\n\\nRESEARCH DEEPSEEK:\\n' + ds;\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), geminiText: gem, deepseekText: ds } }];"
+          "jsCode": "let gem = '';\ntry { gem = ($('Gemini Research').first().json.candidates[0].content.parts || []).map(p => p.text || '').join('\\n'); } catch (e) { gem = ''; }\nif (!gem) { gem = '(Gemini nie zwrocil researchu)'; }\nlet ds = '';\ntry { ds = ($('DeepSeek Research').first().json.choices || []).map(c => (c.message && c.message.content) || '').join('\\n').trim(); } catch (e) { ds = ''; }\nif (!ds) { ds = '(DeepSeek nie zwrocil researchu)'; }\nconst content = ($('Idea Set Researching').first().json.content || '').toString();\nconst system = 'Jestes strategiem tresci AGS. Dostajesz pomysl i DWA niezalezne researche (Gemini, DeepSeek). Zsyntetyzuj je w jeden zwarty brief: (1) co to jest, (2) dlaczego wazne, (3) najlepsze katy ujecia, (4) sugerowane haki na posty X i LinkedIn. Polacz wnioski, usun powtorzenia. Zwiezle. ZASADA: zero myslnikow em, uzywaj dywizow lub przebuduj zdanie. Odpowiedz w jezyku pomyslu, poprawna pisownia. JEZYK: jesli pomysl po polsku - pisz CZYSTA polszczyzna, ZERO anglicyzmow, zargonu i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). Zawsze pisz jak czlowiek do czlowieka, NIE jak maszyna: zero korpo-mowy, zero pustych frazesow i hype, naturalny rytm, konkret.';\nconst user = 'POMYSL:\\n' + content + '\\n\\nRESEARCH GEMINI:\\n' + gem + '\\n\\nRESEARCH DEEPSEEK:\\n' + ds;\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), geminiText: gem, deepseekText: ds } }];"
         },
         "id": "node-prepare-claude-synthesis",
         "name": "Prepare Claude Synthesis",
@@ -6035,7 +6529,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const g = $('Synth State Gate').first().json;\nconst angle = ($('Detect Update Type').first().json.text || '').toString();\nconst content = (g.content || '').toString();\nconst prev = (g.research_result || '').toString();\nconst system = 'Jestes strategiem tresci AGS. Masz pomysl, dotychczasowa synteze i KAT na ktorym Tomasz chce sie skupic. Przepisz synteze MOCNO pod tym katem: (1) co to jest, (2) dlaczego wazne, (3) najlepsze ujecia, (4) haki na posty X i LinkedIn - wszystko przez pryzmat tego kata. Zwiezle. Zero myslnikow em. Po polsku, poprawna pisownia.';\nconst user = 'POMYSL:\\n' + content + '\\n\\nDOTYCHCZASOWA SYNTEZA:\\n' + prev + '\\n\\nKAT (skup sie na tym):\\n' + angle;\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: g.idea_id, chatId: $('Detect Update Type').first().json.chat_id } }];"
+          "jsCode": "const g = $('Synth State Gate').first().json;\nconst angle = ($('Detect Update Type').first().json.text || '').toString();\nconst content = (g.content || '').toString();\nconst prev = (g.research_result || '').toString();\nconst system = 'Jestes strategiem tresci AGS. Masz pomysl, dotychczasowa synteze i KAT na ktorym Tomasz chce sie skupic. Przepisz synteze MOCNO pod tym katem: (1) co to jest, (2) dlaczego wazne, (3) najlepsze ujecia, (4) haki na posty X i LinkedIn - wszystko przez pryzmat tego kata. Zwiezle. Zero myslnikow em. Po polsku, poprawna pisownia. JEZYK: jesli pomysl po polsku - pisz CZYSTA polszczyzna, ZERO anglicyzmow, zargonu i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). Zawsze pisz jak czlowiek do czlowieka, NIE jak maszyna: zero korpo-mowy, zero pustych frazesow i hype, naturalny rytm, konkret.';\nconst user = 'POMYSL:\\n' + content + '\\n\\nDOTYCHCZASOWA SYNTEZA:\\n' + prev + '\\n\\nKAT (skup sie na tym):\\n' + angle;\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: g.idea_id, chatId: $('Detect Update Type').first().json.chat_id } }];"
         },
         "id": "n-prepare-angle-resynth",
         "name": "Prepare Angle Resynth",
@@ -6161,6 +6655,345 @@
         "position": [
           2016,
           920
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT i.research_result, i.content, (SELECT json_agg(c) FROM (SELECT content AS c FROM published_posts WHERE content IS NOT NULL ORDER BY created_at DESC LIMIT 8) t) AS recent_posts FROM inspirations i WHERE i.id = {{ $('Parse Synth Callback').first().json.ideaId }};",
+          "options": {}
+        },
+        "id": "n-load-creator-context",
+        "name": "Load Creator Context",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          1700,
+          -560
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const ctx = $json;\nconst research = (ctx.research_result || '').toString();\nconst recent = Array.isArray(ctx.recent_posts) ? ctx.recent_posts.filter(Boolean).join('\\n---\\n') : '';\nconst system = 'Jestes Content Creatorem AGS. Cel: maksymalizowac zasieg i liczbe followersow marki. Masz research pomyslu oraz ostatnie opublikowane posty (co juz poszlo). Zarekomenduj JEDEN najlepszy format na teraz: post / seria / artykul. Napisz 2-3 zdania: ktory format i DLACZEGO - na bazie researchu i tego co juz publikowano (nie powtarzaj, buduj na tym co dziala). Zwiezle. Po polsku, zero myslnikow em. JEZYK: jesli pomysl po polsku - pisz CZYSTA polszczyzna, ZERO anglicyzmow, zargonu i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). Zawsze pisz jak czlowiek do czlowieka, NIE jak maszyna: zero korpo-mowy, zero pustych frazesow i hype, naturalny rytm, konkret.';\nconst user = 'RESEARCH:\\n' + research + '\\n\\nOSTATNIE PUBLIKACJE:\\n' + (recent || '(brak historii)');\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: $('Parse Synth Callback').first().json.ideaId, chatId: $('Parse Synth Callback').first().json.chatId } }];"
+        },
+        "id": "n-prepare-decision-prompt",
+        "name": "Prepare Decision Prompt",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1920,
+          -560
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.anthropic.com/v1/messages",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "anthropic-version",
+                "value": "2023-06-01"
+              },
+              {
+                "name": "content-type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.claudeBodyStr }}",
+          "options": {
+            "timeout": 60000
+          }
+        },
+        "id": "n-claude-decision",
+        "name": "Claude Decision",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2140,
+          -560
+        ],
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "w2iuB1ttk7ekS2ix",
+            "name": "Anthropic API AGS-n8n"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 4,
+        "waitBetweenTries": 2500,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const resp = $json;\nlet rec = '';\ntry { rec = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { rec = ''; }\nif (!rec) { rec = 'Wybierz format ktory chcesz wygenerowac:'; }\nrec = rec.replace(/\\u2014/g, '-');\nconst id = $('Prepare Decision Prompt').first().json.ideaId;\nconst chatId = $('Prepare Decision Prompt').first().json.chatId;\nconst tgBody = { chat_id: chatId, text: '\\uD83E\\uDDE0 Content Creator:\\n\\n' + rec + '\\n\\nCo robimy?', disable_web_page_preview: true, reply_markup: { inline_keyboard: [ [ { text: '\\u270D\\uFE0F Jeden post', callback_data: 'make:' + id + ':post' }, { text: '\\uD83D\\uDCDA Seria', callback_data: 'make:' + id + ':series' } ], [ { text: '\\uD83D\\uDCC4 Artykul', callback_data: 'make:' + id + ':article' } ] ] } };\nreturn [{ json: { tgBodyStr: JSON.stringify(tgBody) } }];"
+        },
+        "id": "n-prepare-decision-reply",
+        "name": "Prepare Decision Reply",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2360,
+          -560
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.tgBodyStr }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "n-send-decision",
+        "name": "Send Decision",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2580,
+          -560
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ $json.callbackId }}",
+                "rightValue": "make:",
+                "operator": {
+                  "type": "string",
+                  "operation": "startsWith"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "n-is-make-callback",
+        "name": "Is Make Callback?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1000,
+          -180
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const c = $json;\nconst id = (c.callbackId || '').split(':')[1] || '';\nreturn [{ json: { ideaId: id, format: c.action, chatId: c.chatId, callbackQueryId: c.callbackQueryId } }];"
+        },
+        "id": "n-parse-make-callback",
+        "name": "Parse Make Callback",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1220,
+          -240
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Make Callback').first().json.chatId, text: '\\u270D\\uFE0F Pisze draft, chwila...' }) }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "n-telegram-make-ack",
+        "name": "Telegram Make Ack",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1440,
+          -240
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT research_result, content FROM inspirations WHERE id = {{ $('Parse Make Callback').first().json.ideaId }};",
+          "options": {}
+        },
+        "id": "n-load-draft-context",
+        "name": "Load Draft Context",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          1660,
+          -240
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const format = $('Parse Make Callback').first().json.format;\nconst research = ($json.research_result || '').toString();\nlet instr, platform;\nif (format === 'post') { instr = 'Napisz JEDEN post na X, max 280 znakow. Hook plus jedna konkretna mysl z researchu.'; platform = 'x'; }\nelse if (format === 'series') { instr = 'Napisz serie 3-5 postow na X jako watek. Kazdy max 280 znakow, numeruj 1/ 2/ 3/. Spojny luk z researchu.'; platform = 'x'; }\nelse { instr = 'Napisz post na LinkedIn (1200-1400 znakow) plus krotki outline dluzszego artykulu (3-5 punktow) z researchu.'; platform = 'linkedin'; }\nconst system = 'Jestes Content Creatorem AGS. ' + instr + ' Kanon AGS: zero myslnikow em (uzywaj dywizow), bez frazesow i guru-jezyka, konkret, glos zalozyciela. Po polsku, poprawna pisownia. JEZYK: jesli pomysl po polsku - pisz CZYSTA polszczyzna, ZERO anglicyzmow, zargonu i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). Zawsze pisz jak czlowiek do czlowieka, NIE jak maszyna: zero korpo-mowy, zero pustych frazesow i hype, naturalny rytm, konkret. Zwroc TYLKO gotowa tresc.';\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1200, system: system, messages: [{ role: 'user', content: 'RESEARCH:\\n' + research }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: $('Parse Make Callback').first().json.ideaId, chatId: $('Parse Make Callback').first().json.chatId, format: format, platform: platform } }];"
+        },
+        "id": "n-prepare-draft-prompt",
+        "name": "Prepare Draft Prompt",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1880,
+          -240
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.anthropic.com/v1/messages",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "anthropic-version",
+                "value": "2023-06-01"
+              },
+              {
+                "name": "content-type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.claudeBodyStr }}",
+          "options": {
+            "timeout": 60000
+          }
+        },
+        "id": "n-claude-draft",
+        "name": "Claude Draft",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2100,
+          -240
+        ],
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "w2iuB1ttk7ekS2ix",
+            "name": "Anthropic API AGS-n8n"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 4,
+        "waitBetweenTries": 2500,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const resp = $json;\nlet draft = '';\ntry { draft = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { draft = ''; }\nif (!draft) { draft = '(Draft sie nie wygenerowal - sprobuj ponownie)'; }\ndraft = draft.replace(/\\u2014/g, '-');\nconst p = $('Prepare Draft Prompt').first().json;\nreturn [{ json: { draft: draft, draftEsc: draft.replace(/'/g, \"''\"), ideaId: p.ideaId, chatId: p.chatId, format: p.format, platform: p.platform } }];"
+        },
+        "id": "n-extract-draft",
+        "name": "Extract Draft",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2320,
+          -240
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO post_queue (content, platform, topic, status) VALUES ('{{ $json.draftEsc }}', '{{ $json.platform }}', 'idea:{{ $json.ideaId }}:{{ $json.format }}', 'queued') RETURNING id;",
+          "options": {}
+        },
+        "id": "n-save-to-queue",
+        "name": "Save To Queue",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          2540,
+          -240
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const e = $('Extract Draft').first().json;\nconst draft = e.draft || ''; const chatId = e.chatId;\nconst header = '\\u270D\\uFE0F Draft (' + e.format + ', ' + e.platform + ') - dodany do kolejki:\\n\\n';\nconst full = header + draft; const max = 3800; const parts = [];\nfor (let i = 0; i < full.length; i += max) { parts.push(full.substring(i, i + max)); }\nif (parts.length === 0) { parts.push(header + '(pusto)'); }\nreturn parts.map(p => ({ json: { tgBodyStr: JSON.stringify({ chat_id: chatId, text: p, disable_web_page_preview: true }) } }));"
+        },
+        "id": "n-prepare-draft-reply",
+        "name": "Prepare Draft Reply",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2760,
+          -240
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.tgBodyStr }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "n-send-draft",
+        "name": "Send Draft",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2980,
+          -240
         ]
       }
     ],
@@ -6916,7 +7749,7 @@
           ],
           [
             {
-              "node": "PostgreSQL Lookup Session",
+              "node": "Is Make Callback?",
               "type": "main",
               "index": 0
             }
@@ -6971,6 +7804,11 @@
           [
             {
               "node": "Telegram Synth Saved",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Load Creator Context",
               "type": "main",
               "index": 0
             }
@@ -7126,6 +7964,156 @@
             }
           ]
         ]
+      },
+      "Load Creator Context": {
+        "main": [
+          [
+            {
+              "node": "Prepare Decision Prompt",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Decision Prompt": {
+        "main": [
+          [
+            {
+              "node": "Claude Decision",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Claude Decision": {
+        "main": [
+          [
+            {
+              "node": "Prepare Decision Reply",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Decision Reply": {
+        "main": [
+          [
+            {
+              "node": "Send Decision",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is Make Callback?": {
+        "main": [
+          [
+            {
+              "node": "Parse Make Callback",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "PostgreSQL Lookup Session",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse Make Callback": {
+        "main": [
+          [
+            {
+              "node": "Telegram Make Ack",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Telegram Make Ack": {
+        "main": [
+          [
+            {
+              "node": "Load Draft Context",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Draft Context": {
+        "main": [
+          [
+            {
+              "node": "Prepare Draft Prompt",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Draft Prompt": {
+        "main": [
+          [
+            {
+              "node": "Claude Draft",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Claude Draft": {
+        "main": [
+          [
+            {
+              "node": "Extract Draft",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Extract Draft": {
+        "main": [
+          [
+            {
+              "node": "Save To Queue",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save To Queue": {
+        "main": [
+          [
+            {
+              "node": "Prepare Draft Reply",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Draft Reply": {
+        "main": [
+          [
+            {
+              "node": "Send Draft",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       }
     },
     "nodeGroups": [],
@@ -7135,18 +8123,18 @@
     "autosaved": false,
     "workflowPublishHistory": [
       {
-        "createdAt": "2026-06-11T07:28:28.183Z",
-        "id": 311,
+        "createdAt": "2026-06-11T08:05:11.781Z",
+        "id": 323,
         "workflowId": "U5pUZjy2yAhR1sWg",
-        "versionId": "0852b806-3707-4ae2-af59-33db2d9e6bab",
+        "versionId": "02ba04f1-4da5-4fe2-9caf-fda1c4b073b3",
         "event": "deactivated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       },
       {
-        "createdAt": "2026-06-11T07:28:28.494Z",
-        "id": 312,
+        "createdAt": "2026-06-11T08:05:12.092Z",
+        "id": 324,
         "workflowId": "U5pUZjy2yAhR1sWg",
-        "versionId": "0852b806-3707-4ae2-af59-33db2d9e6bab",
+        "versionId": "02ba04f1-4da5-4fe2-9caf-fda1c4b073b3",
         "event": "activated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       }
