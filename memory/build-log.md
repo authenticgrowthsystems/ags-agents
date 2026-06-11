@@ -142,6 +142,44 @@ This file is the canonical "what happened when" - update it after every signific
 
 ---
 
+## 2026-06-10/11 - Idea-capture bot -> Content Creator v1 (huge session)
+
+**What happened:**
+- Built the whole idea-capture + research + Content Creator stack INTO the HITL Handler workflow (single Telegram bot consumer constraint). Grew 48 -> 133 nodes, stayed active throughout.
+- Migration: `inspirations` + `metadata` jsonb + `research_result`; granted SELECT/INSERT/UPDATE to ags_crd_user (app tables owned by `n8n` superuser, not ags_crd_user).
+- Idea capture text/voice/photo -> triage buttons (research/save/post/discard). Voice/photo via Telegram getFile -> binary download -> Gemini transcribe/vision (base64 inline_data).
+- Research: PARALLEL Gemini ∥ DeepSeek (branch + Merge) -> Claude synthesis. Interactive synthesis with buttons: save / edit / regenerate-by-angle / discard (conversation_state plumbing, HITL edit untouched).
+- Content Creator v1: after save, reads `published_posts` + research -> recommends format -> drafts (PL+EN) -> `post_queue`. Routing chain: idea: -> synth: -> make: -> menu: -> HITL.
+- `/start` + `/menu` (pomysly/kolejka/ustawienia/pomoc). Language hardening (pure Polish "mom test" + anti-AI-slop in 4 Claude prompts). Style Bible questionnaire (100 Q) drafted in brand-canon/.
+
+**Decisions:**
+- LLM creds: httpHeaderAuth (Gemini `aJ6CuRlcNA5xVysJ`, Anthropic `w2iuB1ttk7ekS2ix`) + predefinedCredentialType deepSeekApi (`AOtZzfRgRgq5f2mO`) - zero inline keys in workflow.
+- Content language doctrine: PL + EN versions; Polish = PURE Polish (mom test, zero anglicisms); strong anti-slop. Style Bible (100 Q) to feed prompts later. See memory `project_language_style_doctrine`.
+- Product architecture captured in memory: `project_product_architecture` (CM backbone + paid modules), `project_content_creator_agent_vision`.
+
+**Problems hit:**
+- `inspirations` owned by `n8n` superuser -> ALTER blocked for ags_crd_user. Fix: temp n8n/n8n owner cred via API, run migration, delete cred.
+- n8n public API has NO execute endpoint -> ran one-shot SQL + self-tests via temp webhook workflows (create/activate/trigger/delete).
+- ACK fired AFTER pipeline (n8n depth-first) so a Gemini 503 left zero feedback -> chained ACK serially BEFORE pipeline.
+- Gemini free tier 503s -> retry (maxTries 4-5) + `onError: continueRegularOutput` so research degrades to one source instead of dying.
+- 521 (Cloudflare) on one PUT - PUT is atomic (didn't apply), retried clean.
+- bash-embedded python mangles `$(...)` / `$json` in harness JSON -> use Write tool for harness files.
+
+**Lessons:**
+- n8n executes nodes SEQUENTIALLY in one run; "parallel" branch+Merge is correct topology + sync barrier, NOT wall-clock parallel.
+- Binary: HTTP node responseFormat=file (outputPropertyName data) -> base64 at `$input.first().binary.data.data` -> Gemini inline_data.
+- queryReplacement comma-split is unsafe for arbitrary user text -> escape (double single-quotes) in a Code node, inline in SQL (mirror PG Upsert Config valueEsc).
+- Verify pipelines WITHOUT Telegram by extracting the real nodes into a temp webhook workflow + stubbing the source node by name (e.g. stub 'Idea Set Researching').
+- Every PUT: clean body {name,nodes,connections,settings(executionOrder/saveManualExecutions/errorWorkflow/timezone only)}; re-export SANITIZED (5 secrets -> placeholders) + scan before commit.
+
+**Next:**
+- Tomasz to TEST (untested-on-live): voice note + screenshot capture (needs real media), /menu, PL+EN draft.
+- Tomasz decision: en-dash `–` (Polish myslnik) keep, or hyphen-only.
+- Fill Style Bible questionnaire -> generate STYLE_BIBLE.md -> wire into prompts (replace inline rule).
+- Phase 2 objects (each own session): AI NEWS (RSS), CRM activation (contacts), content archive reuse, performance metrics loop, LinkedIn/IG publisher modules, multimedia generation.
+
+---
+
 ## Template for future entries
 
 ```

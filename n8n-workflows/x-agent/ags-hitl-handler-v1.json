@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-11T08:05:11.483Z",
+  "updatedAt": "2026-06-11T08:35:06.936Z",
   "createdAt": "2026-06-01T07:09:59.480Z",
   "id": "U5pUZjy2yAhR1sWg",
   "name": "AGS HITL Handler v1.0",
@@ -33,7 +33,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const item = items[0].json;\nif (item.callback_query) { return [{ json: { type: 'callback', data: item.callback_query } }]; }\nconst txt = item.message?.text || '';\nconst chatId = item.message?.chat?.id;\nif (txt.startsWith('/queue')) { return [{ json: { type: 'queue_command', chat_id: chatId } }]; }\nif (txt.startsWith('/settings')) { return [{ json: { type: 'settings_command', chat_id: chatId, text: txt } }]; }\nif (txt.startsWith('/get')) { return [{ json: { type: 'get_command', chat_id: chatId, text: txt } }]; }\nif (txt.startsWith('/set')) { return [{ json: { type: 'set_command', chat_id: chatId, text: txt } }]; }\nif (txt && !txt.startsWith('/')) { return [{ json: { type: 'plain_text', chat_id: chatId, text: txt } }]; }\nreturn [{ json: { type: 'other' } }];"
+        "jsCode": "const item = items[0].json;\nif (item.callback_query) { return [{ json: { type: 'callback', data: item.callback_query } }]; }\nconst txt = item.message?.text || '';\nconst chatId = item.message?.chat?.id;\nif (item.message?.voice) { return [{ json: { type: 'idea_voice', file_id: item.message.voice.file_id, chat_id: chatId } }]; }\nif (item.message?.photo && item.message.photo.length) { const ph = item.message.photo[item.message.photo.length - 1]; return [{ json: { type: 'idea_photo', file_id: ph.file_id, caption: item.message.caption || '', chat_id: chatId } }]; }\nif (txt.startsWith('/queue')) { return [{ json: { type: 'queue_command', chat_id: chatId } }]; }\nif (txt.startsWith('/settings')) { return [{ json: { type: 'settings_command', chat_id: chatId, text: txt } }]; }\nif (txt.startsWith('/get')) { return [{ json: { type: 'get_command', chat_id: chatId, text: txt } }]; }\nif (txt.startsWith('/set')) { return [{ json: { type: 'set_command', chat_id: chatId, text: txt } }]; }\nif (txt.startsWith('/start') || txt.startsWith('/menu')) { return [{ json: { type: 'menu_command', chat_id: chatId } }]; }\nif (txt && !txt.startsWith('/')) { return [{ json: { type: 'plain_text', chat_id: chatId, text: txt } }]; }\nreturn [{ json: { type: 'other' } }];"
       },
       "id": "node-detect-update-type",
       "name": "Detect Update Type",
@@ -215,6 +215,78 @@
               },
               "renameOutput": true,
               "outputKey": "set_command"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-menu_command",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "menu_command",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "menu_command"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-idea_voice",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "idea_voice",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "idea_voice"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-idea_photo",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "idea_photo",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "idea_photo"
             }
           ]
         },
@@ -2793,7 +2865,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const format = $('Parse Make Callback').first().json.format;\nconst research = ($json.research_result || '').toString();\nlet instr, platform;\nif (format === 'post') { instr = 'Napisz JEDEN post na X, max 280 znakow. Hook plus jedna konkretna mysl z researchu.'; platform = 'x'; }\nelse if (format === 'series') { instr = 'Napisz serie 3-5 postow na X jako watek. Kazdy max 280 znakow, numeruj 1/ 2/ 3/. Spojny luk z researchu.'; platform = 'x'; }\nelse { instr = 'Napisz post na LinkedIn (1200-1400 znakow) plus krotki outline dluzszego artykulu (3-5 punktow) z researchu.'; platform = 'linkedin'; }\nconst system = 'Jestes Content Creatorem AGS. ' + instr + ' Kanon AGS: zero myslnikow em (uzywaj dywizow), bez frazesow i guru-jezyka, konkret, glos zalozyciela. Po polsku, poprawna pisownia. JEZYK: jesli pomysl po polsku - pisz CZYSTA polszczyzna, ZERO anglicyzmow, zargonu i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). Zawsze pisz jak czlowiek do czlowieka, NIE jak maszyna: zero korpo-mowy, zero pustych frazesow i hype, naturalny rytm, konkret. Zwroc TYLKO gotowa tresc.';\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1200, system: system, messages: [{ role: 'user', content: 'RESEARCH:\\n' + research }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: $('Parse Make Callback').first().json.ideaId, chatId: $('Parse Make Callback').first().json.chatId, format: format, platform: platform } }];"
+        "jsCode": "const format = $('Parse Make Callback').first().json.format;\nconst research = ($json.research_result || '').toString();\nlet instr, platform;\nif (format === 'post') { instr = 'Napisz JEDEN post na X, max 280 znakow. Hook plus jedna konkretna mysl z researchu.'; platform = 'x'; }\nelse if (format === 'series') { instr = 'Napisz serie 3-5 postow na X jako watek. Kazdy max 280 znakow, numeruj 1/ 2/ 3/. Spojny luk z researchu.'; platform = 'x'; }\nelse { instr = 'Napisz post na LinkedIn (1200-1400 znakow) plus krotki outline dluzszego artykulu (3-5 punktow) z researchu.'; platform = 'linkedin'; }\nconst system = 'Jestes Content Creatorem AGS. ' + instr + ' Zrob to w DWOCH wersjach jezykowych: najpierw polska, potem angielska. Oznacz kazda wyraznie naglowkiem na osobnej linii: === PL === oraz === EN ===. Kanon AGS: zero myslnikow em (uzywaj dywizow), bez frazesow i guru-jezyka, konkret, glos zalozyciela. WERSJA PL: czysta polszczyzna, ZERO anglicyzmow i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). WERSJA EN: naturalna angielszczyzna, nie tlumaczenie-kalka. Obie wersje: jak czlowiek do czlowieka, NIE jak maszyna, naturalny rytm, konkret. Zwroc TYLKO obie gotowe wersje.';\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 2000, system: system, messages: [{ role: 'user', content: 'RESEARCH:\n' + research }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: $('Parse Make Callback').first().json.ideaId, chatId: $('Parse Make Callback').first().json.chatId, format: format, platform: platform } }];"
       },
       "id": "n-prepare-draft-prompt",
       "name": "Prepare Draft Prompt",
@@ -2920,6 +2992,559 @@
         2980,
         -240
       ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const chatId = $json.chat_id;\nconst tgBody = { chat_id: chatId, text: '\\uD83E\\uDD16 AGS Social Bot\\n\\nWyslij pomysl tekstem, a zajme sie reszta. Albo wybierz:', reply_markup: { inline_keyboard: [ [ { text: '\\uD83D\\uDCE5 Moje pomysly', callback_data: 'menu:ideas' }, { text: '\\uD83D\\uDCCB Kolejka', callback_data: 'menu:queue' } ], [ { text: '\\u2699\\uFE0F Ustawienia', callback_data: 'menu:settings' }, { text: '\\u2753 Jak uzywac', callback_data: 'menu:help' } ] ] } };\nreturn [{ json: { tgBodyStr: JSON.stringify(tgBody) } }];"
+      },
+      "id": "n-build-menu",
+      "name": "Build Menu",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        -700
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.tgBodyStr }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "n-send-menu",
+      "name": "Send Menu",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -180,
+        -700
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.callbackId }}",
+              "rightValue": "menu",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n-is-menu-callback",
+      "name": "Is Menu Callback?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1180,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "mn-ideas",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "ideas",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ideas"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "mn-queue",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "queue",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "queue"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "mn-settings",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "settings",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "settings"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "mn-help",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "help",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "help"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n-route-menu-action",
+      "name": "Route Menu Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1400,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COALESCE(string_agg('#' || id || ' [' || status || '] ' || left(content, 50), E'\\n' ORDER BY id DESC), '(brak pomyslow)') AS list FROM (SELECT id, status, content FROM inspirations ORDER BY id DESC LIMIT 10) q;",
+        "options": {}
+      },
+      "id": "n-menu-ideas",
+      "name": "Menu Ideas",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1620,
+        -240
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COALESCE(string_agg('#' || id || ' ' || platform || ' [' || status || '] ' || left(content, 50), E'\\n' ORDER BY id DESC), '(kolejka pusta)') AS list FROM (SELECT id, platform, status, content FROM post_queue ORDER BY id DESC LIMIT 10) q;",
+        "options": {}
+      },
+      "id": "n-menu-queue",
+      "name": "Menu Queue",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1620,
+        -100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COALESCE(string_agg(config_key || ' = ' || config_value, E'\\n' ORDER BY config_key), '(brak ustawien)') AS list FROM brand_config WHERE brand_id='AGS' AND config_key LIKE 'auto_publish%';",
+        "options": {}
+      },
+      "id": "n-menu-settings",
+      "name": "Menu Settings",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1620,
+        40
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Extract Callback Parts').first().json.chatId, text: '\\uD83D\\uDCE5 Twoje pomysly:\\n\\n' + ($json.list || '(brak)') }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "n-telegram-menu-ideas",
+      "name": "Telegram Menu Ideas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1840,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Extract Callback Parts').first().json.chatId, text: '\\uD83D\\uDCCB Kolejka:\\n\\n' + ($json.list || '(brak)') }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "n-telegram-menu-queue",
+      "name": "Telegram Menu Queue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1840,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Extract Callback Parts').first().json.chatId, text: '\\u2699\\uFE0F Ustawienia auto-publikacji:\\n\\n' + ($json.list || '(brak)') }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "n-telegram-menu-settings",
+      "name": "Telegram Menu Settings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1840,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Extract Callback Parts').first().json.chatId, text: '\\u2753 Jak uzywac:\\n\\n- Wyslij pomysl tekstem -> dostajesz guziki (Research / Zapisz / Post / Odrzuc)\\n- Research: dwa zrodla + synteza, ktora mozesz zapisac, edytowac lub powtorzyc pod katem\\n- Po zapisie Content Creator podpowie format i napisze draft do kolejki\\n- /menu - to menu\\n- /settings - ustawienia auto-publikacji' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "n-telegram-menu-help",
+      "name": "Telegram Menu Help",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1840,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/getFile?file_id={{ $('Detect Update Type').first().json.file_id }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "n-voice-getfile",
+      "name": "Voice GetFile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -400,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.telegram.org/file/bot__TELEGRAM_BOT_TOKEN__/{{ $json.result.file_path }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "n-voice-download",
+      "name": "Voice Download",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -180,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const bin = $input.first().binary;\nconst b64 = (bin && bin.data && bin.data.data) ? bin.data.data : '';\nconst body = { contents: [{ parts: [ { inline_data: { mime_type: 'audio/ogg', data: b64 } }, { text: 'Transkrybuj to nagranie doslownie. Zwroc TYLKO tekst transkrypcji, bez zadnych komentarzy.' } ] }] };\nreturn [{ json: { geminiBodyStr: JSON.stringify(body) } }];"
+      },
+      "id": "n-prepare-voice-gemini",
+      "name": "Prepare Voice Gemini",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.geminiBodyStr }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "n-gemini-transcribe",
+      "name": "Gemini Transcribe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        400
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aJ6CuRlcNA5xVysJ",
+          "name": "Gemini API AGS (x-goog-api-key)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 2500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "let txt = '';\ntry { txt = ($json.candidates[0].content.parts || []).map(p => p.text || '').join(' ').trim(); } catch (e) { txt = ''; }\nif (!txt) { txt = '(transkrypcja nieudana - sprobuj ponownie)'; }\nconst d = $('Detect Update Type').first().json;\nconst t = $('Telegram Trigger').first().json;\nconst meta = { chat_id: d.chat_id, telegram_msg_id: (t.message && t.message.message_id) || null, idea_type: 'voice' };\nreturn [{ json: { contentEsc: txt.replace(/'/g, \"''\"), metadataEsc: JSON.stringify(meta).replace(/'/g, \"''\"), chat_id: d.chat_id } }];"
+      },
+      "id": "n-prepare-idea-voice",
+      "name": "Prepare Idea Voice",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/getFile?file_id={{ $('Detect Update Type').first().json.file_id }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "n-photo-getfile",
+      "name": "Photo GetFile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -400,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.telegram.org/file/bot__TELEGRAM_BOT_TOKEN__/{{ $json.result.file_path }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "n-photo-download",
+      "name": "Photo Download",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -180,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const bin = $input.first().binary;\nconst b64 = (bin && bin.data && bin.data.data) ? bin.data.data : '';\nconst body = { contents: [{ parts: [ { inline_data: { mime_type: 'image/jpeg', data: b64 } }, { text: 'Opisz ten obraz zwiezle i wyciagnij caly widoczny tekst (OCR). Po polsku, zwroc TYLKO opis plus tekst.' } ] }] };\nreturn [{ json: { geminiBodyStr: JSON.stringify(body) } }];"
+      },
+      "id": "n-prepare-photo-gemini",
+      "name": "Prepare Photo Gemini",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.geminiBodyStr }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "n-gemini-vision",
+      "name": "Gemini Vision",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        640
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aJ6CuRlcNA5xVysJ",
+          "name": "Gemini API AGS (x-goog-api-key)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 2500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "let desc = '';\ntry { desc = ($json.candidates[0].content.parts || []).map(p => p.text || '').join(' ').trim(); } catch (e) { desc = ''; }\nif (!desc) { desc = '(opis obrazu nieudany)'; }\nconst d = $('Detect Update Type').first().json;\nconst t = $('Telegram Trigger').first().json;\nconst cap = (d.caption || '').toString();\nconst content = (cap ? cap + ' | ' : '') + desc;\nconst meta = { chat_id: d.chat_id, telegram_msg_id: (t.message && t.message.message_id) || null, idea_type: 'photo' };\nreturn [{ json: { contentEsc: content.replace(/'/g, \"''\"), metadataEsc: JSON.stringify(meta).replace(/'/g, \"''\"), chat_id: d.chat_id } }];"
+      },
+      "id": "n-prepare-idea-photo",
+      "name": "Prepare Idea Photo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        640
+      ]
     }
   ],
   "connections": {
@@ -3007,6 +3632,27 @@
         [
           {
             "node": "PG Load Admin List",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Menu",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Voice GetFile",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Photo GetFile",
             "type": "main",
             "index": 0
           }
@@ -3945,7 +4591,7 @@
         ],
         [
           {
-            "node": "PostgreSQL Lookup Session",
+            "node": "Is Menu Callback?",
             "type": "main",
             "index": 0
           }
@@ -4039,6 +4685,210 @@
           }
         ]
       ]
+    },
+    "Build Menu": {
+      "main": [
+        [
+          {
+            "node": "Send Menu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Menu Callback?": {
+      "main": [
+        [
+          {
+            "node": "Route Menu Action",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PostgreSQL Lookup Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Menu Action": {
+      "main": [
+        [
+          {
+            "node": "Menu Ideas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Menu Queue",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Menu Settings",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram Menu Help",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Menu Ideas": {
+      "main": [
+        [
+          {
+            "node": "Telegram Menu Ideas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Menu Queue": {
+      "main": [
+        [
+          {
+            "node": "Telegram Menu Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Menu Settings": {
+      "main": [
+        [
+          {
+            "node": "Telegram Menu Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Voice GetFile": {
+      "main": [
+        [
+          {
+            "node": "Voice Download",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Voice Download": {
+      "main": [
+        [
+          {
+            "node": "Prepare Voice Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Voice Gemini": {
+      "main": [
+        [
+          {
+            "node": "Gemini Transcribe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Transcribe": {
+      "main": [
+        [
+          {
+            "node": "Prepare Idea Voice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Idea Voice": {
+      "main": [
+        [
+          {
+            "node": "Save Idea",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Photo GetFile": {
+      "main": [
+        [
+          {
+            "node": "Photo Download",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Photo Download": {
+      "main": [
+        [
+          {
+            "node": "Prepare Photo Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Photo Gemini": {
+      "main": [
+        [
+          {
+            "node": "Gemini Vision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Vision": {
+      "main": [
+        [
+          {
+            "node": "Prepare Idea Photo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Idea Photo": {
+      "main": [
+        [
+          {
+            "node": "Save Idea",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -4052,9 +4902,9 @@
   "meta": null,
   "nodeGroups": [],
   "pinData": {},
-  "versionId": "02ba04f1-4da5-4fe2-9caf-fda1c4b073b3",
-  "activeVersionId": "02ba04f1-4da5-4fe2-9caf-fda1c4b073b3",
-  "versionCounter": 86,
+  "versionId": "8b4f73eb-4a07-419a-9ea5-85e9cc7a88d7",
+  "activeVersionId": "8b4f73eb-4a07-419a-9ea5-85e9cc7a88d7",
+  "versionCounter": 89,
   "triggerCount": 1,
   "shared": [
     {
@@ -4077,9 +4927,9 @@
   ],
   "tags": [],
   "activeVersion": {
-    "updatedAt": "2026-06-11T08:05:11.488Z",
-    "createdAt": "2026-06-11T08:05:11.488Z",
-    "versionId": "02ba04f1-4da5-4fe2-9caf-fda1c4b073b3",
+    "updatedAt": "2026-06-11T08:35:06.942Z",
+    "createdAt": "2026-06-11T08:35:06.942Z",
+    "versionId": "8b4f73eb-4a07-419a-9ea5-85e9cc7a88d7",
     "workflowId": "U5pUZjy2yAhR1sWg",
     "nodes": [
       {
@@ -4108,7 +4958,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const item = items[0].json;\nif (item.callback_query) { return [{ json: { type: 'callback', data: item.callback_query } }]; }\nconst txt = item.message?.text || '';\nconst chatId = item.message?.chat?.id;\nif (txt.startsWith('/queue')) { return [{ json: { type: 'queue_command', chat_id: chatId } }]; }\nif (txt.startsWith('/settings')) { return [{ json: { type: 'settings_command', chat_id: chatId, text: txt } }]; }\nif (txt.startsWith('/get')) { return [{ json: { type: 'get_command', chat_id: chatId, text: txt } }]; }\nif (txt.startsWith('/set')) { return [{ json: { type: 'set_command', chat_id: chatId, text: txt } }]; }\nif (txt && !txt.startsWith('/')) { return [{ json: { type: 'plain_text', chat_id: chatId, text: txt } }]; }\nreturn [{ json: { type: 'other' } }];"
+          "jsCode": "const item = items[0].json;\nif (item.callback_query) { return [{ json: { type: 'callback', data: item.callback_query } }]; }\nconst txt = item.message?.text || '';\nconst chatId = item.message?.chat?.id;\nif (item.message?.voice) { return [{ json: { type: 'idea_voice', file_id: item.message.voice.file_id, chat_id: chatId } }]; }\nif (item.message?.photo && item.message.photo.length) { const ph = item.message.photo[item.message.photo.length - 1]; return [{ json: { type: 'idea_photo', file_id: ph.file_id, caption: item.message.caption || '', chat_id: chatId } }]; }\nif (txt.startsWith('/queue')) { return [{ json: { type: 'queue_command', chat_id: chatId } }]; }\nif (txt.startsWith('/settings')) { return [{ json: { type: 'settings_command', chat_id: chatId, text: txt } }]; }\nif (txt.startsWith('/get')) { return [{ json: { type: 'get_command', chat_id: chatId, text: txt } }]; }\nif (txt.startsWith('/set')) { return [{ json: { type: 'set_command', chat_id: chatId, text: txt } }]; }\nif (txt.startsWith('/start') || txt.startsWith('/menu')) { return [{ json: { type: 'menu_command', chat_id: chatId } }]; }\nif (txt && !txt.startsWith('/')) { return [{ json: { type: 'plain_text', chat_id: chatId, text: txt } }]; }\nreturn [{ json: { type: 'other' } }];"
         },
         "id": "node-detect-update-type",
         "name": "Detect Update Type",
@@ -4290,6 +5140,78 @@
                 },
                 "renameOutput": true,
                 "outputKey": "set_command"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "sw-menu_command",
+                      "leftValue": "={{ $json.type }}",
+                      "rightValue": "menu_command",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "menu_command"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "sw-idea_voice",
+                      "leftValue": "={{ $json.type }}",
+                      "rightValue": "idea_voice",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "idea_voice"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "sw-idea_photo",
+                      "leftValue": "={{ $json.type }}",
+                      "rightValue": "idea_photo",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "idea_photo"
               }
             ]
           },
@@ -6868,7 +7790,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const format = $('Parse Make Callback').first().json.format;\nconst research = ($json.research_result || '').toString();\nlet instr, platform;\nif (format === 'post') { instr = 'Napisz JEDEN post na X, max 280 znakow. Hook plus jedna konkretna mysl z researchu.'; platform = 'x'; }\nelse if (format === 'series') { instr = 'Napisz serie 3-5 postow na X jako watek. Kazdy max 280 znakow, numeruj 1/ 2/ 3/. Spojny luk z researchu.'; platform = 'x'; }\nelse { instr = 'Napisz post na LinkedIn (1200-1400 znakow) plus krotki outline dluzszego artykulu (3-5 punktow) z researchu.'; platform = 'linkedin'; }\nconst system = 'Jestes Content Creatorem AGS. ' + instr + ' Kanon AGS: zero myslnikow em (uzywaj dywizow), bez frazesow i guru-jezyka, konkret, glos zalozyciela. Po polsku, poprawna pisownia. JEZYK: jesli pomysl po polsku - pisz CZYSTA polszczyzna, ZERO anglicyzmow, zargonu i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). Zawsze pisz jak czlowiek do czlowieka, NIE jak maszyna: zero korpo-mowy, zero pustych frazesow i hype, naturalny rytm, konkret. Zwroc TYLKO gotowa tresc.';\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1200, system: system, messages: [{ role: 'user', content: 'RESEARCH:\\n' + research }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: $('Parse Make Callback').first().json.ideaId, chatId: $('Parse Make Callback').first().json.chatId, format: format, platform: platform } }];"
+          "jsCode": "const format = $('Parse Make Callback').first().json.format;\nconst research = ($json.research_result || '').toString();\nlet instr, platform;\nif (format === 'post') { instr = 'Napisz JEDEN post na X, max 280 znakow. Hook plus jedna konkretna mysl z researchu.'; platform = 'x'; }\nelse if (format === 'series') { instr = 'Napisz serie 3-5 postow na X jako watek. Kazdy max 280 znakow, numeruj 1/ 2/ 3/. Spojny luk z researchu.'; platform = 'x'; }\nelse { instr = 'Napisz post na LinkedIn (1200-1400 znakow) plus krotki outline dluzszego artykulu (3-5 punktow) z researchu.'; platform = 'linkedin'; }\nconst system = 'Jestes Content Creatorem AGS. ' + instr + ' Zrob to w DWOCH wersjach jezykowych: najpierw polska, potem angielska. Oznacz kazda wyraznie naglowkiem na osobnej linii: === PL === oraz === EN ===. Kanon AGS: zero myslnikow em (uzywaj dywizow), bez frazesow i guru-jezyka, konkret, glos zalozyciela. WERSJA PL: czysta polszczyzna, ZERO anglicyzmow i obcych slow (zasada: moja mama ma zrozumiec kazde slowo; nazwy jak ChatGPT/Claude/X/LinkedIn OK). WERSJA EN: naturalna angielszczyzna, nie tlumaczenie-kalka. Obie wersje: jak czlowiek do czlowieka, NIE jak maszyna, naturalny rytm, konkret. Zwroc TYLKO obie gotowe wersje.';\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 2000, system: system, messages: [{ role: 'user', content: 'RESEARCH:\n' + research }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), ideaId: $('Parse Make Callback').first().json.ideaId, chatId: $('Parse Make Callback').first().json.chatId, format: format, platform: platform } }];"
         },
         "id": "n-prepare-draft-prompt",
         "name": "Prepare Draft Prompt",
@@ -6995,6 +7917,559 @@
           2980,
           -240
         ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const chatId = $json.chat_id;\nconst tgBody = { chat_id: chatId, text: '\\uD83E\\uDD16 AGS Social Bot\\n\\nWyslij pomysl tekstem, a zajme sie reszta. Albo wybierz:', reply_markup: { inline_keyboard: [ [ { text: '\\uD83D\\uDCE5 Moje pomysly', callback_data: 'menu:ideas' }, { text: '\\uD83D\\uDCCB Kolejka', callback_data: 'menu:queue' } ], [ { text: '\\u2699\\uFE0F Ustawienia', callback_data: 'menu:settings' }, { text: '\\u2753 Jak uzywac', callback_data: 'menu:help' } ] ] } };\nreturn [{ json: { tgBodyStr: JSON.stringify(tgBody) } }];"
+        },
+        "id": "n-build-menu",
+        "name": "Build Menu",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -400,
+          -700
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.tgBodyStr }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "n-send-menu",
+        "name": "Send Menu",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -180,
+          -700
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ $json.callbackId }}",
+                "rightValue": "menu",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "n-is-menu-callback",
+        "name": "Is Menu Callback?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1180,
+          -60
+        ]
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "mn-ideas",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "ideas",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "ideas"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "mn-queue",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "queue",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "queue"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "mn-settings",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "settings",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "settings"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "mn-help",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "help",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "help"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "n-route-menu-action",
+        "name": "Route Menu Action",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.2,
+        "position": [
+          1400,
+          -60
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT COALESCE(string_agg('#' || id || ' [' || status || '] ' || left(content, 50), E'\\n' ORDER BY id DESC), '(brak pomyslow)') AS list FROM (SELECT id, status, content FROM inspirations ORDER BY id DESC LIMIT 10) q;",
+          "options": {}
+        },
+        "id": "n-menu-ideas",
+        "name": "Menu Ideas",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          1620,
+          -240
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT COALESCE(string_agg('#' || id || ' ' || platform || ' [' || status || '] ' || left(content, 50), E'\\n' ORDER BY id DESC), '(kolejka pusta)') AS list FROM (SELECT id, platform, status, content FROM post_queue ORDER BY id DESC LIMIT 10) q;",
+          "options": {}
+        },
+        "id": "n-menu-queue",
+        "name": "Menu Queue",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          1620,
+          -100
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT COALESCE(string_agg(config_key || ' = ' || config_value, E'\\n' ORDER BY config_key), '(brak ustawien)') AS list FROM brand_config WHERE brand_id='AGS' AND config_key LIKE 'auto_publish%';",
+          "options": {}
+        },
+        "id": "n-menu-settings",
+        "name": "Menu Settings",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          1620,
+          40
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Extract Callback Parts').first().json.chatId, text: '\\uD83D\\uDCE5 Twoje pomysly:\\n\\n' + ($json.list || '(brak)') }) }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "n-telegram-menu-ideas",
+        "name": "Telegram Menu Ideas",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1840,
+          -240
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Extract Callback Parts').first().json.chatId, text: '\\uD83D\\uDCCB Kolejka:\\n\\n' + ($json.list || '(brak)') }) }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "n-telegram-menu-queue",
+        "name": "Telegram Menu Queue",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1840,
+          -100
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Extract Callback Parts').first().json.chatId, text: '\\u2699\\uFE0F Ustawienia auto-publikacji:\\n\\n' + ($json.list || '(brak)') }) }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "n-telegram-menu-settings",
+        "name": "Telegram Menu Settings",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1840,
+          40
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Extract Callback Parts').first().json.chatId, text: '\\u2753 Jak uzywac:\\n\\n- Wyslij pomysl tekstem -> dostajesz guziki (Research / Zapisz / Post / Odrzuc)\\n- Research: dwa zrodla + synteza, ktora mozesz zapisac, edytowac lub powtorzyc pod katem\\n- Po zapisie Content Creator podpowie format i napisze draft do kolejki\\n- /menu - to menu\\n- /settings - ustawienia auto-publikacji' }) }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "n-telegram-menu-help",
+        "name": "Telegram Menu Help",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1840,
+          180
+        ]
+      },
+      {
+        "parameters": {
+          "method": "GET",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/getFile?file_id={{ $('Detect Update Type').first().json.file_id }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 30000
+          }
+        },
+        "id": "n-voice-getfile",
+        "name": "Voice GetFile",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -400,
+          400
+        ]
+      },
+      {
+        "parameters": {
+          "method": "GET",
+          "url": "=https://api.telegram.org/file/bot__TELEGRAM_BOT_TOKEN__/{{ $json.result.file_path }}",
+          "options": {
+            "response": {
+              "response": {
+                "responseFormat": "file",
+                "outputPropertyName": "data"
+              }
+            },
+            "timeout": 30000
+          }
+        },
+        "id": "n-voice-download",
+        "name": "Voice Download",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -180,
+          400
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const bin = $input.first().binary;\nconst b64 = (bin && bin.data && bin.data.data) ? bin.data.data : '';\nconst body = { contents: [{ parts: [ { inline_data: { mime_type: 'audio/ogg', data: b64 } }, { text: 'Transkrybuj to nagranie doslownie. Zwroc TYLKO tekst transkrypcji, bez zadnych komentarzy.' } ] }] };\nreturn [{ json: { geminiBodyStr: JSON.stringify(body) } }];"
+        },
+        "id": "n-prepare-voice-gemini",
+        "name": "Prepare Voice Gemini",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          40,
+          400
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.geminiBodyStr }}",
+          "options": {
+            "timeout": 60000
+          }
+        },
+        "id": "n-gemini-transcribe",
+        "name": "Gemini Transcribe",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          260,
+          400
+        ],
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "aJ6CuRlcNA5xVysJ",
+            "name": "Gemini API AGS (x-goog-api-key)"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 4,
+        "waitBetweenTries": 2500,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "let txt = '';\ntry { txt = ($json.candidates[0].content.parts || []).map(p => p.text || '').join(' ').trim(); } catch (e) { txt = ''; }\nif (!txt) { txt = '(transkrypcja nieudana - sprobuj ponownie)'; }\nconst d = $('Detect Update Type').first().json;\nconst t = $('Telegram Trigger').first().json;\nconst meta = { chat_id: d.chat_id, telegram_msg_id: (t.message && t.message.message_id) || null, idea_type: 'voice' };\nreturn [{ json: { contentEsc: txt.replace(/'/g, \"''\"), metadataEsc: JSON.stringify(meta).replace(/'/g, \"''\"), chat_id: d.chat_id } }];"
+        },
+        "id": "n-prepare-idea-voice",
+        "name": "Prepare Idea Voice",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          480,
+          400
+        ]
+      },
+      {
+        "parameters": {
+          "method": "GET",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/getFile?file_id={{ $('Detect Update Type').first().json.file_id }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 30000
+          }
+        },
+        "id": "n-photo-getfile",
+        "name": "Photo GetFile",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -400,
+          640
+        ]
+      },
+      {
+        "parameters": {
+          "method": "GET",
+          "url": "=https://api.telegram.org/file/bot__TELEGRAM_BOT_TOKEN__/{{ $json.result.file_path }}",
+          "options": {
+            "response": {
+              "response": {
+                "responseFormat": "file",
+                "outputPropertyName": "data"
+              }
+            },
+            "timeout": 30000
+          }
+        },
+        "id": "n-photo-download",
+        "name": "Photo Download",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -180,
+          640
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const bin = $input.first().binary;\nconst b64 = (bin && bin.data && bin.data.data) ? bin.data.data : '';\nconst body = { contents: [{ parts: [ { inline_data: { mime_type: 'image/jpeg', data: b64 } }, { text: 'Opisz ten obraz zwiezle i wyciagnij caly widoczny tekst (OCR). Po polsku, zwroc TYLKO opis plus tekst.' } ] }] };\nreturn [{ json: { geminiBodyStr: JSON.stringify(body) } }];"
+        },
+        "id": "n-prepare-photo-gemini",
+        "name": "Prepare Photo Gemini",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          40,
+          640
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.geminiBodyStr }}",
+          "options": {
+            "timeout": 60000
+          }
+        },
+        "id": "n-gemini-vision",
+        "name": "Gemini Vision",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          260,
+          640
+        ],
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "aJ6CuRlcNA5xVysJ",
+            "name": "Gemini API AGS (x-goog-api-key)"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 4,
+        "waitBetweenTries": 2500,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "let desc = '';\ntry { desc = ($json.candidates[0].content.parts || []).map(p => p.text || '').join(' ').trim(); } catch (e) { desc = ''; }\nif (!desc) { desc = '(opis obrazu nieudany)'; }\nconst d = $('Detect Update Type').first().json;\nconst t = $('Telegram Trigger').first().json;\nconst cap = (d.caption || '').toString();\nconst content = (cap ? cap + ' | ' : '') + desc;\nconst meta = { chat_id: d.chat_id, telegram_msg_id: (t.message && t.message.message_id) || null, idea_type: 'photo' };\nreturn [{ json: { contentEsc: content.replace(/'/g, \"''\"), metadataEsc: JSON.stringify(meta).replace(/'/g, \"''\"), chat_id: d.chat_id } }];"
+        },
+        "id": "n-prepare-idea-photo",
+        "name": "Prepare Idea Photo",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          480,
+          640
+        ]
       }
     ],
     "connections": {
@@ -7082,6 +8557,27 @@
           [
             {
               "node": "PG Load Admin List",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Build Menu",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Voice GetFile",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Photo GetFile",
               "type": "main",
               "index": 0
             }
@@ -8020,7 +9516,7 @@
           ],
           [
             {
-              "node": "PostgreSQL Lookup Session",
+              "node": "Is Menu Callback?",
               "type": "main",
               "index": 0
             }
@@ -8114,6 +9610,210 @@
             }
           ]
         ]
+      },
+      "Build Menu": {
+        "main": [
+          [
+            {
+              "node": "Send Menu",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is Menu Callback?": {
+        "main": [
+          [
+            {
+              "node": "Route Menu Action",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "PostgreSQL Lookup Session",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Route Menu Action": {
+        "main": [
+          [
+            {
+              "node": "Menu Ideas",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Menu Queue",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Menu Settings",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Telegram Menu Help",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Menu Ideas": {
+        "main": [
+          [
+            {
+              "node": "Telegram Menu Ideas",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Menu Queue": {
+        "main": [
+          [
+            {
+              "node": "Telegram Menu Queue",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Menu Settings": {
+        "main": [
+          [
+            {
+              "node": "Telegram Menu Settings",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Voice GetFile": {
+        "main": [
+          [
+            {
+              "node": "Voice Download",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Voice Download": {
+        "main": [
+          [
+            {
+              "node": "Prepare Voice Gemini",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Voice Gemini": {
+        "main": [
+          [
+            {
+              "node": "Gemini Transcribe",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gemini Transcribe": {
+        "main": [
+          [
+            {
+              "node": "Prepare Idea Voice",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Idea Voice": {
+        "main": [
+          [
+            {
+              "node": "Save Idea",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Photo GetFile": {
+        "main": [
+          [
+            {
+              "node": "Photo Download",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Photo Download": {
+        "main": [
+          [
+            {
+              "node": "Prepare Photo Gemini",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Photo Gemini": {
+        "main": [
+          [
+            {
+              "node": "Gemini Vision",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gemini Vision": {
+        "main": [
+          [
+            {
+              "node": "Prepare Idea Photo",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Idea Photo": {
+        "main": [
+          [
+            {
+              "node": "Save Idea",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       }
     },
     "nodeGroups": [],
@@ -8123,18 +9823,18 @@
     "autosaved": false,
     "workflowPublishHistory": [
       {
-        "createdAt": "2026-06-11T08:05:11.781Z",
-        "id": 323,
+        "createdAt": "2026-06-11T08:35:07.250Z",
+        "id": 335,
         "workflowId": "U5pUZjy2yAhR1sWg",
-        "versionId": "02ba04f1-4da5-4fe2-9caf-fda1c4b073b3",
+        "versionId": "8b4f73eb-4a07-419a-9ea5-85e9cc7a88d7",
         "event": "deactivated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       },
       {
-        "createdAt": "2026-06-11T08:05:12.092Z",
-        "id": 324,
+        "createdAt": "2026-06-11T08:35:07.612Z",
+        "id": 336,
         "workflowId": "U5pUZjy2yAhR1sWg",
-        "versionId": "02ba04f1-4da5-4fe2-9caf-fda1c4b073b3",
+        "versionId": "8b4f73eb-4a07-419a-9ea5-85e9cc7a88d7",
         "event": "activated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       }
