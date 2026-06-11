@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-10T10:34:24.517Z",
+  "updatedAt": "2026-06-11T06:39:23.186Z",
   "createdAt": "2026-06-01T07:09:59.480Z",
   "id": "U5pUZjy2yAhR1sWg",
   "name": "AGS HITL Handler v1.0",
@@ -1272,6 +1272,898 @@
           "name": "Telegram @ags_social_bot"
         }
       }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT (SELECT id FROM conversation_state WHERE chat_id = {{ $json.chat_id }} AND state = 'awaiting_edit' LIMIT 1) AS edit_id;",
+        "options": {}
+      },
+      "id": "node-idea-gate-check",
+      "name": "Idea Gate Check",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        448,
+        560
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.edit_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-idea-not-editing",
+      "name": "Idea Not Editing?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('Detect Update Type').first().json;\nconst t = $('Telegram Trigger').first().json;\nconst content = (d.text || '').toString();\nconst meta = { chat_id: d.chat_id, telegram_msg_id: (t.message && t.message.message_id) || null, idea_type: 'text' };\nreturn [{ json: {\n  contentEsc: content.replace(/'/g, \"''\"),\n  metadataEsc: JSON.stringify(meta).replace(/'/g, \"''\"),\n  chat_id: d.chat_id\n} }];"
+      },
+      "id": "node-prepare-idea-text",
+      "name": "Prepare Idea Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO inspirations (source, content, brand, status, metadata) VALUES ('telegram', '{{ $json.contentEsc }}', 'AGS', 'new', '{{ $json.metadataEsc }}'::jsonb) RETURNING id, content, (metadata->>'chat_id') AS chat_id;",
+        "options": {}
+      },
+      "id": "node-save-idea",
+      "name": "Save Idea",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1120,
+        560
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $json;\nconst id = r.id;\nconst content = (r.content || '').toString();\nconst echo = content.length > 160 ? content.substring(0, 160) + '...' : content;\nconst tgBody = {\n  chat_id: r.chat_id,\n  text: '\\uD83D\\uDCA1 Z\\u0142apane: \"' + echo + '\"\\n\\nCo z tym zrobi\\u0107?',\n  disable_web_page_preview: true,\n  reply_markup: { inline_keyboard: [\n    [ { text: '\\uD83D\\uDD0D Research', callback_data: 'idea:' + id + ':research' }, { text: '\\uD83D\\uDCBE Zapisz', callback_data: 'idea:' + id + ':save' } ],\n    [ { text: '\\u270D\\uFE0F Zr\\u00F3b post', callback_data: 'idea:' + id + ':post' }, { text: '\\uD83D\\uDDD1 Odrzu\\u0107', callback_data: 'idea:' + id + ':discard' } ]\n  ] }\n};\nreturn [{ json: { tgBodyStr: JSON.stringify(tgBody) } }];"
+      },
+      "id": "node-prepare-triage-reply",
+      "name": "Prepare Triage Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.tgBodyStr }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "node-telegram-send-triage",
+      "name": "Telegram Send Triage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1568,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.callbackId }}",
+              "rightValue": "idea:",
+              "operator": {
+                "type": "string",
+                "operation": "startsWith"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-is-idea-callback",
+      "name": "Is Idea Callback?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        -540
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const c = $json;\nconst id = (c.callbackId || '').split(':')[1] || '';\nreturn [{ json: { ideaId: id, action: c.action, chatId: c.chatId, callbackQueryId: c.callbackQueryId, messageId: c.messageId } }];"
+      },
+      "id": "node-parse-idea-callback",
+      "name": "Parse Idea Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        -600
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-research",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "research",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "research"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-save",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "save",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "save"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-post",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "post",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "post"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-discard",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "discard",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "discard"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-route-idea-action",
+      "name": "Route Idea Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1120,
+        -600
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE inspirations SET status='researching' WHERE id = {{ $json.ideaId }} RETURNING id, content, (metadata->>'chat_id') AS chat_id;",
+        "options": {}
+      },
+      "id": "node-idea-set-researching",
+      "name": "Idea Set Researching",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1344,
+        -760
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE inspirations SET status='saved', processed_at=NOW() WHERE id = {{ $json.ideaId }};",
+        "options": {}
+      },
+      "id": "node-idea-set-saved",
+      "name": "Idea Set Saved",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1344,
+        -620
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH src AS (SELECT content FROM inspirations WHERE id = {{ $json.ideaId }}), upd AS (UPDATE inspirations SET status='queued_post', processed_at=NOW() WHERE id = {{ $json.ideaId }}) INSERT INTO post_queue (content, status) SELECT content, 'queued' FROM src RETURNING id;",
+        "options": {}
+      },
+      "id": "node-idea-to-post-queue",
+      "name": "Idea To Post Queue",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1344,
+        -480
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE inspirations SET status='discarded', processed_at=NOW() WHERE id = {{ $json.ideaId }};",
+        "options": {}
+      },
+      "id": "node-idea-set-discarded",
+      "name": "Idea Set Discarded",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1344,
+        -340
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Idea Callback').first().json.chatId, text: '\\uD83D\\uDD0D Researchuj\\u0119, chwila...' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "node-telegram-idea-researching",
+      "name": "Telegram Idea Researching",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1568,
+        -760
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Idea Callback').first().json.chatId, text: '\\uD83D\\uDCBE Zapisane do pomys\\u0142\\u00F3w.' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "node-telegram-idea-saved",
+      "name": "Telegram Idea Saved",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1568,
+        -620
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Idea Callback').first().json.chatId, text: '\\u270D\\uFE0F Dodane do kolejki X.' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "node-telegram-idea-queued",
+      "name": "Telegram Idea Queued",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1568,
+        -480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Idea Callback').first().json.chatId, text: '\\uD83D\\uDDD1 Odrzucone.' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "node-telegram-idea-discarded",
+      "name": "Telegram Idea Discarded",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1568,
+        -340
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const content = ($('Idea Set Researching').first().json.content || '').toString();\nconst rp = 'Jestes analitykiem researchu. Zrob zwiezly deep-research pomyslu:\\n1. O co chodzi (1-2 zdania)\\n2. Dlaczego wazne teraz\\n3. 3-5 katow ujecia\\n4. Mozliwe zrodla lub dane\\n5. Ryzyka.\\nOdpowiedz w jezyku pomyslu, poprawna pisownia (polskie znaki jesli po polsku), bez myslnikow em.\\n\\nPOMYSL:\\n' + content;\nconst gemBody = { contents: [{ parts: [{ text: rp }] }], generationConfig: { temperature: 0.7, maxOutputTokens: 4096 } };\nconst dsBody = { model: 'deepseek-chat', messages: [{ role: 'user', content: rp }], max_tokens: 1500, temperature: 0.7 };\nreturn [{ json: { geminiBodyStr: JSON.stringify(gemBody), deepseekBodyStr: JSON.stringify(dsBody) } }];"
+      },
+      "id": "node-prepare-research-prompt",
+      "name": "Prepare Research Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        -1000
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.geminiBodyStr }}",
+        "options": {
+          "timeout": 60000
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "node-gemini-research",
+      "name": "Gemini Research",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2016,
+        -1000
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aJ6CuRlcNA5xVysJ",
+          "name": "Gemini API AGS (x-goog-api-key)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 2500
+    },
+    {
+      "parameters": {
+        "jsCode": "let gem = '';\ntry { gem = ($('Gemini Research').first().json.candidates[0].content.parts || []).map(p => p.text || '').join('\\n'); } catch (e) { gem = ''; }\nif (!gem) { gem = '(Gemini nie zwrocil researchu)'; }\nlet ds = '';\ntry { ds = ($('DeepSeek Research').first().json.choices || []).map(c => (c.message && c.message.content) || '').join('\\n').trim(); } catch (e) { ds = ''; }\nif (!ds) { ds = '(DeepSeek nie zwrocil researchu)'; }\nconst content = ($('Idea Set Researching').first().json.content || '').toString();\nconst system = 'Jestes strategiem tresci AGS. Dostajesz pomysl i DWA niezalezne researche (Gemini, DeepSeek). Zsyntetyzuj je w jeden zwarty brief: (1) co to jest, (2) dlaczego wazne, (3) najlepsze katy ujecia, (4) sugerowane haki na posty X i LinkedIn. Polacz wnioski, usun powtorzenia. Zwiezle. ZASADA: zero myslnikow em, uzywaj dywizow lub przebuduj zdanie. Odpowiedz w jezyku pomyslu, poprawna pisownia.';\nconst user = 'POMYSL:\\n' + content + '\\n\\nRESEARCH GEMINI:\\n' + gem + '\\n\\nRESEARCH DEEPSEEK:\\n' + ds;\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), geminiText: gem, deepseekText: ds } }];"
+      },
+      "id": "node-prepare-claude-synthesis",
+      "name": "Prepare Claude Synthesis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        -1000
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.claudeBodyStr }}",
+        "options": {
+          "timeout": 60000
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "node-claude-synthesis",
+      "name": "Claude Synthesis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2464,
+        -1000
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "w2iuB1ttk7ekS2ix",
+          "name": "Anthropic API AGS-n8n"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 2500
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nlet brief = '';\ntry { brief = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { brief = ''; }\nif (!brief) { brief = $('Prepare Claude Synthesis').first().json.geminiText || '(Brak wyniku syntezy)'; }\nbrief = brief.replace(/\\u2014/g, '-');\nreturn [{ json: { brief: brief, briefEsc: brief.replace(/'/g, \"''\") } }];"
+      },
+      "id": "node-extract-claude-brief",
+      "name": "Extract Claude Brief",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2688,
+        -1000
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE inspirations SET research_result='{{ $json.briefEsc }}', status='researching' WHERE id = {{ $('Parse Idea Callback').first().json.ideaId }};",
+        "options": {}
+      },
+      "id": "node-save-research",
+      "name": "Save Research",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        2912,
+        -1000
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.deepseek.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "deepSeekApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.deepseekBodyStr }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "node-deepseek-research",
+      "name": "DeepSeek Research",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2128,
+        -1040
+      ],
+      "credentials": {
+        "deepSeekApi": {
+          "id": "AOtZzfRgRgq5f2mO",
+          "name": "AGS - DeepSeek"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 2500
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "node-merge-research",
+      "name": "Merge Research",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2352,
+        -1000
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const brief = $('Extract Claude Brief').first().json.brief || '';\nconst chatId = $('Idea Set Researching').first().json.chat_id;\nconst id = $('Parse Idea Callback').first().json.ideaId;\nconst header = '\\uD83D\\uDCDA Synteza gotowa:\\n\\n';\nconst full = header + brief;\nconst max = 3800;\nconst parts = [];\nfor (let i = 0; i < full.length; i += max) { parts.push(full.substring(i, i + max)); }\nif (parts.length === 0) { parts.push(header + '(pusto)'); }\nconst kb = { inline_keyboard: [[ { text: '\\uD83D\\uDCBE Zapisz', callback_data: 'synth:' + id + ':save' }, { text: '\\uD83D\\uDDD1 Usun', callback_data: 'synth:' + id + ':del' } ]] };\nreturn parts.map((p, idx) => { const b = { chat_id: chatId, text: p, disable_web_page_preview: true }; if (idx === parts.length - 1) { b.reply_markup = kb; } return { json: { tgBodyStr: JSON.stringify(b) } }; });"
+      },
+      "id": "node-prepare-synthesis-reply",
+      "name": "Prepare Synthesis Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3136,
+        -1000
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.tgBodyStr }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "node-telegram-send-synthesis",
+      "name": "Telegram Send Synthesis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3360,
+        -1000
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.callbackId }}",
+              "rightValue": "synth:",
+              "operator": {
+                "type": "string",
+                "operation": "startsWith"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-is-synth-callback",
+      "name": "Is Synth Callback?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        820,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const c = $json;\nconst id = (c.callbackId || '').split(':')[1] || '';\nreturn [{ json: { ideaId: id, action: c.action, chatId: c.chatId, callbackQueryId: c.callbackQueryId } }];"
+      },
+      "id": "node-parse-synth-callback",
+      "name": "Parse Synth Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-save",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "save",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "save"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-del",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "del",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "del"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-route-synth-action",
+      "name": "Route Synth Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1260,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE inspirations SET status='researched', processed_at=NOW() WHERE id = {{ $json.ideaId }};",
+        "options": {}
+      },
+      "id": "node-synth-set-saved",
+      "name": "Synth Set Saved",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1480,
+        -440
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE inspirations SET status='discarded', processed_at=NOW() WHERE id = {{ $json.ideaId }};",
+        "options": {}
+      },
+      "id": "node-synth-set-discarded",
+      "name": "Synth Set Discarded",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1480,
+        -280
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Synth Callback').first().json.chatId, text: '\\uD83D\\uDCBE Zapisane do researchu.' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "node-telegram-synth-saved",
+      "name": "Telegram Synth Saved",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1700,
+        -440
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Synth Callback').first().json.chatId, text: '\\uD83D\\uDDD1 Usuniete.' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "node-telegram-synth-discarded",
+      "name": "Telegram Synth Discarded",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1700,
+        -280
+      ]
     }
   ],
   "connections": {
@@ -1323,6 +2215,11 @@
             "node": "PostgreSQL Check Edit State",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Idea Gate Check",
+            "type": "main",
+            "index": 0
           }
         ],
         [
@@ -1359,7 +2256,7 @@
       "main": [
         [
           {
-            "node": "PostgreSQL Lookup Session",
+            "node": "Is Idea Callback?",
             "type": "main",
             "index": 0
           },
@@ -1739,6 +2636,345 @@
           }
         ]
       ]
+    },
+    "Idea Gate Check": {
+      "main": [
+        [
+          {
+            "node": "Idea Not Editing?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Idea Not Editing?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Idea Text",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Prepare Idea Text": {
+      "main": [
+        [
+          {
+            "node": "Save Idea",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Idea": {
+      "main": [
+        [
+          {
+            "node": "Prepare Triage Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Triage Reply": {
+      "main": [
+        [
+          {
+            "node": "Telegram Send Triage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Idea Callback?": {
+      "main": [
+        [
+          {
+            "node": "Parse Idea Callback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Synth Callback?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Idea Callback": {
+      "main": [
+        [
+          {
+            "node": "Route Idea Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Idea Action": {
+      "main": [
+        [
+          {
+            "node": "Idea Set Researching",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Idea Set Saved",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Idea To Post Queue",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Idea Set Discarded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Idea Set Researching": {
+      "main": [
+        [
+          {
+            "node": "Telegram Idea Researching",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare Research Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Idea Set Saved": {
+      "main": [
+        [
+          {
+            "node": "Telegram Idea Saved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Idea To Post Queue": {
+      "main": [
+        [
+          {
+            "node": "Telegram Idea Queued",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Idea Set Discarded": {
+      "main": [
+        [
+          {
+            "node": "Telegram Idea Discarded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Research Prompt": {
+      "main": [
+        [
+          {
+            "node": "Gemini Research",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "DeepSeek Research",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Research": {
+      "main": [
+        [
+          {
+            "node": "Merge Research",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Claude Synthesis": {
+      "main": [
+        [
+          {
+            "node": "Claude Synthesis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Synthesis": {
+      "main": [
+        [
+          {
+            "node": "Extract Claude Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Claude Brief": {
+      "main": [
+        [
+          {
+            "node": "Save Research",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Research": {
+      "main": [
+        [
+          {
+            "node": "Prepare Synthesis Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Research": {
+      "main": [
+        [
+          {
+            "node": "Merge Research",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Research": {
+      "main": [
+        [
+          {
+            "node": "Prepare Claude Synthesis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Synthesis Reply": {
+      "main": [
+        [
+          {
+            "node": "Telegram Send Synthesis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Synth Callback?": {
+      "main": [
+        [
+          {
+            "node": "Parse Synth Callback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PostgreSQL Lookup Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Synth Callback": {
+      "main": [
+        [
+          {
+            "node": "Route Synth Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Synth Action": {
+      "main": [
+        [
+          {
+            "node": "Synth Set Saved",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Synth Set Discarded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Synth Set Saved": {
+      "main": [
+        [
+          {
+            "node": "Telegram Synth Saved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Synth Set Discarded": {
+      "main": [
+        [
+          {
+            "node": "Telegram Synth Discarded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -1752,9 +2988,9 @@
   "meta": null,
   "nodeGroups": [],
   "pinData": {},
-  "versionId": "9d8e9631-3f22-47e3-aa8c-781e2be14c31",
-  "activeVersionId": "9d8e9631-3f22-47e3-aa8c-781e2be14c31",
-  "versionCounter": 72,
+  "versionId": "f8d0aee0-de50-406e-b0bb-4915d5595053",
+  "activeVersionId": "f8d0aee0-de50-406e-b0bb-4915d5595053",
+  "versionCounter": 80,
   "triggerCount": 1,
   "shared": [
     {
@@ -1777,9 +3013,9 @@
   ],
   "tags": [],
   "activeVersion": {
-    "updatedAt": "2026-06-10T10:34:24.520Z",
-    "createdAt": "2026-06-10T10:34:24.520Z",
-    "versionId": "9d8e9631-3f22-47e3-aa8c-781e2be14c31",
+    "updatedAt": "2026-06-11T06:39:23.196Z",
+    "createdAt": "2026-06-11T06:39:23.196Z",
+    "versionId": "f8d0aee0-de50-406e-b0bb-4915d5595053",
     "workflowId": "U5pUZjy2yAhR1sWg",
     "nodes": [
       {
@@ -3047,6 +4283,898 @@
             "name": "Telegram @ags_social_bot"
           }
         }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT (SELECT id FROM conversation_state WHERE chat_id = {{ $json.chat_id }} AND state = 'awaiting_edit' LIMIT 1) AS edit_id;",
+          "options": {}
+        },
+        "id": "node-idea-gate-check",
+        "name": "Idea Gate Check",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          448,
+          560
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ $json.edit_id }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "empty",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "node-idea-not-editing",
+        "name": "Idea Not Editing?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          672,
+          560
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const d = $('Detect Update Type').first().json;\nconst t = $('Telegram Trigger').first().json;\nconst content = (d.text || '').toString();\nconst meta = { chat_id: d.chat_id, telegram_msg_id: (t.message && t.message.message_id) || null, idea_type: 'text' };\nreturn [{ json: {\n  contentEsc: content.replace(/'/g, \"''\"),\n  metadataEsc: JSON.stringify(meta).replace(/'/g, \"''\"),\n  chat_id: d.chat_id\n} }];"
+        },
+        "id": "node-prepare-idea-text",
+        "name": "Prepare Idea Text",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          896,
+          480
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO inspirations (source, content, brand, status, metadata) VALUES ('telegram', '{{ $json.contentEsc }}', 'AGS', 'new', '{{ $json.metadataEsc }}'::jsonb) RETURNING id, content, (metadata->>'chat_id') AS chat_id;",
+          "options": {}
+        },
+        "id": "node-save-idea",
+        "name": "Save Idea",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          1120,
+          560
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const r = $json;\nconst id = r.id;\nconst content = (r.content || '').toString();\nconst echo = content.length > 160 ? content.substring(0, 160) + '...' : content;\nconst tgBody = {\n  chat_id: r.chat_id,\n  text: '\\uD83D\\uDCA1 Z\\u0142apane: \"' + echo + '\"\\n\\nCo z tym zrobi\\u0107?',\n  disable_web_page_preview: true,\n  reply_markup: { inline_keyboard: [\n    [ { text: '\\uD83D\\uDD0D Research', callback_data: 'idea:' + id + ':research' }, { text: '\\uD83D\\uDCBE Zapisz', callback_data: 'idea:' + id + ':save' } ],\n    [ { text: '\\u270D\\uFE0F Zr\\u00F3b post', callback_data: 'idea:' + id + ':post' }, { text: '\\uD83D\\uDDD1 Odrzu\\u0107', callback_data: 'idea:' + id + ':discard' } ]\n  ] }\n};\nreturn [{ json: { tgBodyStr: JSON.stringify(tgBody) } }];"
+        },
+        "id": "node-prepare-triage-reply",
+        "name": "Prepare Triage Reply",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1344,
+          560
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.tgBodyStr }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "node-telegram-send-triage",
+        "name": "Telegram Send Triage",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1568,
+          560
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ $json.callbackId }}",
+                "rightValue": "idea:",
+                "operator": {
+                  "type": "string",
+                  "operation": "startsWith"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "node-is-idea-callback",
+        "name": "Is Idea Callback?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          672,
+          -540
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const c = $json;\nconst id = (c.callbackId || '').split(':')[1] || '';\nreturn [{ json: { ideaId: id, action: c.action, chatId: c.chatId, callbackQueryId: c.callbackQueryId, messageId: c.messageId } }];"
+        },
+        "id": "node-parse-idea-callback",
+        "name": "Parse Idea Callback",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          896,
+          -600
+        ]
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "sw-research",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "research",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "research"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "sw-save",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "save",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "save"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "sw-post",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "post",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "post"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "sw-discard",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "discard",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "discard"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "node-route-idea-action",
+        "name": "Route Idea Action",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.2,
+        "position": [
+          1120,
+          -600
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE inspirations SET status='researching' WHERE id = {{ $json.ideaId }} RETURNING id, content, (metadata->>'chat_id') AS chat_id;",
+          "options": {}
+        },
+        "id": "node-idea-set-researching",
+        "name": "Idea Set Researching",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          1344,
+          -760
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE inspirations SET status='saved', processed_at=NOW() WHERE id = {{ $json.ideaId }};",
+          "options": {}
+        },
+        "id": "node-idea-set-saved",
+        "name": "Idea Set Saved",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          1344,
+          -620
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "WITH src AS (SELECT content FROM inspirations WHERE id = {{ $json.ideaId }}), upd AS (UPDATE inspirations SET status='queued_post', processed_at=NOW() WHERE id = {{ $json.ideaId }}) INSERT INTO post_queue (content, status) SELECT content, 'queued' FROM src RETURNING id;",
+          "options": {}
+        },
+        "id": "node-idea-to-post-queue",
+        "name": "Idea To Post Queue",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          1344,
+          -480
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE inspirations SET status='discarded', processed_at=NOW() WHERE id = {{ $json.ideaId }};",
+          "options": {}
+        },
+        "id": "node-idea-set-discarded",
+        "name": "Idea Set Discarded",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          1344,
+          -340
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Idea Callback').first().json.chatId, text: '\\uD83D\\uDD0D Researchuj\\u0119, chwila...' }) }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "node-telegram-idea-researching",
+        "name": "Telegram Idea Researching",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1568,
+          -760
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Idea Callback').first().json.chatId, text: '\\uD83D\\uDCBE Zapisane do pomys\\u0142\\u00F3w.' }) }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "node-telegram-idea-saved",
+        "name": "Telegram Idea Saved",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1568,
+          -620
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Idea Callback').first().json.chatId, text: '\\u270D\\uFE0F Dodane do kolejki X.' }) }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "node-telegram-idea-queued",
+        "name": "Telegram Idea Queued",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1568,
+          -480
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Idea Callback').first().json.chatId, text: '\\uD83D\\uDDD1 Odrzucone.' }) }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "node-telegram-idea-discarded",
+        "name": "Telegram Idea Discarded",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1568,
+          -340
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const content = ($('Idea Set Researching').first().json.content || '').toString();\nconst rp = 'Jestes analitykiem researchu. Zrob zwiezly deep-research pomyslu:\\n1. O co chodzi (1-2 zdania)\\n2. Dlaczego wazne teraz\\n3. 3-5 katow ujecia\\n4. Mozliwe zrodla lub dane\\n5. Ryzyka.\\nOdpowiedz w jezyku pomyslu, poprawna pisownia (polskie znaki jesli po polsku), bez myslnikow em.\\n\\nPOMYSL:\\n' + content;\nconst gemBody = { contents: [{ parts: [{ text: rp }] }], generationConfig: { temperature: 0.7, maxOutputTokens: 4096 } };\nconst dsBody = { model: 'deepseek-chat', messages: [{ role: 'user', content: rp }], max_tokens: 1500, temperature: 0.7 };\nreturn [{ json: { geminiBodyStr: JSON.stringify(gemBody), deepseekBodyStr: JSON.stringify(dsBody) } }];"
+        },
+        "id": "node-prepare-research-prompt",
+        "name": "Prepare Research Prompt",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1792,
+          -1000
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.geminiBodyStr }}",
+          "options": {
+            "timeout": 60000
+          },
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth"
+        },
+        "id": "node-gemini-research",
+        "name": "Gemini Research",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2016,
+          -1000
+        ],
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "aJ6CuRlcNA5xVysJ",
+            "name": "Gemini API AGS (x-goog-api-key)"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 4,
+        "waitBetweenTries": 2500
+      },
+      {
+        "parameters": {
+          "jsCode": "let gem = '';\ntry { gem = ($('Gemini Research').first().json.candidates[0].content.parts || []).map(p => p.text || '').join('\\n'); } catch (e) { gem = ''; }\nif (!gem) { gem = '(Gemini nie zwrocil researchu)'; }\nlet ds = '';\ntry { ds = ($('DeepSeek Research').first().json.choices || []).map(c => (c.message && c.message.content) || '').join('\\n').trim(); } catch (e) { ds = ''; }\nif (!ds) { ds = '(DeepSeek nie zwrocil researchu)'; }\nconst content = ($('Idea Set Researching').first().json.content || '').toString();\nconst system = 'Jestes strategiem tresci AGS. Dostajesz pomysl i DWA niezalezne researche (Gemini, DeepSeek). Zsyntetyzuj je w jeden zwarty brief: (1) co to jest, (2) dlaczego wazne, (3) najlepsze katy ujecia, (4) sugerowane haki na posty X i LinkedIn. Polacz wnioski, usun powtorzenia. Zwiezle. ZASADA: zero myslnikow em, uzywaj dywizow lub przebuduj zdanie. Odpowiedz w jezyku pomyslu, poprawna pisownia.';\nconst user = 'POMYSL:\\n' + content + '\\n\\nRESEARCH GEMINI:\\n' + gem + '\\n\\nRESEARCH DEEPSEEK:\\n' + ds;\nconst body = { model: 'claude-haiku-4-5-20251001', max_tokens: 1500, system: system, messages: [{ role: 'user', content: user }] };\nreturn [{ json: { claudeBodyStr: JSON.stringify(body), geminiText: gem, deepseekText: ds } }];"
+        },
+        "id": "node-prepare-claude-synthesis",
+        "name": "Prepare Claude Synthesis",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2240,
+          -1000
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.anthropic.com/v1/messages",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.claudeBodyStr }}",
+          "options": {
+            "timeout": 60000
+          },
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "anthropic-version",
+                "value": "2023-06-01"
+              },
+              {
+                "name": "content-type",
+                "value": "application/json"
+              }
+            ]
+          }
+        },
+        "id": "node-claude-synthesis",
+        "name": "Claude Synthesis",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2464,
+          -1000
+        ],
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "w2iuB1ttk7ekS2ix",
+            "name": "Anthropic API AGS-n8n"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 4,
+        "waitBetweenTries": 2500
+      },
+      {
+        "parameters": {
+          "jsCode": "const resp = $json;\nlet brief = '';\ntry { brief = (resp.content || []).map(b => b.text || '').join('\\n').trim(); } catch (e) { brief = ''; }\nif (!brief) { brief = $('Prepare Claude Synthesis').first().json.geminiText || '(Brak wyniku syntezy)'; }\nbrief = brief.replace(/\\u2014/g, '-');\nreturn [{ json: { brief: brief, briefEsc: brief.replace(/'/g, \"''\") } }];"
+        },
+        "id": "node-extract-claude-brief",
+        "name": "Extract Claude Brief",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2688,
+          -1000
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE inspirations SET research_result='{{ $json.briefEsc }}', status='researching' WHERE id = {{ $('Parse Idea Callback').first().json.ideaId }};",
+          "options": {}
+        },
+        "id": "node-save-research",
+        "name": "Save Research",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          2912,
+          -1000
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.deepseek.com/v1/chat/completions",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "deepSeekApi",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.deepseekBodyStr }}",
+          "options": {
+            "timeout": 60000
+          }
+        },
+        "id": "node-deepseek-research",
+        "name": "DeepSeek Research",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2128,
+          -1040
+        ],
+        "credentials": {
+          "deepSeekApi": {
+            "id": "AOtZzfRgRgq5f2mO",
+            "name": "AGS - DeepSeek"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 4,
+        "waitBetweenTries": 2500
+      },
+      {
+        "parameters": {
+          "mode": "combine",
+          "combineBy": "combineByPosition",
+          "options": {}
+        },
+        "id": "node-merge-research",
+        "name": "Merge Research",
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 3.2,
+        "position": [
+          2352,
+          -1000
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const brief = $('Extract Claude Brief').first().json.brief || '';\nconst chatId = $('Idea Set Researching').first().json.chat_id;\nconst id = $('Parse Idea Callback').first().json.ideaId;\nconst header = '\\uD83D\\uDCDA Synteza gotowa:\\n\\n';\nconst full = header + brief;\nconst max = 3800;\nconst parts = [];\nfor (let i = 0; i < full.length; i += max) { parts.push(full.substring(i, i + max)); }\nif (parts.length === 0) { parts.push(header + '(pusto)'); }\nconst kb = { inline_keyboard: [[ { text: '\\uD83D\\uDCBE Zapisz', callback_data: 'synth:' + id + ':save' }, { text: '\\uD83D\\uDDD1 Usun', callback_data: 'synth:' + id + ':del' } ]] };\nreturn parts.map((p, idx) => { const b = { chat_id: chatId, text: p, disable_web_page_preview: true }; if (idx === parts.length - 1) { b.reply_markup = kb; } return { json: { tgBodyStr: JSON.stringify(b) } }; });"
+        },
+        "id": "node-prepare-synthesis-reply",
+        "name": "Prepare Synthesis Reply",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3136,
+          -1000
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.tgBodyStr }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "node-telegram-send-synthesis",
+        "name": "Telegram Send Synthesis",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          3360,
+          -1000
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ $json.callbackId }}",
+                "rightValue": "synth:",
+                "operator": {
+                  "type": "string",
+                  "operation": "startsWith"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "node-is-synth-callback",
+        "name": "Is Synth Callback?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          820,
+          -300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const c = $json;\nconst id = (c.callbackId || '').split(':')[1] || '';\nreturn [{ json: { ideaId: id, action: c.action, chatId: c.chatId, callbackQueryId: c.callbackQueryId } }];"
+        },
+        "id": "node-parse-synth-callback",
+        "name": "Parse Synth Callback",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1040,
+          -360
+        ]
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "sw-save",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "save",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "save"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "sw-del",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "del",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "del"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "node-route-synth-action",
+        "name": "Route Synth Action",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.2,
+        "position": [
+          1260,
+          -360
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE inspirations SET status='researched', processed_at=NOW() WHERE id = {{ $json.ideaId }};",
+          "options": {}
+        },
+        "id": "node-synth-set-saved",
+        "name": "Synth Set Saved",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          1480,
+          -440
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE inspirations SET status='discarded', processed_at=NOW() WHERE id = {{ $json.ideaId }};",
+          "options": {}
+        },
+        "id": "node-synth-set-discarded",
+        "name": "Synth Set Discarded",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          1480,
+          -280
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "aHDeZ1ywfPihvVxH",
+            "name": "PostgreSQL CRD ags-agents"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Synth Callback').first().json.chatId, text: '\\uD83D\\uDCBE Zapisane do researchu.' }) }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "node-telegram-synth-saved",
+        "name": "Telegram Synth Saved",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1700,
+          -440
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Synth Callback').first().json.chatId, text: '\\uD83D\\uDDD1 Usuniete.' }) }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "node-telegram-synth-discarded",
+        "name": "Telegram Synth Discarded",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1700,
+          -280
+        ]
       }
     ],
     "connections": {
@@ -3098,6 +5226,11 @@
               "node": "PostgreSQL Check Edit State",
               "type": "main",
               "index": 0
+            },
+            {
+              "node": "Idea Gate Check",
+              "type": "main",
+              "index": 0
             }
           ],
           [
@@ -3134,7 +5267,7 @@
         "main": [
           [
             {
-              "node": "PostgreSQL Lookup Session",
+              "node": "Is Idea Callback?",
               "type": "main",
               "index": 0
             },
@@ -3514,6 +5647,345 @@
             }
           ]
         ]
+      },
+      "Idea Gate Check": {
+        "main": [
+          [
+            {
+              "node": "Idea Not Editing?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Idea Not Editing?": {
+        "main": [
+          [
+            {
+              "node": "Prepare Idea Text",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          []
+        ]
+      },
+      "Prepare Idea Text": {
+        "main": [
+          [
+            {
+              "node": "Save Idea",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save Idea": {
+        "main": [
+          [
+            {
+              "node": "Prepare Triage Reply",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Triage Reply": {
+        "main": [
+          [
+            {
+              "node": "Telegram Send Triage",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is Idea Callback?": {
+        "main": [
+          [
+            {
+              "node": "Parse Idea Callback",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Is Synth Callback?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse Idea Callback": {
+        "main": [
+          [
+            {
+              "node": "Route Idea Action",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Route Idea Action": {
+        "main": [
+          [
+            {
+              "node": "Idea Set Researching",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Idea Set Saved",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Idea To Post Queue",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Idea Set Discarded",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Idea Set Researching": {
+        "main": [
+          [
+            {
+              "node": "Telegram Idea Researching",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Prepare Research Prompt",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Idea Set Saved": {
+        "main": [
+          [
+            {
+              "node": "Telegram Idea Saved",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Idea To Post Queue": {
+        "main": [
+          [
+            {
+              "node": "Telegram Idea Queued",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Idea Set Discarded": {
+        "main": [
+          [
+            {
+              "node": "Telegram Idea Discarded",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Research Prompt": {
+        "main": [
+          [
+            {
+              "node": "Gemini Research",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "DeepSeek Research",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gemini Research": {
+        "main": [
+          [
+            {
+              "node": "Merge Research",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Claude Synthesis": {
+        "main": [
+          [
+            {
+              "node": "Claude Synthesis",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Claude Synthesis": {
+        "main": [
+          [
+            {
+              "node": "Extract Claude Brief",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Extract Claude Brief": {
+        "main": [
+          [
+            {
+              "node": "Save Research",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save Research": {
+        "main": [
+          [
+            {
+              "node": "Prepare Synthesis Reply",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "DeepSeek Research": {
+        "main": [
+          [
+            {
+              "node": "Merge Research",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Merge Research": {
+        "main": [
+          [
+            {
+              "node": "Prepare Claude Synthesis",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Synthesis Reply": {
+        "main": [
+          [
+            {
+              "node": "Telegram Send Synthesis",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is Synth Callback?": {
+        "main": [
+          [
+            {
+              "node": "Parse Synth Callback",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "PostgreSQL Lookup Session",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse Synth Callback": {
+        "main": [
+          [
+            {
+              "node": "Route Synth Action",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Route Synth Action": {
+        "main": [
+          [
+            {
+              "node": "Synth Set Saved",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Synth Set Discarded",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Synth Set Saved": {
+        "main": [
+          [
+            {
+              "node": "Telegram Synth Saved",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Synth Set Discarded": {
+        "main": [
+          [
+            {
+              "node": "Telegram Synth Discarded",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       }
     },
     "nodeGroups": [],
@@ -3523,18 +5995,18 @@
     "autosaved": false,
     "workflowPublishHistory": [
       {
-        "createdAt": "2026-06-10T10:34:24.745Z",
-        "id": 273,
+        "createdAt": "2026-06-11T06:39:23.559Z",
+        "id": 303,
         "workflowId": "U5pUZjy2yAhR1sWg",
-        "versionId": "9d8e9631-3f22-47e3-aa8c-781e2be14c31",
+        "versionId": "f8d0aee0-de50-406e-b0bb-4915d5595053",
         "event": "deactivated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       },
       {
-        "createdAt": "2026-06-10T10:34:25.031Z",
-        "id": 274,
+        "createdAt": "2026-06-11T06:39:23.836Z",
+        "id": 304,
         "workflowId": "U5pUZjy2yAhR1sWg",
-        "versionId": "9d8e9631-3f22-47e3-aa8c-781e2be14c31",
+        "versionId": "f8d0aee0-de50-406e-b0bb-4915d5595053",
         "event": "activated",
         "userId": "c804b804-01e6-4f71-83c2-0494b200789b"
       }
