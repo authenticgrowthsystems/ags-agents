@@ -859,6 +859,110 @@
         240,
         -320
       ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  (SELECT id FROM post_queue WHERE status='queued' AND (platform='x' OR platform IS NULL) ORDER BY priority ASC NULLS LAST, created_at ASC LIMIT 1) AS id,\n  (SELECT content FROM post_queue WHERE status='queued' AND (platform='x' OR platform IS NULL) ORDER BY priority ASC NULLS LAST, created_at ASC LIMIT 1) AS content;",
+        "options": {}
+      },
+      "id": "n-fetch-queued",
+      "name": "Fetch Top Queued",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        400,
+        760
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c-hasq",
+              "leftValue": "={{ $json.id == null ? 0 : 1 }}",
+              "rightValue": 1,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "n-has-queued",
+      "name": "Has Queued?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        620,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require(\"crypto\");\nconst https = require(\"https\");\nconst tweetText = ($json.content || '').toString();\nconst postId = $json.id;\nif (!tweetText) { return [{ json: { skipped: true, postId, error: 'empty content' } }]; }\n\nconst consumerKey = \"__X_CONSUMER_KEY__\";\nconst consumerSecret = \"__X_CONSUMER_SECRET__\";\nconst accessToken = \"__X_ACCESS_TOKEN__\";\nconst accessTokenSecret = \"__X_ACCESS_TOKEN_SECRET__\";\n\nconst method = \"POST\";\nconst url = \"https://api.twitter.com/2/tweets\";\nconst oauthTimestamp = Math.floor(Date.now() / 1000).toString();\nconst oauthNonce = crypto.randomBytes(16).toString(\"hex\");\n\nconst oauthParams = {\n  oauth_consumer_key: consumerKey,\n  oauth_nonce: oauthNonce,\n  oauth_signature_method: \"HMAC-SHA1\",\n  oauth_timestamp: oauthTimestamp,\n  oauth_token: accessToken,\n  oauth_version: \"1.0\"\n};\n\nconst sortedParams = Object.keys(oauthParams).sort().map(k =>\n  `${encodeURIComponent(k)}=${encodeURIComponent(oauthParams[k])}`\n).join(\"&\");\n\nconst sigBase = `${method}&${encodeURIComponent(url)}&${encodeURIComponent(sortedParams)}`;\nconst sigKey = `${encodeURIComponent(consumerSecret)}&${encodeURIComponent(accessTokenSecret)}`;\nconst signature = crypto.createHmac(\"sha1\", sigKey).update(sigBase).digest(\"base64\");\n\nconst authHeader = \"OAuth \" + Object.keys(oauthParams).sort().map(k =>\n  `${encodeURIComponent(k)}=\"${encodeURIComponent(oauthParams[k])}\"`\n).join(\", \") + `, oauth_signature=\"${encodeURIComponent(signature)}\"`;\n\nconst body = JSON.stringify({ text: tweetText });\n\nconst result = await new Promise((resolve, reject) => {\n  const req = https.request({\n    hostname: \"api.twitter.com\",\n    path: \"/2/tweets\",\n    method: \"POST\",\n    headers: {\n      \"Authorization\": authHeader,\n      \"Content-Type\": \"application/json\",\n      \"Content-Length\": Buffer.byteLength(body)\n    }\n  }, (res) => {\n    let data = \"\";\n    res.on(\"data\", chunk => data += chunk);\n    res.on(\"end\", () => resolve({ status: res.statusCode, body: JSON.parse(data) }));\n  });\n  req.on(\"error\", reject);\n  req.write(body);\n  req.end();\n});\n\nconst tweetId = result.body?.data?.id || \"\";\nconst tweetUrl = tweetId ? `https://x.com/i/web/status/${tweetId}` : \"\";\n\nreturn [{ json: { tweet_id: tweetId, tweet_url: tweetUrl, tweet_text: tweetText, postId: postId, x_status: result.status, ok: (result.status === 200 || result.status === 201) } }];"
+      },
+      "id": "n-publish-queued",
+      "name": "Publish Queued To X",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE post_queue SET status = CASE WHEN {{ $json.ok }} THEN 'published' ELSE 'failed' END, updated_at=NOW() WHERE id = {{ $json.postId }};",
+        "options": {}
+      },
+      "id": "n-mark-queued",
+      "name": "Mark Queued Published",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1060,
+        660
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: 2106351328, text: '\\ud83d\\ude80 Opublikowano z kolejki na X:\\n\\n' + ($('Publish Queued To X').first().json.tweet_text || '') + '\\n\\n' + ($('Publish Queued To X').first().json.tweet_url || '') }) }}",
+        "options": {}
+      },
+      "id": "n-confirm-queued",
+      "name": "Telegram Queued Confirm",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1280,
+        660
+      ]
     }
   ],
   "connections": {
@@ -1239,7 +1343,7 @@
       "main": [
         [
           {
-            "node": "Notion Get X Queue",
+            "node": "Fetch Top Queued",
             "type": "main",
             "index": 0
           }
@@ -1247,6 +1351,57 @@
         [
           {
             "node": "Slot Blocked (scheduled exists)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Top Queued": {
+      "main": [
+        [
+          {
+            "node": "Has Queued?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Queued?": {
+      "main": [
+        [
+          {
+            "node": "Publish Queued To X",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notion Get X Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish Queued To X": {
+      "main": [
+        [
+          {
+            "node": "Mark Queued Published",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Queued Published": {
+      "main": [
+        [
+          {
+            "node": "Telegram Queued Confirm",
             "type": "main",
             "index": 0
           }
