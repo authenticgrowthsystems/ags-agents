@@ -208,10 +208,17 @@ This file is the canonical "what happened when" - update it after every signific
 - Reactivate after every PUT. Don't trust n8n branch ordering; make mutual-exclusion data-dependent.
 - Verify generation via temp-webhook + execution inspection before asking Tomasz to test.
 
-**Next:**
-- Build queue server (serve post_queue 'queued' at slots, priority order) - awaiting cadence confirm.
-- Tighten 280 enforcement (Sonnet generated EN 298 once; HITL shows count + edit fixes, but a hard guard would help).
-- Fix shared Set Awaiting Edit SQL (X-agent edit latent bug).
+**Shipped late same session (12/06 evening):**
+- Queue server LIVE + VERIFIED: queued post auto-published at the 14:00 slot (ok=True, posted to x.com); 18:00 + 22:00 fell back to generation (queue empty). Priority ASC, 1/slot. Built into X-agent (Slot Free -> Fetch Top Queued -> Has Queued? publish / generate), reuses scheduler OAuth1 publish code.
+- 280 hardened in all 3 generation prompts (adapt, angle, edit).
+- Shared `Set Awaiting Edit` SQL fixed (single-quote escaping vs JSON.stringify) -> X-agent edit bug closed, tested.
+- Both commits pushed (afa379b + follow-up).
+
+**Next (see memory/NEXT_SESSION.md for the resume prompt):**
+- MEDIA (Tomasz #1): attach original photo to the tweet (store Telegram file ref with photo idea; OAuth1 media upload + attach media_id across the 3 publish points).
+- Style Bible: fill 100-q -> STYLE_BIBLE.md -> wire into prompt.
+- voice_notes editable from the bot.
+- Build-in-public content draft for the whole pipeline (offered).
 
 ---
 
