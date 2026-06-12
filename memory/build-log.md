@@ -180,6 +180,41 @@ This file is the canonical "what happened when" - update it after every signific
 
 ---
 
+## 2026-06-11/12 - Idea->post pipeline: PL+EN voice, edit-sync, voice memory, queue (marathon)
+
+**What happened:**
+- Issue 1 FIX (auto-published garbage): X-agent retry path dropped the insight. `Increment Retry Count` (Set node) kept only retryCount -> retried Claude got empty insight -> refusal "I don't see any insight" -> passed canon -> published. 3-layer fix: Claude Adapt reads insight from stable `$('Prepare Claude Input')`; Extract Draft refusal-guard -> claudeError; Retry Available? caps on `$runIndex`.
+- Photo OCR -> OpenAI gpt-4o-mini vision via Telegram download + `this.helpers.getBinaryDataBuffer` base64 (OpenAI URL-fetch unreliable). Works.
+- "Zrob post" rebuilt: idea -> Sonnet 4.6 draft -> HITL preview reusing existing approve/reject/edit/schedule handlers.
+- Voice: Sonnet 4.6 + full VOICE_BIBLE.md injected. Draft quality jumped generic -> on-voice (uses visible image text as anchor, dance=architecture metaphor).
+- PL+EN dual gen (one Claude call -> {pl,en}); publish EN to AGS (single account). PL = editing/comprehension language.
+- "Inny kat" regenerate button (different angle).
+- Idea-post edit flow (isolated `:ideaedit`): edit in PL -> Claude re-syncs EN -> "Zapisalem Twoja edycje" re-preview + "To probka mojego glosu" button.
+- Voice memory: `voice_notes` (rules, seeded) + `voice_samples` (his edits) tables, injected into every generation. brand-canon/VOICE_SAMPLES.md = readable mirror.
+- "Zapisz do kolejki" + priority (post_queue already had `priority` int): ask priority -> save status='queued'.
+
+**Decisions:**
+- Single X account (AGS, English publish). No 2-account routing. PL for working/edit.
+- Voice samples in Postgres (agent reads them at gen time; n8n can't reach repo files). MD = mirror.
+- Queue cadence PROPOSED, not built: serve post_queue 'queued' at 14/18/22, priority order, 1/slot, queued auto-publishes (pre-approved) else generate. AWAITING confirm.
+
+**Problems hit:**
+- n8n PUT does NOT hot-reload an active workflow -> deactivate+activate after EVERY PUT or the old def keeps running.
+- n8n branch execution order is NOT connection-order. Double-capture race (edit-submit also captured edit text as new idea) fixed DETERMINISTICALLY: capture gate ANDs on `$('PostgreSQL Check Edit State').all().length==0` (early read, pre-clear). Reorder attempt failed first.
+- Shared `Set Awaiting Edit` builds SQL via JSON.stringify -> double-quotes -> "zero-length delimited identifier" on empty value. Idea-posts use own correct-SQL node; X-agent edit still has this latent bug (flagged).
+- post_queue/inspirations owned by superuser -> ALTER blocked; used existing `priority` column.
+
+**Lessons:**
+- Reactivate after every PUT. Don't trust n8n branch ordering; make mutual-exclusion data-dependent.
+- Verify generation via temp-webhook + execution inspection before asking Tomasz to test.
+
+**Next:**
+- Build queue server (serve post_queue 'queued' at slots, priority order) - awaiting cadence confirm.
+- Tighten 280 enforcement (Sonnet generated EN 298 once; HITL shows count + edit fixes, but a hard guard would help).
+- Fix shared Set Awaiting Edit SQL (X-agent edit latent bug).
+
+---
+
 ## Template for future entries
 
 ```

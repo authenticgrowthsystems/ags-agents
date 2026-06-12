@@ -1,11 +1,5 @@
 {
-  "updatedAt": "2026-06-11T09:31:02.515Z",
-  "createdAt": "2026-06-11T09:30:08.505Z",
-  "id": "x1jJEbcWAe3FnpCa",
   "name": "AGS Scheduler v1",
-  "description": null,
-  "active": false,
-  "isArchived": false,
   "nodes": [
     {
       "parameters": {
@@ -159,34 +153,5 @@
   },
   "settings": {
     "executionOrder": "v1"
-  },
-  "staticData": null,
-  "meta": null,
-  "nodeGroups": [],
-  "pinData": null,
-  "versionId": "9d93f540-63bc-4c2c-91e4-015e433c11f6",
-  "activeVersionId": null,
-  "versionCounter": 2,
-  "triggerCount": 0,
-  "shared": [
-    {
-      "updatedAt": "2026-06-11T09:30:08.505Z",
-      "createdAt": "2026-06-11T09:30:08.505Z",
-      "role": "workflow:owner",
-      "workflowId": "x1jJEbcWAe3FnpCa",
-      "projectId": "AVGJSTgEgAPPwXHX",
-      "project": {
-        "updatedAt": "2026-04-18T08:31:32.266Z",
-        "createdAt": "2026-04-18T08:22:28.807Z",
-        "id": "AVGJSTgEgAPPwXHX",
-        "name": "Tomasz Nawrocki <mr.tomasz.nawrocki@gmail.com>",
-        "type": "personal",
-        "icon": null,
-        "description": null,
-        "creatorId": "c804b804-01e6-4f71-83c2-0494b200789b"
-      }
-    }
-  ],
-  "tags": [],
-  "activeVersion": null
+  }
 }
