@@ -45,6 +45,12 @@ def fetchone(sql, params=None):
         return cur.fetchone()
 
 
+def get_secret(key):
+    """Read an API key from app_secrets (single source of truth for Researcher secrets)."""
+    row = fetchone("SELECT value FROM app_secrets WHERE key=%s", (key,))
+    return row["value"] if row else None
+
+
 def execute(sql, params=None):
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute(sql, params or ())

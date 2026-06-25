@@ -12,12 +12,13 @@ Hub-and-Spoke async: **Python worker = orkiestracja** (poll `research_jobs` prze
 - [ ] Day 3: 6 workflowów n8n (5 adapterów + ingress/callback) + status-adaptery + testy integracyjne.
 - [ ] Brama 3 acceptance → LIVE cel 25/06.
 
-## Lokalnie
+## Deploy (Mikrus, potwierdzone 24/06)
+Infra: **standalone `docker run`** (BEZ compose). Kontener bazy `pg_n8n` jest na sieci Dockera **`n8n_network`** - worker MUSI wejść na tę sieć, żeby gadać z bazą po `pg_n8n:5432`.
 ```bash
-cp .env.example .env   # uzupełnij
+cp .env.example .env   # uzupełnij (POSTGRES_DSN host = pg_n8n)
 docker build -t ags-researcher:latest .
 docker run -d --name ags-researcher --restart unless-stopped -m 512m \
-  --network <siec_pg_n8n> -p 127.0.0.1:8088:8088 \
+  --network n8n_network -p 127.0.0.1:8088:8088 \
   --env-file ./.env -v "$PWD/logs":/app/logs -v "$PWD/cache":/app/cache \
   ags-researcher:latest
 curl -fsS http://localhost:8088/health

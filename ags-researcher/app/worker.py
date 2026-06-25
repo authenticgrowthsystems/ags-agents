@@ -2,6 +2,7 @@
 Orchestration loop lives here (Python), not in n8n. n8n owns the source adapters + ingress + callback.
 Also serves /health (container healthcheck) and /metrics."""
 import datetime
+import json
 import threading
 import time
 import traceback
@@ -124,19 +125,42 @@ def _escalate(message: str):
         traceback.print_exc()
 
 
-def _callback(job, payload: dict):
-    """Hand the finished result to the n8n Ingress & Callback workflow (writes agent_messages RESPONSE + Telegram).
-    Best-effort: the result is already durable in Postgres regardless."""
+def _admin_chat_id():
     try:
-        httpx.post(
-            config.N8N_BASE_URL + config.ADAPTER_PATHS["callback"],
-            json={"job_id": str(job["job_id"]),
-                  "requesting_agent_id": str(job.get("requesting_agent_id") or ""),
-                  **payload},
-            timeout=20,
-        )
+        r = db.fetchone("SELECT config_value FROM brand_config WHERE brand_id='AGS' AND config_key='admin_chat_ids' LIMIT 1")
+        if r and r.get("config_value"):
+            arr = json.loads(r["config_value"])
+            return str(arr[0]) if arr else None
     except Exception:
         pass
+    return None
+
+
+def _telegram(text):
+    try:
+        tok = db.get_secret("telegram_bot_token")
+        chat = _admin_chat_id()
+        if tok and chat:
+            httpx.post(f"https://api.telegram.org/bot{tok}/sendMessage",
+                       json={"chat_id": chat, "text": text[:3500], "disable_web_page_preview": True}, timeout=15)
+    except Exception:
+        traceback.print_exc()
+
+
+def _callback(job, payload: dict):
+    """Write RESPONSE to agent_messages + Telegram notify (ingress/callback in-Python per refinement).
+    Result is already durable in research_jobs/claims/options regardless."""
+    try:
+        db.execute(
+            """INSERT INTO agent_messages (from_agent_id, to_agent_id, message_type, payload, status, correlation_id)
+               VALUES ((SELECT agent_id FROM agent_registry WHERE agent_name='researcher'), %s, 'response', %s, 'unread', %s)""",
+            (job.get("requesting_agent_id"), Jsonb(payload), job.get("callback_url")),
+        )
+    except Exception:
+        traceback.print_exc()
+    opts = payload.get("options") or []
+    labels = ", ".join([(o.get("label") if isinstance(o, dict) else getattr(o, "label", "")) for o in opts][:4])
+    _telegram(f"AGS Researcher: zadanie gotowe ({len(opts)} opcje: {labels}). koszt {payload.get('cost_pln', '?')} PLN, confidence {payload.get('overall_confidence', '?')}.")
 
 
 def _job_cost_pln(job_id) -> float:
@@ -241,11 +265,42 @@ def process_job(job):
 
 
 # ---------------- main loop ----------------
+def ingest_requests():
+    """agent_messages REQUEST (to researcher, unread) -> research_jobs (ingress, in-Python per refinement)."""
+    try:
+        rows = db.fetchall(
+            """SELECT message_id, from_agent_id, payload, correlation_id
+               FROM agent_messages
+               WHERE to_agent_id = (SELECT agent_id FROM agent_registry WHERE agent_name='researcher')
+                 AND message_type='request' AND status='unread'
+               ORDER BY created_at LIMIT 10"""
+        )
+    except Exception:
+        traceback.print_exc()
+        return
+    for r in rows:
+        payload = r.get("payload") or {}
+        query = (payload.get("query") or payload.get("query_text") or "").strip()
+        try:
+            if not query:
+                db.execute("UPDATE agent_messages SET status='failed', read_at=NOW() WHERE message_id=%s", (r["message_id"],))
+                continue
+            db.execute(
+                """INSERT INTO research_jobs (requesting_agent_id, query_text, query_hash, status, callback_url)
+                   VALUES (%s,%s,%s,'enqueued',%s)""",
+                (r.get("from_agent_id"), query, CacheLayer.hash_query(query), str(r.get("correlation_id") or r["message_id"])),
+            )
+            db.execute("UPDATE agent_messages SET status='read', read_at=NOW() WHERE message_id=%s", (r["message_id"],))
+        except Exception:
+            traceback.print_exc()
+
+
 def loop():
     print("[researcher] worker loop started", flush=True)
     while True:
         job = None
         try:
+            ingest_requests()
             job = db.claim_job()
             if not job:
                 time.sleep(config.POLL_INTERVAL_S)
@@ -263,7 +318,20 @@ def loop():
             time.sleep(config.POLL_INTERVAL_S)
 
 
+def _load_secrets():
+    """API keys live in app_secrets (single source). The worker .env only carries POSTGRES_DSN + N8N_BASE_URL."""
+    for attr, key in (("ANTHROPIC_API_KEY", "anthropic_api_key"), ("OPENAI_API_KEY", "openai_api_key")):
+        try:
+            v = db.get_secret(key)
+            if v:
+                setattr(config, attr, v)
+        except Exception:
+            traceback.print_exc()
+    print("[researcher] secrets loaded from app_secrets", flush=True)
+
+
 def main():
+    _load_secrets()
     threading.Thread(target=loop, daemon=True).start()
     uvicorn.run(api, host="0.0.0.0", port=config.HTTP_PORT, log_level="info")
 
