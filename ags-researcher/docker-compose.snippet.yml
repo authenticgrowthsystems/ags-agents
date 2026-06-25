@@ -1,0 +1,16 @@
+# Dodaj ten serwis do istniejącego compose (sąsiad pg_n8n) ALBO użyj standalone docker run (README).
+# Tryb infra (compose vs docker run) potwierdza Tomasz przed Day 3.
+services:
+  ags-researcher:
+    build: ./ags-researcher
+    container_name: ags-researcher
+    restart: unless-stopped
+    mem_limit: 512m
+    env_file: ./ags-researcher/.env
+    ports:
+      - "127.0.0.1:8088:8088"
+    networks:
+      - default            # ta sama sieć Dockera co pg_n8n
+    volumes:
+      - ./ags-researcher/logs:/app/logs
+      - ./ags-researcher/cache:/app/cache
