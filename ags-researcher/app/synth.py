@@ -49,7 +49,7 @@ class Synthesizer:
             user += "\n\nUWAGA: czesc zrodel padla (dane czesciowe). overall_confidence <= 0.5."
         resp = self._client.messages.create(
             model=config.SYNTH_MODEL,
-            max_tokens=4096,
+            max_tokens=8192,
             system=self._system,
             tools=[_TOOL],
             tool_choice={"type": "tool", "name": "emit_research_output"},

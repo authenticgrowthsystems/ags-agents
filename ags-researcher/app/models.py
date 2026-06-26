@@ -21,6 +21,6 @@ class ResearchOption(BaseModel):
 class ResearchOutput(BaseModel):
     claims: list[Claim] = Field(default_factory=list)
     sources_cited: list[str] = Field(default_factory=list)
-    overall_confidence: float
-    options: list[ResearchOption]    # exactly 4 (validated post-parse)
+    overall_confidence: float = 0.0
+    options: list[ResearchOption] = Field(default_factory=list)  # exactly 4, enforced post-parse by _enforce_four (optional here so a truncated/partial model output degrades instead of crashing the job)
     recommendation: str | None = None
