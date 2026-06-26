@@ -1,0 +1,158 @@
+{
+  "name": "Researcher - Web Search",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "researcher-web-search",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "h1",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "researcher-web-search"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT (SELECT value FROM app_secrets WHERE key='anthropic_api_key') AS value, (SELECT value FROM app_secrets WHERE key='researcher_webhook_secret') AS guard",
+        "options": {}
+      },
+      "id": "h2",
+      "name": "Get Anthropic Key",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        220,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $json.value }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1500, tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: ($('Webhook').first().json.body.max_uses || 3) }], messages: [{ role: 'user', content: 'Search the web and list the key sources (titles and URLs) for: ' + ($('Webhook').first().json.body.query || '') }] }) }}",
+        "options": {}
+      },
+      "id": "h3",
+      "name": "Web Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const msg=$json;const content=(msg&&msg.content)||[];const seen={};const evidence=[];for(const b of content){if(b&&b.type==='web_search_tool_result'){const arr=b.content||[];for(const x of arr){if(x&&x.type==='web_search_result'&&x.url&&!seen[x.url]){seen[x.url]=1;evidence.push({source_url:x.url,source_name:'web_search',content:x.title||x.url,freshness:x.page_age||null,authority:null});}}}}return [{json:{status:evidence.length?'completed':'empty',source:'web_search',evidence_count:evidence.length,evidence:evidence}}];"
+      },
+      "id": "h4",
+      "name": "Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const h=($('Webhook').first().json.headers)||{};const hdr=h['x-researcher-secret']||'';const guard=$input.first().json.guard||'';if(!guard||hdr!==guard){throw new Error('unauthorized: missing or bad X-Researcher-Secret');}return [{json:{value:$input.first().json.value}}];"
+      },
+      "id": "guard",
+      "name": "Guard",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        330,
+        140
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Anthropic Key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Anthropic Key": {
+      "main": [
+        [
+          {
+            "node": "Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Web Search": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guard": {
+      "main": [
+        [
+          {
+            "node": "Web Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none"
+  }
+}

@@ -1,0 +1,154 @@
+{
+  "name": "Researcher - Gemini",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "researcher-gemini-dr",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "h1",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "researcher-gemini"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT (SELECT value FROM app_secrets WHERE key='gemini_api_key') AS value, (SELECT value FROM app_secrets WHERE key='researcher_webhook_secret') AS guard",
+        "options": {}
+      },
+      "id": "h2",
+      "name": "Get Gemini Key",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        220,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-goog-api-key",
+              "value": "={{ $json.value }}"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ contents: [{ parts: [{ text: ($('Webhook').first().json.body.query || '') }] }], tools: [{ google_search: {} }] }) }}",
+        "options": {}
+      },
+      "id": "h3",
+      "name": "Gemini",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const msg=$json;const cands=(msg&&msg.candidates)||[];const cand=cands[0]||{};const gm=cand.groundingMetadata||{};const chunks=gm.groundingChunks||[];const seen={};const evidence=[];for(const ch of chunks){const w=ch.web||{};const url=w.uri||w.url;if(url&&!seen[url]){seen[url]=1;evidence.push({source_url:url,source_name:'gemini',content:w.title||url,freshness:null,authority:null});}}let answer='';for(const p of ((cand.content&&cand.content.parts)||[])){if(p.text)answer+=p.text;}return [{json:{status:evidence.length?'completed':'empty',source:'gemini',evidence_count:evidence.length,answer_chars:answer.length,evidence:evidence}}];"
+      },
+      "id": "h4",
+      "name": "Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const h=($('Webhook').first().json.headers)||{};const hdr=h['x-researcher-secret']||'';const guard=$input.first().json.guard||'';if(!guard||hdr!==guard){throw new Error('unauthorized: missing or bad X-Researcher-Secret');}return [{json:{value:$input.first().json.value}}];"
+      },
+      "id": "guard",
+      "name": "Guard",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        330,
+        140
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Gemini Key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Gemini Key": {
+      "main": [
+        [
+          {
+            "node": "Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guard": {
+      "main": [
+        [
+          {
+            "node": "Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none"
+  }
+}

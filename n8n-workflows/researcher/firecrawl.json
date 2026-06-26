@@ -1,0 +1,159 @@
+{
+  "name": "Researcher - Firecrawl",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "researcher-firecrawl",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "h1",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "researcher-firecrawl"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT (SELECT value FROM app_secrets WHERE key='firecrawl_api_key') AS value, (SELECT value FROM app_secrets WHERE key='researcher_webhook_secret') AS guard",
+        "options": {}
+      },
+      "id": "h2",
+      "name": "Get FC Key",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        220,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.firecrawl.dev/v2/search/research/papers",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $('Webhook').first().json.body.query }}"
+            },
+            {
+              "name": "k",
+              "value": "={{ $('Webhook').first().json.body.limit || 5 }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $json.value }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "h3",
+      "name": "FC Papers",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp=$json;const results=(resp&&resp.results)||[];const evidence=results.map(function(p){var arx=(p.ids&&p.ids.arxiv&&p.ids.arxiv[0])||String(p.primaryId||'').replace('arxiv:','');var url=arx?('https://arxiv.org/abs/'+arx):('firecrawl:paper:'+(p.paperId||''));var content=(p.title||'')+(p.abstract?('\\n'+p.abstract):'');return {source_url:url,source_name:'firecrawl_papers',content:content,freshness:null,authority:(typeof p.score==='number')?Math.min(1,Math.max(0,p.score)):null};});return [{json:{status:results.length?'completed':'empty',source:'firecrawl_papers',evidence_count:evidence.length,evidence:evidence}}];"
+      },
+      "id": "h4",
+      "name": "Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const h=($('Webhook').first().json.headers)||{};const hdr=h['x-researcher-secret']||'';const guard=$input.first().json.guard||'';if(!guard||hdr!==guard){throw new Error('unauthorized: missing or bad X-Researcher-Secret');}return [{json:{value:$input.first().json.value}}];"
+      },
+      "id": "guard",
+      "name": "Guard",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        330,
+        140
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get FC Key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get FC Key": {
+      "main": [
+        [
+          {
+            "node": "Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FC Papers": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guard": {
+      "main": [
+        [
+          {
+            "node": "FC Papers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none"
+  }
+}
