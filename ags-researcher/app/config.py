@@ -62,14 +62,18 @@ MIN_SOURCES_FOR_CONFIDENCE = _i("MIN_SOURCES_FOR_CONFIDENCE", 2)
 PARTIAL_CONFIDENCE_CAP = _f("PARTIAL_CONFIDENCE_CAP", 0.5)
 
 # --- source routing policy (cost cascade) ---
+# Aspirational full cascade. active_sources() filters this to DEPLOYED_ADAPTERS, so a tier may
+# name a source whose adapter is not built yet without the worker ever calling it.
 SOURCE_POLICY = {
     "low": ["web_search"],
-    "medium": ["web_search", "firecrawl"],
-    "high": ["web_search", "firecrawl", "openai_dr"],
-    "critical": ["web_search", "firecrawl", "openai_dr", "gemini_dr", "manus"],
+    "medium": ["web_search", "firecrawl", "gemini_dr"],
+    "high": ["web_search", "firecrawl", "gemini_dr", "openai_dr"],
+    "critical": ["web_search", "firecrawl", "gemini_dr", "openai_dr", "manus"],
 }
-# sources skipped automatically when their API key is absent (must not block LIVE)
-OPTIONAL_SOURCES = {"manus", "gemini_dr"}
+# Adapters actually deployed + active in n8n right now. active_sources() routes ONLY to these,
+# so undeployed sources (openai_dr blocked on OpenAI org-verify, manus not built) are never
+# called and never 404. Add a source here the moment its adapter goes live.
+DEPLOYED_ADAPTERS = {"web_search", "firecrawl", "gemini_dr"}
 
 # n8n source-adapter webhook paths (Python orchestrator calls these)
 ADAPTER_PATHS = {
@@ -83,26 +87,14 @@ ADAPTER_PATHS = {
     "manus_status": "/webhook/researcher-manus-status",
     "callback": "/webhook/researcher-callback",
 }
-ASYNC_SOURCES = {"openai_dr", "gemini_dr", "manus"}
+# gemini adapter returns evidence inline (sync); only DR / Manus are start+poll.
+ASYNC_SOURCES = {"openai_dr", "manus"}
 
 OPTIONS_LABELS = ["Najszybsza", "Najtansza", "Najwyzsze upside", "Najwyzsza pewnosc"]
 
 
-def source_key(source: str) -> str:
-    return {
-        "firecrawl": FIRECRAWL_API_KEY,
-        "gemini_dr": GEMINI_API_KEY,
-        "manus": MANUS_API_KEY,
-        "openai_dr": OPENAI_API_KEY,
-        "web_search": ANTHROPIC_API_KEY,
-    }.get(source, "")
-
-
 def active_sources(level: str) -> list[str]:
-    """Sources for a complexity level, dropping optional ones whose key is missing."""
-    out = []
-    for s in SOURCE_POLICY.get(level, ["web_search"]):
-        if s in OPTIONAL_SOURCES and not source_key(s):
-            continue
-        out.append(s)
-    return out
+    """Sources for a complexity level, filtered to adapters actually deployed in n8n.
+    Source API keys live in app_secrets and are read by each n8n adapter itself, so the worker
+    does not gate on keys here - it gates on which adapters exist (DEPLOYED_ADAPTERS)."""
+    return [s for s in SOURCE_POLICY.get(level, ["web_search"]) if s in DEPLOYED_ADAPTERS]

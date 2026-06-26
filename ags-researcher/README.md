@@ -27,3 +27,4 @@ curl -fsS http://localhost:8088/health
 ## Migracje
 - `db/001_init.sql` — zaaplikowane 23/06 jako `ags_crd_user` (ma CREATE w bazie).
 - `db/002_vector_addon.sql` — linia 1 (CREATE EXTENSION) wymaga superusera `n8n`; linie 2-3 robi owner `ags_crd_user`. Idempotentne.
+- `db/003_relax_provenance_types.sql` — 26/06: `freshness`->TEXT, `supporting_evidence`/`supporting_claims`->TEXT[] (honest types dla danych ze źródeł i wyjścia LLM, żeby pierwszy job się nie wywalił na cast). Aplikowane jako `ags_crd_user`; tabele puste.

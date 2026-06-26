@@ -3,7 +3,13 @@ import re
 
 from . import config
 
-_MEDIUM_KW = re.compile(r"\b(compare|alternatives?|strateg\w*|deep|por[oó]wn\w*|opcj\w*|architekt\w*)", re.I)
+_MEDIUM_KW = re.compile(
+    r"\b(compare|comparison|alternativ\w*|strateg\w*|deep|research|best\s+practic\w*|"
+    r"recommend\w*|guide|tutorial|architect\w*|orchestrat\w*|scal\w*|optimi[sz]\w*|"
+    r"por[oó]wn\w*|opcj\w*|architekt\w*|orkiestr\w*|praktyk\w*|najlep\w*|rekomend\w*|"
+    r"skalow\w*|wydajn\w*|multi[- ]?agent|postgres\w*)",
+    re.I,
+)
 _CRITICAL_KW = re.compile(r"\b(urgent|critical|high[- ]?stakes|piln\w*|krytyczn\w*)", re.I)
 
 

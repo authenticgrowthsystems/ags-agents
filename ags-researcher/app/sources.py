@@ -12,6 +12,16 @@ class SourceClient:
     def __init__(self):
         self._http = httpx.Client(timeout=config.SOURCE_TIMEOUT_S + 10)
 
+    @staticmethod
+    def _unwrap(resp):
+        """n8n webhook (responseMode=lastNode) may return the node json as a bare object, a list
+        of items, or {data:[...]}. Normalize to the single result dict the worker expects."""
+        if isinstance(resp, list):
+            return resp[0] if resp else {}
+        if isinstance(resp, dict) and "evidence" not in resp and isinstance(resp.get("data"), list):
+            return resp["data"][0] if resp["data"] else {}
+        return resp if isinstance(resp, dict) else {}
+
     def run(self, source: str, job_id, run_id, payload: dict) -> dict:
         """Returns {status, evidence:[...], cost_usd?, provider_job_id?}."""
         path = config.ADAPTER_PATHS.get(source)
@@ -19,7 +29,7 @@ class SourceClient:
             return {"status": "skipped", "evidence": []}
         body = {"job_id": str(job_id), "run_id": str(run_id), **payload}
         try:
-            resp = self._post(config.N8N_BASE_URL + path, body)
+            resp = self._unwrap(self._post(config.N8N_BASE_URL + path, body))
         except Exception as e:  # transport failures after retries, or HTTP status errors
             return {"status": "error", "evidence": [], "error": str(e)}
         if source in config.ASYNC_SOURCES:
@@ -49,7 +59,7 @@ class SourceClient:
             time.sleep(config.ASYNC_POLL_INTERVAL_S)
             try:
                 r = self._http.post(url, json={"run_id": str(run_id), "provider_job_id": provider_job_id})
-                data = r.json() if r.status_code == 200 else {}
+                data = self._unwrap(r.json()) if r.status_code == 200 else {}
             except Exception:
                 data = {}
             if data.get("status") == "completed":
