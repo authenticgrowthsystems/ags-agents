@@ -1,0 +1,115 @@
+<svg viewBox="0 0 800 980" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="ttl dsc">
+<title id="ttl">AGS Researcher - przeplyw danych</title>
+<desc id="dsc">REQUEST z agent_messages trafia do kolejki research_jobs. Worker (Python) klasyfikuje zapytanie, sprawdza cache i budzet, rozsyla do wdrozonych adapterow Web Search, Firecrawl i Gemini chronionych sekretem X-Researcher-Secret, zbiera evidence_items, synteza Sonnet 4.6 daje dokladnie 4 opcje plus claims, wynik wraca jako RESPONSE i Telegram. Po prawej oznaczone gdzie dane sa zapisywane.</desc>
+<style>
+  svg{--text-primary:#1f2328;--text-secondary:#454b52;--text-muted:#6b7280;--text-accent:#b45309;
+      --surface-0:#ffffff;--surface-1:#f5f6f8;--surface-2:#eaeff4;
+      --border:#d7dce1;--border-strong:#b6bec6;--border-stronger:#8b949e;
+      --font-sans:'Segoe UI',system-ui,-apple-system,sans-serif;--font-voice:Georgia,'Times New Roman',serif;--font-mono:'SF Mono',Consolas,monospace}
+  .t{font-family:var(--font-sans);fill:var(--text-primary);font-weight:600;font-size:14px}
+  .s{font-family:var(--font-sans);fill:var(--text-muted);font-size:11px}
+  .w{font-family:var(--font-mono);fill:var(--text-accent);font-size:10.5px}
+  .n{font-family:var(--font-sans);fill:var(--text-secondary);font-size:11px}
+  .hd{font-family:var(--font-voice);fill:var(--text-primary);font-weight:700;font-size:20px}
+  .box{fill:var(--surface-1);stroke:var(--border-strong);stroke-width:1.5}
+  .live{fill:var(--surface-2);stroke:var(--text-accent);stroke-width:1.75}
+  .dim{fill:var(--surface-0);stroke:var(--border);stroke-width:1.25;opacity:.55}
+  .flow{stroke:var(--border-stronger);stroke-width:1.6;fill:none;marker-end:url(#a)}
+  .br{stroke:var(--text-accent);stroke-width:1.3;fill:none;stroke-dasharray:4 3;marker-end:url(#a2)}
+</style>
+<defs>
+  <marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="var(--border-stronger)"/></marker>
+  <marker id="a2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="var(--text-accent)"/></marker>
+</defs>
+<rect x="0" y="0" width="800" height="980" fill="var(--surface-0)"/>
+
+<text x="44" y="34" class="hd">AGS Researcher</text>
+<text x="46" y="54" class="s">przeplyw danych · LIVE · 3 zrodla · ~0.3-0.4 PLN / zapytanie</text>
+
+<path class="flow" d="M250,126 L250,150"/>
+<path class="flow" d="M250,204 L250,228"/>
+<path class="flow" d="M250,282 L250,306"/>
+<path class="flow" d="M250,360 L250,384"/>
+<path class="flow" d="M250,438 L250,462"/>
+<path class="flow" d="M135,600 L228,650"/>
+<path class="flow" d="M320,600 L260,650"/>
+<path class="flow" d="M505,600 L272,650"/>
+<path class="flow" d="M250,706 L250,730"/>
+<path class="flow" d="M250,784 L250,808"/>
+<path class="flow" d="M250,862 L250,886"/>
+<path class="flow" d="M250,516 C250,530 135,524 135,540"/>
+<path class="flow" d="M250,516 C250,530 505,524 505,540"/>
+
+<rect class="box" x="100" y="74" width="300" height="52" rx="10"/>
+<text class="t" x="250" y="96" text-anchor="middle">REQUEST</text>
+<text class="s" x="250" y="113" text-anchor="middle">agent_messages (Manager / Tomasz)</text>
+
+<rect class="box" x="100" y="150" width="300" height="54" rx="10"/>
+<text class="t" x="250" y="172" text-anchor="middle">Worker: ingest + claim</text>
+<text class="s" x="250" y="189" text-anchor="middle">poll · FOR UPDATE SKIP LOCKED</text>
+<text class="w" x="415" y="181">→ research_jobs</text>
+
+<rect class="box" x="100" y="228" width="300" height="54" rx="10"/>
+<text class="t" x="250" y="250" text-anchor="middle">Router</text>
+<text class="s" x="250" y="267" text-anchor="middle">low · medium · critical</text>
+
+<rect class="box" x="100" y="306" width="300" height="54" rx="10"/>
+<text class="t" x="250" y="328" text-anchor="middle">Cache</text>
+<text class="s" x="250" y="345" text-anchor="middle">SHA-256 + pgvector (0.92)</text>
+<path class="br" d="M400,332 L470,332"/>
+<text class="n" x="476" y="329">trafienie →</text>
+<text class="n" x="476" y="344">4 opcje · 0 PLN</text>
+
+<rect class="box" x="100" y="384" width="300" height="54" rx="10"/>
+<text class="t" x="250" y="406" text-anchor="middle">Budget</text>
+<text class="s" x="250" y="423" text-anchor="middle">stopy 50 / 100 / 1500 PLN</text>
+<path class="br" d="M400,410 L470,410"/>
+<text class="n" x="476" y="407">limit →</text>
+<text class="n" x="476" y="422">stop + eskalacja</text>
+
+<rect class="box" x="100" y="462" width="300" height="54" rx="10"/>
+<text class="t" x="250" y="484" text-anchor="middle">Dispatch · kaskada kosztowa</text>
+<text class="s" x="250" y="501" text-anchor="middle">tylko wdrozone adaptery</text>
+
+<rect class="live" x="60" y="540" width="150" height="60" rx="10"/>
+<text class="t" x="135" y="566" text-anchor="middle">Web Search</text>
+<text class="s" x="135" y="583" text-anchor="middle">Anthropic</text>
+<rect class="live" x="245" y="540" width="150" height="60" rx="10"/>
+<text class="t" x="320" y="566" text-anchor="middle">Firecrawl</text>
+<text class="s" x="320" y="583" text-anchor="middle">papers index</text>
+<rect class="live" x="430" y="540" width="150" height="60" rx="10"/>
+<text class="t" x="505" y="566" text-anchor="middle">Gemini</text>
+<text class="s" x="505" y="583" text-anchor="middle">2.5 Flash + grounding</text>
+<text class="s" x="600" y="558">fast-follow:</text>
+<text class="s" x="600" y="573">OpenAI DR</text>
+<text class="s" x="600" y="588">Manus</text>
+<text class="n" x="320" y="624" text-anchor="middle">kazdy adapter: klucz z app_secrets · naglowek X-Researcher-Secret · Normalize → evidence</text>
+
+<rect class="box" x="100" y="650" width="300" height="52" rx="10"/>
+<text class="t" x="250" y="672" text-anchor="middle">evidence_items</text>
+<text class="s" x="250" y="689" text-anchor="middle">znormalizowane dowody</text>
+<text class="w" x="415" y="668">→ research_runs</text>
+<text class="w" x="415" y="683">→ evidence_items</text>
+<text class="w" x="415" y="698">→ cost_events</text>
+
+<rect class="live" x="100" y="730" width="300" height="54" rx="10"/>
+<text class="t" x="250" y="752" text-anchor="middle">Synteza · Sonnet 4.6</text>
+<text class="s" x="250" y="769" text-anchor="middle">prompt cache + voice_bible</text>
+<text class="w" x="415" y="761">→ claims</text>
+
+<rect class="box" x="100" y="808" width="300" height="54" rx="10"/>
+<text class="t" x="250" y="830" text-anchor="middle">4 opcje decyzji + claims</text>
+<text class="s" x="250" y="847" text-anchor="middle">Najszybsza · Najtansza · Upside · Pewnosc</text>
+<text class="w" x="415" y="839">→ options</text>
+
+<rect class="box" x="100" y="886" width="300" height="54" rx="10"/>
+<text class="t" x="250" y="908" text-anchor="middle">RESPONSE + Telegram</text>
+<text class="s" x="250" y="925" text-anchor="middle">agent_messages → klient</text>
+<text class="w" x="415" y="917">→ agent_messages</text>
+
+<rect class="live" x="100" y="952" width="16" height="12" rx="3"/>
+<text class="s" x="122" y="962">wdrozone + guard</text>
+<rect class="dim" x="250" y="952" width="16" height="12" rx="3"/>
+<text class="s" x="272" y="962">fast-follow (DR, Manus)</text>
+<text class="s" x="430" y="962">jedno zrodlo prawdy: PostgreSQL ags_crd</text>
+</svg>

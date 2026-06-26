@@ -2,7 +2,7 @@
 
 **Status:** ŻYWY dokument, aktualizowany przy każdej zmianie przepływu. To SUBSTRAT pod docelowy **diagram graficzny** (renderowany, gdy build skończony) - część pakietu sprzedażowego produktu.
 **Zasada nadrzędna:** jedno źródło prawdy = PostgreSQL (`ags_crd`). Notion = lustro dla człowieka, nie źródło dla agentów.
-**Ostatnia aktualizacja:** 24/06/2026.
+**Ostatnia aktualizacja:** 26/06/2026 (Researcher LIVE). Diagram graficzny Researchera: `docs/researcher-dataflow.svg`.
 
 Legenda: `[W]` = zapis, `[R]` = odczyt.
 
@@ -61,9 +61,9 @@ Capture (tekst/głos/zdjęcie) -> triage -> research (Gemini∥DeepSeek -> Claud
 
 ---
 
-## C. Researcher - przepływ (Faza 0.5, w budowie)
+## C. Researcher - przepływ (Faza 0.5, **LIVE 26/06**)
 
-**Topologia:** Hub-and-Spoke async. Orkiestracja w **kontenerze Python** (`ags-researcher`), n8n = adaptery źródeł + ingress + status polling.
+**Topologia:** Hub-and-Spoke. Orkiestracja w **kontenerze Python** (`ags-researcher`, Mikrus, sieć `n8n_network`); **ingress + callback są w workerze** (poll `agent_messages` REQUEST -> `research_jobs`; RESPONSE + Telegram bezpośrednio). n8n = **3 adaptery źródeł** (read-only): Web Search, Firecrawl, Gemini. Diagram graficzny: `docs/researcher-dataflow.svg`.
 
 ```
 Agent-klient / Tomasz --(REQUEST agent_messages)--> [n8n Ingress] --INSERT--> research_jobs(enqueued)
@@ -78,12 +78,15 @@ Agent-klient / Tomasz --(REQUEST agent_messages)--> [n8n Ingress] --INSERT--> re
                 -> [n8n callback] -> agent_messages RESPONSE [W] + Telegram
 ```
 - **Co gdzie zapisywane:** job -> `research_jobs`; każde źródło -> `research_runs` + `evidence_items` + `cost_events`; synteza -> `claims` + `options`; wynik dla klienta -> `agent_messages` (RESPONSE).
-- **Eskalacja kosztowa:** low=WebSearch; medium=+Firecrawl; high=+OpenAI DR (o4-mini); critical=+o3/Manus/Gemini. Twarde stopy: 50/100/1500 PLN.
-- **Moduły Python:** `router`, `cache`, `budget`, `prompts`, `synth`, `failure`, `sources`; `worker` (pętla + FastAPI `/health` `/metrics`). Szczegóły w `ags-researcher/`.
+- **Kaskada (stan wdrożony):** low=Web Search; medium=+Firecrawl+Gemini (3 żywe źródła); high=+OpenAI DR; critical=+Manus. `DEPLOYED_ADAPTERS` w `config.py` filtruje do zbudowanych adapterów (DR/Manus = fast-follow, dziś NIE wołane -> zero 404). Router klasyfikuje query researchowe jako `medium`. Twarde stopy: 50/100/1500 PLN.
+- **Bezpieczeństwo adapterów:** każdy czyta swój klucz z `app_secrets` (zero literałów w JSON). **Guard:** adapter pobiera też `researcher_webhook_secret` i odrzuca call bez/z błędnym nagłówkiem `X-Researcher-Secret` (worker go wysyła) PRZED płatnym callem (zero spendu dla nieautoryzowanych). `saveData` OFF (klucze nie trafiają do logów n8n).
+- **Robustność:** synteza `max_tokens=8192` + `options`/`overall_confidence` z defaultami (duży pakiet evidence nie wywala joba); `evidence_items.freshness` -> TEXT, `claims.supporting_evidence` + `options.supporting_claims` -> TEXT[] (migracja `db/003`, bo źródła/LLM zwracają nie-UUID/nie-timestamp).
+- **Moduły Python:** `router`, `cache`, `budget`, `prompts`, `synth`, `failure`, `sources`; `worker` (pętla + FastAPI `/health` `/metrics`). Adaptery n8n w repo: `n8n-workflows/researcher/`. Deploy: `ags-researcher/README.md`.
 
 ---
 
 ## D. Do udokumentowania dalej
-- [ ] 6 workflowów n8n Researchera (5 adapterów + ingress/callback) - node-by-node (Day 3).
+- [x] Researcher LIVE: diagram graficzny (`docs/researcher-dataflow.svg`) + 3 adaptery w repo (`n8n-workflows/researcher/`) + deploy/README.
+- [ ] OpenAI DR + Manus adaptery (fast-follow) - dopisać gdy zbudowane (+ do `DEPLOYED_ADAPTERS`).
 - [ ] HITL handler: pełny graf capture->triage->research->content gate (rozwinąć z węzłów).
-- [ ] **Diagram graficzny całości** (gdy build skończony) - cel sprzedażowy.
+- [ ] **Diagram graficzny CAŁOŚCI** (pipeline treści + Researcher + sieć agentów) - cel sprzedażowy.
