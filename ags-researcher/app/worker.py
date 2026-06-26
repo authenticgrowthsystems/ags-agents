@@ -320,7 +320,8 @@ def loop():
 
 def _load_secrets():
     """API keys live in app_secrets (single source). The worker .env only carries POSTGRES_DSN + N8N_BASE_URL."""
-    for attr, key in (("ANTHROPIC_API_KEY", "anthropic_api_key"), ("OPENAI_API_KEY", "openai_api_key")):
+    for attr, key in (("ANTHROPIC_API_KEY", "anthropic_api_key"), ("OPENAI_API_KEY", "openai_api_key"),
+                      ("RESEARCHER_WEBHOOK_SECRET", "researcher_webhook_secret")):
         try:
             v = db.get_secret(key)
             if v:

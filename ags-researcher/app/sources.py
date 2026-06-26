@@ -43,7 +43,7 @@ class SourceClient:
         reraise=True,
     )
     def _post(self, url, body):
-        r = self._http.post(url, json=body)
+        r = self._http.post(url, json=body, headers={"X-Researcher-Secret": config.RESEARCHER_WEBHOOK_SECRET})
         r.raise_for_status()
         return r.json()
 
@@ -58,7 +58,8 @@ class SourceClient:
         while time.time() < deadline:
             time.sleep(config.ASYNC_POLL_INTERVAL_S)
             try:
-                r = self._http.post(url, json={"run_id": str(run_id), "provider_job_id": provider_job_id})
+                r = self._http.post(url, json={"run_id": str(run_id), "provider_job_id": provider_job_id},
+                                    headers={"X-Researcher-Secret": config.RESEARCHER_WEBHOOK_SECRET})
                 data = self._unwrap(r.json()) if r.status_code == 200 else {}
             except Exception:
                 data = {}

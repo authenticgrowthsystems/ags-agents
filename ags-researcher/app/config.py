@@ -28,6 +28,11 @@ FIRECRAWL_API_KEY = os.getenv("FIRECRAWL_API_KEY", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 MANUS_API_KEY = os.getenv("MANUS_API_KEY", "")
 
+# Shared secret the worker sends as the X-Researcher-Secret header on every adapter call; the
+# adapters reject calls without it (guards the credit-spending webhooks). Loaded from app_secrets
+# at startup (single source) - the value never lives in code, .env, chat, or logs.
+RESEARCHER_WEBHOOK_SECRET = os.getenv("RESEARCHER_WEBHOOK_SECRET", "")
+
 # --- models ---
 SYNTH_MODEL = os.getenv("SYNTH_MODEL", "claude-sonnet-4-6")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "text-embedding-3-small")
