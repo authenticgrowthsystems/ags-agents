@@ -65,6 +65,16 @@ def rates_for_model(model):
     """(input_rate, output_rate) USD per 1M for a model; unknown -> sonnet rates."""
     return MODEL_RATES.get(model, MODEL_RATES["claude-sonnet-4-6"])
 
+
+# auto-by-complexity (slice 2): the default tier when a REQUEST does not pin payload.model_tier.
+# low -> haiku (cheap/simple), medium -> sonnet (full 4 options), high/critical -> opus (hardest).
+LEVEL_TIERS = {"low": "haiku", "medium": "sonnet", "high": "opus", "critical": "opus"}
+
+
+def tier_for_level(level) -> str:
+    """Map a router complexity level to its default model tier."""
+    return LEVEL_TIERS.get(level, DEFAULT_MODEL_TIER)
+
 # --- budgets (PLN) ---
 USD_PLN = _f("USD_PLN", 4.0)
 BUDGET_PER_QUERY_PLN = _f("BUDGET_PER_QUERY_PLN", 50.0)

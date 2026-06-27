@@ -2,7 +2,7 @@
 
 **Status:** ŻYWY dokument, aktualizowany przy każdej zmianie przepływu. To SUBSTRAT pod docelowy **diagram graficzny** (renderowany, gdy build skończony) - część pakietu sprzedażowego produktu.
 **Zasada nadrzędna:** jedno źródło prawdy = PostgreSQL (`ags_crd`). Notion = lustro dla człowieka, nie źródło dla agentów.
-**Ostatnia aktualizacja:** 26/06/2026 (Researcher LIVE). Diagram graficzny Researchera: `docs/researcher-dataflow.svg`.
+**Ostatnia aktualizacja:** 27/06/2026 (Researcher LIVE + model selection). Diagram graficzny Researchera: `docs/researcher-dataflow.svg`.
 
 Legenda: `[W]` = zapis, `[R]` = odczyt.
 
@@ -30,7 +30,7 @@ Legenda: `[W]` = zapis, `[R]` = odczyt.
 | `agent_registry` | rejestr agentów: `agent_name`, `agent_type`, `status`, `current_gate` | wszyscy [R]; orchestrator [W] |
 | `agent_messages` | szyna agent↔agent: `from/to_agent_id`, `message_type` (request/response/notification/escalation/heartbeat/error), `payload`, `correlation_id`, `status` | każdy agent [W/R] |
 | `agent_approval_gates` | log 3 bram per agent: `gate_type` (research/build/acceptance), `status`, `research_output`/`build_plan`/`test_results` jsonb | BE/Manager [W], Tomasz approve |
-| `research_jobs` | master per zapytanie: `query_text`, `query_hash`, `query_embedding` VECTOR(1536), `complexity`, `status`, `cost_pln`, `confidence_score` | Researcher worker [W/R] |
+| `research_jobs` | master per zapytanie: `query_text`, `query_hash`, `query_embedding` VECTOR(1536), `complexity`, `model_tier` (haiku/sonnet/opus, db/004), `status`, `cost_pln`, `confidence_score` | Researcher worker [W/R] |
 | `research_runs` | per-source run w ramach job: `source_name`, `status`, `raw_output`, `cost_pln` | worker [W] |
 | `evidence_items` | znormalizowane evidence z runs: `source_url`, `content`, `freshness`, `authority` | adaptery/worker [W], synth [R] |
 | `claims` | fakty z evidence: `claim_text`, `supporting_evidence` UUID[], `confidence`, `conflict_flag` | synth [W] |
@@ -81,6 +81,7 @@ Agent-klient / Tomasz --(REQUEST agent_messages)--> [n8n Ingress] --INSERT--> re
 - **Kaskada (stan wdrożony):** low=Web Search; medium=+Firecrawl+Gemini (3 żywe źródła); high=+OpenAI DR; critical=+Manus. `DEPLOYED_ADAPTERS` w `config.py` filtruje do zbudowanych adapterów (DR/Manus = fast-follow, dziś NIE wołane -> zero 404). Router klasyfikuje query researchowe jako `medium`. Twarde stopy: 50/100/1500 PLN.
 - **Bezpieczeństwo adapterów:** każdy czyta swój klucz z `app_secrets` (zero literałów w JSON). **Guard:** adapter pobiera też `researcher_webhook_secret` i odrzuca call bez/z błędnym nagłówkiem `X-Researcher-Secret` (worker go wysyła) PRZED płatnym callem (zero spendu dla nieautoryzowanych). `saveData` OFF (klucze nie trafiają do logów n8n).
 - **Robustność:** synteza `max_tokens=8192` + `options`/`overall_confidence` z defaultami (duży pakiet evidence nie wywala joba); `evidence_items.freshness` -> TEXT, `claims.supporting_evidence` + `options.supporting_claims` -> TEXT[] (migracja `db/003`, bo źródła/LLM zwracają nie-UUID/nie-timestamp).
+- **Wybór modelu (model selection, slice 1+2):** synteza dobiera model per-job. `payload.model_tier` (haiku/sonnet/opus) wskazuje jawnie; gdy brak - auto wg complexity (low->haiku, medium->sonnet, high/critical->opus). Tier->model: haiku=`claude-haiku-4-5-20251001`, sonnet=`claude-sonnet-4-6`, opus=`claude-opus-4-8`. Koszt liczony per-model (`MODEL_RATES`; cache write 1.25x / read 0.10x input). Rozwiązany tier zapisywany w `research_jobs.model_tier`; cache rozdzielony po `(query_hash, model_tier)`. Manager będzie proponował tier z zatwierdzeniem Tomasza (slice 3, [[manager-decisions-approval-learning]]). Uwaga: haiku bywa zwraca <4 pełnych opcji na trudniejszych pytaniach (kompromis lekkiego tieru).
 - **Moduły Python:** `router`, `cache`, `budget`, `prompts`, `synth`, `failure`, `sources`; `worker` (pętla + FastAPI `/health` `/metrics`). Adaptery n8n w repo: `n8n-workflows/researcher/`. Deploy: `ags-researcher/README.md`.
 
 ---

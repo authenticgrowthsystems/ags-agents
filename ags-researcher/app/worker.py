@@ -177,10 +177,10 @@ def _job_cost_pln(job_id) -> float:
 def process_job(job):
     job_id = job["job_id"]
     query = job["query_text"]
-    tier = job.get("model_tier") or config.DEFAULT_MODEL_TIER
-    synth_model = config.model_for_tier(tier)
     level = router.classify(query)
-    db.set_status(job_id, "routing", complexity=level)
+    tier = job.get("model_tier") or config.tier_for_level(level)  # explicit payload tier wins; else auto-by-complexity
+    synth_model = config.model_for_tier(tier)
+    db.set_status(job_id, "routing", complexity=level, model_tier=tier)
 
     # 1) cache (exact always; semantic only when enabled) - keyed on (query, model_tier)
     emb = embed(query)
@@ -283,9 +283,8 @@ def ingest_requests():
     for r in rows:
         payload = r.get("payload") or {}
         query = (payload.get("query") or payload.get("query_text") or "").strip()
-        tier = (payload.get("model_tier") or payload.get("tier") or "").strip().lower()
-        if tier not in config.TIER_MODELS:
-            tier = config.DEFAULT_MODEL_TIER
+        raw_tier = (payload.get("model_tier") or payload.get("tier") or "").strip().lower()
+        tier = raw_tier if raw_tier in config.TIER_MODELS else None  # None -> auto-by-complexity in process_job
         try:
             if not query:
                 db.execute("UPDATE agent_messages SET status='failed', read_at=NOW() WHERE message_id=%s", (r["message_id"],))
