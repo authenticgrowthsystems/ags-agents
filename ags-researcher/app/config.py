@@ -112,11 +112,11 @@ SOURCE_POLICY = {
     "high": ["web_search", "firecrawl", "gemini_dr", "openai_dr"],
     "critical": ["web_search", "firecrawl", "gemini_dr", "openai_dr", "manus"],
 }
-# Adapters actually deployed + active in n8n right now. active_sources() routes ONLY to these,
-# so undeployed sources (manus not built) are never called and never 404. Add a source here the
-# moment its adapter goes live. openai_dr LIVE 27/06 (org verified): START XmwNyZEGqe89plcy +
-# STATUS FlkyrFad8U7CE4iS, async start+poll, fires at the critical tier.
-DEPLOYED_ADAPTERS = {"web_search", "firecrawl", "gemini_dr", "openai_dr"}
+# Adapters actually deployed + active in n8n right now. active_sources() routes ONLY to these.
+# openai_dr LIVE 27/06 (START XmwNyZEGqe89plcy + STATUS FlkyrFad8U7CE4iS). manus LIVE 27/06
+# (START eKD2tgXHrreWkGfN + STATUS iDNBK5Xdan44Mugd; task.create -> task.detail+listMessages,
+# agent_profile lite). Both async start+poll, fire at the critical tier (DR + Manus together).
+DEPLOYED_ADAPTERS = {"web_search", "firecrawl", "gemini_dr", "openai_dr", "manus"}
 
 # n8n source-adapter webhook paths (Python orchestrator calls these)
 ADAPTER_PATHS = {
