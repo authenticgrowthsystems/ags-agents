@@ -173,12 +173,46 @@ def _job_cost_pln(job_id) -> float:
     return float(r["s"] or 0)
 
 
+def _log_model_decision(job, level, tier, synth_model, status, cost_pln, confidence, n_options):
+    """SLICE 3 learning corpus: record an AUTO-proposed synth tier + its outcome as a model_selection gate.
+    Only auto proposals are logged (a caller-dictated model_tier is not a Manager decision). Async flow:
+    the job already ran at `tier`; Tomasz reviews/corrects later (3a-2 Telegram), which sets
+    approved_tier / was_corrected. Best-effort: never breaks the job. Returns gate_id (used by 3a-2)."""
+    decision = {
+        "query": job.get("query_text"),
+        "query_hash": job.get("query_hash"),
+        "complexity": level,
+        "proposed_tier": tier,
+        "approved_tier": None,
+        "was_corrected": None,
+        "rationale": f"auto-by-complexity: {level} -> {tier}",
+        "synth_model": synth_model,
+        "outcome_status": status,
+        "outcome_cost_pln": cost_pln,
+        "outcome_confidence": confidence,
+        "outcome_option_count": n_options,
+    }
+    try:
+        row = db.fetchone(
+            """INSERT INTO agent_approval_gates (agent_id, gate_type, status, submitted_by, model_decision)
+               VALUES ((SELECT agent_id FROM agent_registry WHERE agent_name='researcher'),
+                       'model_selection', 'pending', 'manager-ags', %s)
+               RETURNING gate_id""",
+            (Jsonb(decision),),
+        )
+        return str(row["gate_id"]) if row else None
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
 # ---------------- core pipeline ----------------
 def process_job(job):
     job_id = job["job_id"]
     query = job["query_text"]
     level = router.classify(query)
     tier = job.get("model_tier") or config.tier_for_level(level)  # explicit payload tier wins; else auto-by-complexity
+    proposed = not job.get("model_tier")  # True = Manager auto-proposed the tier (vs caller-dictated); only proposals feed learning
     synth_model = config.model_for_tier(tier)
     db.set_status(job_id, "routing", complexity=level, model_tier=tier)
 
@@ -254,6 +288,10 @@ def process_job(job):
     if config.SEMANTIC_CACHE_ENABLED and emb:
         db.execute("UPDATE research_jobs SET query_embedding=%s::vector WHERE job_id=%s", (_vec_literal(emb), job_id))
     db.set_status(job_id, status, completed_at=_now(), cost_pln=total, confidence_score=conf)
+
+    # 6b) learning corpus (SLICE 3a-1): record auto-proposed tier + outcome as a model_selection gate (async, no wait).
+    if proposed:
+        _log_model_decision(job, level, tier, synth_model, status, total, conf, len(out.options))
 
     # 7) callback (agent_messages RESPONSE + Telegram via n8n)
     _callback(job, {

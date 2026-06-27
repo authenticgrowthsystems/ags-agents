@@ -2,7 +2,7 @@
 
 **Status:** ŻYWY dokument, aktualizowany przy każdej zmianie przepływu. To SUBSTRAT pod docelowy **diagram graficzny** (renderowany, gdy build skończony) - część pakietu sprzedażowego produktu.
 **Zasada nadrzędna:** jedno źródło prawdy = PostgreSQL (`ags_crd`). Notion = lustro dla człowieka, nie źródło dla agentów.
-**Ostatnia aktualizacja:** 27/06/2026 (Researcher LIVE + model selection). Diagram graficzny Researchera: `docs/researcher-dataflow.svg`.
+**Ostatnia aktualizacja:** 27/06/2026 (Researcher LIVE + model selection + SLICE 3a-1 pętla nauki tieru). Diagram graficzny Researchera: `docs/researcher-dataflow.svg`.
 
 Legenda: `[W]` = zapis, `[R]` = odczyt.
 
@@ -82,6 +82,7 @@ Agent-klient / Tomasz --(REQUEST agent_messages)--> [n8n Ingress] --INSERT--> re
 - **Bezpieczeństwo adapterów:** każdy czyta swój klucz z `app_secrets` (zero literałów w JSON). **Guard:** adapter pobiera też `researcher_webhook_secret` i odrzuca call bez/z błędnym nagłówkiem `X-Researcher-Secret` (worker go wysyła) PRZED płatnym callem (zero spendu dla nieautoryzowanych). `saveData` OFF (klucze nie trafiają do logów n8n).
 - **Robustność:** synteza `max_tokens=8192` + `options`/`overall_confidence` z defaultami (duży pakiet evidence nie wywala joba); `evidence_items.freshness` -> TEXT, `claims.supporting_evidence` + `options.supporting_claims` -> TEXT[] (migracja `db/003`, bo źródła/LLM zwracają nie-UUID/nie-timestamp).
 - **Wybór modelu (model selection, slice 1+2):** synteza dobiera model per-job. `payload.model_tier` (haiku/sonnet/opus) wskazuje jawnie; gdy brak - auto wg complexity (low->haiku, medium->sonnet, high/critical->opus). Tier->model: haiku=`claude-haiku-4-5-20251001`, sonnet=`claude-sonnet-4-6`, opus=`claude-opus-4-8`. Koszt liczony per-model (`MODEL_RATES`; cache write 1.25x / read 0.10x input). Rozwiązany tier zapisywany w `research_jobs.model_tier`; cache rozdzielony po `(query_hash, model_tier)`. Manager będzie proponował tier z zatwierdzeniem Tomasza (slice 3, [[manager-decisions-approval-learning]]). Uwaga: haiku bywa zwraca <4 pełnych opcji na trudniejszych pytaniach (kompromis lekkiego tieru).
+- **Pętla nauki tieru (SLICE 3a-1, async propose-and-run):** worker po domknięciu joba z AUTO-tierem (brak jawnego `payload.model_tier`) zapisuje decyzję jako bramkę `gate_type='model_selection'` w `agent_approval_gates` (status 'pending', submitted_by 'manager-ags') z propozycją + wynikiem w `model_decision` JSONB (`proposed_tier`, `complexity`, `outcome_status`/`_cost_pln`/`_confidence`/`_option_count`; `approved_tier`/`was_corrected` = NULL do korekty). Job NIE czeka. Cache-hit / failed / budget-block NIE są logowane (tier nie odpalił syntezy). Korekta/zatwierdzenie przez Telegram = 3a-2; wykrywanie wzorców + automatyzacja po 20-30 = 3b. Migracja `db/005`. [[manager-decisions-approval-learning]]
 - **Moduły Python:** `router`, `cache`, `budget`, `prompts`, `synth`, `failure`, `sources`; `worker` (pętla + FastAPI `/health` `/metrics`). Adaptery n8n w repo: `n8n-workflows/researcher/`. Deploy: `ags-researcher/README.md`.
 
 ---
