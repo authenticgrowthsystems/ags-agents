@@ -38,7 +38,9 @@ SYNTH_MODEL = os.getenv("SYNTH_MODEL", "claude-sonnet-4-6")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "text-embedding-3-small")
 EMBED_DIM = 1536
 OPENAI_DR_HIGH = os.getenv("OPENAI_DR_HIGH", "o4-mini-deep-research")
-OPENAI_DR_CRITICAL = os.getenv("OPENAI_DR_CRITICAL", "o3-deep-research")
+# temp: validate Deep Research on the cheap model for both tiers. Switch CRITICAL to
+# o3-deep-research once the router actually splits high (o4-mini) vs critical (o3).
+OPENAI_DR_CRITICAL = os.getenv("OPENAI_DR_CRITICAL", "o4-mini-deep-research")
 
 # --- model selection (per-job synth model tier) ---
 # Tomasz / Manager pick a tier per query via payload.model_tier; falls back to DEFAULT_MODEL_TIER.
@@ -111,9 +113,10 @@ SOURCE_POLICY = {
     "critical": ["web_search", "firecrawl", "gemini_dr", "openai_dr", "manus"],
 }
 # Adapters actually deployed + active in n8n right now. active_sources() routes ONLY to these,
-# so undeployed sources (openai_dr blocked on OpenAI org-verify, manus not built) are never
-# called and never 404. Add a source here the moment its adapter goes live.
-DEPLOYED_ADAPTERS = {"web_search", "firecrawl", "gemini_dr"}
+# so undeployed sources (manus not built) are never called and never 404. Add a source here the
+# moment its adapter goes live. openai_dr LIVE 27/06 (org verified): START XmwNyZEGqe89plcy +
+# STATUS FlkyrFad8U7CE4iS, async start+poll, fires at the critical tier.
+DEPLOYED_ADAPTERS = {"web_search", "firecrawl", "gemini_dr", "openai_dr"}
 
 # n8n source-adapter webhook paths (Python orchestrator calls these)
 ADAPTER_PATHS = {
