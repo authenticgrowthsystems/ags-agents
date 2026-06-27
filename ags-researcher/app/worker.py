@@ -41,6 +41,15 @@ def _now():
     return datetime.datetime.now(datetime.timezone.utc)
 
 
+def _num(x):
+    """Coerce to float else None. evidence_items.authority is NUMERIC; some adapters send a label
+    (e.g. 'manus_agent') instead of a score - never let that crash the whole job's evidence insert."""
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return None
+
+
 # ---------------- FastAPI ----------------
 api = FastAPI(title="AGS Researcher")
 
@@ -260,7 +269,7 @@ def process_job(job):
             row = db.fetchone(
                 """INSERT INTO evidence_items (run_id, source_url, source_name, content, freshness, authority)
                    VALUES (%s,%s,%s,%s,%s,%s) RETURNING evidence_id""",
-                (run_id, e.get("source_url"), src, e.get("content", ""), e.get("freshness"), e.get("authority")),
+                (run_id, e.get("source_url"), src, e.get("content", ""), e.get("freshness"), _num(e.get("authority"))),
             )
             item = dict(e)
             item["evidence_id"] = str(row["evidence_id"])

@@ -94,7 +94,7 @@ SEMANTIC_TTL_DAYS = _i("SEMANTIC_TTL_DAYS", 3)
 EXACT_TTL_DAYS = {"tooling": 7.0, "pricing": 1.0, "news": 0.25, "default": 7.0}
 
 # --- failure / timing (seconds) ---
-SOURCE_TIMEOUT_S = _i("SOURCE_TIMEOUT_S", 300)
+SOURCE_TIMEOUT_S = _i("SOURCE_TIMEOUT_S", 420)  # async sources (DR) can exceed 300s; sequential so keep modest
 PARTIAL_AFTER_S = _i("PARTIAL_AFTER_S", 180)
 SOURCE_RETRIES = _i("SOURCE_RETRIES", 2)
 POLL_INTERVAL_S = _i("POLL_INTERVAL_S", 5)
