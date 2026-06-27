@@ -177,12 +177,14 @@ def _job_cost_pln(job_id) -> float:
 def process_job(job):
     job_id = job["job_id"]
     query = job["query_text"]
+    tier = job.get("model_tier") or config.DEFAULT_MODEL_TIER
+    synth_model = config.model_for_tier(tier)
     level = router.classify(query)
     db.set_status(job_id, "routing", complexity=level)
 
-    # 1) cache (exact always; semantic only when enabled)
+    # 1) cache (exact always; semantic only when enabled) - keyed on (query, model_tier)
     emb = embed(query)
-    hit = cache.get_exact(query) or cache.get_semantic(emb)
+    hit = cache.get_exact(query, model_tier=tier) or cache.get_semantic(emb, model_tier=tier)
     if hit:
         _persist_options(job_id, hit["options"])
         db.set_status(job_id, "completed", completed_at=_now(), cost_pln=0)
@@ -238,10 +240,10 @@ def process_job(job):
         "INSERT INTO research_runs (job_id, source_name, started_at, status) VALUES (%s,'synthesis',NOW(),'running') RETURNING run_id",
         (job_id,),
     )
-    out, usage = synth().synthesize(query, all_evidence, partial=(status == "partial_failure"))
-    budget.log_cost(synth_run["run_id"], "synthesis", config.SYNTH_MODEL,
+    out, usage = synth().synthesize(query, all_evidence, partial=(status == "partial_failure"), model=synth_model)
+    budget.log_cost(synth_run["run_id"], "synthesis", synth_model,
                     getattr(usage, "input_tokens", 0), getattr(usage, "output_tokens", 0),
-                    budget.anthropic_cost_usd(usage))
+                    budget.anthropic_cost_usd(usage, *config.rates_for_model(synth_model)))
     db.execute("UPDATE research_runs SET status='completed', completed_at=NOW() WHERE run_id=%s", (synth_run["run_id"],))
 
     # 6) persist + finalize
@@ -281,14 +283,17 @@ def ingest_requests():
     for r in rows:
         payload = r.get("payload") or {}
         query = (payload.get("query") or payload.get("query_text") or "").strip()
+        tier = (payload.get("model_tier") or payload.get("tier") or "").strip().lower()
+        if tier not in config.TIER_MODELS:
+            tier = config.DEFAULT_MODEL_TIER
         try:
             if not query:
                 db.execute("UPDATE agent_messages SET status='failed', read_at=NOW() WHERE message_id=%s", (r["message_id"],))
                 continue
             db.execute(
-                """INSERT INTO research_jobs (requesting_agent_id, query_text, query_hash, status, callback_url)
-                   VALUES (%s,%s,%s,'enqueued',%s)""",
-                (r.get("from_agent_id"), query, CacheLayer.hash_query(query), str(r.get("correlation_id") or r["message_id"])),
+                """INSERT INTO research_jobs (requesting_agent_id, query_text, query_hash, status, callback_url, model_tier)
+                   VALUES (%s,%s,%s,'enqueued',%s,%s)""",
+                (r.get("from_agent_id"), query, CacheLayer.hash_query(query), str(r.get("correlation_id") or r["message_id"]), tier),
             )
             db.execute("UPDATE agent_messages SET status='read', read_at=NOW() WHERE message_id=%s", (r["message_id"],))
         except Exception:

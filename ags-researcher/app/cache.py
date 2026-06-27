@@ -16,28 +16,31 @@ class CacheLayer:
         norm = " ".join((query_text or "").lower().split())
         return hashlib.sha256(norm.encode("utf-8")).hexdigest()
 
-    def get_exact(self, query_text: str, content_class: str = "default"):
+    def get_exact(self, query_text: str, content_class: str = "default", model_tier: str = None):
+        # cache is keyed on (query, model_tier): a different tier must NOT return another tier's result
+        tier = model_tier or config.DEFAULT_MODEL_TIER
         ttl_days = config.EXACT_TTL_DAYS.get(content_class, config.EXACT_TTL_DAYS["default"])
         row = db.fetchone(
             """SELECT job_id FROM research_jobs
-               WHERE query_hash=%s AND status='completed'
+               WHERE query_hash=%s AND status='completed' AND model_tier=%s
                  AND completed_at > NOW() - make_interval(secs => %s)
                ORDER BY completed_at DESC LIMIT 1""",
-            (self.hash_query(query_text), ttl_days * 86400.0),
+            (self.hash_query(query_text), tier, ttl_days * 86400.0),
         )
         return self._load(row["job_id"]) if row else None
 
-    def get_semantic(self, embedding):
+    def get_semantic(self, embedding, model_tier: str = None):
         if not config.SEMANTIC_CACHE_ENABLED or not embedding:
             return None
+        tier = model_tier or config.DEFAULT_MODEL_TIER
         lit = _vec_literal(embedding)
         row = db.fetchone(
             """SELECT job_id, 1 - (query_embedding <=> %s::vector) AS sim
                FROM research_jobs
-               WHERE status='completed' AND query_embedding IS NOT NULL
+               WHERE status='completed' AND model_tier=%s AND query_embedding IS NOT NULL
                  AND completed_at > NOW() - make_interval(days => %s)
                ORDER BY query_embedding <=> %s::vector ASC LIMIT 1""",
-            (lit, config.SEMANTIC_TTL_DAYS, lit),
+            (lit, tier, config.SEMANTIC_TTL_DAYS, lit),
         )
         if row and row.get("sim") is not None and float(row["sim"]) >= config.SEMANTIC_THRESHOLD:
             return self._load(row["job_id"])

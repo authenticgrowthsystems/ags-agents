@@ -43,12 +43,12 @@ class Synthesizer:
         # one cached block: stable instructions + brand voice (~stable across queries)
         return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
 
-    def synthesize(self, query: str, evidence: list[dict], partial: bool = False):
+    def synthesize(self, query: str, evidence: list[dict], partial: bool = False, model: str = None):
         user = f"PYTANIE:\n{query}\n\nEVIDENCE ({len(evidence)} pozycji):\n{self._format_evidence(evidence)}"
         if partial:
             user += "\n\nUWAGA: czesc zrodel padla (dane czesciowe). overall_confidence <= 0.5."
         resp = self._client.messages.create(
-            model=config.SYNTH_MODEL,
+            model=model or config.SYNTH_MODEL,
             max_tokens=8192,
             system=self._system,
             tools=[_TOOL],

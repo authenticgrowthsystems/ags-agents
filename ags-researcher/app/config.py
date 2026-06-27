@@ -40,6 +40,31 @@ EMBED_DIM = 1536
 OPENAI_DR_HIGH = os.getenv("OPENAI_DR_HIGH", "o4-mini-deep-research")
 OPENAI_DR_CRITICAL = os.getenv("OPENAI_DR_CRITICAL", "o3-deep-research")
 
+# --- model selection (per-job synth model tier) ---
+# Tomasz / Manager pick a tier per query via payload.model_tier; falls back to DEFAULT_MODEL_TIER.
+DEFAULT_MODEL_TIER = "sonnet"
+TIER_MODELS = {
+    "haiku": "claude-haiku-4-5-20251001",  # cheap / fast
+    "sonnet": "claude-sonnet-4-6",          # standard (default)
+    "opus": "claude-opus-4-8",              # heavy / most capable
+}
+# input / output USD per 1M tokens (verified via claude-api skill 27/06). Cache: write 1.25x input, read 0.10x input.
+MODEL_RATES = {
+    "claude-haiku-4-5-20251001": (1.0, 5.0),
+    "claude-sonnet-4-6": (3.0, 15.0),
+    "claude-opus-4-8": (5.0, 25.0),
+}
+
+
+def model_for_tier(tier) -> str:
+    """Resolve a tier label to a model id; unknown / None -> default tier."""
+    return TIER_MODELS.get(tier or DEFAULT_MODEL_TIER, TIER_MODELS[DEFAULT_MODEL_TIER])
+
+
+def rates_for_model(model):
+    """(input_rate, output_rate) USD per 1M for a model; unknown -> sonnet rates."""
+    return MODEL_RATES.get(model, MODEL_RATES["claude-sonnet-4-6"])
+
 # --- budgets (PLN) ---
 USD_PLN = _f("USD_PLN", 4.0)
 BUDGET_PER_QUERY_PLN = _f("BUDGET_PER_QUERY_PLN", 50.0)
