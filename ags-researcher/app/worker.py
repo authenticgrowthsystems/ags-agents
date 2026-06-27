@@ -136,13 +136,15 @@ def _admin_chat_id():
     return None
 
 
-def _telegram(text):
+def _telegram(text, reply_markup=None):
     try:
         tok = db.get_secret("telegram_bot_token")
         chat = _admin_chat_id()
         if tok and chat:
-            httpx.post(f"https://api.telegram.org/bot{tok}/sendMessage",
-                       json={"chat_id": chat, "text": text[:3500], "disable_web_page_preview": True}, timeout=15)
+            body = {"chat_id": chat, "text": text[:3500], "disable_web_page_preview": True}
+            if reply_markup:
+                body["reply_markup"] = reply_markup
+            httpx.post(f"https://api.telegram.org/bot{tok}/sendMessage", json=body, timeout=15)
     except Exception:
         traceback.print_exc()
 
@@ -160,7 +162,17 @@ def _callback(job, payload: dict):
         traceback.print_exc()
     opts = payload.get("options") or []
     labels = ", ".join([(o.get("label") if isinstance(o, dict) else getattr(o, "label", "")) for o in opts][:4])
-    _telegram(f"AGS Researcher: zadanie gotowe ({len(opts)} opcje: {labels}). koszt {payload.get('cost_pln', '?')} PLN, confidence {payload.get('overall_confidence', '?')}.")
+    text = f"AGS Researcher: zadanie gotowe ({len(opts)} opcje: {labels}). koszt {payload.get('cost_pln', '?')} PLN, confidence {payload.get('overall_confidence', '?')}."
+    # SLICE 3a-2: tier correction buttons, only for an auto-proposed tier that has a logged model_selection gate
+    tier = payload.get("model_tier")
+    gate_id = payload.get("gate_id")
+    reply_markup = None
+    if gate_id and tier:
+        text += f"\nTier: {tier} (auto). Zly tier? Popraw:"
+        row = [{"text": ("✅ " if t == tier else "") + t, "callback_data": f"mtier:{gate_id}:{t}"}
+               for t in ("haiku", "sonnet", "opus")]
+        reply_markup = {"inline_keyboard": [row]}
+    _telegram(text, reply_markup)
 
 
 def _job_cost_pln(job_id) -> float:
@@ -290,16 +302,19 @@ def process_job(job):
     db.set_status(job_id, status, completed_at=_now(), cost_pln=total, confidence_score=conf)
 
     # 6b) learning corpus (SLICE 3a-1): record auto-proposed tier + outcome as a model_selection gate (async, no wait).
+    gate_id = None
     if proposed:
-        _log_model_decision(job, level, tier, synth_model, status, total, conf, len(out.options))
+        gate_id = _log_model_decision(job, level, tier, synth_model, status, total, conf, len(out.options))
 
-    # 7) callback (agent_messages RESPONSE + Telegram via n8n)
+    # 7) callback (agent_messages RESPONSE + Telegram via n8n); gate_id + tier drive the 3a-2 correction buttons.
     _callback(job, {
         "options": [o.model_dump() for o in out.options],
         "overall_confidence": conf,
         "cost_pln": total,
         "recommendation": out.recommendation,
         "partial": status == "partial_failure",
+        "model_tier": tier,
+        "gate_id": gate_id,
     })
     return status
 
