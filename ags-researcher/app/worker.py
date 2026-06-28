@@ -6,6 +6,7 @@ import json
 import threading
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import httpx
 import uvicorn
@@ -353,16 +354,39 @@ def process_job(job):
         _escalate(f"budget block: {e}")
         return "budget_blocked"
 
-    # 3) dispatch sources per cost-cascade policy
+    # 3) dispatch sources per cost-cascade policy - CONCURRENTLY (one thread per source). The two async pollers
+    #    (OpenAI DR + Manus) no longer serialize: wall-clock ~= slowest single source instead of the sum
+    #    (critical was ~14min sequential). httpx.Client is thread-safe; ALL DB writes stay on the MAIN thread
+    #    (run rows created up front, evidence/cost persisted after join in deterministic source order) so the
+    #    psycopg pool is never contended by worker threads.
     db.set_status(job_id, "dispatched")
-    evidence_by_source, all_evidence = {}, []
-    for src in router.sources(level):
-        run = db.fetchone(
+    srcs = router.sources(level)
+    payloads = {s: prompts.build(s, query, level) for s in srcs}
+    runs = {}
+    for s in srcs:
+        r = db.fetchone(
             "INSERT INTO research_runs (job_id, source_name, started_at, status) VALUES (%s,%s,NOW(),'running') RETURNING run_id",
-            (job_id, src),
+            (job_id, s),
         )
-        run_id = run["run_id"]
-        res = sources.run(src, job_id, run_id, prompts.build(src, query, level))
+        runs[s] = r["run_id"]
+
+    def _run_source(s):
+        return s, sources.run(s, job_id, runs[s], payloads[s])
+
+    src_results = {}
+    if srcs:
+        with ThreadPoolExecutor(max_workers=min(len(srcs), 6)) as ex:
+            for fut in as_completed([ex.submit(_run_source, s) for s in srcs]):
+                try:
+                    s, res = fut.result()
+                    src_results[s] = res
+                except Exception:
+                    traceback.print_exc()
+
+    evidence_by_source, all_evidence = {}, []
+    for src in srcs:  # deterministic order for the synthesis input
+        res = src_results.get(src) or {"status": "error", "evidence": []}
+        run_id = runs[src]
         ev = res.get("evidence") or []
         for e in ev:
             row = db.fetchone(
@@ -376,7 +400,7 @@ def process_job(job):
             all_evidence.append(item)
         evidence_by_source[src] = ev
         if res.get("cost_usd") is not None:
-            budget.log_cost(run_id, src, str((prompts.build(src, query, level)).get("model") or src),
+            budget.log_cost(run_id, src, str(payloads[src].get("model") or src),
                             res.get("input_tokens"), res.get("output_tokens"), res.get("cost_usd"))
         db.execute("UPDATE research_runs SET status=%s, completed_at=NOW() WHERE run_id=%s",
                    (res.get("status", "completed"), run_id))
