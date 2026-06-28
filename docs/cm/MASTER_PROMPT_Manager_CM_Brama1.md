@@ -27,8 +27,10 @@ Manager nie ma bezpośredniego dostępu do serwera. Po tym jak zatwierdzisz/dopr
 SECRET=$(docker exec pg_n8n psql -U n8n -d ags_crd -tAc "SELECT value FROM app_secrets WHERE key='researcher_webhook_secret'" | tr -d '[:space:]') && \
 curl -sS -X POST http://localhost:8088/request \
   -H "X-Researcher-Secret: $SECRET" -H "Content-Type: application/json" \
-  -d '{"query":"<WKLEJ QUERY Z SEKCJI 3>","from":"manager-ags","model_tier":"sonnet"}'; echo
+  -d '{"query":"<WKLEJ QUERY Z SEKCJI 3>","from":"manager-ags"}'; echo
 ```
+
+UWAGA: NIE podajemy `model_tier` -> tier jest AUTO (medium query -> sonnet), więc na wyniku Telegram dostaniesz guziki korekty **[haiku / sonnet / opus]** ("Zły tier? Popraw"). Jednym tapem możesz podbić syntezę na **opus** (cięższy model) dla ważnej decyzji architektury, a Manager się na tym uczy. (Gdybyś chciał wymusić tier z góry, dodaj `"model_tier":"opus"` - wtedy guzików NIE będzie, bo narzucony tier nie jest decyzją do nauki.)
 
 Researcher zwróci **4 opcje architektury CM** (Najszybsza / Najtańsza / Najwyższe upside / Najwyższa pewność) z dowodami, na Telegram + `agent_messages` RESPONSE = materiał wejściowy do Bramy 2.
 
