@@ -9,7 +9,7 @@ import traceback
 
 import httpx
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
 from psycopg.types.json import Jsonb
 
 from . import config, db
@@ -28,6 +28,10 @@ prompts = MasterPromptBuilder()
 failure = FailureHandler()
 sources = SourceClient()
 _synth = None
+
+# Event-driven wake: the /request webhook sets this so the loop runs IMMEDIATELY instead of waiting out
+# the poll interval. The poll (POLL_INTERVAL_S, now a slow backstop) only catches missed/legacy wakes.
+wake = threading.Event()
 
 
 def synth() -> Synthesizer:
@@ -74,6 +78,27 @@ def metrics():
              (SELECT COUNT(*) FROM research_jobs WHERE status='enqueued')                                                  AS queue_depth"""
     )
     return row or {}
+
+
+@api.post("/request", status_code=202)
+def request_research(body: dict, x_researcher_secret: str = Header(default="")):
+    """Event-driven ingress (the async-comms contract): wake the Researcher INSTANTLY instead of waiting
+    on the agent_messages poll. Guarded by the same shared secret the adapters use. Enqueues the job +
+    signals the loop, returns 202 {accepted, job_id}; the result is delivered later via _callback
+    (RESPONSE to agent_messages + Telegram), never inline. This endpoint is the template every future
+    agent (CM, Sprzedawca) follows."""
+    if not config.RESEARCHER_WEBHOOK_SECRET or x_researcher_secret != config.RESEARCHER_WEBHOOK_SECRET:
+        raise HTTPException(status_code=401, detail="unauthorized")
+    query = str(body.get("query") or body.get("query_text") or "").strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="query required")
+    raw_tier = str(body.get("model_tier") or body.get("tier") or "").strip().lower()
+    tier = raw_tier if raw_tier in config.TIER_MODELS else None  # None -> auto-by-complexity in process_job
+    corr = body.get("correlation_id")
+    requesting_agent_id = _agent_id(body.get("from") or body.get("from_agent"))
+    job_id = enqueue_job(requesting_agent_id, query, tier, str(corr) if corr else None)
+    _ledger_request(requesting_agent_id, query, tier, corr, job_id)  # durable audit (best-effort)
+    return {"accepted": True, "job_id": job_id}
 
 
 # ---------------- embeddings (only when semantic cache is on) ----------------
@@ -328,6 +353,46 @@ def process_job(job):
     return status
 
 
+# ---------------- ingress (event-driven webhook + agent_messages backstop) ----------------
+def _agent_id(name):
+    """Resolve an agent_name to its registry UUID (the webhook 'from' is a name); None if absent/unknown."""
+    if not name:
+        return None
+    try:
+        r = db.fetchone("SELECT agent_id FROM agent_registry WHERE agent_name=%s", (str(name),))
+        return r["agent_id"] if r else None
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def enqueue_job(requesting_agent_id, query, tier, correlation_id) -> str:
+    """INSERT one enqueued research_job and wake the loop immediately. Single ingestion path shared by the
+    /request webhook (event) and ingest_requests (agent_messages backstop). Returns the new job_id."""
+    row = db.fetchone(
+        """INSERT INTO research_jobs (requesting_agent_id, query_text, query_hash, status, callback_url, model_tier)
+           VALUES (%s,%s,%s,'enqueued',%s,%s) RETURNING job_id""",
+        (requesting_agent_id, query, CacheLayer.hash_query(query), correlation_id, tier),
+    )
+    wake.set()
+    return str(row["job_id"])
+
+
+def _ledger_request(requesting_agent_id, query, tier, correlation_id, job_id):
+    """Durable audit of an event-driven REQUEST in agent_messages (status='read' so the poll backstop never
+    re-ingests it - the webhook already enqueued the job). Best-effort; never blocks the 202 response."""
+    try:
+        db.execute(
+            """INSERT INTO agent_messages (from_agent_id, to_agent_id, message_type, payload, status, read_at, correlation_id)
+               VALUES (%s, (SELECT agent_id FROM agent_registry WHERE agent_name='researcher'),
+                       'request', %s, 'read', NOW(), %s)""",
+            (requesting_agent_id, Jsonb({"query": query, "model_tier": tier, "job_id": job_id}),
+             str(correlation_id) if correlation_id else None),
+        )
+    except Exception:
+        traceback.print_exc()
+
+
 # ---------------- main loop ----------------
 def ingest_requests():
     """agent_messages REQUEST (to researcher, unread) -> research_jobs (ingress, in-Python per refinement)."""
@@ -351,11 +416,7 @@ def ingest_requests():
             if not query:
                 db.execute("UPDATE agent_messages SET status='failed', read_at=NOW() WHERE message_id=%s", (r["message_id"],))
                 continue
-            db.execute(
-                """INSERT INTO research_jobs (requesting_agent_id, query_text, query_hash, status, callback_url, model_tier)
-                   VALUES (%s,%s,%s,'enqueued',%s,%s)""",
-                (r.get("from_agent_id"), query, CacheLayer.hash_query(query), str(r.get("correlation_id") or r["message_id"]), tier),
-            )
+            enqueue_job(r.get("from_agent_id"), query, tier, str(r.get("correlation_id") or r["message_id"]))
             db.execute("UPDATE agent_messages SET status='read', read_at=NOW() WHERE message_id=%s", (r["message_id"],))
         except Exception:
             traceback.print_exc()
@@ -369,7 +430,8 @@ def loop():
             ingest_requests()
             job = db.claim_job()
             if not job:
-                time.sleep(config.POLL_INTERVAL_S)
+                wake.wait(timeout=config.POLL_INTERVAL_S)  # /request signals -> instant; timeout = slow backstop
+                wake.clear()
                 continue
             print(f"[researcher] job {job['job_id']} claimed", flush=True)
             result = process_job(job)
