@@ -2,7 +2,7 @@
 
 **Status:** ŻYWY dokument, aktualizowany przy każdej zmianie przepływu. To SUBSTRAT pod docelowy **diagram graficzny** (renderowany, gdy build skończony) - część pakietu sprzedażowego produktu.
 **Zasada nadrzędna:** jedno źródło prawdy = PostgreSQL (`ags_crd`). Notion = lustro dla człowieka, nie źródło dla agentów.
-**Ostatnia aktualizacja:** 28/06/2026 (Researcher LIVE, 5 źródeł, model selection + pętla nauki tieru; **ingress EVENT-DRIVEN** - webhook `POST /request` budzi workera natychmiast, poll = wolny bezpiecznik). Diagram graficzny Researchera: `docs/researcher-dataflow.svg`.
+**Ostatnia aktualizacja:** 28/06/2026 (Researcher LIVE, 5 źródeł, model selection + pętla nauki tieru; **ingress EVENT-DRIVEN** - webhook `POST /request`; **critical-restriction** - kaskada critical tylko manager-ags/tomasz, inni przez bramkę HITL z guzikami). Diagram graficzny Researchera: `docs/researcher-dataflow.svg`.
 
 Legenda: `[W]` = zapis, `[R]` = odczyt.
 
@@ -27,10 +27,10 @@ Legenda: `[W]` = zapis, `[R]` = odczyt.
 ### A.2 Researcher + sieć agentów (Faza 0.5, NOWE 23/06)
 | Tabela | Co trzyma | Kto pisze / czyta |
 |---|---|---|
-| `agent_registry` | rejestr agentów: `agent_name`, `agent_type`, `status`, `current_gate` | wszyscy [R]; orchestrator [W] |
+| `agent_registry` | rejestr agentów: `agent_name`, `agent_type`, `status`, `current_gate`, `allowed_model_tiers` TEXT[] (db/007, dozwolone POZIOMY kaskady; default `['low','medium']`) | wszyscy [R]; orchestrator [W] |
 | `agent_messages` | szyna agent↔agent: `from/to_agent_id`, `message_type` (request/response/notification/escalation/heartbeat/error), `payload`, `correlation_id`, `status` | każdy agent [W/R] |
-| `agent_approval_gates` | log 3 bram per agent: `gate_type` (research/build/acceptance), `status`, `research_output`/`build_plan`/`test_results` jsonb | BE/Manager [W], Tomasz approve |
-| `research_jobs` | master per zapytanie: `query_text`, `query_hash`, `query_embedding` VECTOR(1536), `complexity`, `model_tier` (haiku/sonnet/opus, db/004), `status`, `cost_pln`, `confidence_score` | Researcher worker [W/R] |
+| `agent_approval_gates` | log bram per agent: `gate_type` (research/build/acceptance/**model_selection**/**critical_escalation**), `status`, `research_output`/`build_plan`/`test_results`/`model_decision`/`escalation_detail` jsonb | BE/Manager/worker [W], Tomasz approve via Telegram |
+| `research_jobs` | master per zapytanie: `query_text`, `query_hash`, `query_embedding` VECTOR(1536), `complexity`, `model_tier` (haiku/sonnet/opus, db/004), `level_override` (db/007, ruling HITL: critical/medium), `status`, `cost_pln`, `confidence_score` | Researcher worker [W/R] |
 | `research_runs` | per-source run w ramach job: `source_name`, `status`, `raw_output`, `cost_pln` | worker [W] |
 | `evidence_items` | znormalizowane evidence z runs: `source_url`, `content`, `freshness`, `authority` | adaptery/worker [W], synth [R] |
 | `claims` | fakty z evidence: `claim_text`, `supporting_evidence` UUID[], `confidence`, `conflict_flag` | synth [W] |
@@ -81,6 +81,7 @@ Agent-klient / Tomasz
                 -> [n8n callback] -> agent_messages RESPONSE [W] + Telegram
 ```
 - **Kontrakt async (event-driven, 28/06) - SZABLON dla CM/Sprzedawcy:** każdy agent = serwis z webhookiem. Prośba = `POST /request` na cel -> cel budzi pętlę OD RAZU (`threading.Event`), zwraca `202 {accepted, job_id}`; praca leci w tle, wynik callbackiem (`agent_messages` RESPONSE + Telegram), NIGDY inline. `POST /request` audytuje też prośbę w `agent_messages` (status='read', żeby poll jej nie ssał drugi raz). Guard `X-Researcher-Secret` (ten sam sekret co adaptery). Poll `agent_messages` zszedł z 5s na 30s = WOLNY BEZPIECZNIK na przegapione dzwonki + droga dla agentów piszących jeszcze prosto do DB. Cron tylko dla rutyn (NIE agent↔agent). `enqueue_job()` = jedna ścieżka ingestu dla webhooka i pollu. [[async-event-driven-comms]]
+- **Critical-restriction (Regula 2, 28/06, [[manager-decisions-approval-learning]]):** kaskada `critical` (DR+Manus, ~18 PLN) tylko dla agentów z `critical` w `agent_registry.allowed_model_tiers` (manager-ags, tomasz-human). Inny agent z zapytaniem sklasyfikowanym jako critical -> worker `_guard_level` PARKUJE job (`status='awaiting_approval'`, claim_job go nie bierze), zakłada bramkę `critical_escalation` (`escalation_detail` jsonb) i wysyła Tomaszowi Telegram z guzikami **[✅ Zatwierdz critical] [⬇️ Daj medium]** (`crit:<gate_id>:approve|deny`). Gałąź HITL (`Is Crit?` -> `Crit Resolve Gate` CTE) rozstrzyga bramkę + ustawia `research_jobs.level_override` (approve->critical / deny->capped medium) + `status='enqueued'`; worker wznawia (bezpiecznik 30s) i leci dokładnie tym poziomem. `level_override` honorowany w `process_job` PRZED guardem (decyzja człowieka jest ostateczna). NIE dotyczy synth modelu (haiku/sonnet/opus) - tylko poziomu kaskady. manager/tomasz mają full liste -> bez bramki.
 - **Co gdzie zapisywane:** job -> `research_jobs`; każde źródło -> `research_runs` + `evidence_items` + `cost_events`; synteza -> `claims` + `options`; wynik dla klienta -> `agent_messages` (RESPONSE).
 - **Kaskada (stan wdrożony, 5 żywych źródeł):** low=Web Search; medium=+Firecrawl+Gemini; critical=+OpenAI DR+Manus (router nie zwraca `high`). `DEPLOYED_ADAPTERS` w `config.py` = {web_search, firecrawl, gemini_dr, openai_dr, manus}. Router klasyfikuje query researchowe jako `medium`; `critical` wymaga słowa (piln/krytyczn/urgent/critical/high-stakes). Twarde stopy: 50/100/1500 PLN (critical ~18 PLN/query, DR drogi). Async DR+Manus dziś SEKWENCYJNIE (critical blokuje workera ~10min) -> parallel dispatch = fast-follow.
 - **Bezpieczeństwo adapterów:** każdy czyta swój klucz z `app_secrets` (zero literałów w JSON). **Guard:** adapter pobiera też `researcher_webhook_secret` i odrzuca call bez/z błędnym nagłówkiem `X-Researcher-Secret` (worker go wysyła) PRZED płatnym callem (zero spendu dla nieautoryzowanych). `saveData` OFF (klucze nie trafiają do logów n8n).
