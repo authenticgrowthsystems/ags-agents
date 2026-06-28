@@ -280,9 +280,10 @@ def _guard_level(job, level):
     capped = _capped_level(allowed, level)
     job_id = job["job_id"]
     est = config.CRITICAL_EST_PLN if level == "critical" else None
+    display = name or (str(rid) if rid else "nieznany agent")  # registered agents resolve to a name
     detail = {
         "job_id": str(job_id),
-        "requesting_agent": name or (str(rid) if rid else "unknown"),
+        "requesting_agent": display,
         "query": job.get("query_text"),
         "query_hash": job.get("query_hash"),
         "requested_level": level,
@@ -302,7 +303,7 @@ def _guard_level(job, level):
     except Exception:
         traceback.print_exc()
     db.set_status(job_id, "awaiting_approval")  # parks the job; claim_job only takes 'enqueued'
-    txt = (f"AGS Researcher: agent '{name or rid}' poprosil o poziom '{level}'"
+    txt = (f"AGS Researcher: agent '{display}' poprosil o poziom '{level}'"
            + (f" (~{est} PLN)" if est else "")
            + f", niedozwolony dla tego agenta.\nZapytanie: {(job.get('query_text') or '')[:200]}\n"
            + f"Zatwierdzic '{level}', czy dac '{capped}'?")
