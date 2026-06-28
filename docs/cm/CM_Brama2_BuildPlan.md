@@ -114,3 +114,12 @@ Event-driven: `/request` budzi pętlę (wake event, jak Researcher); poll 30s ba
 - **B-D2:** HITL CM - rozszerzyć istniejący handler `U5pUZjy2yAhR1sWg` (gałąź `cm:`) vs osobny CM HITL handler.
 - **B-D3:** planowanie - n8n cron budzi CM (spójne z "n8n=egzekutor") vs APScheduler w serwisie CM.
 - **B-D4:** wariant kanałowy - generowany przy dispatch (lazy, świeży) vs przy approval (cache'owany w post_queue wcześniej).
+
+## 8. DECYZJE BUILD-PLANU ROZSTRZYGNIĘTE (Tomasz 28/06)
+
+- **B-D1 = osobna lekka tabela `brands`** (PK brand_id, cel FK dla content_items/brand_strategy/channels; kotwica tenantów + RLS). 4 nowe tabele łącznie.
+- **B-D2 = gałąź `cm:` w istniejącym handlerze** `U5pUZjy2yAhR1sWg` (Telegram = jeden bot/webhook; routing cm: -> /hitl CM; wzorzec jak crit:/mtier:).
+- **B-D3 = n8n cron budzi CM** (POST /plan; crony w jednym miejscu; timed publishing reuse istniejący per-minutowy Scheduler).
+- **B-D4 = warianty EAGER (przed bramą HITL).** KOREKTA state-machine §4: `drafting` -> `generate.canonical` (Sonnet) + `generate.variants` dla aktywnych target_channels (Haiku) + `compliance` na każdym wariancie -> `needs_approval` pokazuje FAKTYCZNE teksty kanałowe. `approved` -> dispatch publikuje już-wygenerowane warianty (active publish / draft store). Tomasz zatwierdza to, co się opublikuje (spójne z obecnym X-agentem).
+
+**PLAN BUDOWY KOMPLETNY.** Brama 2 zaliczona (architektura + plan + wszystkie decyzje). Gotowe do buildu 30/06-01/07.
