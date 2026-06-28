@@ -2,7 +2,7 @@
 
 **Status:** ŻYWY dokument, aktualizowany przy każdej zmianie przepływu. To SUBSTRAT pod docelowy **diagram graficzny** (renderowany, gdy build skończony) - część pakietu sprzedażowego produktu.
 **Zasada nadrzędna:** jedno źródło prawdy = PostgreSQL (`ags_crd`). Notion = lustro dla człowieka, nie źródło dla agentów.
-**Ostatnia aktualizacja:** 27/06/2026 (Researcher LIVE + model selection + SLICE 3a-1 pętla nauki tieru). Diagram graficzny Researchera: `docs/researcher-dataflow.svg`.
+**Ostatnia aktualizacja:** 28/06/2026 (Researcher LIVE, 5 źródeł, model selection + pętla nauki tieru; **ingress EVENT-DRIVEN** - webhook `POST /request` budzi workera natychmiast, poll = wolny bezpiecznik). Diagram graficzny Researchera: `docs/researcher-dataflow.svg`.
 
 Legenda: `[W]` = zapis, `[R]` = odczyt.
 
@@ -63,11 +63,14 @@ Capture (tekst/głos/zdjęcie) -> triage -> research (Gemini∥DeepSeek -> Claud
 
 ## C. Researcher - przepływ (Faza 0.5, **LIVE 26/06**)
 
-**Topologia:** Hub-and-Spoke. Orkiestracja w **kontenerze Python** (`ags-researcher`, Mikrus, sieć `n8n_network`); **ingress + callback są w workerze** (poll `agent_messages` REQUEST -> `research_jobs`; RESPONSE + Telegram bezpośrednio). n8n = **3 adaptery źródeł** (read-only): Web Search, Firecrawl, Gemini. Diagram graficzny: `docs/researcher-dataflow.svg`.
+**Topologia:** Hub-and-Spoke. Orkiestracja w **kontenerze Python** (`ags-researcher`, Mikrus, sieć `n8n_network`); **ingress + callback są w workerze** (webhook `POST /request` EVENT-DRIVEN, plus poll `agent_messages` REQUEST jako bezpiecznik -> `research_jobs`; RESPONSE + Telegram bezpośrednio). n8n = **5 adapterów źródeł** (read-only): Web Search, Firecrawl, Gemini, OpenAI DR, Manus. Diagram graficzny: `docs/researcher-dataflow.svg`.
 
 ```
-Agent-klient / Tomasz --(REQUEST agent_messages)--> [n8n Ingress] --INSERT--> research_jobs(enqueued)
-   worker poll (FOR UPDATE SKIP LOCKED):
+Agent-klient / Tomasz
+   --(A) POST /request {query,model_tier?,from?,correlation_id?} [X-Researcher-Secret] --> worker: enqueue + wake.set() -> 202 {job_id}   (DROGA GŁÓWNA, event-driven)
+   --(B) REQUEST agent_messages (status unread) --> worker poll co 30s -> enqueue                                                       (BEZPIECZNIK)
+   research_jobs(enqueued):
+   worker pętla (FOR UPDATE SKIP LOCKED), budzona przez wake (natychmiast) lub timeout 30s:
      QueryRouter.classify -> CacheLayer (exact SHA-256 [+ semantic pgvector])
        hit  -> options [W] -> completed -> callback
        miss -> BudgetGovernor.preflight -> dispatch adaptery n8n (wg policy low/med/high/critical)
@@ -77,8 +80,9 @@ Agent-klient / Tomasz --(REQUEST agent_messages)--> [n8n Ingress] --INSERT--> re
                 -> claims [W] + options [W] -> research_jobs.completed (+cost_pln,confidence) [W]
                 -> [n8n callback] -> agent_messages RESPONSE [W] + Telegram
 ```
+- **Kontrakt async (event-driven, 28/06) - SZABLON dla CM/Sprzedawcy:** każdy agent = serwis z webhookiem. Prośba = `POST /request` na cel -> cel budzi pętlę OD RAZU (`threading.Event`), zwraca `202 {accepted, job_id}`; praca leci w tle, wynik callbackiem (`agent_messages` RESPONSE + Telegram), NIGDY inline. `POST /request` audytuje też prośbę w `agent_messages` (status='read', żeby poll jej nie ssał drugi raz). Guard `X-Researcher-Secret` (ten sam sekret co adaptery). Poll `agent_messages` zszedł z 5s na 30s = WOLNY BEZPIECZNIK na przegapione dzwonki + droga dla agentów piszących jeszcze prosto do DB. Cron tylko dla rutyn (NIE agent↔agent). `enqueue_job()` = jedna ścieżka ingestu dla webhooka i pollu. [[async-event-driven-comms]]
 - **Co gdzie zapisywane:** job -> `research_jobs`; każde źródło -> `research_runs` + `evidence_items` + `cost_events`; synteza -> `claims` + `options`; wynik dla klienta -> `agent_messages` (RESPONSE).
-- **Kaskada (stan wdrożony):** low=Web Search; medium=+Firecrawl+Gemini (3 żywe źródła); high=+OpenAI DR; critical=+Manus. `DEPLOYED_ADAPTERS` w `config.py` filtruje do zbudowanych adapterów (DR/Manus = fast-follow, dziś NIE wołane -> zero 404). Router klasyfikuje query researchowe jako `medium`. Twarde stopy: 50/100/1500 PLN.
+- **Kaskada (stan wdrożony, 5 żywych źródeł):** low=Web Search; medium=+Firecrawl+Gemini; critical=+OpenAI DR+Manus (router nie zwraca `high`). `DEPLOYED_ADAPTERS` w `config.py` = {web_search, firecrawl, gemini_dr, openai_dr, manus}. Router klasyfikuje query researchowe jako `medium`; `critical` wymaga słowa (piln/krytyczn/urgent/critical/high-stakes). Twarde stopy: 50/100/1500 PLN (critical ~18 PLN/query, DR drogi). Async DR+Manus dziś SEKWENCYJNIE (critical blokuje workera ~10min) -> parallel dispatch = fast-follow.
 - **Bezpieczeństwo adapterów:** każdy czyta swój klucz z `app_secrets` (zero literałów w JSON). **Guard:** adapter pobiera też `researcher_webhook_secret` i odrzuca call bez/z błędnym nagłówkiem `X-Researcher-Secret` (worker go wysyła) PRZED płatnym callem (zero spendu dla nieautoryzowanych). `saveData` OFF (klucze nie trafiają do logów n8n).
 - **Robustność:** synteza `max_tokens=8192` + `options`/`overall_confidence` z defaultami (duży pakiet evidence nie wywala joba); `evidence_items.freshness` -> TEXT, `claims.supporting_evidence` + `options.supporting_claims` -> TEXT[] (migracja `db/003`, bo źródła/LLM zwracają nie-UUID/nie-timestamp).
 - **Wybór modelu (model selection, slice 1+2):** synteza dobiera model per-job. `payload.model_tier` (haiku/sonnet/opus) wskazuje jawnie; gdy brak - auto wg complexity (low->haiku, medium->sonnet, high/critical->opus). Tier->model: haiku=`claude-haiku-4-5-20251001`, sonnet=`claude-sonnet-4-6`, opus=`claude-opus-4-8`. Koszt liczony per-model (`MODEL_RATES`; cache write 1.25x / read 0.10x input). Rozwiązany tier zapisywany w `research_jobs.model_tier`; cache rozdzielony po `(query_hash, model_tier)`. Manager będzie proponował tier z zatwierdzeniem Tomasza (slice 3, [[manager-decisions-approval-learning]]). Uwaga: haiku bywa zwraca <4 pełnych opcji na trudniejszych pytaniach (kompromis lekkiego tieru).
