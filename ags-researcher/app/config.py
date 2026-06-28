@@ -84,6 +84,8 @@ BUDGET_DAILY_PLN = _f("BUDGET_DAILY_PLN", 100.0)
 BUDGET_MONTHLY_PLN = _f("BUDGET_MONTHLY_PLN", 1500.0)
 OPENAI_DR_MAX_TOOL_CALLS = _i("OPENAI_DR_MAX_TOOL_CALLS", 20)
 FIRECRAWL_MAX_CREDITS = _i("FIRECRAWL_MAX_CREDITS", 50)
+# rough PLN cost of one critical cascade (DR + Manus), shown to Tomasz on the escalation gate (job cf4487b3 = 18.84).
+CRITICAL_EST_PLN = _f("CRITICAL_EST_PLN", 18.0)
 
 # --- cache ---
 # SEMANTIC_CACHE_ENABLED stays False until db/002_vector_addon.sql is applied (needs superuser once).

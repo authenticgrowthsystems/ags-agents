@@ -252,11 +252,84 @@ def _log_model_decision(job, level, tier, synth_model, status, cost_pln, confide
         return None
 
 
+# ---------------- critical-restriction (Regula 2: HITL gate for the critical cascade) ----------------
+_LEVEL_ORDER = ["low", "medium", "high", "critical"]
+
+
+def _capped_level(allowed, level):
+    """Highest allowed cascade level that is <= the requested level; falls back to 'low'."""
+    cands = [l for l in allowed if l in _LEVEL_ORDER and _LEVEL_ORDER.index(l) <= _LEVEL_ORDER.index(level)]
+    return max(cands, key=_LEVEL_ORDER.index) if cands else "low"
+
+
+def _guard_level(job, level):
+    """If the requesting agent is NOT allowed this cascade level (the only real case: a non-privileged agent
+    hitting `critical`, ~18 PLN), PARK the job (status='awaiting_approval') and ask Tomasz via Telegram with
+    approve / give-medium buttons (decision handled by the HITL n8n branch, callback crit:<gate_id>:approve|deny);
+    return None. Otherwise return the level unchanged. manager-ags / tomasz-human carry the full allow-list so
+    they always pass. 'level' here = cascade level (sources + cost), NOT the synth model."""
+    rid = job.get("requesting_agent_id")
+    name, allowed = None, None
+    if rid:
+        r = db.fetchone("SELECT agent_name, allowed_model_tiers FROM agent_registry WHERE agent_id=%s", (rid,))
+        if r:
+            name, allowed = r.get("agent_name"), r.get("allowed_model_tiers")
+    allowed = allowed or ["low", "medium"]  # NULL / unknown requester -> safe default
+    if level in allowed:
+        return level
+    capped = _capped_level(allowed, level)
+    job_id = job["job_id"]
+    est = config.CRITICAL_EST_PLN if level == "critical" else None
+    detail = {
+        "job_id": str(job_id),
+        "requesting_agent": name or (str(rid) if rid else "unknown"),
+        "query": job.get("query_text"),
+        "query_hash": job.get("query_hash"),
+        "requested_level": level,
+        "capped_level": capped,
+        "est_cost_pln": est,
+    }
+    gate_id = None
+    try:
+        row = db.fetchone(
+            """INSERT INTO agent_approval_gates (agent_id, gate_type, status, submitted_by, escalation_detail)
+               VALUES ((SELECT agent_id FROM agent_registry WHERE agent_name='researcher'),
+                       'critical_escalation', 'pending', %s, %s)
+               RETURNING gate_id""",
+            ((name or "agent")[:100], Jsonb(detail)),
+        )
+        gate_id = str(row["gate_id"]) if row else None
+    except Exception:
+        traceback.print_exc()
+    db.set_status(job_id, "awaiting_approval")  # parks the job; claim_job only takes 'enqueued'
+    txt = (f"AGS Researcher: agent '{name or rid}' poprosil o poziom '{level}'"
+           + (f" (~{est} PLN)" if est else "")
+           + f", niedozwolony dla tego agenta.\nZapytanie: {(job.get('query_text') or '')[:200]}\n"
+           + f"Zatwierdzic '{level}', czy dac '{capped}'?")
+    markup = None
+    if gate_id:
+        markup = {"inline_keyboard": [[
+            {"text": f"✅ Zatwierdz {level}", "callback_data": f"crit:{gate_id}:approve"},
+            {"text": f"⬇️ Daj {capped}", "callback_data": f"crit:{gate_id}:deny"},
+        ]]}
+    _telegram(txt, markup)
+    return None
+
+
 # ---------------- core pipeline ----------------
 def process_job(job):
     job_id = job["job_id"]
     query = job["query_text"]
     level = router.classify(query)
+    # critical-restriction (Regula 2): honour a prior HITL ruling (level_override), else gate a non-allowed level.
+    override = job.get("level_override")
+    if override:
+        level = override  # Tomasz already decided (approve->critical / give-medium->capped); skip the guard
+    else:
+        guarded = _guard_level(job, level)
+        if guarded is None:
+            return "awaiting_approval"  # parked: gate + Telegram sent; job resumes when Tomasz taps a button
+        level = guarded
     tier = job.get("model_tier") or config.tier_for_level(level)  # explicit payload tier wins; else auto-by-complexity
     proposed = not job.get("model_tier")  # True = Manager auto-proposed the tier (vs caller-dictated); only proposals feed learning
     synth_model = config.model_for_tier(tier)
