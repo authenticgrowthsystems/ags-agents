@@ -1,0 +1,42 @@
+"""HITL: Telegram approval gate. Sends the canonical + per-channel variants with approve/reject buttons
+(callback cm:<item_id>:approve|reject). The button is handled by the cm: branch added to the existing n8n
+HITL handler (U5pUZjy2yAhR1sWg), which flips content_items.status -> approved | rejected."""
+import json
+
+import httpx
+
+from . import db, config
+
+
+def _admin_chat_id():
+    r = db.fetchone("SELECT config_value FROM brand_config WHERE brand_id='AGS' AND config_key='admin_chat_ids' LIMIT 1")
+    if r and r.get("config_value"):
+        try:
+            arr = json.loads(r["config_value"])
+            return str(arr[0]) if arr else None
+        except Exception:
+            return None
+    return None
+
+
+def send_approval(item, variants):
+    """variants = list of (channel, text). Returns True if sent."""
+    tok = config.TELEGRAM_BOT_TOKEN
+    chat = _admin_chat_id()
+    if not tok or not chat:
+        return False
+    lines = [f"CM: nowy material (marka {item['brand_id']}) - {item.get('master_theme')}", ""]
+    for ch, txt in variants:
+        lines.append(f"--- {ch} ---\n{txt}\n")
+    text = "\n".join(lines)[:3800]
+    kb = {"inline_keyboard": [[
+        {"text": "✅ Zatwierdz", "callback_data": f"cm:{item['id']}:approve"},
+        {"text": "❌ Odrzuc", "callback_data": f"cm:{item['id']}:reject"},
+    ]]}
+    try:
+        httpx.post(f"https://api.telegram.org/bot{tok}/sendMessage",
+                   json={"chat_id": chat, "text": text, "disable_web_page_preview": True, "reply_markup": kb},
+                   timeout=15)
+        return True
+    except Exception:
+        return False
