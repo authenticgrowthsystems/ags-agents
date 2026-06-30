@@ -50,6 +50,7 @@ class Synthesizer:
         resp = self._client.messages.create(
             model=model or config.SYNTH_MODEL,
             max_tokens=8192,
+            thinking={"type": "disabled"},  # Sonnet 5 defaults thinking ON; forced tool_choice needs it off
             system=self._system,
             tools=[_TOOL],
             tool_choice={"type": "tool", "name": "emit_research_output"},

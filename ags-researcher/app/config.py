@@ -34,7 +34,7 @@ MANUS_API_KEY = os.getenv("MANUS_API_KEY", "")
 RESEARCHER_WEBHOOK_SECRET = os.getenv("RESEARCHER_WEBHOOK_SECRET", "")
 
 # --- models ---
-SYNTH_MODEL = os.getenv("SYNTH_MODEL", "claude-sonnet-4-6")
+SYNTH_MODEL = os.getenv("SYNTH_MODEL", "claude-sonnet-5")  # upgraded 30/06 from claude-sonnet-4-6
 EMBED_MODEL = os.getenv("EMBED_MODEL", "text-embedding-3-small")
 EMBED_DIM = 1536
 OPENAI_DR_HIGH = os.getenv("OPENAI_DR_HIGH", "o4-mini-deep-research")
@@ -47,13 +47,16 @@ OPENAI_DR_CRITICAL = os.getenv("OPENAI_DR_CRITICAL", "o4-mini-deep-research")
 DEFAULT_MODEL_TIER = "sonnet"
 TIER_MODELS = {
     "haiku": "claude-haiku-4-5-20251001",  # cheap / fast
-    "sonnet": "claude-sonnet-4-6",          # standard (default)
+    "sonnet": "claude-sonnet-5",            # standard (default) - upgraded 30/06 from claude-sonnet-4-6
     "opus": "claude-opus-4-8",              # heavy / most capable
 }
-# input / output USD per 1M tokens (verified via claude-api skill 27/06). Cache: write 1.25x input, read 0.10x input.
+# input / output USD per 1M tokens (verified via claude-api skill). Cache: write 1.25x input, read 0.10x input.
+# Sonnet 5 sticker $3/$15 (intro $2/$10 through 2026-08-31); sticker kept for conservative budgeting. NOTE the
+# Sonnet 5 tokenizer emits ~30% more tokens for the same text, so real per-job cost rises ~30% vs Sonnet 4.6.
 MODEL_RATES = {
     "claude-haiku-4-5-20251001": (1.0, 5.0),
-    "claude-sonnet-4-6": (3.0, 15.0),
+    "claude-sonnet-5": (3.0, 15.0),
+    "claude-sonnet-4-6": (3.0, 15.0),  # kept for cost lookup on any pre-upgrade cached jobs
     "claude-opus-4-8": (5.0, 25.0),
 }
 

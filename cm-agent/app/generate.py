@@ -27,6 +27,7 @@ def generate_canonical(brand, master_theme, research_context=""):
     msg += "\n\nReturn ONLY the post body. Brand voice. Zero em dashes."
     resp = client().messages.create(
         model=config.CANONICAL_MODEL, max_tokens=1500,
+        thinking={"type": "disabled"},  # Sonnet 5 defaults thinking ON when omitted; keep it off (preserves budget)
         system=system_blocks(brand),
         messages=[{"role": "user", "content": msg}],
     )
@@ -48,7 +49,7 @@ def generate_variant(brand, canonical_body, channel):
     msg = (f"Adapt the canonical post below for {channel}. {guide}\n"
            f"Keep the brand voice. Zero em dashes. Return ONLY the adapted text.\n\nCANONICAL:\n{canonical_body}")
     resp = client().messages.create(
-        model=config.VARIANT_MODEL, max_tokens=800,
+        model=config.VARIANT_MODEL, max_tokens=800,  # Haiku: no thinking-default change, leave as-is
         system=system_blocks(brand),
         messages=[{"role": "user", "content": msg}],
     )

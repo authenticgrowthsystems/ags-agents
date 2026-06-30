@@ -27,12 +27,14 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 # --- models (verified ids; same map as Researcher) ---
 TIER_MODELS = {
     "haiku": "claude-haiku-4-5-20251001",
-    "sonnet": "claude-sonnet-4-6",
+    "sonnet": "claude-sonnet-5",   # upgraded 30/06 from claude-sonnet-4-6 (near-Opus quality)
     "opus": "claude-opus-4-8",
 }
 MODEL_RATES = {  # input / output USD per 1M
     "claude-haiku-4-5-20251001": (1.0, 5.0),
-    "claude-sonnet-4-6": (3.0, 15.0),
+    # Sonnet 5 sticker $3/$15 (intro $2/$10 through 2026-08-31). Sticker used here for conservative budgeting;
+    # NOTE the Sonnet 5 tokenizer emits ~30% more tokens for the same text, so real per-job cost rises ~30%.
+    "claude-sonnet-5": (3.0, 15.0),
     "claude-opus-4-8": (5.0, 25.0),
 }
 CANONICAL_MODEL = TIER_MODELS[os.getenv("CM_CANONICAL_TIER", "sonnet")]   # tekst-matka
