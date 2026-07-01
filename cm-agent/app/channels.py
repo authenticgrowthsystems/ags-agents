@@ -8,13 +8,15 @@ from . import db, config
 
 
 def active_targets(brand_id, target_channels):
-    """Registry rows for the item's target channels that should receive a variant now (active or draft).
-    'ready' channels are scaffolded slots, skipped until activated."""
+    """Channels CM manages for this item: rows that are SUPERVISED (CM toggle ON) AND active/draft.
+    supervised=false = the channel runs STANDALONE (its own sub-agent loop + own Telegram), so CM leaves it
+    alone - the toggle that makes each sub-agent a sellable object usable with or without CM. 'ready' channels
+    are scaffolded slots, skipped until activated."""
     rows = db.fetchall(
-        "SELECT channel, status, adapter_path, config FROM channels WHERE brand_id=%s AND channel = ANY(%s)",
+        "SELECT channel, status, adapter_path, config, supervised FROM channels WHERE brand_id=%s AND channel = ANY(%s)",
         (brand_id, list(target_channels or [])),
     )
-    return [r for r in rows if r["status"] in ("active", "draft")]
+    return [r for r in rows if r.get("supervised") and r["status"] in ("active", "draft")]
 
 
 def stage_variant(item, channel_row, variant_text):
