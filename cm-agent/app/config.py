@@ -43,7 +43,7 @@ COMPLIANCE_MODEL = TIER_MODELS[os.getenv("CM_COMPLIANCE_TIER", "haiku")]  # redr
 
 
 def rates_for_model(model):
-    return MODEL_RATES.get(model, MODEL_RATES["claude-sonnet-4-6"])
+    return MODEL_RATES.get(model, MODEL_RATES["claude-sonnet-5"])
 
 
 # --- loop / http ---
