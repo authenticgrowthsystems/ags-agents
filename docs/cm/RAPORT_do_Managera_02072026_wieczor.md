@@ -26,8 +26,12 @@ Jeden master_theme -> tekst-matka + 2 warianty -> jeden approve na Telegramie ->
 - **Granulacja subagentów per KONTO/CEL** (nie per platforma) z toggle - "bardzo, bardzo ważne".
 - **Docelowa obsługa contentu tylko z Telegrama** (potem aplikacja/Slack) - ręczne triggery przeze mnie to tryb przejściowy.
 
-## 6. Następny krok (krok 3): MÓZG CM
-Proaktywny planer (tydzień/2 mies.), dwustronna rozmowa Telegram, podgląd/harmonogram, konfiguracja per cel (język/narracja), media. Projekt startuje w następnej sesji na świeżym kontekście (resume gotowy).
+## 6. Mózg CM (krok 3) - AKTUALIZACJA z końcówki sesji: PROJEKT GOTOWY I ZATWIERDZONY
+Sesja poszła dalej niż zakładał ten raport:
+- Tomasz wykonał RĘCZNIE głębokie researche (Gemini Deep Research + Manus na kontach premium, wg briefu `RESEARCH_BRIEF_TelegramMultiAgent_02072026.md`); wyniki w `docs/research/` - obie analizy ZBIEŻNE i potwierdzają nasz wzorzec (kolejka w PostgreSQL + workery; aiogram 3.x przy gatewayu; FSM w PG; dedup update_id; split 4096; ForceReply+/cancel+TTL).
+- Architektura mózgu zaprojektowana i ZATWIERDZONA: `CM_BRAIN_DESIGN_v1.md` - 4 fazy (rozmowa+kolejka z jednym approve -> proaktywny planer -> pierwszy komentarz + język per cel -> media).
+- Decyzje domknięte: D1 logi na istniejącego bota #2; D2 model jednego approve (plan hurtem, materiał jednym tapnięciem, publikacja automatycznie w slocie); D3 implementacja Fazy 1 od następnej sesji (resume `RESUME_MASTERPROMPT_03072026.md` sekcja 6 = dokładna lista budowy).
+- Nowa reguła wykonawcza od Tomasza utrwalona: badania mogą być robione ręcznie na jego kontach premium - moja rola = kompletne prompty + instrukcje krok po kroku + format wyników czytelny dla agenta.
 
 ## Otwarte / do pilnowania
 - Token LinkedIn: odnowienie ~01/09/2026 (Token Generator, 2 min).
