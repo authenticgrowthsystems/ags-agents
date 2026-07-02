@@ -33,11 +33,14 @@ def get_secret(key):
 
 def claim_content_item():
     """Atomically claim the oldest content_item the loop can advance (SKIP LOCKED). The state machine itself
-    moves the row to its next status, so a claimed item is not re-picked. Returns dict or None."""
+    moves the row to its next status, so a claimed item is not re-picked. Slot gate (CM Brain Phase 1):
+    an 'approved' item with a future scheduled_for is NOT claimed - it waits for its slot; the 30s poll
+    backstop gives publish precision comparable to the per-minute Scheduler. Returns dict or None."""
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute(
             """SELECT * FROM content_items
                WHERE status = ANY(%s)
+                 AND (status <> 'approved' OR scheduled_for IS NULL OR scheduled_for <= NOW())
                ORDER BY created_at
                FOR UPDATE SKIP LOCKED
                LIMIT 1""",

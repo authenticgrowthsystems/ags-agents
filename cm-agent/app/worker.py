@@ -1,5 +1,6 @@
-"""CM worker: FastAPI (/health /metrics /request /plan) + a state-machine loop over content_items.
-Event-driven: /request and /plan wake the loop; a 30s poll is the backstop. Mirrors the Researcher worker."""
+"""CM worker: FastAPI (/health /metrics /request /plan /message) + a state-machine loop over content_items.
+Event-driven: /request, /plan and /message wake the loop; a 30s poll is the backstop. Mirrors the Researcher
+worker. /message = the CM Brain conversation entry (n8n HITL forwards Telegram text here)."""
 import datetime
 import threading
 import traceback
@@ -9,7 +10,7 @@ from fastapi import FastAPI, Header, HTTPException
 
 from . import config, db
 from .brand import load_brand
-from . import generate, compliance, channels, research, hitl
+from . import generate, compliance, channels, research, hitl, conversation, logbot
 
 api = FastAPI(title="AGS Content Manager")
 wake = threading.Event()
@@ -73,6 +74,17 @@ def plan(body: dict, x_researcher_secret: str = Header(default="")):
     return {"accepted": True}
 
 
+@api.post("/message", status_code=202)
+def message(body: dict, x_researcher_secret: str = Header(default="")):
+    """Conversation entry: n8n HITL forwards a Telegram text {chat_id, text, update_id}. Returns 202
+    immediately; a background thread runs the ConversationRouter and replies via sendMessage directly."""
+    _guard(x_researcher_secret)
+    if not body.get("chat_id"):
+        raise HTTPException(status_code=400, detail="chat_id required")
+    threading.Thread(target=conversation.handle, args=(body,), daemon=True).start()
+    return {"accepted": True}
+
+
 # ---------------- state machine ----------------
 def _draft(item):
     brand = load_brand(item["brand_id"])
@@ -105,6 +117,7 @@ def process_item(item):
         db.set_item_status(item["id"], "dispatching")
         n = channels.dispatch_item(item)
         db.set_item_status(item["id"], "published")
+        logbot.send(f"✅ CM opublikowal: {item['master_theme']} ({n} kanalow)")
         return f"published({n})"
     return "noop"
 
@@ -131,7 +144,8 @@ def loop():
 def _load_secrets():
     for attr, key in (("ANTHROPIC_API_KEY", "anthropic_api_key"),
                       ("RESEARCHER_WEBHOOK_SECRET", "researcher_webhook_secret"),
-                      ("TELEGRAM_BOT_TOKEN", "telegram_bot_token")):
+                      ("TELEGRAM_BOT_TOKEN", "telegram_bot_token"),
+                      ("LOG_BOT_TOKEN", "log_bot_token")):
         try:
             v = db.get_secret(key)
             if v:
@@ -143,6 +157,7 @@ def _load_secrets():
 
 def main():
     _load_secrets()
+    conversation.wake_event = wake  # a material proposed in conversation wakes the loop immediately
     threading.Thread(target=loop, daemon=True).start()
     uvicorn.run(api, host="0.0.0.0", port=config.HTTP_PORT, log_level="info")
 

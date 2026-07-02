@@ -23,6 +23,7 @@ RESEARCHER_URL = os.getenv("RESEARCHER_URL", "http://ags-researcher:8088").rstri
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 RESEARCHER_WEBHOOK_SECRET = os.getenv("RESEARCHER_WEBHOOK_SECRET", "")  # shared guard for /request calls
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+LOG_BOT_TOKEN = os.getenv("LOG_BOT_TOKEN", "")  # bot #2: log channel (publish confirmations), decision D1
 
 # --- models (verified ids; same map as Researcher) ---
 TIER_MODELS = {
@@ -40,6 +41,7 @@ MODEL_RATES = {  # input / output USD per 1M
 CANONICAL_MODEL = TIER_MODELS[os.getenv("CM_CANONICAL_TIER", "sonnet")]   # tekst-matka
 VARIANT_MODEL = TIER_MODELS[os.getenv("CM_VARIANT_TIER", "haiku")]        # per-channel adaptacja
 COMPLIANCE_MODEL = TIER_MODELS[os.getenv("CM_COMPLIANCE_TIER", "haiku")]  # redraft on canon fail
+CONVERSATION_MODEL = TIER_MODELS[os.getenv("CM_CONVERSATION_TIER", "sonnet")]  # rozmowa Telegram (mozg CM)
 
 
 def rates_for_model(model):

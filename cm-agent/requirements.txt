@@ -5,3 +5,4 @@ httpx==0.28.1
 anthropic>=0.92
 tenacity==9.0.0
 pydantic==2.10.4
+tzdata==2025.2

@@ -123,8 +123,28 @@ approve -> CM dispatch per publish_mode:
 | **LinkedIn profil osobisty** (`linkedin-agent`) | `Subagent LinkedIn Publisher` Uv9TvUMI8MRSqCLz, `/webhook/subagent-linkedin-publish` | Bearer `POST /v2/ugcPosts` (Share on LinkedIn, w_member_social) | `linkedin_access_token` + `linkedin_author_urn`; **GENERYCZNY per cel**: `secret_prefix` w payloadzie (default 'linkedin'); strona firmowa = nowy prefix + wiersz `channels`, zero kodu |
 | (pomocniczy) | `LinkedIn OAuth Callback` qvznauoY3FXIttMI, `/webhook/li-oauth-callback` | 3-legged exchange + zapis tokenu/URN | wymaga poprawnego `linkedin_client_secret` (dziś zły; token brany z portalowego Token Generatora) |
 
-### E.4 Czego NIE ma (mózg CM = krok 3 kanonicznej sekwencji)
-Proaktywny planer (tydzień/2 mies. z brand_strategy), dwustronna rozmowa Telegram (dziś tylko guziki), podgląd/edycja/harmonogram, media (zdjęcia/wideo), konfiguracja per cel (język: profil EN / TNM PL / AGS EN / RDC PL; narracja; cele), strony firmowe LinkedIn (App 2 CMA w review), FB/IG/YT, tryb standalone subagentów, multi-brand. Znana kosmetyka: tekst potwierdzenia HITL po approve ("X scheduled, LinkedIn draft") nie odzwierciedla delegacji webhook.
+### E.4 Mózg CM Faza 1 - rozmowa + kolejka z jednym approve (zbudowane 03/07, wg CM_BRAIN_DESIGN_v1)
+```
+Telegram tekst (bez stanu edycji/synth) -> HITL 'Idea Not Editing?' TRUE -> [NOWE] CM Get Secret -> POST cm-agent /message {chat_id,text,update_id} [X-Researcher-Secret]
+  cm-agent /message: 202 + wątek tła -> conversation.handle:
+    dedup update_id (processed_updates, czyszczenie >24h) -> /cancel|anuluj = reset stanu -> plan|kolejka|status = podgląd kolejki (bez LLM)
+    -> reszta: placeholder ⏳ -> Sonnet 5 (thinking disabled, historia z user_agent_state, TTL 30 min, glos marki cache)
+       + narzędzie propose_material {master_theme, target_channels, scheduled_for ISO} -> INSERT content_items 'planned' + wake pętli
+    -> odpowiedź: editMessageText placeholdera + split 4096 na granicach akapitów
+JEDEN APPROVE (D2): approve materiału = koniec klikania; pętla claimuje 'approved' DOPIERO gdy scheduled_for<=NOW() (backstop 30s)
+  -> dispatch (istniejący kontrakt) -> potwierdzenie publikacji na KANAŁ LOGOWY = bot #2 (app_secrets.log_bot_token, D1)
+```
+| Nowe tabele/kolumny (db/003_brain_phase1.sql) | Co trzymają |
+|---|---|
+| `user_agent_state` | stan rozmowy per czat: `active_agent`, `fsm_state`, `fsm_data` jsonb (historia, TTL 30 min) |
+| `processed_updates` | dedup Telegram update_id (retry webhooka nie dubluje) |
+| `content_items.first_comment` + status `proposed` | pierwszy komentarz (Faza 3) + pozycja planu przed akceptacją (Faza 2) |
+| `app_secrets.log_bot_token` | token bota #2 (kanał logowy) |
+
+Stary zapis pomysłu z TEKSTU (Prepare Idea Text -> Save Idea -> triage) ODPIĘTY (węzły zostają jako sierotki do rollbacku); głos/foto idą starym torem. Gałąź HITL: +2 węzły `CM Get Secret` + `CM Conversation Message` (patch: ags-media-spike/hitl-cm-branch-patch.cjs).
+
+### E.5 Czego dalej NIE ma (Fazy 2-4)
+Proaktywny planer (tydzień/2 mies. z brand_strategy, cron /plan), edycja zaplanowanych postów w rozmowie, media (zdjęcia/wideo), konfiguracja per cel (język: profil EN / TNM PL / AGS EN / RDC PL; narracja; cele), pierwszy komentarz (generacja + publikacja), strony firmowe LinkedIn (App 2 CMA w review), FB/IG/YT, tryb standalone subagentów, multi-brand. Znana kosmetyka: tekst potwierdzenia HITL po approve ("X scheduled, LinkedIn draft") nie odzwierciedla delegacji webhook.
 
 ---
 
