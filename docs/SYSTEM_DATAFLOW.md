@@ -2,7 +2,7 @@
 
 **Status:** ŻYWY dokument, aktualizowany przy każdej zmianie przepływu. To SUBSTRAT pod docelowy **diagram graficzny** (renderowany, gdy build skończony) - część pakietu sprzedażowego produktu.
 **Zasada nadrzędna:** jedno źródło prawdy = PostgreSQL (`ags_crd`). Notion = lustro dla człowieka, nie źródło dla agentów.
-**Ostatnia aktualizacja:** 28/06/2026 (Researcher LIVE, 5 źródeł, model selection + pętla nauki tieru; **ingress EVENT-DRIVEN** - webhook `POST /request`; **critical-restriction** - kaskada critical tylko manager-ags/tomasz, inni przez bramkę HITL z guzikami). Diagram graficzny Researchera: `docs/researcher-dataflow.svg`.
+**Ostatnia aktualizacja:** 02/07/2026 wieczór (CM + subagenci X/LinkedIn na kontrakcie konektora - sekcja E; rotacja kluczy X + de-hardkod Schedulera; dwukanałowe E2E PASSED). Poprzednio 28/06 (Researcher LIVE). Diagram graficzny Researchera: `docs/researcher-dataflow.svg`.
 
 Legenda: `[W]` = zapis, `[R]` = odczyt.
 
@@ -20,7 +20,7 @@ Legenda: `[W]` = zapis, `[R]` = odczyt.
 | `conversation_state` | stan rozmowy idea-bota | HITL [W/R] |
 | `voice_notes`, `voice_samples` | pamięć głosu do generacji | HITL [W/R] |
 | `brand_config` | key/value per `brand_id`. `voice_bible`, `banned_vocab`, `publish_windows`, `auto_publish_enabled` (=false), itd. ZRODLO GLOSU | generatory [R], Tomasz [W via Telegram] |
-| `app_secrets` | sekrety: `telegram_bot_token`, `x_consumer_key/secret`, `x_access_token/secret` | publishery [R przez SQL subselect] |
+| `app_secrets` | sekrety (key/value, JEDYNE źródło kluczy): `telegram_bot_token`, `x_consumer_key/secret`, `x_access_token/secret` (ZROTOWANE 02/07), `linkedin_client_id/secret`, `linkedin_access_token` (Token Generator, wygasa ~01/09/2026), `linkedin_author_urn`, `researcher_webhook_secret`, klucze LLM/źródeł | publishery + workery [R przez SQL]; rotacja = UPDATE (Tomasz SSH) |
 | `task_queue` | (z oryginalnego buildu) zadania agentowe | - |
 | `contacts`, `engagement_log` | relikty CRM | - |
 
@@ -54,7 +54,7 @@ Capture (tekst/głos/zdjęcie) -> triage -> research (Gemini∥DeepSeek -> Claud
 - **Dedup = prawda z bazy:** wpis raz opublikowany (`block.id` w `published_posts`) NIGDY nie jest podawany ponownie, niezależnie od wizualnego stanu Notion.
 
 ### B.3 Scheduler `x1jJEbcWAe3FnpCa` (co minutę)
-`post_queue` status='scheduled' o `scheduled_for` <= now -> publish (OAuth1) -> `published_posts` [W].
+Every Minute -> `Get Keys` (klucze X + telegram_bot_token z `app_secrets` [R]; de-hardkod 02/07, zero sekretów w definicji) -> `post_queue` status='scheduled' o `scheduled_for` <= now -> publish (OAuth1) -> mark published + Telegram confirm.
 
 ### B.4 Znana luka (interim, do migracji)
 `Notion Mark Published` ma relikt `$('PostgreSQL Lookup Session').item.json[0]...` (`.json` to obiekt, nie tablica) -> PATCH pada -> bullety nie dostają `[PUBLISHED]` w Notion -> kolejka Notion nie sprząta się sama. **Dedup DB chroni przed pętlą** (re-publish niemożliwy). Płynący objaw "pusta kolejka mimo wpisów" = poprawny dedup wyczerpanych wpisów; komunikat bota to teraz tłumaczy (fix 24/06). Pełna naprawa = migracja źródła treści Notion -> baza (Notion staje się tylko lustrem).
@@ -89,6 +89,42 @@ Agent-klient / Tomasz
 - **Wybór modelu (model selection, slice 1+2):** synteza dobiera model per-job. `payload.model_tier` (haiku/sonnet/opus) wskazuje jawnie; gdy brak - auto wg complexity (low->haiku, medium->sonnet, high/critical->opus). Tier->model: haiku=`claude-haiku-4-5-20251001`, sonnet=`claude-sonnet-4-6`, opus=`claude-opus-4-8`. Koszt liczony per-model (`MODEL_RATES`; cache write 1.25x / read 0.10x input). Rozwiązany tier zapisywany w `research_jobs.model_tier`; cache rozdzielony po `(query_hash, model_tier)`. Manager będzie proponował tier z zatwierdzeniem Tomasza (slice 3, [[manager-decisions-approval-learning]]). Uwaga: haiku bywa zwraca <4 pełnych opcji na trudniejszych pytaniach (kompromis lekkiego tieru).
 - **Pętla nauki tieru (SLICE 3a-1, async propose-and-run):** worker po domknięciu joba z AUTO-tierem (brak jawnego `payload.model_tier`) zapisuje decyzję jako bramkę `gate_type='model_selection'` w `agent_approval_gates` (status 'pending', submitted_by 'manager-ags') z propozycją + wynikiem w `model_decision` JSONB (`proposed_tier`, `complexity`, `outcome_status`/`_cost_pln`/`_confidence`/`_option_count`; `approved_tier`/`was_corrected` = NULL do korekty). Job NIE czeka. Cache-hit / failed / budget-block NIE są logowane (tier nie odpalił syntezy). Korekta/zatwierdzenie przez Telegram = 3a-2; wykrywanie wzorców + automatyzacja po 20-30 = 3b. Migracja `db/005`. [[manager-decisions-approval-learning]]
 - **Moduły Python:** `router`, `cache`, `budget`, `prompts`, `synth`, `failure`, `sources`; `worker` (pętla + FastAPI `/health` `/metrics`). Adaptery n8n w repo: `n8n-workflows/researcher/`. Deploy: `ags-researcher/README.md`.
+
+---
+
+## E. Content Manager + subagenci kanałów (LIVE 02/07, SZKIELET WYKONAWCZY ~10%)
+
+**Topologia:** CM = kontener Python (`cm-agent`, port 8089, wzorzec Researchera: FastAPI `/request` `/plan` `/health` + pętla state-machine budzona wake/30s). Subagenci kanałów = workflowy n8n na KONTRAKCIE KONEKTORA (webhook + guard + klucze z `app_secrets` + publish + callback). Zasada produktu: **subagent = obiekt per KONTO/CEL** (nie per platforma), toggle `channels.supervised`.
+
+### E.1 Tabele CM (owner ags_crd_user)
+| Tabela | Co trzyma | Kto pisze / czyta |
+|---|---|---|
+| `brands` | rejestr marek (AGS; docelowo TNM, RDC, personal) | CM [R] |
+| `brand_strategy` | `target_audience`, `content_pillars`, `core_topics` per brand | CM [R] |
+| `content_items` | state machine treści: planned->[needs_research->researching]->drafting->needs_approval->approved->dispatching->published/rejected; `master_theme`, `canonical_body` (tekst-matka), `target_channels[]`, `taxonomy`, `voice_hash`, `research_job_id` | CM [W/R], HITL (cm: guziki) [W] |
+| `channels` | rejestr celów publikacji per brand: `channel`, `status` (active/draft/ready), **`supervised`** (toggle CM on/off), `adapter_path`, `config` jsonb (`publish_mode`: webhook/post_queue/draft) | CM [R], Tomasz [W SQL] |
+| `post_queue.content_item_id` | link wariantów kanałowych do content_item | CM [W], subagenci [W status] |
+
+### E.2 Przepływ dwukanałowy (E2E PASSED 02/07 22:08, item 66c6357e)
+```
+Tomasz/Manager --POST /request {brand_id,master_theme,target_channels,taxonomy}--> CM (202 {content_item_id})
+CM pętla: planned -> generate_canonical (Sonnet 5, thinking disabled, voice z brand_config + cache) -> compliance (em-dash filter + banned vocab)
+   -> per kanał SUPERVISED+active/draft: generate_variant (Haiku, CHANNEL_GUIDE) -> stage do post_queue (status='review')
+   -> needs_approval + Telegram guziki cm:<id>:approve|reject (HITL handler U5pUZjy2yAhR1sWg)
+approve -> CM dispatch per publish_mode:
+   webhook  -> POST adapter subagenta [X-Researcher-Secret] -> subagent publikuje -> callback: post_queue 'published' + agent_messages RESPONSE {ok,url}
+   post_queue -> status 'scheduled' (Scheduler co minutę)   |   draft -> status 'held' (ręcznie)
+```
+
+### E.3 Subagenci LIVE
+| Subagent | Workflow | Publikacja | Klucze (app_secrets) |
+|---|---|---|---|
+| **X** (`x-agent`) | `Subagent X Publisher` G3nEIt5lIkiKemiK, `/webhook/subagent-x-publish` | OAuth1 `POST /2/tweets` | `x_consumer_key/secret`, `x_access_token/secret` |
+| **LinkedIn profil osobisty** (`linkedin-agent`) | `Subagent LinkedIn Publisher` Uv9TvUMI8MRSqCLz, `/webhook/subagent-linkedin-publish` | Bearer `POST /v2/ugcPosts` (Share on LinkedIn, w_member_social) | `linkedin_access_token` + `linkedin_author_urn`; **GENERYCZNY per cel**: `secret_prefix` w payloadzie (default 'linkedin'); strona firmowa = nowy prefix + wiersz `channels`, zero kodu |
+| (pomocniczy) | `LinkedIn OAuth Callback` qvznauoY3FXIttMI, `/webhook/li-oauth-callback` | 3-legged exchange + zapis tokenu/URN | wymaga poprawnego `linkedin_client_secret` (dziś zły; token brany z portalowego Token Generatora) |
+
+### E.4 Czego NIE ma (mózg CM = krok 3 kanonicznej sekwencji)
+Proaktywny planer (tydzień/2 mies. z brand_strategy), dwustronna rozmowa Telegram (dziś tylko guziki), podgląd/edycja/harmonogram, media (zdjęcia/wideo), konfiguracja per cel (język: profil EN / TNM PL / AGS EN / RDC PL; narracja; cele), strony firmowe LinkedIn (App 2 CMA w review), FB/IG/YT, tryb standalone subagentów, multi-brand. Znana kosmetyka: tekst potwierdzenia HITL po approve ("X scheduled, LinkedIn draft") nie odzwierciedla delegacji webhook.
 
 ---
 
