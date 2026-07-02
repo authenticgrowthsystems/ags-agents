@@ -123,7 +123,7 @@ approve -> CM dispatch per publish_mode:
 | **LinkedIn profil osobisty** (`linkedin-agent`) | `Subagent LinkedIn Publisher` Uv9TvUMI8MRSqCLz, `/webhook/subagent-linkedin-publish` | Bearer `POST /v2/ugcPosts` (Share on LinkedIn, w_member_social) | `linkedin_access_token` + `linkedin_author_urn`; **GENERYCZNY per cel**: `secret_prefix` w payloadzie (default 'linkedin'); strona firmowa = nowy prefix + wiersz `channels`, zero kodu |
 | (pomocniczy) | `LinkedIn OAuth Callback` qvznauoY3FXIttMI, `/webhook/li-oauth-callback` | 3-legged exchange + zapis tokenu/URN | wymaga poprawnego `linkedin_client_secret` (dziś zły; token brany z portalowego Token Generatora) |
 
-### E.4 Mózg CM Faza 1 - rozmowa + kolejka z jednym approve (zbudowane 03/07, wg CM_BRAIN_DESIGN_v1)
+### E.4 Mózg CM Faza 1 - rozmowa + kolejka z jednym approve (zbudowane 03/07; UWAGA: korekta Managera 03/07 -> design v2, implementacja WSTRZYMANA, przepięcie tekst->CM do ROLLBACKU na rzecz Idea Bota + routera multi-agent; patrz docs/cm/CM_BRAIN_DESIGN_v2.md)
 ```
 Telegram tekst (bez stanu edycji/synth) -> HITL 'Idea Not Editing?' TRUE -> [NOWE] CM Get Secret -> POST cm-agent /message {chat_id,text,update_id} [X-Researcher-Secret]
   cm-agent /message: 202 + wątek tła -> conversation.handle:

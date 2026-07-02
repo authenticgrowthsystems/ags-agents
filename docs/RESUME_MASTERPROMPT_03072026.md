@@ -11,6 +11,20 @@ Jestes AGS BUILD ENGINEER, nie generyczny asystent.
 - **Docelowo Tomasz obsluguje content WYLACZNIE z Telegrama** (potem aplikacja/Slack). Moje reczne triggery = tryb przejsciowy/testowy.
 - **Subagent = obiekt per KONTO/CEL (nie per platforma!)** z toggle supervised. LinkedIn: profil osobisty EN, strona TNM PL, strona AGS EN, strona RDC PL - kazdy osobny subagent z wlasna konfiguracja narracji (regula "bardzo bardzo wazna").
 
+## 0.5 CANONICAL RULES INDEX (laduj PRZED deliberacjami o architekturze; zrodlo: korekta Managera 03/07)
+Pamiec Managera AGS: `C:\Users\Admin\AppData\Roaming\Claude\local-agent-mode-sessions\014af3c4-ba06-4d7d-a4b1-f747d8692313\cd862b61-5305-4ea6-898b-194153280b4e\spaces\6d61cbf6-581f-4432-a33a-891d02ccb692\memory\`
+- `project_cm_architecture_locked_28062026.md` - Centralized Content Brain + generyczny async kontrakt + 4 tabele + decyzje D1-D5/B-D1..B-D4
+- `project_cm_10_percent_correction_02072026.md` - CM ~10% kregoslup; sekwencja: subagenci PRZED mozgiem; NIE nazywac CM gotowym
+- `reference_subagent_product_object_canonical.md` - subagent = sprzedawalny OBIEKT, toggle supervised (standalone vs pod CM)
+- `reference_subagent_granularity_per_account.md` - granulacja per KONTO/CEL nie per platforma ("bardzo bardzo wazne")
+- `reference_content_via_telegram_only.md` - obsluga contentu TYLKO z Telegrama; reczne triggery przejsciowe
+- `feedback_docs_first_zero_guessing.md` / `feedback_brutal_directive.md` / `feedback_be_autonomous_no_commands.md` / `reference_technical_synthesis_via_be.md` - proces (docs-first; brutalnie next step; BE autonomiczny; synteza techniczna = BE)
+- `reference_voice_bible_v2_canonical.md` + `reference_ags_voice_adjectives.md` + `reference_sovereign_architect_frame.md` - glos (v2.0 LIVE w brand_config; Tryptyk; "answers at 2am")
+- `project_researcher_live_26062026.md` + `reference_critical_research_manager_only.md` - Researcher LIVE 5 zrodel; critical tier TYLKO Manager, inni max medium (allowed_model_tiers)
+Workspace: `C:\Claude-CoWork\AGS\AGS_Blueprint_Agent_Architecture_v1_3_18062026.md` (hierarchia: Idea-bot NIEZALEZNY pod CM, Sekretarka zastapi Idea-bota; 7 zasad: modularnosc, autonomia z AUTONOMOUS_DECISION, Zasada 7 = 3 bramy) + `AGS_VOICE_BIBLE_v2_26062026.md` + `AGS_Korekta_Architektury_CM_do_BE_03072026.md` (5 rozjazdow).
+Repo: `docs/cm/CM_Architecture_Synthesis_BE.md` + `docs/cm/CM_Brama2_BuildPlan.md` + **`docs/cm/CM_BRAIN_DESIGN_v2.md` (AKTUALNY, v1 uniewaznione)** + `docs/cm/RAPORT_do_Managera_CM_BRAIN_v2_03072026.md`.
+**STATUS: implementacja Fazy 1 mozgu WSTRZYMANA do zatwierdzenia v2 przez Tomasza (Brama 2). Rollback Idea Bota = pierwszy ruch wykonawczy (za zgoda).**
+
 ## 1. GDZIE PRACUJESZ
 Worktree: `C:\Claude-CoWork\AGS\ags-agents\.claude\worktrees\silly-blackwell-dfc32d` (galaz claude/silly-blackwell-dfc32d; origin @1ac385c + docs commit z 02/07 wieczor). Sesja moze wystartowac w INNYM worktree - pracuj po sciezce absolutnej, git przez `git -C`.
 Sekrety lokalne: `C:\Claude-CoWork\AGS\ags-agents\.env` (N8N_API_KEY, N8N_BASE_URL=https://ivy147-20147.mikrus.cloud). Czytaj, NIGDY nie wypisuj.
