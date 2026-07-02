@@ -49,10 +49,10 @@ gałąź transportowa w HITL (tekst -> /message); ConversationRouter w cm-agent;
 **Faza 3 - Pierwszy komentarz + język per cel:** first_comment generowany z wariantem (widoczny przy approve); X = reply do tweeta (OAuth1, systemowe); LinkedIn = socialActions (ZWERYFIKOWAĆ docs przed implementacją; fallback = gotowy tekst w powiadomieniu); `language` z channels.config w generate_variant (profil EN, TNM/RDC PL).
 **Faza 4 - Media:** zdjęcia do postów (X v2 chunked upload - fakty zweryfikowane w reference_x_media_api_2026; LinkedIn assets API).
 
-## 5. Otwarte decyzje (Tomasz, guziki)
-D1: kanał logowy = istniejący bot #2 (rekomendacja) czy prywatny kanał Telegram?
-D2: potwierdzenie modelu "jednego approve": plan akceptowany HURTEM w rozmowie (lekko), materiał JEDNYM approve, publikacja automatyczna w slocie - tak?
-D3: start implementacji Fazy 1 - następna sesja (rekomendacja: świeży kontekst, ten dokument + research jako wsad) czy natychmiast?
+## 5. Decyzje DOMKNIĘTE (Tomasz 02/07 ~24:00)
+D1: kanał logowy = ISTNIEJĄCY bot #2 (alertowy); token do app_secrets jako `log_bot_token`.
+D2: model "jednego approve" POTWIERDZONY: plan hurtem w rozmowie -> materiał jednym tapnięciem -> publikacja automatycznie w slocie (slot/kanały/komentarz wg planu, bez dodatkowych pytań).
+D3: implementacja Fazy 1 startuje w NASTĘPNEJ sesji (wsad: ten dokument + docs/research/ + RESUME_MASTERPROMPT_03072026.md).
 
 ## 6. Wzorce do skopiowania (z researchu, na etapie implementacji)
 - telegramify-markdown (bezpieczny split MarkdownV2) - jeśli wyjdziemy poza plain text.
