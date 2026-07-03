@@ -89,12 +89,12 @@ def message(body: dict, x_researcher_secret: str = Header(default="")):
 def _draft(item):
     brand = load_brand(item["brand_id"])
     ctx = research.research_context(item.get("research_job_id"))
-    canonical, _ = generate.generate_canonical(brand, item["master_theme"], ctx)
-    canonical = compliance.enforce(brand, canonical)
+    canonical, _ = generate.generate_canonical(brand, item["master_theme"], ctx, content_item_id=item["id"])
+    canonical = compliance.enforce(brand, canonical, content_item_id=item["id"])
     variants = []
     for ch in channels.active_targets(item["brand_id"], item.get("target_channels")):
-        vtext, _ = generate.generate_variant(brand, canonical, ch["channel"])
-        vtext = compliance.enforce(brand, vtext)
+        vtext, _ = generate.generate_variant(brand, canonical, ch["channel"], content_item_id=item["id"])
+        vtext = compliance.enforce(brand, vtext, content_item_id=item["id"])
         channels.stage_variant(item, ch, vtext)
         variants.append((ch["channel"], vtext))
     db.set_item_status(item["id"], "needs_approval", canonical_body=canonical, voice_hash=brand["voice_hash"])

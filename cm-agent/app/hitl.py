@@ -5,7 +5,7 @@ import json
 
 import httpx
 
-from . import db, config
+from . import db, config, tasks
 
 
 def _admin_chat_id():
@@ -25,14 +25,20 @@ def send_approval(item, variants):
     chat = _admin_chat_id()
     if not tok or not chat:
         return False
+    can_tier, _ = tasks.tier_for("canonical")
     lines = [f"CM: nowy material (marka {item['brand_id']}) - {item.get('master_theme')}", ""]
     for ch, txt in variants:
         lines.append(f"--- {ch} ---\n{txt}\n")
+    lines.append(f"Model tekstu-matki: {can_tier} (zmiana guzikiem 🎚 dziala od nastepnego materialu)")
     text = "\n".join(lines)[:3800]
-    kb = {"inline_keyboard": [[
-        {"text": "✅ Zatwierdz", "callback_data": f"cm:{item['id']}:approve"},
-        {"text": "❌ Odrzuc", "callback_data": f"cm:{item['id']}:reject"},
-    ]]}
+    kb = {"inline_keyboard": [
+        [{"text": "✅ Zatwierdz", "callback_data": f"cm:{item['id']}:approve"},
+         {"text": "❌ Odrzuc", "callback_data": f"cm:{item['id']}:reject"}],
+        # korekta tieru = approval-learning (R4): zapis do agent_approval_gates + brand_config przez galaz cmtier: w HITL
+        [{"text": "🎚 haiku", "callback_data": "cmtier:canonical:haiku"},
+         {"text": "🎚 sonnet", "callback_data": "cmtier:canonical:sonnet"},
+         {"text": "🎚 opus", "callback_data": "cmtier:canonical:opus"}],
+    ]}
     try:
         httpx.post(f"https://api.telegram.org/bot{tok}/sendMessage",
                    json={"chat_id": chat, "text": text, "disable_web_page_preview": True, "reply_markup": kb},

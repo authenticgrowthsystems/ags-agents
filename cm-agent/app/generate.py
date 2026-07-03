@@ -2,7 +2,7 @@
 the cached system block (brand.system_blocks), so the voice prefix is reused cheaply across calls."""
 import anthropic
 
-from . import config
+from . import config, tasks
 from .brand import system_blocks
 
 _client = None
@@ -19,18 +19,20 @@ def _text(resp):
     return "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
 
 
-def generate_canonical(brand, master_theme, research_context=""):
-    """Sonnet -> the canonical post body in brand voice (channel adapters transform it later)."""
+def generate_canonical(brand, master_theme, research_context="", content_item_id=None):
+    """Tekst-matka; model per task z routera R4 (default sonnet, override brand_config cm_tier_canonical)."""
+    model, tier, source = tasks.model_for("canonical")
     msg = f"Write a canonical post for the theme: {master_theme}."
     if research_context:
         msg += f"\n\nGround it in this evidence (use what is relevant, do not list sources):\n{research_context[:6000]}"
     msg += "\n\nReturn ONLY the post body. Brand voice. Zero em dashes."
     resp = client().messages.create(
-        model=config.CANONICAL_MODEL, max_tokens=1500,
+        model=model, max_tokens=1500,
         thinking={"type": "disabled"},  # Sonnet 5 defaults thinking ON when omitted; keep it off (preserves budget)
         system=system_blocks(brand),
         messages=[{"role": "user", "content": msg}],
     )
+    tasks.log_task("canonical", tier, model, source, getattr(resp, "usage", None), content_item_id)
     return _text(resp), getattr(resp, "usage", None)
 
 
@@ -43,14 +45,17 @@ CHANNEL_GUIDE = {
 }
 
 
-def generate_variant(brand, canonical_body, channel):
-    """Haiku -> a platform-ready adaptation of the canonical body for one channel."""
+def generate_variant(brand, canonical_body, channel, content_item_id=None):
+    """Adaptacja per kanal; model per task z routera R4 (default haiku)."""
+    model, tier, source = tasks.model_for("variant")
     guide = CHANNEL_GUIDE.get(channel, f"{channel}: adapt naturally for this platform.")
     msg = (f"Adapt the canonical post below for {channel}. {guide}\n"
            f"Keep the brand voice. Zero em dashes. Return ONLY the adapted text.\n\nCANONICAL:\n{canonical_body}")
     resp = client().messages.create(
-        model=config.VARIANT_MODEL, max_tokens=800,  # Haiku: no thinking-default change, leave as-is
+        model=model, max_tokens=800,
+        thinking={"type": "disabled"},  # gdy config podbije tier na Sonnet 5, thinking nie moze wlaczyc sie domyslnie
         system=system_blocks(brand),
         messages=[{"role": "user", "content": msg}],
     )
+    tasks.log_task("variant", tier, model, source, getattr(resp, "usage", None), content_item_id)
     return _text(resp), getattr(resp, "usage", None)

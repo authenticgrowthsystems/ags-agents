@@ -2,7 +2,7 @@
 banned vocabulary is present. Cheap and safe; the dash filter never depends on an LLM."""
 import re
 
-from . import config
+from . import config, tasks
 from .generate import client
 
 _DASH = re.compile(r"\s*[—–]\s*")  # em dash + en dash with surrounding space
@@ -17,19 +17,22 @@ def find_banned(text, banned_vocab):
     return [w for w in (banned_vocab or []) if w and re.search(r"\b" + re.escape(w.lower()) + r"\b", low)]
 
 
-def enforce(brand, text):
-    """Return clean text: dashes fixed deterministically; if banned vocab remains, one Haiku rewrite."""
+def enforce(brand, text, content_item_id=None):
+    """Return clean text: dashes fixed deterministically; if banned vocab remains, one LLM rewrite (tier R4)."""
     text = fix_dashes(text)
     banned = find_banned(text, brand.get("banned_vocab"))
     if banned:
         try:
+            model, tier, source = tasks.model_for("compliance")
             resp = client().messages.create(
-                model=config.COMPLIANCE_MODEL, max_tokens=900,
+                model=model, max_tokens=900,
+                thinking={"type": "disabled"},
                 messages=[{"role": "user", "content":
                            f"Rewrite the text removing these banned words/phrases entirely while keeping the "
                            f"meaning and voice: {', '.join(banned)}. Zero em dashes. Return ONLY the rewritten text."
                            f"\n\n{text}"}],
             )
+            tasks.log_task("compliance", tier, model, source, getattr(resp, "usage", None), content_item_id)
             out = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
             if out:
                 text = fix_dashes(out)

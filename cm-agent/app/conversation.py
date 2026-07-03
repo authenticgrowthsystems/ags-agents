@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 import httpx
 from psycopg.types.json import Jsonb
 
-from . import db, config
+from . import db, config, tasks
 from .brand import load_brand
 from .generate import client
 
@@ -144,15 +144,6 @@ def _memory_snapshot(brand_id="AGS"):
 
 
 # ---------------- LLM discussion ----------------
-def _conversation_model():
-    """Tier rozmowy czytany LIVE z brand_config (klucz cm_tier_conversation, np. 'opus'/'sonnet'/'haiku');
-    default = Opus 4.8 dla dyskusji strategicznej (R4). Zmiana przez /set, zero deployu."""
-    row = db.fetchone(
-        "SELECT config_value FROM brand_config WHERE brand_id='AGS' AND config_key='cm_tier_conversation' ORDER BY version DESC LIMIT 1")
-    tier = (row or {}).get("config_value", "")
-    return config.TIER_MODELS.get(str(tier).strip(), config.CONVERSATION_MODEL)
-
-
 TOOL_SCHOWEK = {
     "name": "save_to_schowek",
     "description": ("Zapisz pomysl do SCHOWKA (baza pomyslow) BEZ uruchamiania produkcji. Uzyj gdy Tomasz "
@@ -247,13 +238,15 @@ def _save_schowek(inp, chat_id):
 def _discuss(chat_id, text):
     history = _load_history(chat_id) + [{"role": "user", "content": text}]
     brand = load_brand("AGS")
+    model, tier, source = tasks.model_for("conversation")  # R4: default opus, override cm_tier_conversation
     resp = client().messages.create(
-        model=_conversation_model(), max_tokens=1200,
+        model=model, max_tokens=1200,
         thinking={"type": "disabled"},  # Sonnet 5/Opus: thinking off, rozmowa ma byc szybka i tania
         system=_system_blocks(brand),
         tools=[TOOL_PROPOSE, TOOL_SCHOWEK],
         messages=history,
     )
+    tasks.log_task("conversation", tier, model, source, getattr(resp, "usage", None))
     parts = [b.text for b in resp.content if getattr(b, "type", "") == "text" and b.text.strip()]
     for b in resp.content:
         if getattr(b, "type", "") == "tool_use" and b.name == "propose_material":
@@ -378,13 +371,6 @@ def _sub_system(brand_row, brand, channel):
     return [{"type": "text", "text": role}]
 
 
-def _sub_tier_model():
-    row = db.fetchone(
-        "SELECT config_value FROM brand_config WHERE brand_id='AGS' AND config_key='cm_tier_subagent_chat' ORDER BY version DESC LIMIT 1")
-    tier = (row or {}).get("config_value", "")
-    return config.TIER_MODELS.get(str(tier).strip(), config.TIER_MODELS["sonnet"])
-
-
 def _subagent_handle(chat_id, text, active):
     """Rozmowa z subagentem per KONTO/CEL. active = 'subagent:<brand>:<channel>'."""
     try:
@@ -406,13 +392,15 @@ def _subagent_handle(chat_id, text, active):
     ph = _tg("sendMessage", {"chat_id": chat_id, "text": "⏳"})
     ph_id = ((ph or {}).get("result") or {}).get("message_id")
     history = _load_history(chat_id, agent=active) + [{"role": "user", "content": text}]
+    model, tier, source = tasks.model_for("subagent_chat")  # R4: default sonnet, override cm_tier_subagent_chat
     resp = client().messages.create(
-        model=_sub_tier_model(), max_tokens=900,
+        model=model, max_tokens=900,
         thinking={"type": "disabled"},
         system=_sub_system(brand_row, brand, channel),
         tools=[TOOL_SUB_REMOVE, TOOL_SUB_RESCHEDULE, TOOL_PROPOSE],
         messages=history,
     )
+    tasks.log_task("subagent_chat", tier, model, source, getattr(resp, "usage", None))
     parts = [b.text for b in resp.content if getattr(b, "type", "") == "text" and b.text.strip()]
     for b in resp.content:
         if getattr(b, "type", "") != "tool_use":
