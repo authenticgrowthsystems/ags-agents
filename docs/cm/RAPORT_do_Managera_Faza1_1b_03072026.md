@@ -18,6 +18,9 @@
 | (d) nowy wiersz channels widoczny w menu bez zmian kodu | TAK (menu budowane z SELECT po channels) |
 | R1(a) default bez wyboru = Idea Bot (tor sprzed 03/07) | TAK (COALESCE 'idea') |
 
+## INCYDENT + HOTFIX (03/07 ~10:45, wykryty w tap-teście Tomasza)
+Objaw: po przełączeniu na CM tekst "Pokaż plan" złapał Idea Bot, CM milczał. Diagnoza Z DOWODU (egzekucja 39398, node-by-node): `Get Active Agent` zwrócił poprawnie 'cm', ale IF `Active Is Idea?` puścił item wyjściem TRUE. Przyczyna: oba nowe IF-y dostały `typeVersion: 1` z NOWYM formatem warunków (filter v2) - stary silnik IF ignoruje taki format i przepuszcza wszystko. Konsekwencja groźniejsza: `Is Agsel Callback?` przepuszczał WSZYSTKIE callbacki do gałęzi agsel (guziki approve/triage martwe od PUT 1b do hotfixu; nikt w tym oknie nie klikał approve - zero szkód; śmieć: tekst "Pokaż plan" zapisany jako pomysł w inspirations, Tomasz odrzuci guzikiem). HOTFIX: oba IF-y na typeVersion 2.2 + conditions options {version:2, typeValidation:'loose'} (wzorzec działających bramek), PUT 200 + reactivate 200, zweryfikowane na live snapshocie. LEKCJA do anti-patterns: nowe węzły n8n buduj na typeVersion WZIĘTYM z działającego węzła tego samego typu w tym workflow, nie z pamięci.
+
 ## Commit / artefakty
 Kod HITL żyje w n8n (nie w repo); skrypt patcha: `Temp/ags-media-spike/hitl-1b-agent-router.cjs` (+ backup bk_hitl_1b_*.json). Raport w repo (commit razem z 1c).
 

@@ -37,7 +37,7 @@ Telegram bot @ags_social_bot (JEDEN interaktywny)
   cm-agent (Python, host rozmów supervised):
     ConversationRouter (per active_agent):
       ├─ CM: intencje plan/pokaż/zmień/pomysł/status + swobodna dyskusja (model wg R4)
-      │    + narzędzia: propose_material, show_queue, save_to_zanadrze (inspirations INSERT), content_memory.*
+      │    + narzędzia: propose_material, show_queue, save_to_schowek (inspirations INSERT), content_memory.*
       ├─ Subagent: pokaż/edytuj kolejkę, dodaj ad-hoc, usuń pozycję, wyjaśnij decyzję autonomiczną,
       │    pokaż raport dzienny/tygodniowy (kontekst = kolejka + historia publikacji + agent_logs subagenta)
       └─ odpowiedzi: sendMessage bezpośrednio, placeholder+edit, split 4096
@@ -54,9 +54,9 @@ Rozmowy subagentów supervised HOSTUJE proces cm-agent (wspólny runtime, osobne
 **Canonical:** Blueprint v1.3 sekcja 2 (Idea-bot = niezależny agent pod CM; Sekretarka zastępuje Idea-bota w Fazie 2, nie CM); zasada 2 modularność plug-and-play; Tomasz 03/07 "Idea Bot ma żyć".
 - **Rollback NATYCHMIAST** przepięcia z 03/07: wyjście TRUE `Idea Not Editing?` wraca do `Prepare Idea Text` (stary tor tekst -> triage -> inspirations). Węzły CM Get Secret / CM Conversation Message zostają w workflow (odłączone) do czasu implementacji routera R2.
 - Idea Bot = pełna funkcjonalność (tekst + głos + foto -> triage -> inspirations pool) do Fazy 2 Blueprintu (Sekretarka LIVE).
-- CM CZYTA inspirations pool (planner Fazy 2 + narzędzie rozmowy "pokaż zanadrze"), NIE zastępuje mechanizmu zapisu.
-- "Dyskusja o kącie" w rozmowie CM = DODATKOWA funkcjonalność dostępna po przełączeniu na CM w menu, nie substytut Idea Bota. Rozmowa CM dostaje też narzędzie `save_to_zanadrze` (INSERT do inspirations bez uruchamiania produkcji).
-**Acceptance criteria:** (a) tekst do bota bez przełączania (default 'idea') -> triage guziki -> wiersz w inspirations, zachowanie identyczne jak przed 03/07; (b) po wyborze CM w menu tekst idzie do rozmowy CM; (c) "zapisz do zanadrza" w rozmowie CM tworzy inspirations row; (d) głos/foto działają bez zmian.
+- CM CZYTA inspirations pool (planner Fazy 2 + narzędzie rozmowy "pokaż schowek"), NIE zastępuje mechanizmu zapisu.
+- "Dyskusja o kącie" w rozmowie CM = DODATKOWA funkcjonalność dostępna po przełączeniu na CM w menu, nie substytut Idea Bota. Rozmowa CM dostaje też narzędzie `save_to_schowek` (INSERT do inspirations bez uruchamiania produkcji).
+**Acceptance criteria:** (a) tekst do bota bez przełączania (default 'idea') -> triage guziki -> wiersz w inspirations, zachowanie identyczne jak przed 03/07; (b) po wyborze CM w menu tekst idzie do rozmowy CM; (c) "zapisz do schowka" w rozmowie CM tworzy inspirations row; (d) głos/foto działają bez zmian.
 
 ## R2. Subagenci rozmowni per KONTO + menu wyboru LIVE od Fazy 1 (korekta rozjazdu 2, KRYTYCZNY)
 **Canonical:** Tomasz 03/07 "z każdym z subagentów muszę mieć możliwość porozmawiać i sprawdzić co mają w kolejce"; reference_subagent_granularity_per_account; reference_content_via_telegram_only; Blueprint zasada 4 (dialog potrzebny do "dlaczego" przy decyzjach autonomicznych).
@@ -131,14 +131,14 @@ DDL finalny po zatwierdzeniu v2 (jeden plik db/004, idempotentny, OWNER ags_crd_
 **Faza 1 - Rozmowa multi-agent + kolejka z jednym approve (POSZERZONA per korekta):**
 1a. **Rollback Idea Bota** (natychmiast, przed resztą) [R1]
 1b. Router active_agent w HITL + menu /agents + setMyCommands (Idea default, CM, X, LinkedIn) [R2]
-1c. Rozmowa CM za menu (moduł z 03/07 + narzędzia save_to_zanadrze i content_memory) [R1+R5]
+1c. Rozmowa CM za menu (moduł z 03/07 + narzędzia save_to_schowek i content_memory) [R1+R5]
 1d. Rozmowa subagentów (kolejka, wyjaśnij decyzję, raporty na żądanie) [R2]
 1e. cm_tasks + router tierów + override guziki + approval-learning [R4]
 1f. content_memory moduł + published_posts kolumny [R5]
 1g. agent_logs AUTONOMOUS_DECISION + raporty daily/weekly (tabele + cron + push) [R3]
 1h. Język: language_comm w rozmowie + language_publish w generate_variant (seed 5 celów) [R6]
 Elementy z 03/07 już LIVE i ZGODNE z v2 (zostają): /message + ConversationRouter, slot gate 'approved', kanał logowy bot #2, dedup, user_agent_state.
-**Faza 2 - Proaktywny planer:** cron /plan -> propozycja tygodnia (brand_strategy + cadence + zanadrze Idea Bota + content_memory) jedną wiadomością -> akceptacja/korekta w rozmowie -> pozycje 'proposed'->'planned' -> generacja wyprzedzająca T-24h -> pojedyncze approve.
+**Faza 2 - Proaktywny planer:** cron /plan -> propozycja tygodnia (brand_strategy + cadence + schowek Idea Bota + content_memory) jedną wiadomością -> akceptacja/korekta w rozmowie -> pozycje 'proposed'->'planned' -> generacja wyprzedzająca T-24h -> pojedyncze approve.
 **Faza 3 - Pierwszy komentarz:** first_comment z wariantem (w language_publish celu); X = reply OAuth1; LinkedIn = socialActions (ZWERYFIKOWAĆ docs). (Język przeniesiony do Fazy 1 jako 1h per R6.)
 **Faza 4 - Media:** X v2 chunked upload (fakty w reference_x_media_api_2026), LinkedIn assets API.
 

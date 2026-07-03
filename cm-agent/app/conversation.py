@@ -131,7 +131,7 @@ def _queue_snapshot(brand_id="AGS"):
 
 
 def _memory_snapshot(brand_id="AGS"):
-    """Kontekst pamieci do rozmowy: ostatnie publikacje + rozmiar zanadrza (pelny modul content_memory = krok 1f)."""
+    """Kontekst pamieci do rozmowy: ostatnie publikacje + rozmiar schowka (pelny modul content_memory = krok 1f)."""
     pub = db.fetchall(
         """SELECT master_theme, updated_at FROM content_items
            WHERE brand_id=%s AND status='published' ORDER BY updated_at DESC LIMIT 5""",
@@ -140,7 +140,7 @@ def _memory_snapshot(brand_id="AGS"):
     zan = db.fetchone("SELECT COUNT(*) AS n FROM inspirations WHERE status='new'") or {"n": 0}
     lines = [f"- {p['master_theme'][:80]} ({p['updated_at'].astimezone(WARSAW).strftime('%d/%m')})" for p in pub]
     pub_txt = "\n".join(lines) if lines else "(brak)"
-    return f"OSTATNIE PUBLIKACJE:\n{pub_txt}\nZANADRZE (pomysly czekajace): {zan['n']}"
+    return f"OSTATNIE PUBLIKACJE:\n{pub_txt}\nSCHOWEK (pomysly czekajace): {zan['n']}"
 
 
 # ---------------- LLM discussion ----------------
@@ -153,11 +153,11 @@ def _conversation_model():
     return config.TIER_MODELS.get(str(tier).strip(), config.CONVERSATION_MODEL)
 
 
-TOOL_ZANADRZE = {
-    "name": "save_to_zanadrze",
-    "description": ("Zapisz pomysl do ZANADRZA (pula inspiracji) BEZ uruchamiania produkcji. Uzyj gdy Tomasz "
-                    "mowi 'na pozniej', 'do zanadrza', 'zapisz pomysl' albo pomysl jest dobry ale nie teraz. "
-                    "Zanadrze zasila planer i Idea Bota - to wspolna pula inspirations."),
+TOOL_SCHOWEK = {
+    "name": "save_to_schowek",
+    "description": ("Zapisz pomysl do SCHOWKA (baza pomyslow) BEZ uruchamiania produkcji. Uzyj gdy Tomasz "
+                    "mowi 'na pozniej', 'do schowka', 'do bazy', 'zapisz pomysl' albo pomysl jest dobry ale nie teraz. "
+                    "Schowek zasila planer i Idea Bota - to wspolna pula inspirations."),
     "input_schema": {
         "type": "object",
         "properties": {"idea": {"type": "string", "description": "Tresc pomyslu, zwiezle, z uzgodnionym katem jesli byl."}},
@@ -195,7 +195,7 @@ def _system_blocks(brand):
         "na pytania o kolejke, a gdy Tomasz potwierdzi temat, zapisujesz material narzedziem propose_material. "
         "Model pracy: jedno zatwierdzenie. Po zapisaniu materialu pipeline generuje tekst, Tomasz klika raz "
         "Zatwierdz, a publikacja idzie automatycznie w slocie. Pomysl 'na pozniej' zapisujesz narzedziem "
-        "save_to_zanadrze (bez produkcji). Nie dopytuj o szczegoly, ktore mozesz sensownie "
+        "save_to_schowek (bez produkcji). Nie dopytuj o szczegoly, ktore mozesz sensownie "
         "zalozyc (kanaly: domyslnie x + linkedin; slot: null gdy nie podany). "
         f"\nTeraz jest {now} (Europe/Warsaw)."
         f"\n\nAKTUALNA KOLEJKA CM:\n{_queue_snapshot()}"
@@ -232,7 +232,7 @@ def _create_material(inp):
     return f"✅ W kolejce: \"{theme}\" | kanaly: {', '.join(channels)} | publikacja: {when}"
 
 
-def _save_zanadrze(inp, chat_id):
+def _save_schowek(inp, chat_id):
     idea = (inp.get("idea") or "").strip()
     if not idea:
         return "Pusty pomysl, nic nie zapisuje."
@@ -241,7 +241,7 @@ def _save_zanadrze(inp, chat_id):
            VALUES ('cm_conversation', %s, 'AGS', 'new', %s) RETURNING id""",
         (idea, Jsonb({"chat_id": chat_id, "via": "cm_brain"})),
     )
-    return f"🗃 W zanadrzu: \"{idea[:120]}\""
+    return f"🗃 W schowku: \"{idea[:120]}\""
 
 
 def _discuss(chat_id, text):
@@ -251,15 +251,15 @@ def _discuss(chat_id, text):
         model=_conversation_model(), max_tokens=1200,
         thinking={"type": "disabled"},  # Sonnet 5/Opus: thinking off, rozmowa ma byc szybka i tania
         system=_system_blocks(brand),
-        tools=[TOOL_PROPOSE, TOOL_ZANADRZE],
+        tools=[TOOL_PROPOSE, TOOL_SCHOWEK],
         messages=history,
     )
     parts = [b.text for b in resp.content if getattr(b, "type", "") == "text" and b.text.strip()]
     for b in resp.content:
         if getattr(b, "type", "") == "tool_use" and b.name == "propose_material":
             parts.append(_create_material(b.input))
-        elif getattr(b, "type", "") == "tool_use" and b.name == "save_to_zanadrze":
-            parts.append(_save_zanadrze(b.input, chat_id))
+        elif getattr(b, "type", "") == "tool_use" and b.name == "save_to_schowek":
+            parts.append(_save_schowek(b.input, chat_id))
     reply = "\n\n".join(parts).strip() or "Przyjete."
     # history stores plain text only (tool calls are summarized in the reply line itself)
     _save_history(chat_id, history + [{"role": "assistant", "content": reply}], agent="cm")

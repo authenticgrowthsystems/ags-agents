@@ -92,6 +92,16 @@ Agents must screen output against this library BEFORE HITL preview.
 **Why bad:** Cognitive overhead, dilutes focus, paralyzes action.
 **Correct:** Max 3 KPIs per stage. Default: Revenue (closed $), Pipeline (calls booked), Close rate (%).
 
+### AP-301: New n8n node with typeVersion from memory instead of from a working sibling
+**Anti-pattern (03/07/2026, BE, HITL 1b build):** created two IF nodes with `typeVersion: 1` but NEW filter-format conditions. Old IF engine ignores the unknown format and passes EVERYTHING true - the agent router silently sent all text to Idea Bot and (worse) the agsel gate swallowed ALL callback families, killing approve/triage buttons until hotfix.
+**Why bad:** silent pass-through, no error anywhere; discovered only in Tomasz's tap-test; every broken production window costs trust and money.
+**Correct:** when adding a node to an existing workflow, COPY typeVersion + parameter shape from a WORKING node of the same type in that workflow (e.g. `Is Cm Callback?` = if 2.2, conditions.options {version:2, typeValidation:'loose'}). Verify routing with a real execution read (executions API, node-by-node), not only structure.
+
+### AP-302: User-facing vocabulary invented by the agent without checking brand register
+**Anti-pattern (03/07/2026):** BE named the inspirations pool "zanadrze" in bot replies and tool names. Tomasz: "na pewno nie bedziemy tego slowa uzywac".
+**Why bad:** user-facing wording is brand voice territory; archaic/bookish words break the operator register.
+**Correct:** for user-facing labels pick plain everyday Polish ("schowek", "baza"), confirm with Tomasz when introducing a NEW recurring label.
+
 ---
 
 ## How to add entries
