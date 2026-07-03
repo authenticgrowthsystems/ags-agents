@@ -14,6 +14,7 @@
 - **Autonomia subagentów + raporty daily/weekly z metrykami.** [KOREKTA R3, Blueprint zasada 4]
 - **CM na Opus 4.8 dla strategii, model selection per task z nadzorem Tomasza.** [KOREKTA R4]
 - **Pamięć cross-channel z published_posts (reuse na nowe kanały).** [KOREKTA R5, wzorzec Centralized Content Brain]
+- **Język komunikacji i język publikacji = dwa osobne ustawienia konfiguracji** (sprzedawalność). [UZUPEŁNIENIE R6, Tomasz 03/07]
 
 ## 1. Werdykt z researchu (przejęte z v1, bez zmian)
 - Architektura "DB-Queue Distributed": router/gateway cienki, stan FSM i kolejki w PostgreSQL, każdy agent osobnym workerem. Nasz istniejący wzorzec, mózg go rozszerza.
@@ -95,6 +96,24 @@ Rozmowy subagentów supervised HOSTUJE proces cm-agent (wspólny runtime, osobne
 - Schema: `published_posts` + `content_item_id` FK (jeśli brak) + `engagement_metrics` JSONB (aktualizowane przez subagentów przy raportach). Cross-channel reuse = explicit funkcja plannera Fazy 2.
 **Acceptance criteria:** (a) get_top_performing zwraca posortowane posty z metrykami; (b) pytanie w rozmowie CM o najlepsze posty odpowiada danymi z archiwum; (c) aktywacja testowego kanału wywołuje propozycję adaptacji; (d) published_posts ma content_item_id + engagement_metrics.
 
+## R6. Konfiguracja języka: komunikacji i publikacji (uzupełnienie Tomasza 03/07, po E2E)
+**Canonical:** Tomasz 03/07 ("agent ma być sprzedawalny, więc muszę mieć w konfiguracji wybór języka komunikacji ORAZ języka publikacji"); project_language_style_doctrine (PL = czysta polszczyzna); cross-posting protocol PL/EN per brand.
+- **Dwa OSOBNE ustawienia:**
+  - `language_comm` - język ROZMOWY bota z użytkownikiem (menu, rozmowa CM, rozmowy subagentów, raporty, potwierdzenia). Poziom instalacji/marki: klucz brand_config `language_comm` (Tomasz: 'pl'; klient wybiera przy wdrożeniu). Rozmowa czyta live, zero hardkodu języka w promptach.
+  - `channels.config.language_publish` - język PUBLIKACJI per cel (generate_variant + CHANNEL_GUIDE po tym języku; first_comment tak samo).
+- **Domyślne wartości (Tomasz 03/07):**
+
+| Cel | language_publish |
+|---|---|
+| X AGS (@tomasz_ags) | en |
+| LinkedIn AGS (strona firmowa) | en |
+| LinkedIn profil prywatny Tomasza | en |
+| LinkedIn TNM | pl |
+| LinkedIn Royal Dance Center | pl |
+- Reguła jakości: publikacja PL = czysta polszczyzna bez anglicyzmów ("mom test"), publikacja EN = brand voice EN; oba z Voice Bible.
+- Sprzedawalność: nowy klient = ustawienie language_comm przy onboardingu + language_publish per każdy jego cel, zero zmian kodu.
+**Acceptance criteria:** (a) `/set language_comm en` przełącza język rozmowy bota bez deployu; (b) wariant dla LinkedIn TNM wychodzi po polsku, dla LinkedIn personal po angielsku, z tego samego tekstu-matki; (c) raporty subagentów przychodzą w language_comm; (d) seed channels.config dla 5 celów z tabeli powyżej.
+
 ## 3. Zmiany w DB (v2, addytywne)
 | Tabela | Zmiana | Status |
 |---|---|---|
@@ -104,7 +123,8 @@ Rozmowy subagentów supervised HOSTUJE proces cm-agent (wspólny runtime, osobne
 | `subagent_weekly_reports` (NOWA) | brand_id, channel, week_start, metrics_7d JSONB, best_content JSONB, worst_content JSONB, recommendations TEXT | R3 |
 | `agent_logs` (NOWA lub istniejąca - pytanie otwarte #1) | agent_id/channel, log_type ('AUTONOMOUS_DECISION',...), rationale, context JSONB, created_at | R3 |
 | `published_posts` | +content_item_id FK (jeśli brak), +engagement_metrics JSONB (jeśli brak) | R5 |
-| `channels.config` | klucze per cel: language, narrative, goals, posts_per_week, slots, first_comment on/off | v1, utrzymane |
+| `channels.config` | klucze per cel: **language_publish** (R6, seed 5 celów), narrative, goals, posts_per_week, slots, first_comment on/off | v1 + R6 |
+| `brand_config` | +klucz `language_comm` (język rozmowy bota, R6) + klucze `cm_tier_<task_type>` (R4) | R4 + R6 |
 DDL finalny po zatwierdzeniu v2 (jeden plik db/004, idempotentny, OWNER ags_crd_user).
 
 ## 4. Fazy budowy v2 (każda = działająca wartość, testowalna E2E)
@@ -116,9 +136,10 @@ DDL finalny po zatwierdzeniu v2 (jeden plik db/004, idempotentny, OWNER ags_crd_
 1e. cm_tasks + router tierów + override guziki + approval-learning [R4]
 1f. content_memory moduł + published_posts kolumny [R5]
 1g. agent_logs AUTONOMOUS_DECISION + raporty daily/weekly (tabele + cron + push) [R3]
+1h. Język: language_comm w rozmowie + language_publish w generate_variant (seed 5 celów) [R6]
 Elementy z 03/07 już LIVE i ZGODNE z v2 (zostają): /message + ConversationRouter, slot gate 'approved', kanał logowy bot #2, dedup, user_agent_state.
 **Faza 2 - Proaktywny planer:** cron /plan -> propozycja tygodnia (brand_strategy + cadence + zanadrze Idea Bota + content_memory) jedną wiadomością -> akceptacja/korekta w rozmowie -> pozycje 'proposed'->'planned' -> generacja wyprzedzająca T-24h -> pojedyncze approve.
-**Faza 3 - Pierwszy komentarz + język per cel:** first_comment z wariantem; X = reply OAuth1; LinkedIn = socialActions (ZWERYFIKOWAĆ docs); language z channels.config w generate_variant.
+**Faza 3 - Pierwszy komentarz:** first_comment z wariantem (w language_publish celu); X = reply OAuth1; LinkedIn = socialActions (ZWERYFIKOWAĆ docs). (Język przeniesiony do Fazy 1 jako 1h per R6.)
 **Faza 4 - Media:** X v2 chunked upload (fakty w reference_x_media_api_2026), LinkedIn assets API.
 
 ## 5. Czego NIE robimy (parking świadomy, Sekcja 4 korekty)

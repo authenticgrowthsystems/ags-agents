@@ -43,4 +43,10 @@
 - `docs/SYSTEM_DATAFLOW.md` sekcja E.4 (stan zastany 03/07 + adnotacja o wstrzymaniu)
 - Patch rollbacku: scratchpad `hitl-cm-branch-patch.cjs` (tryb rollback) + backup `bk_hitl_*.json`
 
-**Next:** Manager AGS review v2 przeciwko canonical -> rekomendacja Tomaszowi -> Tomasz Brama 2 approve -> implementacja Fazy 1 (1a rollback już wcześniej, za zgodą Tomasza).
+## 6. Uzupełnienia po dostarczeniu (03/07, przed review)
+
+- **ROLLBACK R1 WYKONANY** za zgodą Tomasza (PUT 200 + reactivate, zweryfikowany live): tekst w bocie wraca torem Idea Bota (Prepare Idea Text -> Save Idea -> triage). Węzły CM odłączone w workflow, użyje ich router R2.
+- **E2E stanu zastanego DOMKNIĘTE (weryfikacja per Sekcja 3.3):** pełny łańcuch rozmowa -> propose_material (slot 01:07) -> generacja -> jeden approve (01:02) -> blokada slotu (zero publikacji przed czasem) -> publikacja w slocie 01:07 (X + LinkedIn) -> potwierdzenie na kanał logowy bot #2. Tomasz potwierdził; posty testowe usunięte celowo po weryfikacji. Fundament v2 (slot gate, /message, log channel) DOWIEDZIONY.
+- **NOWA SEKCJA R6 w v2 (Tomasz 03/07, po E2E):** język komunikacji (brand_config.language_comm) ODDZIELNIE od języka publikacji (channels.config.language_publish per cel; defaulty: X AGS=EN, LinkedIn AGS=EN, LinkedIn personal=EN, LinkedIn TNM=PL, LinkedIn RDC=PL). Powód: sprzedawalność - klient wybiera oba przy onboardingu. Wpięte w Fazę 1 jako 1h.
+
+**Next:** Manager AGS review v2 (z R6) przeciwko canonical -> rekomendacja Tomaszowi -> Tomasz Brama 2 approve -> implementacja Fazy 1.
