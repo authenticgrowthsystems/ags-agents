@@ -81,21 +81,27 @@ def _seen(update_id):
     return row is None
 
 
-def _load_history(chat_id):
+def _load_history(chat_id, agent="cm"):
+    """Historia rozmowy per AGENT w jednym czacie (fsm_data.histories[agent]) - przelaczenie agenta
+    w menu nie przecieka watkiem do innego agenta."""
     row = db.fetchone("SELECT fsm_data, updated_at FROM user_agent_state WHERE chat_id=%s", (chat_id,))
     if not row:
         return []
     if datetime.datetime.now(datetime.timezone.utc) - row["updated_at"] > datetime.timedelta(minutes=STATE_TTL_MIN):
         return []
-    return (row.get("fsm_data") or {}).get("history") or []
+    data = row.get("fsm_data") or {}
+    return (data.get("histories") or {}).get(agent) or data.get("history") or []
 
 
-def _save_history(chat_id, history):
+def _save_history(chat_id, history, agent="cm"):
+    row = db.fetchone("SELECT fsm_data FROM user_agent_state WHERE chat_id=%s", (chat_id,))
+    hists = ((row or {}).get("fsm_data") or {}).get("histories") or {}
+    hists[agent] = history[-HISTORY_MAX:]
     db.execute(
         """INSERT INTO user_agent_state (chat_id, active_agent, fsm_state, fsm_data, updated_at)
-           VALUES (%s,'cm','idle',%s,NOW())
+           VALUES (%s,%s,'idle',%s,NOW())
            ON CONFLICT (chat_id) DO UPDATE SET fsm_data=EXCLUDED.fsm_data, fsm_state='idle', updated_at=NOW()""",
-        (chat_id, Jsonb({"history": history[-HISTORY_MAX:]})),
+        (chat_id, agent, Jsonb({"histories": hists})),
     )
 
 
@@ -256,8 +262,172 @@ def _discuss(chat_id, text):
             parts.append(_save_zanadrze(b.input, chat_id))
     reply = "\n\n".join(parts).strip() or "Przyjete."
     # history stores plain text only (tool calls are summarized in the reply line itself)
-    _save_history(chat_id, history + [{"role": "assistant", "content": reply}])
+    _save_history(chat_id, history + [{"role": "assistant", "content": reply}], agent="cm")
     return reply
+
+
+# ---------------- subagent conversation (1d) ----------------
+TOOL_SUB_REMOVE = {
+    "name": "subagent_remove_post",
+    "description": "Usun pozycje z kolejki TEGO subagenta (status -> rejected). Uzyj tylko na wyrazne polecenie.",
+    "input_schema": {"type": "object",
+                     "properties": {"post_queue_id": {"type": "integer", "description": "Numer pozycji z listy kolejki."}},
+                     "required": ["post_queue_id"]},
+}
+
+TOOL_SUB_RESCHEDULE = {
+    "name": "subagent_reschedule_post",
+    "description": "Przesun slot publikacji pozycji z kolejki TEGO subagenta.",
+    "input_schema": {"type": "object",
+                     "properties": {"post_queue_id": {"type": "integer"},
+                                    "new_time": {"type": "string", "description": "ISO 8601 z offsetem, np. 2026-07-04T14:00:00+02:00"}},
+                     "required": ["post_queue_id", "new_time"]},
+}
+
+
+def _sub_queue(brand, channel, limit=15):
+    return db.fetchall(
+        """SELECT id, status, content, scheduled_for FROM post_queue
+           WHERE brand=%s AND platform=%s AND status IN ('review','scheduled','queued','held','dispatching')
+           ORDER BY scheduled_for NULLS LAST, id LIMIT %s""",
+        (brand, channel, limit),
+    )
+
+
+def _sub_queue_text(brand, channel):
+    rows = _sub_queue(brand, channel)
+    if not rows:
+        return "(kolejka pusta)"
+    return "\n".join(f"#{r['id']} [{r['status']}] {(r['content'] or '')[:70]} | slot: {_fmt_slot(r.get('scheduled_for'))}"
+                     for r in rows)
+
+
+def _sub_published_text(brand, channel, limit=10):
+    rows = db.fetchall(
+        """SELECT id, content FROM post_queue WHERE brand=%s AND platform=%s AND status='published'
+           ORDER BY id DESC LIMIT %s""",
+        (brand, channel, limit),
+    )
+    return "\n".join(f"#{r['id']} {(r['content'] or '')[:70]}" for r in rows) or "(brak publikacji)"
+
+
+def _sub_decisions_text(brand, channel):
+    try:
+        rows = db.fetchall(
+            """SELECT log_type, rationale, created_at FROM agent_logs
+               WHERE agent_id=%s AND log_type='AUTONOMOUS_DECISION' ORDER BY created_at DESC LIMIT 5""",
+            (f"{brand}:{channel}",),
+        )
+        if rows:
+            return "\n".join(f"- {r['created_at'].astimezone(WARSAW).strftime('%d/%m %H:%M')}: {r['rationale'][:120]}" for r in rows)
+    except Exception:
+        pass  # tabela agent_logs wchodzi w kroku 1g
+    return "(brak zarejestrowanych decyzji autonomicznych; log startuje w kroku 1g)"
+
+
+def _sub_report(brand, channel):
+    return (f"Raport subagenta {brand} {channel} (na zadanie):\n\n"
+            f"OSTATNIE PUBLIKACJE:\n{_sub_published_text(brand, channel)}\n\n"
+            f"KOLEJKA:\n{_sub_queue_text(brand, channel)}\n\n"
+            f"DECYZJE AUTONOMICZNE:\n{_sub_decisions_text(brand, channel)}\n\n"
+            "Metryki engagement: w przygotowaniu (weryfikacja zrodel API w toku); "
+            "cykliczny raport dzienny/tygodniowy wchodzi w kroku 1g.")
+
+
+def _sub_remove(inp, brand, channel):
+    pid = int(inp.get("post_queue_id") or 0)
+    row = db.fetchone("UPDATE post_queue SET status='rejected' WHERE id=%s AND brand=%s AND platform=%s RETURNING id",
+                      (pid, brand, channel))
+    return f"🗑 Usunieta pozycja #{pid}." if row else f"Nie znalazlem pozycji #{pid} w kolejce {channel}."
+
+
+def _sub_reschedule(inp, brand, channel):
+    pid = int(inp.get("post_queue_id") or 0)
+    try:
+        new_dt = datetime.datetime.fromisoformat(str(inp.get("new_time")))
+        if new_dt.tzinfo is None:
+            new_dt = new_dt.replace(tzinfo=WARSAW)
+    except (ValueError, TypeError):
+        return "Nie rozumiem terminu, podaj konkretnie (np. jutro 14:00)."
+    row = db.fetchone(
+        "UPDATE post_queue SET scheduled_for=%s WHERE id=%s AND brand=%s AND platform=%s RETURNING content_item_id",
+        (new_dt, pid, brand, channel))
+    if not row:
+        return f"Nie znalazlem pozycji #{pid} w kolejce {channel}."
+    if row.get("content_item_id"):
+        db.execute("UPDATE content_items SET scheduled_for=%s, updated_at=NOW() WHERE id=%s",
+                   (new_dt, row["content_item_id"]))
+    return f"🕐 Pozycja #{pid} przesunieta na {_fmt_slot(new_dt)}."
+
+
+def _sub_system(brand_row, brand, channel):
+    cfg = brand_row.get("config") or {}
+    now = datetime.datetime.now(WARSAW).strftime("%A %d/%m/%Y %H:%M")
+    role = (
+        f"Jestes SUBAGENTEM publikacji dla celu: marka {brand}, kanal {channel}. Rozmawiasz na Telegramie "
+        "z Tomaszem, wlascicielem. Mowisz po polsku, czysta polszczyzna, zero em dash, krotko i konkretnie. "
+        "Odpowiadasz za SWOJ kanal: kolejka publikacji, sloty, historia. Mozesz usuwac i przesuwac pozycje "
+        "(narzedzia) oraz proponowac material ad-hoc narzedziem propose_material z target_channels "
+        f"ustawionym WYLACZNIE na ['{channel}'] (material przejdzie przez normalne zatwierdzenie Tomasza). "
+        "Nie wychodz poza swoj kanal. Jesli pytanie dotyczy strategii calosci, odeslij do Content Managera (/agents)."
+        f"\nKonfiguracja celu: {json.dumps(cfg, ensure_ascii=False)[:400]}"
+        f"\nTeraz jest {now} (Europe/Warsaw)."
+        f"\n\nKOLEJKA ({channel}):\n{_sub_queue_text(brand, channel)}"
+        f"\n\nOSTATNIE PUBLIKACJE:\n{_sub_published_text(brand, channel, 5)}"
+    )
+    return [{"type": "text", "text": role}]
+
+
+def _sub_tier_model():
+    row = db.fetchone(
+        "SELECT config_value FROM brand_config WHERE brand_id='AGS' AND config_key='cm_tier_subagent_chat' ORDER BY version DESC LIMIT 1")
+    tier = (row or {}).get("config_value", "")
+    return config.TIER_MODELS.get(str(tier).strip(), config.TIER_MODELS["sonnet"])
+
+
+def _subagent_handle(chat_id, text, active):
+    """Rozmowa z subagentem per KONTO/CEL. active = 'subagent:<brand>:<channel>'."""
+    try:
+        _, brand, channel = active.split(":", 2)
+    except ValueError:
+        _reply(chat_id, "Nieznany subagent. /agents aby wybrac.")
+        return
+    brand_row = db.fetchone("SELECT config FROM channels WHERE brand_id=%s AND channel=%s", (brand, channel))
+    if not brand_row:
+        _reply(chat_id, f"Nie znam celu {brand}/{channel}. /agents aby wybrac.")
+        return
+    low = text.lower().strip()
+    if re.match(r"^/?(kolejka|poka[zż]\s+kolejk\w*)\s*\??$", low):
+        _reply(chat_id, f"Kolejka {brand} {channel}:\n{_sub_queue_text(brand, channel)}")
+        return
+    if re.match(r"^/?raport\s*(dzienny|tygodniowy)?\s*$", low):
+        _reply(chat_id, _sub_report(brand, channel))
+        return
+    ph = _tg("sendMessage", {"chat_id": chat_id, "text": "⏳"})
+    ph_id = ((ph or {}).get("result") or {}).get("message_id")
+    history = _load_history(chat_id, agent=active) + [{"role": "user", "content": text}]
+    resp = client().messages.create(
+        model=_sub_tier_model(), max_tokens=900,
+        thinking={"type": "disabled"},
+        system=_sub_system(brand_row, brand, channel),
+        tools=[TOOL_SUB_REMOVE, TOOL_SUB_RESCHEDULE, TOOL_PROPOSE],
+        messages=history,
+    )
+    parts = [b.text for b in resp.content if getattr(b, "type", "") == "text" and b.text.strip()]
+    for b in resp.content:
+        if getattr(b, "type", "") != "tool_use":
+            continue
+        if b.name == "subagent_remove_post":
+            parts.append(_sub_remove(b.input, brand, channel))
+        elif b.name == "subagent_reschedule_post":
+            parts.append(_sub_reschedule(b.input, brand, channel))
+        elif b.name == "propose_material":
+            inp = dict(b.input)
+            inp["target_channels"] = [channel]  # subagent nie wychodzi poza swoj kanal
+            parts.append(_create_material(inp))
+    reply = "\n\n".join(parts).strip() or "Przyjete."
+    _save_history(chat_id, history + [{"role": "assistant", "content": reply}], agent=active)
+    _reply(chat_id, reply, placeholder_id=ph_id)
 
 
 # ---------------- entry point ----------------
@@ -274,9 +444,11 @@ def handle(update):
             row = db.fetchone("SELECT active_agent FROM user_agent_state WHERE chat_id=%s", (chat_id,))
             active = (row or {}).get("active_agent") or "cm"
         if active.startswith("subagent:"):
-            # rozmowy subagentow = krok 1d; do tego czasu uczciwy komunikat zamiast udawania CM
-            _reply(chat_id, f"Rozmowa z subagentem ({active.split(':', 1)[1]}) jest w budowie (krok 1d). "
-                            "Wybierz /agents i przelacz na Content Managera albo Idea Bota.")
+            if _CANCEL_RE.match(text):
+                _reset_state(chat_id)
+                _reply(chat_id, "Anulowane.")
+                return
+            _subagent_handle(chat_id, text, active)
             return
         if _CANCEL_RE.match(text):
             _reset_state(chat_id)
