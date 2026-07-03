@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 import httpx
 from psycopg.types.json import Jsonb
 
-from . import db, config, tasks
+from . import db, config, tasks, content_memory
 from .brand import load_brand
 from .generate import client
 
@@ -156,6 +156,75 @@ TOOL_SCHOWEK = {
     },
 }
 
+TOOL_ARCHIVE = {
+    "name": "show_archive",
+    "description": ("Pokaz archiwum publikacji: najlepiej performujace i ostatnie posty (wszystkie kanaly albo "
+                    "jeden). Uzyj gdy Tomasz pyta co najlepiej zagralo, co juz publikowalismy, o historie."),
+    "input_schema": {
+        "type": "object",
+        "properties": {"channel": {"type": ["string", "null"], "description": "Kanal (x/linkedin/...) albo null = wszystkie."},
+                       "top_n": {"type": "integer", "description": "Ile pozycji, default 10."}},
+        "required": [],
+    },
+}
+
+TOOL_SIMILAR = {
+    "name": "find_similar_published",
+    "description": ("Znajdz w archiwum publikacje SEMANTYCZNIE podobne do podanego tematu/tekstu (pgvector). "
+                    "Uzyj przed proponowaniem materialu, zeby nie dublowac tresci, albo gdy Tomasz pyta "
+                    "'czy juz o tym pisalismy'."),
+    "input_schema": {
+        "type": "object",
+        "properties": {"text": {"type": "string", "description": "Temat albo tekst do porownania."}},
+        "required": ["text"],
+    },
+}
+
+TOOL_ADAPT = {
+    "name": "adapt_published",
+    "description": ("Zaproponuj adaptacje OPUBLIKOWANEGO posta (po numerze #id z archiwum) na inny kanal. "
+                    "Zwraca propozycje tekstu; do kolejki trafia dopiero przez propose_material po akceptacji."),
+    "input_schema": {
+        "type": "object",
+        "properties": {"published_id": {"type": "integer", "description": "Numer #id z archiwum."},
+                       "target_channel": {"type": "string", "description": "Kanal docelowy, np. linkedin, x, instagram."}},
+        "required": ["published_id", "target_channel"],
+    },
+}
+
+
+def _archive_text(inp):
+    ch = inp.get("channel") or None
+    n = int(inp.get("top_n") or 10)
+    top = content_memory.top_performing("AGS", channel=ch, top_n=n)
+    if not top:
+        return "Archiwum puste dla tego zakresu."
+    lines = ["Archiwum (top wg metryk, bez metryk = najswiezsze):"]
+    for t in top:
+        mv = f" | metryka: {t['metric_value']}" if t.get("metric_value") is not None else ""
+        when = t["published_at"].astimezone(WARSAW).strftime("%d/%m") if t.get("published_at") else "?"
+        lines.append(f"- #{t['id']} [{t['platform']}] ({when}) {(t['content'] or '')[:70]}{mv}")
+    return "\n".join(lines)
+
+
+def _similar_text(inp):
+    rows = content_memory.find_similar(str(inp.get("text") or ""), "AGS")
+    if not rows:
+        return "Brak podobnych publikacji w archiwum (albo embeddingi jeszcze sie licza)."
+    lines = ["Podobne publikacje:"]
+    for r in rows:
+        lines.append(f"- #{r['id']} [{r['platform']}] podob. {float(r['similarity']):.2f}: {(r['content'] or '')[:70]}")
+    return "\n".join(lines)
+
+
+def _adapt_text(inp):
+    text, src = content_memory.suggest_adaptation(int(inp.get("published_id") or 0),
+                                                  str(inp.get("target_channel") or "").strip() or "linkedin")
+    if not text:
+        return "Nie znalazlem takiej publikacji w archiwum."
+    return f"Propozycja adaptacji (zrodlo: {src}):\n\n{text}\n\nJesli pasuje, powiedz 'dawaj' - zapisze jako material do zatwierdzenia."
+
+
 TOOL_PROPOSE = {
     "name": "propose_material",
     "description": ("Zapisz uzgodniony material do kolejki produkcyjnej CM. Wywolaj TYLKO gdy Tomasz wyraznie "
@@ -243,16 +312,24 @@ def _discuss(chat_id, text):
         model=model, max_tokens=1200,
         thinking={"type": "disabled"},  # Sonnet 5/Opus: thinking off, rozmowa ma byc szybka i tania
         system=_system_blocks(brand),
-        tools=[TOOL_PROPOSE, TOOL_SCHOWEK],
+        tools=[TOOL_PROPOSE, TOOL_SCHOWEK, TOOL_ARCHIVE, TOOL_SIMILAR, TOOL_ADAPT],
         messages=history,
     )
     tasks.log_task("conversation", tier, model, source, getattr(resp, "usage", None))
     parts = [b.text for b in resp.content if getattr(b, "type", "") == "text" and b.text.strip()]
     for b in resp.content:
-        if getattr(b, "type", "") == "tool_use" and b.name == "propose_material":
+        if getattr(b, "type", "") != "tool_use":
+            continue
+        if b.name == "propose_material":
             parts.append(_create_material(b.input))
-        elif getattr(b, "type", "") == "tool_use" and b.name == "save_to_schowek":
+        elif b.name == "save_to_schowek":
             parts.append(_save_schowek(b.input, chat_id))
+        elif b.name == "show_archive":
+            parts.append(_archive_text(b.input))
+        elif b.name == "find_similar_published":
+            parts.append(_similar_text(b.input))
+        elif b.name == "adapt_published":
+            parts.append(_adapt_text(b.input))
     reply = "\n\n".join(parts).strip() or "Przyjete."
     # history stores plain text only (tool calls are summarized in the reply line itself)
     _save_history(chat_id, history + [{"role": "assistant", "content": reply}], agent="cm")

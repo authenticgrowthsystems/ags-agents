@@ -10,7 +10,7 @@ from fastapi import FastAPI, Header, HTTPException
 
 from . import config, db
 from .brand import load_brand
-from . import generate, compliance, channels, research, hitl, conversation, logbot
+from . import generate, compliance, channels, research, hitl, conversation, logbot, content_memory
 
 api = FastAPI(title="AGS Content Manager")
 wake = threading.Event()
@@ -122,6 +122,25 @@ def process_item(item):
     return "noop"
 
 
+def _welcome_new_channels():
+    """Hook R5 (open/closed): swiezo aktywowany kanal (bez znacznika welcomed) dostaje od CM propozycje
+    adaptacji najlepszych publikacji z archiwum. Znacznik w channels.config zapobiega powtorkom."""
+    rows = db.fetchall(
+        "SELECT brand_id, channel FROM channels WHERE status IN ('active','draft') AND supervised = true AND NOT (config ? 'welcomed')")
+    for r in rows:
+        try:
+            note = content_memory.adaptation_candidates_note(r["brand_id"], r["channel"])
+            if note:
+                chat = hitl._admin_chat_id()
+                if chat:
+                    conversation._tg("sendMessage", {"chat_id": chat, "text": note[:4096],
+                                                     "disable_web_page_preview": True})
+        except Exception:
+            traceback.print_exc()
+        db.execute("UPDATE channels SET config = config || '{\"welcomed\": true}'::jsonb WHERE brand_id=%s AND channel=%s",
+                   (r["brand_id"], r["channel"]))
+
+
 # ---------------- loop ----------------
 def loop():
     print("[cm] worker loop started", flush=True)
@@ -129,6 +148,7 @@ def loop():
         worked = False
         try:
             research.ingest_research_responses()  # researching -> drafting on Researcher callback
+            _welcome_new_channels()               # R5: nowy kanal -> propozycja reuse archiwum
             item = db.claim_content_item()
             if item:
                 worked = True
