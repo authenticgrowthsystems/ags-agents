@@ -1,5 +1,7 @@
 """Structured-output schema for synthesis. Sonnet 4.6 is forced to emit ResearchOutput."""
-from pydantic import BaseModel, Field
+import json
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class Claim(BaseModel):
@@ -24,3 +26,15 @@ class ResearchOutput(BaseModel):
     overall_confidence: float = 0.0
     options: list[ResearchOption] = Field(default_factory=list)  # exactly 4, enforced post-parse by _enforce_four (optional here so a truncated/partial model output degrades instead of crashing the job)
     recommendation: str | None = None
+
+    @field_validator("claims", "sources_cited", "options", mode="before")
+    @classmethod
+    def _coerce_json_string(cls, v):
+        # tool-forced output sometimes stringifies list fields (seen live: job 728d02ba, options as a JSON
+        # string -> whole job failed). Parse it instead of failing the synthesis.
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return []
+        return v
