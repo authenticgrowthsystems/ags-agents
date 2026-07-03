@@ -41,7 +41,8 @@ MODEL_RATES = {  # input / output USD per 1M
 CANONICAL_MODEL = TIER_MODELS[os.getenv("CM_CANONICAL_TIER", "sonnet")]   # tekst-matka
 VARIANT_MODEL = TIER_MODELS[os.getenv("CM_VARIANT_TIER", "haiku")]        # per-channel adaptacja
 COMPLIANCE_MODEL = TIER_MODELS[os.getenv("CM_COMPLIANCE_TIER", "haiku")]  # redraft on canon fail
-CONVERSATION_MODEL = TIER_MODELS[os.getenv("CM_CONVERSATION_TIER", "sonnet")]  # rozmowa Telegram (mozg CM)
+CONVERSATION_MODEL = TIER_MODELS[os.getenv("CM_CONVERSATION_TIER", "opus")]  # rozmowa strategiczna = Opus 4.8 (R4);
+# override bez deployu: brand_config klucz 'cm_tier_conversation' czytany live w conversation._conversation_model()
 
 
 def rates_for_model(model):

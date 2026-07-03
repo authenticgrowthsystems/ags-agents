@@ -124,7 +124,41 @@ def _queue_snapshot(brand_id="AGS"):
     return "\n".join(lines) if lines else "(kolejka pusta)"
 
 
+def _memory_snapshot(brand_id="AGS"):
+    """Kontekst pamieci do rozmowy: ostatnie publikacje + rozmiar zanadrza (pelny modul content_memory = krok 1f)."""
+    pub = db.fetchall(
+        """SELECT master_theme, updated_at FROM content_items
+           WHERE brand_id=%s AND status='published' ORDER BY updated_at DESC LIMIT 5""",
+        (brand_id,),
+    )
+    zan = db.fetchone("SELECT COUNT(*) AS n FROM inspirations WHERE status='new'") or {"n": 0}
+    lines = [f"- {p['master_theme'][:80]} ({p['updated_at'].astimezone(WARSAW).strftime('%d/%m')})" for p in pub]
+    pub_txt = "\n".join(lines) if lines else "(brak)"
+    return f"OSTATNIE PUBLIKACJE:\n{pub_txt}\nZANADRZE (pomysly czekajace): {zan['n']}"
+
+
 # ---------------- LLM discussion ----------------
+def _conversation_model():
+    """Tier rozmowy czytany LIVE z brand_config (klucz cm_tier_conversation, np. 'opus'/'sonnet'/'haiku');
+    default = Opus 4.8 dla dyskusji strategicznej (R4). Zmiana przez /set, zero deployu."""
+    row = db.fetchone(
+        "SELECT config_value FROM brand_config WHERE brand_id='AGS' AND config_key='cm_tier_conversation' ORDER BY version DESC LIMIT 1")
+    tier = (row or {}).get("config_value", "")
+    return config.TIER_MODELS.get(str(tier).strip(), config.CONVERSATION_MODEL)
+
+
+TOOL_ZANADRZE = {
+    "name": "save_to_zanadrze",
+    "description": ("Zapisz pomysl do ZANADRZA (pula inspiracji) BEZ uruchamiania produkcji. Uzyj gdy Tomasz "
+                    "mowi 'na pozniej', 'do zanadrza', 'zapisz pomysl' albo pomysl jest dobry ale nie teraz. "
+                    "Zanadrze zasila planer i Idea Bota - to wspolna pula inspirations."),
+    "input_schema": {
+        "type": "object",
+        "properties": {"idea": {"type": "string", "description": "Tresc pomyslu, zwiezle, z uzgodnionym katem jesli byl."}},
+        "required": ["idea"],
+    },
+}
+
 TOOL_PROPOSE = {
     "name": "propose_material",
     "description": ("Zapisz uzgodniony material do kolejki produkcyjnej CM. Wywolaj TYLKO gdy Tomasz wyraznie "
@@ -154,10 +188,12 @@ def _system_blocks(brand):
         "nie jak asystent. Twoja rola: dyskutujesz o pomyslach na tresci, proponujesz katy narracji, odpowiadasz "
         "na pytania o kolejke, a gdy Tomasz potwierdzi temat, zapisujesz material narzedziem propose_material. "
         "Model pracy: jedno zatwierdzenie. Po zapisaniu materialu pipeline generuje tekst, Tomasz klika raz "
-        "Zatwierdz, a publikacja idzie automatycznie w slocie. Nie dopytuj o szczegoly, ktore mozesz sensownie "
+        "Zatwierdz, a publikacja idzie automatycznie w slocie. Pomysl 'na pozniej' zapisujesz narzedziem "
+        "save_to_zanadrze (bez produkcji). Nie dopytuj o szczegoly, ktore mozesz sensownie "
         "zalozyc (kanaly: domyslnie x + linkedin; slot: null gdy nie podany). "
         f"\nTeraz jest {now} (Europe/Warsaw)."
         f"\n\nAKTUALNA KOLEJKA CM:\n{_queue_snapshot()}"
+        f"\n\n{_memory_snapshot()}"
     )
     return [
         {"type": "text", "text": role},
@@ -190,20 +226,34 @@ def _create_material(inp):
     return f"✅ W kolejce: \"{theme}\" | kanaly: {', '.join(channels)} | publikacja: {when}"
 
 
+def _save_zanadrze(inp, chat_id):
+    idea = (inp.get("idea") or "").strip()
+    if not idea:
+        return "Pusty pomysl, nic nie zapisuje."
+    db.fetchone(
+        """INSERT INTO inspirations (source, content, brand, status, metadata)
+           VALUES ('cm_conversation', %s, 'AGS', 'new', %s) RETURNING id""",
+        (idea, Jsonb({"chat_id": chat_id, "via": "cm_brain"})),
+    )
+    return f"🗃 W zanadrzu: \"{idea[:120]}\""
+
+
 def _discuss(chat_id, text):
     history = _load_history(chat_id) + [{"role": "user", "content": text}]
     brand = load_brand("AGS")
     resp = client().messages.create(
-        model=config.CONVERSATION_MODEL, max_tokens=1200,
-        thinking={"type": "disabled"},  # Sonnet 5 defaults thinking ON; keep conversation lean
+        model=_conversation_model(), max_tokens=1200,
+        thinking={"type": "disabled"},  # Sonnet 5/Opus: thinking off, rozmowa ma byc szybka i tania
         system=_system_blocks(brand),
-        tools=[TOOL_PROPOSE],
+        tools=[TOOL_PROPOSE, TOOL_ZANADRZE],
         messages=history,
     )
     parts = [b.text for b in resp.content if getattr(b, "type", "") == "text" and b.text.strip()]
     for b in resp.content:
         if getattr(b, "type", "") == "tool_use" and b.name == "propose_material":
             parts.append(_create_material(b.input))
+        elif getattr(b, "type", "") == "tool_use" and b.name == "save_to_zanadrze":
+            parts.append(_save_zanadrze(b.input, chat_id))
     reply = "\n\n".join(parts).strip() or "Przyjete."
     # history stores plain text only (tool calls are summarized in the reply line itself)
     _save_history(chat_id, history + [{"role": "assistant", "content": reply}])
@@ -218,6 +268,15 @@ def handle(update):
         chat_id = int(update.get("chat_id"))
         text = str(update.get("text") or "").strip()
         if not text or _seen(update.get("update_id")):
+            return
+        active = str(update.get("active_agent") or "").strip()
+        if not active:
+            row = db.fetchone("SELECT active_agent FROM user_agent_state WHERE chat_id=%s", (chat_id,))
+            active = (row or {}).get("active_agent") or "cm"
+        if active.startswith("subagent:"):
+            # rozmowy subagentow = krok 1d; do tego czasu uczciwy komunikat zamiast udawania CM
+            _reply(chat_id, f"Rozmowa z subagentem ({active.split(':', 1)[1]}) jest w budowie (krok 1d). "
+                            "Wybierz /agents i przelacz na Content Managera albo Idea Bota.")
             return
         if _CANCEL_RE.match(text):
             _reset_state(chat_id)
