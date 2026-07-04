@@ -122,6 +122,13 @@ własne ustawienia zmienialne ręcznie + tryb pracy: **autonomiczny / półauton
 autonomia z logiem), brakuje JAWNEGO pola `work_mode` w kontrakcie config. DO MAPY: dopisać do kontraktu
 konfiguracji subagenta (tani krok przy Fazie 2).
 
+**8.7a ZARZĄDZANIE MODUŁAMI Z POZIOMU UŻYTKOWNIKA (Tomasz 04/07, DO MAPY).** Użytkownik musi WIDZIEĆ,
+które agenty/cele są włączone, móc je włączać/wyłączać z czatu, a przy włączeniu: nowa konfiguracja ALBO
+użycie zapisanej + modyfikacja. Skala: sam Tomasz ma 3 cele na LinkedIn (strona AGS, profil prywatny, RDC);
+klient może mieć znacznie więcej. Warstwa danych JUŻ istnieje (channels: status active/paused + supervised +
+config per cel) - brakuje UI: lista celów z toggle ON/OFF + kreator konfiguracji w Telegramie.
+Rekomendacja BE: wpiąć w zakres Fazy 2 (planer i tak dotyka channels.config) jako krok "zarządzanie celami".
+
 **8.7 DIAGRAMY WIZUALNE.** Tomasz: grafy wizualne (co skąd dokąd przechodzi) są dla niego kluczowe -
 świadomie odłożone, ale KANONICZNE (documentation requirement: graficzny diagram przepływu danych jako
 element pakietu sprzedawalności, razem z playbookiem z sekcji 6).
