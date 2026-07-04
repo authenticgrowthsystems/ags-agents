@@ -73,6 +73,19 @@ WORK_MODE per cel (kanon 10, D-F2-2):
   contacts + engagement_log) = warstwa CRM, kanon 9; mechanika zbierania per platforma wymaga docs-first
   researchu API -> pakiet CRM (Opiekun Relacji), nie Faza 2.
 
+## 4b. KROK 2 Fazy 2 - zakres z feedbacku Tomasza po pierwszym planie E2E (04/07 15:31)
+1. **Formatowanie planu (ZROBIONE w kroku 1b):** pelne tematy bez obcinania, grupowanie po dniach
+   z naglowkami, emoji kanalow z rozroznieniem marki (🐦X / 💼LI-profil / 🏢LI-AGS / 💼LI-TNM...).
+2. **NAWIGACJA ZATWIERDZANIA PLANU (guziki):** [✅ Zatwierdz wszystkie] jednym tapem ORAZ tryb
+   przegladu jeden-po-drugim: karta pozycji (temat + slot + cele + STATUS: czeka/zatwierdzony/odrzucony/
+   inny kat) z guzikami [✅] [❌] [🔄 inny kat] [⬅️ poprzedni] [➡️ nastepny]. Rodzina callbackow plannav:.
+3. **Statusy pozycji widoczne** w liscie planu (nie tylko proposed - takze co juz zatwierdzone/odrzucone).
+4. **Po przegladzie: automatyczna kolejka** (zatwierdzone pozycje ida w produkcje i sloty bez dodatkowych pytan).
+5. **Inspiracje z Notion:** zapytanie do Managera wyslane (ZAPYTANIE_do_Managera_Notion_inspiracje_04072026.md);
+   rekomendacja BE = jednorazowy ETL do inspirations (source='notion', dedup po notion_page_id), zero zywego
+   odczytu Notion przez CM. ETL po odpowiedzi Managera (lista pul).
+6. Egzekucja work_mode semi/auto (z kroku 1, przeniesione).
+
 ## 5. Acceptance (calosc Fazy 2)
 (a) CM w niedziele (lub na zadanie) przysyla ponumerowany plan tygodnia zbudowany ze schowka+strategii+archiwum;
 (b) "zatwierdz plan" -> pozycje 'planned' ze slotami; edycje w rozmowie dzialaja; (c) generacja odpala sie

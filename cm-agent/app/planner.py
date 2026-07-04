@@ -113,16 +113,38 @@ def plan_items(brand_id="AGS"):
         (brand_id,))
 
 
+_DAYS_PL = ["Poniedzialek", "Wtorek", "Sroda", "Czwartek", "Piatek", "Sobota", "Niedziela"]
+
+
+def _target_label(brand_id, ch):
+    """Czytelne oznaczenie celu (feedback Tomasza 04/07): kanal + KTORA marka/profil."""
+    if ch == "x":
+        return f"🐦X-{brand_id}" if brand_id != "AGS" else "🐦X"
+    if ch == "linkedin" and brand_id == "AGS":
+        return "💼LI-profil"
+    if ch.startswith("linkedin"):
+        return f"🏢LI-{brand_id}"
+    return f"📣{ch}-{brand_id}"
+
+
 def plan_text(brand_id="AGS"):
+    """Plan grupowany po DNIACH, pelne tematy, emoji kanalow (split >4096 robi warstwa wysylki)."""
     items = plan_items(brand_id)
     if not items:
         return "(brak propozycji planu)"
     lines = []
+    last_day = None
     for i, it in enumerate(items, 1):
-        when = it["scheduled_for"].astimezone(WARSAW).strftime("%a %d/%m %H:%M") if it.get("scheduled_for") else "?"
-        ch = ",".join(it.get("target_channels") or [])
-        lines.append(f"{i}. [{when}] ({ch}) {it['master_theme'][:90]}")
-    return "\n".join(lines)
+        dt = it["scheduled_for"].astimezone(WARSAW) if it.get("scheduled_for") else None
+        if dt and dt.date() != last_day:
+            lines.append("")
+            lines.append(f"——— {_DAYS_PL[dt.weekday()]} {dt.strftime('%d/%m')} ———")
+            last_day = dt.date()
+        ch = " + ".join(_target_label(brand_id, c) for c in (it.get("target_channels") or []))
+        hhmm = dt.strftime("%H:%M") if dt else "??:??"
+        lines.append(f"{i}. {hhmm} | {ch}")
+        lines.append(f"    {it['master_theme']}")
+    return "\n".join(lines).strip()
 
 
 def build_plan(brand_id="AGS", days=7):
