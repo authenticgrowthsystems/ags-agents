@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 860" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#546e7a"/>
+    </marker>
+    <marker id="arrg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2e7d32"/>
+    </marker>
+  </defs>
+  <rect width="1280" height="860" fill="#fafafa"/>
+  <text x="24" y="34" font-size="22" font-weight="700" fill="#263238">AI Content Manager - system data flow</text>
+  <text x="24" y="54" font-size="12" fill="#78909c">One Telegram window in, one relational database as the single source of truth. Status: Phase 1 LIVE (07/2026)</text>
+
+  <!-- OPERATOR -->
+  <rect x="24" y="90" width="180" height="120" rx="10" fill="#e8eaf6" stroke="#5c6bc0" stroke-width="1.5"/>
+  <text x="114" y="115" font-size="14" font-weight="700" fill="#283593" text-anchor="middle">OPERATOR</text>
+  <text x="114" y="136" font-size="11" fill="#37474f" text-anchor="middle">talks, taps, dictates</text>
+  <text x="114" y="156" font-size="11" fill="#37474f" text-anchor="middle">ideas / approvals /</text>
+  <text x="114" y="172" font-size="11" fill="#37474f" text-anchor="middle">queue edits / metrics</text>
+  <text x="114" y="196" font-size="10" fill="#78909c" text-anchor="middle">no dashboards, chat only</text>
+
+  <!-- TELEGRAM -->
+  <rect x="250" y="70" width="200" height="76" rx="10" fill="#e1f5fe" stroke="#0288d1" stroke-width="1.5"/>
+  <text x="350" y="94" font-size="13" font-weight="700" fill="#01579b" text-anchor="middle">Telegram bot #1</text>
+  <text x="350" y="112" font-size="11" fill="#37474f" text-anchor="middle">conversation window</text>
+  <text x="350" y="130" font-size="10" fill="#78909c" text-anchor="middle">/agents menu - agent switching</text>
+  <rect x="250" y="160" width="200" height="62" rx="10" fill="#e1f5fe" stroke="#0288d1" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="350" y="184" font-size="13" font-weight="700" fill="#01579b" text-anchor="middle">Telegram bot #2</text>
+  <text x="350" y="202" font-size="11" fill="#37474f" text-anchor="middle">log channel: confirms + reports</text>
+
+  <line x1="204" y1="130" x2="248" y2="110" stroke="#546e7a" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="248" y1="190" x2="204" y2="170" stroke="#546e7a" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- N8N TRANSPORT -->
+  <rect x="500" y="70" width="300" height="270" rx="12" fill="#fff3e0" stroke="#f57c00" stroke-width="2"/>
+  <text x="650" y="96" font-size="14" font-weight="700" fill="#e65100" text-anchor="middle">n8n - TRANSPORT LAYER</text>
+  <rect x="516" y="110" width="268" height="88" rx="8" fill="#ffffff" stroke="#f57c00"/>
+  <text x="650" y="128" font-size="12" font-weight="700" fill="#e65100" text-anchor="middle">HITL Handler</text>
+  <text x="650" y="145" font-size="10" fill="#37474f" text-anchor="middle">button families: approve / model tier /</text>
+  <text x="650" y="159" font-size="10" fill="#37474f" text-anchor="middle">agent select / idea triage</text>
+  <text x="650" y="176" font-size="10" fill="#37474f" text-anchor="middle">text router: active agent -> Idea Bot | brain</text>
+  <text x="650" y="190" font-size="10" fill="#78909c" text-anchor="middle">voice + photo -> Idea Bot intake</text>
+  <rect x="516" y="206" width="128" height="58" rx="8" fill="#ffffff" stroke="#f57c00"/>
+  <text x="580" y="226" font-size="11" font-weight="700" fill="#e65100" text-anchor="middle">Subagent X</text>
+  <text x="580" y="242" font-size="9.5" fill="#37474f" text-anchor="middle">publisher (OAuth1)</text>
+  <text x="580" y="255" font-size="9.5" fill="#37474f" text-anchor="middle">+ archive callback</text>
+  <rect x="656" y="206" width="128" height="58" rx="8" fill="#ffffff" stroke="#f57c00"/>
+  <text x="720" y="226" font-size="11" font-weight="700" fill="#e65100" text-anchor="middle">Subagent LinkedIn</text>
+  <text x="720" y="242" font-size="9.5" fill="#37474f" text-anchor="middle">per-account (prefix)</text>
+  <text x="720" y="255" font-size="9.5" fill="#37474f" text-anchor="middle">+ archive callback</text>
+  <rect x="516" y="272" width="268" height="56" rx="8" fill="#ffffff" stroke="#f57c00"/>
+  <text x="650" y="290" font-size="11" font-weight="700" fill="#e65100" text-anchor="middle">Crons</text>
+  <text x="650" y="306" font-size="9.5" fill="#37474f" text-anchor="middle">Scheduler (per minute) | Reports 08:00 daily / Sun 20:00</text>
+  <text x="650" y="320" font-size="9.5" fill="#78909c" text-anchor="middle">+ LinkedIn OAuth callback (re-auth)</text>
+
+  <line x1="450" y1="108" x2="498" y2="120" stroke="#546e7a" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="498" y1="140" x2="450" y2="126" stroke="#546e7a" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- BRAIN -->
+  <rect x="860" y="70" width="300" height="270" rx="12" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+  <text x="1010" y="96" font-size="14" font-weight="700" fill="#1b5e20" text-anchor="middle">cm-agent - THE BRAIN (Python)</text>
+  <rect x="876" y="110" width="268" height="74" rx="8" fill="#ffffff" stroke="#2e7d32"/>
+  <text x="1010" y="128" font-size="12" font-weight="700" fill="#1b5e20" text-anchor="middle">ConversationRouter</text>
+  <text x="1010" y="144" font-size="10" fill="#37474f" text-anchor="middle">CM chat (Opus) + subagent chats (per account)</text>
+  <text x="1010" y="158" font-size="10" fill="#37474f" text-anchor="middle">tools: propose / stash / archive / adapt /</text>
+  <text x="1010" y="172" font-size="10" fill="#37474f" text-anchor="middle">queue edit / manual metrics</text>
+  <rect x="876" y="192" width="128" height="64" rx="8" fill="#ffffff" stroke="#2e7d32"/>
+  <text x="940" y="210" font-size="11" font-weight="700" fill="#1b5e20" text-anchor="middle">Generation</text>
+  <text x="940" y="226" font-size="9.5" fill="#37474f" text-anchor="middle">canonical -> variants</text>
+  <text x="940" y="239" font-size="9.5" fill="#37474f" text-anchor="middle">per-target language</text>
+  <text x="940" y="251" font-size="9.5" fill="#78909c" text-anchor="middle">tier router + cost log</text>
+  <rect x="1016" y="192" width="128" height="64" rx="8" fill="#ffffff" stroke="#2e7d32"/>
+  <text x="1080" y="210" font-size="11" font-weight="700" fill="#1b5e20" text-anchor="middle">Slot loop</text>
+  <text x="1080" y="226" font-size="9.5" fill="#37474f" text-anchor="middle">ONE approve -></text>
+  <text x="1080" y="239" font-size="9.5" fill="#37474f" text-anchor="middle">publish at slot</text>
+  <text x="1080" y="251" font-size="9.5" fill="#78909c" text-anchor="middle">confirm to log bot</text>
+  <rect x="876" y="264" width="268" height="62" rx="8" fill="#ffffff" stroke="#2e7d32"/>
+  <text x="1010" y="282" font-size="11" font-weight="700" fill="#1b5e20" text-anchor="middle">Content memory + Reports</text>
+  <text x="1010" y="298" font-size="9.5" fill="#37474f" text-anchor="middle">semantic archive search (pgvector) | daily/weekly</text>
+  <text x="1010" y="312" font-size="9.5" fill="#37474f" text-anchor="middle">reports per account | autonomous-decision log</text>
+
+  <line x1="800" y1="150" x2="858" y2="150" stroke="#546e7a" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="829" y="143" font-size="9" fill="#78909c" text-anchor="middle">/message</text>
+  <line x1="858" y1="230" x2="800" y2="230" stroke="#546e7a" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="829" y="223" font-size="9" fill="#78909c" text-anchor="middle">delegate publish</text>
+
+  <!-- RESEARCHER -->
+  <rect x="860" y="360" width="300" height="70" rx="12" fill="#f3e5f5" stroke="#7b1fa2" stroke-width="1.5"/>
+  <text x="1010" y="384" font-size="13" font-weight="700" fill="#4a148c" text-anchor="middle">ags-researcher (optional module)</text>
+  <text x="1010" y="402" font-size="10" fill="#37474f" text-anchor="middle">5-source deep research on demand: web / crawler /</text>
+  <text x="1010" y="416" font-size="10" fill="#37474f" text-anchor="middle">Gemini DR / OpenAI DR / Manus - evidence + cost trail</text>
+
+  <!-- EXTERNAL -->
+  <rect x="500" y="360" width="300" height="70" rx="12" fill="#eceff1" stroke="#546e7a" stroke-width="1.5"/>
+  <text x="650" y="384" font-size="13" font-weight="700" fill="#37474f" text-anchor="middle">External APIs (only outbound calls)</text>
+  <text x="650" y="402" font-size="10" fill="#37474f" text-anchor="middle">Anthropic (Claude) | OpenAI (Whisper, embeddings)</text>
+  <text x="650" y="416" font-size="10" fill="#37474f" text-anchor="middle">X API | LinkedIn API (App 1 LIVE, App 2 stats in review)</text>
+
+  <line x1="650" y1="342" x2="650" y2="358" stroke="#546e7a" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="1010" y1="342" x2="1010" y2="358" stroke="#546e7a" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="940" y1="358" x2="820" y2="400" stroke="#546e7a" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arr)"/>
+
+  <!-- DATABASE -->
+  <rect x="24" y="470" width="1136" height="300" rx="14" fill="#e3f2fd" stroke="#1565c0" stroke-width="2.5"/>
+  <text x="592" y="498" font-size="15" font-weight="700" fill="#0d47a1" text-anchor="middle">PostgreSQL (+pgvector) - SINGLE SOURCE OF TRUTH - 32 relational tables, full FK audit trail</text>
+
+  <rect x="44" y="516" width="256" height="234" rx="10" fill="#ffffff" stroke="#1565c0"/>
+  <text x="172" y="538" font-size="12" font-weight="700" fill="#0d47a1" text-anchor="middle">CONTENT CORE</text>
+  <text x="56" y="560" font-size="10.5" fill="#37474f">brands -> content_items (one master text)</text>
+  <text x="56" y="578" font-size="10.5" fill="#37474f">-> post_queue (variant per target)</text>
+  <text x="56" y="596" font-size="10.5" fill="#37474f">-> published_posts (archive + metrics</text>
+  <text x="56" y="612" font-size="10.5" fill="#37474f">&#160;&#160;&#160;+ embeddings for similarity)</text>
+  <text x="56" y="630" font-size="10.5" fill="#37474f">-> cm_tasks (cost ledger per AI call)</text>
+  <text x="56" y="648" font-size="10.5" fill="#37474f">inspirations = idea stash (Idea Bot + chat)</text>
+  <text x="56" y="666" font-size="10.5" fill="#37474f">channels = targets per ACCOUNT (language,</text>
+  <text x="56" y="682" font-size="10.5" fill="#37474f">&#160;&#160;&#160;stats mode, supervised toggle)</text>
+  <text x="56" y="704" font-size="10.5" fill="#37474f">subagent_daily/weekly_reports</text>
+  <text x="56" y="726" font-size="10" fill="#2e7d32" font-weight="700">LIVE, fully relational</text>
+
+  <rect x="320" y="516" width="256" height="234" rx="10" fill="#ffffff" stroke="#1565c0"/>
+  <text x="448" y="538" font-size="12" font-weight="700" fill="#0d47a1" text-anchor="middle">PEOPLE / CRM LAYER</text>
+  <text x="332" y="560" font-size="10.5" fill="#37474f">contacts (40 fields: narrative, ICP tier,</text>
+  <text x="332" y="576" font-size="10.5" fill="#37474f">&#160;&#160;&#160;pain points, next action + owner)</text>
+  <text x="332" y="596" font-size="10.5" fill="#37474f">engagement_log (who reacted / commented /</text>
+  <text x="332" y="612" font-size="10.5" fill="#37474f">&#160;&#160;&#160;DM'd - on which post, on which channel)</text>
+  <text x="332" y="632" font-size="10.5" fill="#37474f">task_queue.contact_id (follow-ups)</text>
+  <text x="332" y="650" font-size="10.5" fill="#37474f">published_posts.contact_id (attribution)</text>
+  <text x="332" y="704" font-size="10" fill="#ef6c00" font-weight="700">schema READY - agents come next</text>
+  <text x="332" y="722" font-size="10" fill="#78909c">(Relationship Keeper + Sales agents)</text>
+
+  <rect x="596" y="516" width="256" height="234" rx="10" fill="#ffffff" stroke="#1565c0"/>
+  <text x="724" y="538" font-size="12" font-weight="700" fill="#0d47a1" text-anchor="middle">AGENT NETWORK</text>
+  <text x="608" y="560" font-size="10.5" fill="#37474f">agent_registry (who exists, model tiers)</text>
+  <text x="608" y="578" font-size="10.5" fill="#37474f">agent_messages (async request/response)</text>
+  <text x="608" y="596" font-size="10.5" fill="#37474f">agent_approval_gates (3-gate process +</text>
+  <text x="608" y="612" font-size="10.5" fill="#37474f">&#160;&#160;&#160;model-selection learning from corrections)</text>
+  <text x="608" y="632" font-size="10.5" fill="#37474f">agent_logs (AUTONOMOUS_DECISION + why)</text>
+  <text x="608" y="652" font-size="10.5" fill="#37474f">user_agent_state (active agent per chat,</text>
+  <text x="608" y="668" font-size="10.5" fill="#37474f">&#160;&#160;&#160;conversation history per agent)</text>
+  <text x="608" y="704" font-size="10" fill="#2e7d32" font-weight="700">LIVE</text>
+
+  <rect x="872" y="516" width="268" height="234" rx="10" fill="#ffffff" stroke="#1565c0"/>
+  <text x="1006" y="538" font-size="12" font-weight="700" fill="#0d47a1" text-anchor="middle">RESEARCH + CONFIG + VAULT</text>
+  <text x="884" y="560" font-size="10.5" fill="#37474f">research_jobs -> runs -> evidence_items</text>
+  <text x="884" y="576" font-size="10.5" fill="#37474f">&#160;&#160;&#160;+ claims / options / cost_events</text>
+  <text x="884" y="596" font-size="10.5" fill="#37474f">brand_config (voice bible, languages,</text>
+  <text x="884" y="612" font-size="10.5" fill="#37474f">&#160;&#160;&#160;model tiers - versioned, live-read)</text>
+  <text x="884" y="632" font-size="10.5" fill="#37474f">brand_strategy (audience, pillars)</text>
+  <text x="884" y="652" font-size="10.5" fill="#37474f">app_secrets = THE VAULT (every key,</text>
+  <text x="884" y="668" font-size="10.5" fill="#37474f">&#160;&#160;&#160;never in code / env / workflow JSON)</text>
+  <text x="884" y="690" font-size="10.5" fill="#37474f">processed_updates (webhook dedup)</text>
+  <text x="884" y="712" font-size="10" fill="#2e7d32" font-weight="700">LIVE</text>
+
+  <line x1="650" y1="432" x2="650" y2="468" stroke="#2e7d32" stroke-width="2" marker-end="url(#arrg)"/>
+  <line x1="1010" y1="432" x2="1010" y2="468" stroke="#2e7d32" stroke-width="2" marker-end="url(#arrg)"/>
+  <line x1="300" y1="224" x2="300" y2="468" stroke="#2e7d32" stroke-width="2" marker-end="url(#arrg)"/>
+  <text x="310" y="450" font-size="9" fill="#2e7d32">reads/writes</text>
+
+  <text x="24" y="800" font-size="11" fill="#546e7a" font-weight="700">Flow of one publication:</text>
+  <text x="24" y="818" font-size="11" fill="#546e7a">chat idea -> brain proposes -> ONE approve tap -> waits in DB for its slot -> subagent publishes -> archive row + metrics -> confirmation on log bot -> daily/weekly report</text>
+  <text x="24" y="842" font-size="10" fill="#90a4ae">Any future interface (web / mobile / Slack) plugs into the same database - nothing else changes. Secrets stay in one vault table on YOUR server. Backups: daily pg_dump + weekly off-server copy.</text>
+</svg>
