@@ -144,6 +144,25 @@ def _memory_snapshot(brand_id="AGS"):
 
 
 # ---------------- LLM discussion ----------------
+_COMM_GUIDE = {
+    "pl": ("Mowisz po polsku, czysta polszczyzna bez anglicyzmow, zero em dash. Krotko i konkretnie, "
+           "jak wspolpracownik, nie jak asystent."),
+    "en": "You speak English. Zero em dashes. Short and concrete, like a coworker, not an assistant.",
+}
+
+
+def language_comm():
+    """R6: jezyk KOMUNIKACJI bota (rozmowa/raporty) z brand_config, default pl. /set language_comm en = live."""
+    row = db.fetchone(
+        "SELECT config_value FROM brand_config WHERE brand_id='AGS' AND config_key='language_comm' ORDER BY version DESC LIMIT 1")
+    return (((row or {}).get("config_value")) or "pl").strip().lower()
+
+
+def comm_guide():
+    lang = language_comm()
+    return _COMM_GUIDE.get(lang, f"You speak the language with code '{lang}'. Zero em dashes.")
+
+
 TOOL_SCHOWEK = {
     "name": "save_to_schowek",
     "description": ("Zapisz pomysl do SCHOWKA (baza pomyslow) BEZ uruchamiania produkcji. Uzyj gdy Tomasz "
@@ -250,8 +269,7 @@ def _system_blocks(brand):
     now = datetime.datetime.now(WARSAW).strftime("%A %d/%m/%Y %H:%M")
     role = (
         "Jestes Content Managerem AGS (Agent Growth Systems) i rozmawiasz na Telegramie z Tomaszem, wlascicielem. "
-        "Mowisz po polsku, czysta polszczyzna bez anglicyzmow, zero em dash. Krotko i konkretnie, jak wspolpracownik, "
-        "nie jak asystent. Twoja rola: dyskutujesz o pomyslach na tresci, proponujesz katy narracji, odpowiadasz "
+        f"{comm_guide()} Twoja rola: dyskutujesz o pomyslach na tresci, proponujesz katy narracji, odpowiadasz "
         "na pytania o kolejke, a gdy Tomasz potwierdzi temat, zapisujesz material narzedziem propose_material. "
         "Model pracy: jedno zatwierdzenie. Po zapisaniu materialu pipeline generuje tekst, Tomasz klika raz "
         "Zatwierdz, a publikacja idzie automatycznie w slocie. Pomysl 'na pozniej' zapisujesz narzedziem "
@@ -459,7 +477,7 @@ def _sub_system(brand_row, brand, channel):
     now = datetime.datetime.now(WARSAW).strftime("%A %d/%m/%Y %H:%M")
     role = (
         f"Jestes SUBAGENTEM publikacji dla celu: marka {brand}, kanal {channel}. Rozmawiasz na Telegramie "
-        "z Tomaszem, wlascicielem. Mowisz po polsku, czysta polszczyzna, zero em dash, krotko i konkretnie. "
+        f"z Tomaszem, wlascicielem. {comm_guide()} "
         "Odpowiadasz za SWOJ kanal: kolejka publikacji, sloty, historia. Mozesz usuwac i przesuwac pozycje "
         "(narzedzia) oraz proponowac material ad-hoc narzedziem propose_material z target_channels "
         f"ustawionym WYLACZNIE na ['{channel}'] (material przejdzie przez normalne zatwierdzenie Tomasza). "

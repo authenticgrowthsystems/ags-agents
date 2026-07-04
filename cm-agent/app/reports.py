@@ -214,12 +214,14 @@ def weekly_report(brand_id, channel):
         try:
             model, tier, source = tasks.model_for("weekly_report")
             posts_txt = "\n".join(f"- {(p['content'] or '')[:100]} | {_fmt_metrics(p.get('engagement_metrics') or {})}" for p in pub)
+            from . import conversation
             resp = client().messages.create(
                 model=model, max_tokens=600, thinking={"type": "disabled"},
                 messages=[{"role": "user", "content":
-                           f"Jestes subagentem publikacji {brand_id}/{channel}. Na bazie tygodnia publikacji nizej "
-                           f"napisz po polsku 3 zwiezle rekomendacje strategiczne dla Content Managera na nastepny "
-                           f"tydzien (co powtorzyc, czego unikac, jaki kat wzmocnic). Zero em dash, zero lania wody.\n\n{posts_txt}"}])
+                           f"Jestes subagentem publikacji {brand_id}/{channel}. {conversation.comm_guide()} "
+                           f"Na bazie tygodnia publikacji nizej napisz 3 zwiezle rekomendacje strategiczne dla "
+                           f"Content Managera na nastepny tydzien (co powtorzyc, czego unikac, jaki kat wzmocnic). "
+                           f"Zero lania wody.\n\n{posts_txt}"}])
             tasks.log_task("weekly_report", tier, model, source, getattr(resp, "usage", None))
             reco = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
         except Exception:

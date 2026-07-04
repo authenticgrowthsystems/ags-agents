@@ -3,6 +3,7 @@ the cached system block (brand.system_blocks), so the voice prefix is reused che
 import anthropic
 
 from . import config, tasks
+from . import db as _db
 from .brand import system_blocks
 
 _client = None
@@ -45,11 +46,26 @@ CHANNEL_GUIDE = {
 }
 
 
+LANGUAGE_GUIDE = {
+    "pl": ("Write the adaptation in PURE POLISH: natural, everyday Polish with ZERO anglicisms "
+           "(the 'mom test' - a non-technical Polish speaker must understand every word)."),
+    "en": "Write the adaptation in English.",
+}
+
+
+def _language_publish(brand_id, channel):
+    """R6: jezyk publikacji per CEL z channels.config.language_publish (default en)."""
+    row = _db.fetchone("SELECT config FROM channels WHERE brand_id=%s AND channel=%s", (brand_id, channel))
+    return (((row or {}).get("config") or {}).get("language_publish") or "en").lower()
+
+
 def generate_variant(brand, canonical_body, channel, content_item_id=None):
-    """Adaptacja per kanal; model per task z routera R4 (default haiku)."""
+    """Adaptacja per kanal; model per task z routera R4 (default haiku); jezyk per cel (R6)."""
     model, tier, source = tasks.model_for("variant")
     guide = CHANNEL_GUIDE.get(channel, f"{channel}: adapt naturally for this platform.")
-    msg = (f"Adapt the canonical post below for {channel}. {guide}\n"
+    lang = _language_publish(brand.get("brand_id", "AGS"), channel)
+    lang_guide = LANGUAGE_GUIDE.get(lang, f"Write the adaptation in language code '{lang}'.")
+    msg = (f"Adapt the canonical post below for {channel}. {guide}\n{lang_guide}\n"
            f"Keep the brand voice. Zero em dashes. Return ONLY the adapted text.\n\nCANONICAL:\n{canonical_body}")
     resp = client().messages.create(
         model=model, max_tokens=800,
