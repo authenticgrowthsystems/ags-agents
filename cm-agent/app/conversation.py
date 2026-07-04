@@ -26,6 +26,7 @@ STATE_TTL_MIN = 30    # stale conversation resets (research verdict: TTL + /canc
 TG_LIMIT = 4096
 
 _PREVIEW_RE = re.compile(r"^\s*(/plan|/kolejka|plan|kolejka|status|poka[zż]\s+(plan|kolejk\w*))\s*\??\s*$", re.IGNORECASE)
+_SCHOWEK_RE = re.compile(r"^\s*(/schowek|schowek|baza\s+pomys\w*|poka[zż]\s+(schowek|baz\w*))\s*\??\s*$", re.IGNORECASE)
 _CANCEL_RE = re.compile(r"^\s*(/cancel|anuluj)\s*$", re.IGNORECASE)
 
 
@@ -129,6 +130,27 @@ def _queue_snapshot(brand_id="AGS"):
         ch = ",".join(it.get("target_channels") or [])
         lines.append(f"- [{it['status']}] {it['master_theme'][:80]} | {ch} | slot: {_fmt_slot(it.get('scheduled_for'))}")
     return "\n".join(lines) if lines else "(kolejka pusta)"
+
+
+_SRC_ICON = {"telegram": "💡", "cm_conversation": "🧠", "notion": "📓"}
+
+
+def _schowek_view():
+    """Deterministyczny podglad schowka (bez LLM): pomysly 'new' czekajace na planer + liczniki statusow."""
+    rows = db.fetchall(
+        "SELECT id, source, content, created_at FROM inspirations WHERE status='new' ORDER BY id DESC LIMIT 20")
+    counts = db.fetchall("SELECT status, COUNT(*) AS n FROM inspirations GROUP BY status ORDER BY status")
+    lines = [f"🗃 Schowek - CZEKAJACE na planer ({len(rows)}):"]
+    for r in rows:
+        when = r["created_at"].astimezone(WARSAW).strftime("%d/%m") if r.get("created_at") else "?"
+        lines.append(f"#{r['id']} {_SRC_ICON.get(r['source'], '📌')} ({when}) {(r['content'] or '')[:80]}")
+    if len(rows) == 0:
+        lines.append("(pusto - wrzuc pomysl przez Idea Bota albo 'zapisz do schowka' tutaj)")
+    lines.append("")
+    lines.append("Wszystkie wpisy wg statusu: " + ", ".join(f"{c['status']}: {c['n']}" for c in counts))
+    lines.append("Statusy inne niz 'new' = pomysly juz przerobione przez stary pipeline (post_drafted/researched...) "
+                 "albo odrzucone; planer bierze tylko 'new'.")
+    return "\n".join(lines)
 
 
 def _memory_snapshot(brand_id="AGS"):
@@ -713,6 +735,9 @@ def handle(update):
             return
         if _PREVIEW_RE.match(text):
             _reply(chat_id, "Kolejka CM:\n" + _queue_snapshot())
+            return
+        if _SCHOWEK_RE.match(text):
+            _reply(chat_id, _schowek_view())
             return
         ph = _tg("sendMessage", {"chat_id": chat_id, "text": "⏳"})
         ph_id = ((ph or {}).get("result") or {}).get("message_id")
