@@ -123,28 +123,49 @@ approve -> CM dispatch per publish_mode:
 | **LinkedIn profil osobisty** (`linkedin-agent`) | `Subagent LinkedIn Publisher` Uv9TvUMI8MRSqCLz, `/webhook/subagent-linkedin-publish` | Bearer `POST /v2/ugcPosts` (Share on LinkedIn, w_member_social) | `linkedin_access_token` + `linkedin_author_urn`; **GENERYCZNY per cel**: `secret_prefix` w payloadzie (default 'linkedin'); strona firmowa = nowy prefix + wiersz `channels`, zero kodu |
 | (pomocniczy) | `LinkedIn OAuth Callback` qvznauoY3FXIttMI, `/webhook/li-oauth-callback` | 3-legged exchange + zapis tokenu/URN | wymaga poprawnego `linkedin_client_secret` (dziś zły; token brany z portalowego Token Generatora) |
 
-### E.4 Mózg CM Faza 1 - rozmowa + kolejka z jednym approve (zbudowane 03/07; UWAGA: korekta Managera 03/07 -> design v2, implementacja WSTRZYMANA, przepięcie tekst->CM do ROLLBACKU na rzecz Idea Bota + routera multi-agent; patrz docs/cm/CM_BRAIN_DESIGN_v2.md)
+### E.4 Mózg CM FAZA 1 - KOMPLET LIVE Z E2E (04/07/2026, wg CM_BRAIN_DESIGN_v2, raporty krokow w docs/cm/)
 ```
-Telegram tekst (bez stanu edycji/synth) -> HITL 'Idea Not Editing?' TRUE -> [NOWE] CM Get Secret -> POST cm-agent /message {chat_id,text,update_id} [X-Researcher-Secret]
-  cm-agent /message: 202 + wątek tła -> conversation.handle:
-    dedup update_id (processed_updates, czyszczenie >24h) -> /cancel|anuluj = reset stanu -> plan|kolejka|status = podgląd kolejki (bez LLM)
-    -> reszta: placeholder ⏳ -> Sonnet 5 (thinking disabled, historia z user_agent_state, TTL 30 min, glos marki cache)
-       + narzędzie propose_material {master_theme, target_channels, scheduled_for ISO} -> INSERT content_items 'planned' + wake pętli
-    -> odpowiedź: editMessageText placeholdera + split 4096 na granicach akapitów
-JEDEN APPROVE (D2): approve materiału = koniec klikania; pętla claimuje 'approved' DOPIERO gdy scheduled_for<=NOW() (backstop 30s)
-  -> dispatch (istniejący kontrakt) -> potwierdzenie publikacji na KANAŁ LOGOWY = bot #2 (app_secrets.log_bot_token, D1)
+Telegram @ags_social_bot -> n8n HITL U5pUZjy2yAhR1sWg (224 węzły, TYLKO transport):
+  guziki: cm:(approve/reject) | cmtier:(korekta modelu -> agent_approval_gates + brand_config) | agsel:(wybór agenta
+          -> user_agent_state.active_agent + setMyCommands per czat) | crit:/mtier:/idea:/synth:/ccp: (bez zmian)
+  /agents -> menu inline z channels (supervised, open/closed: nowy wiersz = nowa pozycja)
+  TEKST (bez stanu edycji/synth) -> Get Active Agent (COALESCE 'idea') -> Active Is Idea?
+    TRUE  -> IDEA BOT (tor sprzed 03/07: Prepare Idea Text -> Save Idea -> triage -> inspirations)  [R1]
+    FALSE -> POST cm-agent /message {chat_id, text, update_id, active_agent} [X-Researcher-Secret]
+  głos/foto -> stary tor Idea Bota (bez zmian)
+cm-agent /message (202 + wątek) -> ConversationRouter:
+  dedup update_id (processed_updates) | historia PER AGENT (user_agent_state.fsm_data.histories, TTL 30 min)
+  'cm' -> rozmowa CM: model z routera R4 (default OPUS 4.8, brand_config cm_tier_conversation live) w języku
+     brand_config.language_comm; narzędzia: propose_material | save_to_schowek (inspirations) |
+     show_archive | find_similar_published (pgvector) | adapt_published
+  'subagent:<brand>:<channel>' -> rozmowa subagenta (sonnet default): kolejka #id | remove/reschedule
+     (sync content_items.scheduled_for) | ad-hoc przez approve | subagent_set_metrics (ręczne, X) |
+     raport na żądanie | decyzje poza planem -> agent_logs AUTONOMOUS_DECISION  [R2+R3]
+JEDEN APPROVE (D2): approve -> pętla claimuje 'approved' DOPIERO gdy scheduled_for<=NOW() -> dispatch
+  -> subagent publikuje -> callback: post_queue 'published' + **INSERT published_posts (post_id/URL)** +
+     agent_messages RESPONSE -> potwierdzenie na KANAŁ LOGOWY bot #2
+GENERACJA: canonical (tier R4) -> compliance -> warianty per cel W JĘZYKU channels.config.language_publish [R6]
+CONTENT MEMORY [R5]: published_posts + embedding vector(1536) (OpenAI text-embedding-3-small, backfill leniwy);
+  hook nowego kanału (welcomed) -> propozycja adaptacji archiwum
+RAPORTY [R3]: cron 'CM Reports Cron' ERweY5vHomrpw1SC (08:00 daily / nd 20:00 weekly, Europe/Warsaw)
+  -> POST /reports/<kind> -> per supervised cel: zbiór + UPSERT subagent_daily/weekly_reports + push bot #2;
+  metryki: stats_mode per cel = manual (X, ręczne w rozmowie) | member_api | org_api (LinkedIn po App 2 CMA)
 ```
-| Nowe tabele/kolumny (db/003_brain_phase1.sql) | Co trzymają |
+| Tabele/kolumny mózgu (DDL db/003..007, wszystkie LIVE) | Co trzymają |
 |---|---|
-| `user_agent_state` | stan rozmowy per czat: `active_agent`, `fsm_state`, `fsm_data` jsonb (historia, TTL 30 min) |
-| `processed_updates` | dedup Telegram update_id (retry webhooka nie dubluje) |
-| `content_items.first_comment` + status `proposed` | pierwszy komentarz (Faza 3) + pozycja planu przed akceptacją (Faza 2) |
-| `app_secrets.log_bot_token` | token bota #2 (kanał logowy) |
+| `user_agent_state` | aktywny agent + historia rozmowy per agent per czat (TTL 30 min) |
+| `processed_updates` | dedup Telegram update_id |
+| `cm_tasks` | ledger operacji LLM: task_type, tier, model, źródło tieru, tokeny, koszt USD |
+| `agent_logs` | AUTONOMOUS_DECISION subagentów (rationale + context) - jedna generyczna tabela |
+| `subagent_daily_reports` / `subagent_weekly_reports` | raporty per cel per okres (UPSERT) |
+| `published_posts` +content_item_id +engagement_metrics +embedding | archiwum publikacji = pamięć cross-channel |
+| `content_items.first_comment` + status 'proposed' | pod Fazę 3 (komentarz) i Fazę 2 (plan) |
+| `channels.config` | publish_mode, supervised, language_publish, stats_mode, welcomed, (narrative/goals - Faza 2) |
+| `brand_config` | voice_bible, language_comm, cm_tier_<task_type>, admin_chat_ids |
+| `app_secrets` | wszystkie klucze (anthropic, x_, linkedin_, openai, telegram_bot_token, log_bot_token, guard) |
 
-Stary zapis pomysłu z TEKSTU (Prepare Idea Text -> Save Idea -> triage) ODPIĘTY (węzły zostają jako sierotki do rollbacku); głos/foto idą starym torem. Gałąź HITL: +2 węzły `CM Get Secret` + `CM Conversation Message` (patch: ags-media-spike/hitl-cm-branch-patch.cjs).
-
-### E.5 Czego dalej NIE ma (Fazy 2-4)
-Proaktywny planer (tydzień/2 mies. z brand_strategy, cron /plan), edycja zaplanowanych postów w rozmowie, media (zdjęcia/wideo), konfiguracja per cel (język: profil EN / TNM PL / AGS EN / RDC PL; narracja; cele), pierwszy komentarz (generacja + publikacja), strony firmowe LinkedIn (App 2 CMA w review), FB/IG/YT, tryb standalone subagentów, multi-brand. Znana kosmetyka: tekst potwierdzenia HITL po approve ("X scheduled, LinkedIn draft") nie odzwierciedla delegacji webhook.
+### E.5 Czego dalej NIE ma (Fazy 2-4 + otwarte)
+Proaktywny planer (Faza 2: cron /plan -> propozycja tygodnia z brand_strategy+schowek+content_memory -> 'proposed' -> generacja T-24h), pierwszy komentarz (Faza 3), media (Faza 4), strony firmowe LinkedIn + metryki LinkedIn (token ze scope po review App 2 CMA), FB/IG/YT, tryb standalone subagentów, multi-brand aktywny, pełne i18n stałych komunikatów bota (przy 1. instalacji EN). Otwarte kosmetyki/długi: tekst HITL po approve ("X scheduled, LinkedIn draft"), rotacja tokena Telegram (hardkody w starych węzłach HITL), linkedin_client_secret w DB błędny (token z Token Generatora, wygasa ~01/09/2026). **WARUNEK BRAMY 3 (Tomasz 04/07): jasna ścieżka wdrożenia u osoby trzeciej (playbook instalacji sprzedawalnej) + diagram graficzny przepływu danych.**
 
 ---
 
