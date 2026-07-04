@@ -10,7 +10,7 @@ from fastapi import FastAPI, Header, HTTPException
 
 from . import config, db
 from .brand import load_brand
-from . import generate, compliance, channels, research, hitl, conversation, logbot, content_memory
+from . import generate, compliance, channels, research, hitl, conversation, logbot, content_memory, reports
 
 api = FastAPI(title="AGS Content Manager")
 wake = threading.Event()
@@ -72,6 +72,16 @@ def plan(body: dict, x_researcher_secret: str = Header(default="")):
     _guard(x_researcher_secret)
     wake.set()
     return {"accepted": True}
+
+
+@api.post("/reports/{kind}", status_code=202)
+def run_reports(kind: str, x_researcher_secret: str = Header(default="")):
+    """Cron entrypoint (n8n): daily 08:00 / weekly niedziela 20:00 Europe/Warsaw. Raport per supervised cel."""
+    _guard(x_researcher_secret)
+    if kind not in ("daily", "weekly"):
+        raise HTTPException(status_code=400, detail="kind must be daily|weekly")
+    threading.Thread(target=reports.run_all, args=(kind,), daemon=True).start()
+    return {"accepted": True, "kind": kind}
 
 
 @api.post("/message", status_code=202)

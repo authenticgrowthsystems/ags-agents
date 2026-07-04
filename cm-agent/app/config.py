@@ -64,3 +64,6 @@ PUBLISH_WEBHOOK = "webhook"        # POST the channel's adapter_path (future YT/
 
 # brand voice prompt-cache: voice_bible is a stable system block we mark cache_control ephemeral.
 USD_PLN = _f("USD_PLN", 4.0)
+
+# LinkedIn REST versioning header (YYYYMM); fakty: docs/research/LINKEDIN_STATISTICS_API_2026.md
+LINKEDIN_VERSION = os.getenv("LINKEDIN_VERSION", "202606")

@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 import httpx
 from psycopg.types.json import Jsonb
 
-from . import db, config, tasks, content_memory
+from . import db, config, tasks, content_memory, reports
 from .brand import load_brand
 from .generate import client
 
@@ -354,6 +354,30 @@ TOOL_SUB_RESCHEDULE = {
                      "required": ["post_queue_id", "new_time"]},
 }
 
+TOOL_SUB_METRICS = {
+    "name": "subagent_set_metrics",
+    "description": ("Zapisz RECZNIE podane metryki publikacji (numer #id z sekcji OSTATNIE PUBLIKACJE). "
+                    "Uzywane dla X (API odczytu zablokowane) - Tomasz odczytuje liczby z aplikacji i dyktuje. "
+                    "Podaj tylko pola, ktore Tomasz wymienil."),
+    "input_schema": {"type": "object",
+                     "properties": {"published_id": {"type": "integer"},
+                                    "impressions": {"type": ["integer", "null"]},
+                                    "reactions": {"type": ["integer", "null"]},
+                                    "comments": {"type": ["integer", "null"]},
+                                    "reshares": {"type": ["integer", "null"]},
+                                    "clicks": {"type": ["integer", "null"]}},
+                     "required": ["published_id"]},
+}
+
+
+def _log_autonomous(brand, channel, rationale, context=None):
+    """Blueprint zasada 4: kazde wyjscie poza plan CM = wpis AUTONOMOUS_DECISION (widoczny w raportach)."""
+    try:
+        db.execute("INSERT INTO agent_logs (agent_id, log_type, rationale, context) VALUES (%s,'AUTONOMOUS_DECISION',%s,%s)",
+                   (f"{brand}:{channel}", rationale, Jsonb(context or {})))
+    except Exception:
+        pass
+
 
 def _sub_queue(brand, channel, limit=15):
     return db.fetchall(
@@ -474,7 +498,7 @@ def _subagent_handle(chat_id, text, active):
         model=model, max_tokens=900,
         thinking={"type": "disabled"},
         system=_sub_system(brand_row, brand, channel),
-        tools=[TOOL_SUB_REMOVE, TOOL_SUB_RESCHEDULE, TOOL_PROPOSE],
+        tools=[TOOL_SUB_REMOVE, TOOL_SUB_RESCHEDULE, TOOL_SUB_METRICS, TOOL_PROPOSE],
         messages=history,
     )
     tasks.log_task("subagent_chat", tier, model, source, getattr(resp, "usage", None))
@@ -483,12 +507,26 @@ def _subagent_handle(chat_id, text, active):
         if getattr(b, "type", "") != "tool_use":
             continue
         if b.name == "subagent_remove_post":
-            parts.append(_sub_remove(b.input, brand, channel))
+            out = _sub_remove(b.input, brand, channel)
+            if out.startswith("🗑"):
+                _log_autonomous(brand, channel, f"Usuniecie pozycji #{b.input.get('post_queue_id')} na polecenie Tomasza w rozmowie",
+                                {"tool": "remove", "input": dict(b.input)})
+            parts.append(out)
         elif b.name == "subagent_reschedule_post":
-            parts.append(_sub_reschedule(b.input, brand, channel))
+            out = _sub_reschedule(b.input, brand, channel)
+            if out.startswith("🕐"):
+                _log_autonomous(brand, channel, f"Przesuniecie slotu pozycji #{b.input.get('post_queue_id')} na {b.input.get('new_time')}",
+                                {"tool": "reschedule", "input": dict(b.input)})
+            parts.append(out)
+        elif b.name == "subagent_set_metrics":
+            m = reports.set_manual_metrics(int(b.input.get("published_id") or 0), dict(b.input), brand, channel)
+            parts.append(f"📈 Metryki zapisane dla #{b.input.get('published_id')}." if m
+                         else f"Nie znalazlem publikacji #{b.input.get('published_id')} w {channel}.")
         elif b.name == "propose_material":
             inp = dict(b.input)
             inp["target_channels"] = [channel]  # subagent nie wychodzi poza swoj kanal
+            _log_autonomous(brand, channel, f"Material ad-hoc poza planem CM: {inp.get('master_theme', '')[:80]}",
+                            {"tool": "propose_material", "input": inp})
             parts.append(_create_material(inp))
     reply = "\n\n".join(parts).strip() or "Przyjete."
     _save_history(chat_id, history + [{"role": "assistant", "content": reply}], agent=active)
