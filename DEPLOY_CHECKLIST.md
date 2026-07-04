@@ -1,158 +1,164 @@
-# Social Publishing Agent - Deploy Checklist
+# AI Content Manager - Deployment Playbook (v2)
 
-Client-facing pre-install requirements and deployment guide. Complete every item in Part 1 BEFORE installation begins.
+A complete, repeatable path to install this system for a new operator. Written so the installer can walk
+a client through it step by step, and so the client understands exactly where their data lives.
 
-Product: an AI social publishing agent. Reads your content insights, adapts them to platform-native posts, runs a brand-voice compliance check, sends you a preview with Approve / Reject / Edit buttons in chat (Telegram, optionally Slack), and publishes on approval. High-priority items can auto-publish after a configurable timeout. All state lives in PostgreSQL.
-
----
-
-## Part 0 - What this product needs (the short version)
-
-| Need | Required? | Who provides |
-|------|-----------|--------------|
-| Linux server with Docker | Yes | Client |
-| PostgreSQL 15+ | Yes (bundled with stack) | Auto / Client |
-| n8n (self-hosted) | Yes | Auto / Client |
-| Anthropic API key (Claude) | Yes | Client |
-| X (Twitter) Developer App | Yes (for X publishing) | Client |
-| Telegram bot | Yes (approval channel) | Client |
-| Slack app | Optional (alt approval channel) | Client |
-| Notion integration | Optional (if Notion = content source) | Client |
-| Domain + HTTPS | Recommended | Client |
+Product in one paragraph: a multi-agent content system you operate ENTIRELY from Telegram. A Content
+Manager brain (Claude, model selectable per task) discusses ideas with you, keeps an idea stash, writes
+platform-native drafts in your brand voice, sends you ONE approve button, publishes at the scheduled slot
+through per-account channel subagents (X, LinkedIn - more pluggable), archives every publication with
+engagement metrics, files every autonomous decision with a rationale, and pushes daily/weekly reports to
+a separate log channel. Every fact lives in one relational PostgreSQL database - so any future interface
+(web app, mobile, Slack) reads the same live data.
 
 ---
 
-## Part 1 - CLIENT PREPARES BEFORE INSTALL
+## Part 0 - What you need (summary)
+
+| Need | Required | Who provides |
+|------|----------|--------------|
+| Linux VPS with Docker (2 GB RAM min, 4 GB rec.) | Yes | Client |
+| Domain + HTTPS for webhooks | Yes | Client |
+| PostgreSQL 15+ with pgvector (bundled in stack) | Yes | Installer |
+| n8n self-hosted (transport layer) | Yes | Installer |
+| Anthropic API key (the brain) | Yes | Client |
+| OpenAI API key (voice transcription + archive embeddings) | Yes | Client |
+| X (Twitter) Developer App, Read+Write | For X publishing | Client |
+| LinkedIn Developer App(s) | For LinkedIn | Client |
+| Telegram: TWO bots (conversation + log channel) | Yes | Client (5 min with @BotFather) |
+| Notion integration | Optional (content source) | Client |
+
+## Part 1 - Client prepares (before install day)
 
 ### 1A. Infrastructure
-- [ ] Linux server / VPS (2 GB RAM minimum, 4 GB recommended). Docker + Docker Compose installed.
-- [ ] A domain or subdomain pointing to the server (for n8n + webhooks), with HTTPS (Caddy/Traefik/Cloudflare). Webhooks need a public HTTPS URL.
-- [ ] SSH access to the server.
-- [ ] Decision: bundled PostgreSQL (in the Docker stack) or external managed PostgreSQL. Bundled is fine for single-client.
+- [ ] VPS with Docker + Docker Compose, SSH access.
+- [ ] Subdomain pointed at the VPS with HTTPS (Caddy/Traefik/Cloudflare). Webhooks need public HTTPS.
 
-### 1B. Anthropic (Claude) - the brain
-- [ ] Account at console.anthropic.com
-- [ ] API key created (starts with `sk-ant-`)
-- [ ] Billing enabled with a spend cap (suggest $10 min / $30 monthly cap to start)
-- [ ] Models used: Haiku (fast, for adapt + brand-canon check). Sonnet optional for heavier reasoning.
-- Cost estimate: ~$5-30/month at a few posts/day.
+### 1B. Anthropic (the brain)
+- [ ] Account at console.anthropic.com, API key (`sk-ant-...`), billing with a spend cap.
+- Models used: Opus (strategy conversation), Sonnet (canonical drafts, subagent chat, weekly analysis),
+  Haiku (channel variants, compliance, daily reports). Per-task tier is configurable at runtime and the
+  system keeps a cost ledger (`cm_tasks`) - the client sees what every AI call cost.
 
-### 1C. X (Twitter) Developer App - to publish
-- [ ] Developer account at developer.x.com
-- [ ] An App created inside a Project
-- [ ] App permissions set to **Read and Write** (default is Read only - must change BEFORE generating tokens)
-- [ ] App type: Web App / Automated App or Bot
-- [ ] Generate and save ALL of these:
-  - [ ] API Key (Consumer Key)
-  - [ ] API Key Secret (Consumer Secret)
-  - [ ] Access Token (must be generated AFTER setting Read+Write)
-  - [ ] Access Token Secret
-  - [ ] Bearer Token (for reads / analytics)
-- [ ] Tier awareness: Free tier allows ~1,500 posts/month (writes). Some READ endpoints (metrics, search) may require Basic (~$100/month). Publishing works on Free; analytics may not.
-- Note: if you regenerate App permissions, you MUST regenerate the Access Token + Secret afterward.
+### 1C. OpenAI (supporting)
+- [ ] API key. Used for: Whisper voice-note transcription + text-embedding-3-small (semantic archive search,
+  ~$0.02 per 1M tokens - negligible).
 
-### 1D. Telegram bot - the approval channel
-- [ ] Open Telegram, message @BotFather
-- [ ] `/newbot` - choose a name and username, save the bot token (format `1234567890:AA...`)
-- [ ] Each approver sends `/start` to the bot once (so the bot can message them)
-- [ ] Capture each approver's numeric chat_id (the installer pulls it from the bot's getUpdates)
-- One bot per client. Do not share bots across clients.
+### 1D. X (Twitter) Developer App
+- [ ] developer.x.com -> Project -> App, permissions **Read and Write** set BEFORE generating tokens.
+- [ ] Save: API Key + Secret (consumer), Access Token + Secret (generated AFTER Read+Write), Bearer.
+- Note: publishing works on the pay-per-use/free tier; READ endpoints (metrics) may require a paid tier -
+  the system supports manual metric entry through chat for X.
 
-### 1E. Slack (optional - alternative approval channel)
-- [ ] Slack workspace admin access
-- [ ] Create a Slack App (api.slack.com/apps)
-- [ ] Bot token scopes: `chat:write`, `commands`, `im:history`
-- [ ] Install to workspace, save Bot User OAuth Token (`xoxb-...`) + Signing Secret
-- [ ] Target channel ID or DM
-- Note: Slack channel is a roadmap item; confirm availability for your install.
+### 1E. LinkedIn Developer App(s)
+- [ ] App with products: "Share on LinkedIn" + "Sign In with LinkedIn" (publishing to personal profile).
+- [ ] For statistics and company pages: apply for the Community Management API product (review takes days
+  to weeks). Post statistics scopes: `r_member_postAnalytics` (personal), `rw_organization_admin` (pages).
+- [ ] Access token: portal Token Generator (fastest) or 3-legged OAuth (a callback workflow ships with the
+  system). Save the member URN (`urn:li:person:...`).
 
-### 1F. Notion (optional - only if Notion is your content source)
-- [ ] Internal integration at notion.so/my-integrations, save token (`ntn_...` or `secret_...`)
-- [ ] Share the content-source page/database with the integration (enable "Apply to sub-pages")
-- [ ] Capture the page/database IDs
-- If you do NOT use Notion, content goes straight into the PostgreSQL `post_queue` table (the product direction). Confirm your content-source choice with the installer.
+### 1F. Telegram - two bots (5 minutes)
+- [ ] @BotFather -> `/newbot` x2: (1) conversation bot - the single window the operator lives in;
+  (2) log bot - publish confirmations + scheduled reports, so the conversation stays clean.
+- [ ] Copy both tokens EXACTLY (format `1234567890:AA...`, no brackets or spaces around them).
+- [ ] Every approver sends `/start` to BOTH bots once; capture their numeric chat_id (getUpdates).
 
-### 1G. Decisions the client must make (config inputs)
-Prepare answers to these - they become the agent's runtime settings:
-- [ ] **Brand voice rules** (the "voice bible"): tone, hard rules, first vs third person, any non-negotiables
-- [ ] **Banned vocabulary**: words/acronyms the agent must never use
-- [ ] **Posting windows** per platform (e.g., X at 09:00 / 14:00 / 18:00 / 22:00)
-- [ ] **Max posts per day** per platform
-- [ ] **Active hours** (timezone + start/end - no posting outside)
-- [ ] **Auto-publish policy**: which priorities auto-publish (e.g., HIGH only), and the timeout before auto-publish (e.g., 30 min). Default is hard human gate (no auto-publish).
-- [ ] **Who approves**: which person(s) get the preview and click Approve
+### 1G. Decisions the client makes (become runtime config, all changeable later from chat)
+- [ ] Brand voice rules ("voice bible") + banned vocabulary
+- [ ] Publication targets - PER ACCOUNT, not per platform (e.g. "LinkedIn personal EN", "LinkedIn company PL"):
+      for each - language of publication, posting cadence, metrics mode (api/manual)
+- [ ] Language of conversation with the bot (`language_comm`: pl/en/...)
+- [ ] Report hours (default: daily 08:00, weekly Sunday 20:00, local timezone)
+- [ ] Who approves (chat ids)
 
----
+## Part 2 - Install (installer runs, ~1 hour)
 
-## Part 2 - INSTALL (installer runs)
+1. **Docker stack:** n8n + PostgreSQL (with `CREATE EXTENSION vector`) + reverse proxy. Then two worker
+   containers built from this repo: `cm-agent` (port 8089) and `ags-researcher` (port 8088, optional
+   research module), both on the same Docker network as n8n and Postgres, ports bound to 127.0.0.1.
+   Worker `.env` carries ONLY `POSTGRES_DSN` + `N8N_BASE_URL` - no API keys in env files, ever.
+2. **n8n env (critical):** `NODE_FUNCTION_ALLOW_BUILTIN=crypto,https` (signed API calls in Code nodes);
+   `GENERIC_TIMEZONE` set to client timezone; executions retention (`EXECUTIONS_DATA_MAX_AGE=168`).
+3. **Database bootstrap - ONE command:** apply `cm-agent/db/*.sql` in order (001..008). All migrations are
+   idempotent; they create the full relational schema: brands, content_items, channels, post_queue,
+   published_posts (+embeddings), inspirations, contacts + engagement_log (CRM layer), cm_tasks (cost ledger),
+   agent_logs, report tables, user_agent_state, app_secrets, agent_registry (+ the research module tables).
+4. **Secrets onboarding - into `app_secrets` table only** (single source; never in code, env, or workflow
+   JSON): anthropic_api_key, openai_api_key, x_consumer_key/secret, x_access_token/secret,
+   linkedin_access_token + linkedin_author_urn (+ client_id/secret for OAuth re-auth),
+   telegram_bot_token, log_bot_token, researcher_webhook_secret (generate a fresh random guard per install).
+   Paste values WITHOUT surrounding brackets/whitespace; verify each with the length+shape check query
+   (ships in the repo) before going live.
+5. **Import n8n workflows** (from `n8n-workflows/` export set): HITL Handler (the Telegram transport),
+   Subagent X Publisher, Subagent LinkedIn Publisher, Scheduler, CM Reports Cron, LinkedIn OAuth Callback.
+   For each: swap the two credentials (PostgreSQL, Telegram conversation bot) to the client's, verify the
+   webhook paths, then ACTIVATE. Rule: after ANY workflow edit via API - deactivate+activate to refresh
+   the live snapshot.
+6. **Register targets:** one row in `brands`, one row in `channels` PER publication account with config:
+   `publish_mode` (webhook), `supervised` (true = under CM), `language_publish`, `stats_mode`
+   (manual | member_api | org_api), `secret_prefix` (which token set to use - adding a second LinkedIn page
+   = new secrets under a new prefix + one row here, ZERO code changes).
+7. **Seed `brand_config`:** voice_bible, banned_vocab, language_comm, admin_chat_ids, optional per-task
+   model tiers (`cm_tier_<task>`).
+8. **Telegram wiring:** point the conversation bot webhook at n8n; run setMyCommands sync so the command
+   menu matches the active agent.
 
-- [ ] Provision Docker stack: n8n + PostgreSQL + reverse proxy (HTTPS)
-- [ ] CRITICAL n8n env vars (the agent signs requests in Code nodes):
-  - `NODE_FUNCTION_ALLOW_BUILTIN=crypto,https`
-  - These MUST be set in the docker run / compose file, not just the live container (auto-updaters wipe live-only env vars).
-- [ ] Run database migrations: create tables (`post_queue`, `published_posts`, `hitl_sessions`, `brand_config`, `conversation_state`, `inspirations`, `task_queue`, `contacts`, `engagement_log`)
-- [ ] Create n8n credentials (one each): Anthropic (header auth), X OAuth 1.0a, Telegram, PostgreSQL, Notion (if used), Slack (if used)
-- [ ] Import workflows: main publisher, HITL handler (the approval/publish brain), analytics, timeout checker
-- [ ] Activate: HITL handler + (optionally) timeout checker. Activate main publisher after the test cycle.
+## Part 3 - Verify (test cycle, before handover)
 
----
+- [ ] `curl /health` on both workers -> `{"status":"ok"}`; both load secrets from app_secrets on boot.
+- [ ] `/agents` in the conversation bot -> menu shows Idea Bot + Content Manager + one entry per channels row.
+- [ ] Plain text (no agent selected) -> Idea Bot triage buttons -> row lands in `inspirations`.
+- [ ] Switch to Content Manager -> discuss an idea -> confirm with a slot 10 minutes ahead -> draft arrives
+      with ONE approve button + model-tier buttons -> approve -> NOTHING publishes early -> at the slot the
+      post goes live on every target in its own language -> log bot confirms -> `published_posts` has the row
+      with URL and post id.
+- [ ] Switch to a subagent -> "kolejka"/"queue" lists items with #ids -> "raport"/"report" returns the
+      on-demand report -> reschedule one item -> `AUTONOMOUS_DECISION` row appears in `agent_logs`.
+- [ ] Fire `POST /reports/daily` manually -> report rows upserted + pushed to the log bot.
 
-## Part 3 - CONFIGURE (seed brand_config)
+## Part 4 - Handover & security (client-facing)
 
-All runtime settings live in the `brand_config` table as key/value rows, scoped by `brand_id`. Seed these from the client's Part 1G answers:
+- [ ] **Rotate ALL tokens as post-install step 1** (X portal, LinkedIn token, both Telegram bots via
+      BotFather) and update `app_secrets` - the installer must not retain working credentials.
+- [ ] Backups: daily `pg_dump` cron with 7-day rotation + weekly copy OFF the server. The database is the
+      entire system state - workflows and code are re-importable, the data is not.
+- [ ] Show the client the data map (`docs/SYSTEM_DATAFLOW.md` + the data-flow diagram): what is stored in
+      which table, what leaves the server (only API calls to Anthropic/OpenAI/X/LinkedIn/Telegram), and that
+      secrets live in one table on THEIR server.
+- [ ] Known limitation to state honestly: fixed bot labels are Polish today (LLM replies follow
+      `language_comm`); full string i18n lands with the first English-first install.
 
-| config_key | example value | meaning |
-|------------|---------------|---------|
-| `voice_bible` | full ruleset text | brand voice the adapter enforces |
-| `banned_vocab` | CSV of words | never-use vocabulary |
-| `publish_windows` | `{"x":["09:00","14:00","18:00","22:00"]}` | allowed post times |
-| `max_posts_per_day` | `{"x":3}` | rate caps |
-| `active_hours_cet` | `{"start":"08:00","end":"22:00"}` | no posting outside |
-| `hitl_timeout_active_min` | `30` | auto-publish timeout (day) |
-| `auto_publish_priorities` | `["high"]` | which priorities auto-publish |
+## Part 5 - Day-to-day (what the operator actually does)
 
-(Two-way config from the chat bot - changing these via a Telegram/Slack command - is a roadmap feature. Until then, settings are seeded at install and edited in the DB.)
-
----
-
-## Part 4 - VERIFY (test cycle before go-live)
-
-- [ ] Telegram: bot responds, approver receives a test message
-- [ ] X API: read own profile succeeds (confirms credentials)
-- [ ] Notion (if used): content source is readable by the integration
-- [ ] End-to-end dry run: add one test insight -> preview appears in chat WITH buttons -> click Approve -> post appears on X -> item marked published -> confirmation returns to chat
-- [ ] Confirm the published post is logged in `published_posts`
-- [ ] Only after a clean test: activate the main publisher (and timeout checker if auto-publish is wanted)
-
----
-
-## Part 5 - OPERATIONS (client day-to-day)
-
-- Add insights to the content source (Notion queue or `post_queue`)
-- Receive previews in chat, click Approve / Reject / Edit
-- High-priority items auto-publish after the timeout (if enabled)
-- Daily analytics digest in chat
-- All errors surface to chat (no silent failures)
+Everything from Telegram: talk to the CM about ideas ("save to stash", "what performed best?",
+"adapt #12 for LinkedIn"), tap ONE approve per piece, correct the model tier with one tap when you care,
+talk to any subagent about its queue, dictate X metrics in chat, read the daily/weekly reports on the log
+bot. No dashboards to log into; the system asks when it needs a decision and stays quiet otherwise.
 
 ---
 
-## Appendix - Credential summary (one page for the client to fill)
+## Appendix A - Credential sheet (fill per install)
 
 ```
-ANTHROPIC_API_KEY=
-X_API_KEY=                 (Consumer Key)
-X_API_SECRET=              (Consumer Secret)
-X_ACCESS_TOKEN=            (Read+Write)
-X_ACCESS_TOKEN_SECRET=
-X_BEARER_TOKEN=
-TELEGRAM_BOT_TOKEN=
-TELEGRAM_APPROVER_CHAT_ID=
-NOTION_API_KEY=            (optional)
-NOTION_SOURCE_PAGE_ID=     (optional)
-SLACK_BOT_TOKEN=           (optional)
-SLACK_SIGNING_SECRET=      (optional)
-POSTGRES_PASSWORD=         (set at install)
-SERVER_DOMAIN=             (HTTPS, for webhooks)
+ANTHROPIC_API_KEY=            OPENAI_API_KEY=
+X_API_KEY=                    X_API_SECRET=
+X_ACCESS_TOKEN=               X_ACCESS_TOKEN_SECRET=        X_BEARER_TOKEN=
+LINKEDIN_ACCESS_TOKEN=        LINKEDIN_AUTHOR_URN=
+LINKEDIN_CLIENT_ID=           LINKEDIN_CLIENT_SECRET=
+TELEGRAM_BOT_TOKEN=           LOG_BOT_TOKEN=
+APPROVER_CHAT_ID(S)=          WEBHOOK_GUARD_SECRET=(generate per install)
+POSTGRES_PASSWORD=            SERVER_DOMAIN=
 ```
 
-Security: never commit filled credentials to git. The installer keeps them in the server's environment + the n8n credential store only.
+## Appendix B - What runs where (inventory per install)
+
+| Piece | Kind | Role |
+|---|---|---|
+| n8n | container | transport: Telegram webhook, button routing, publish adapters, crons |
+| PostgreSQL (+pgvector) | container | THE system state: 30+ relational tables, single source of truth |
+| cm-agent | container (Python/FastAPI) | the brain: conversation router, generation, slot loop, reports |
+| ags-researcher | container (Python/FastAPI) | optional: 5-source deep research on demand |
+| HITL Handler | n8n workflow | all Telegram in/out + button families |
+| Subagent X / LinkedIn Publisher | n8n workflows | per-account publish + archive callback |
+| Scheduler + CM Reports Cron | n8n workflows | minute publisher + 08:00/Sunday report triggers |
+| LinkedIn OAuth Callback | n8n workflow | 3-legged token exchange for re-auth |
