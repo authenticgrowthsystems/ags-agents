@@ -76,3 +76,52 @@ Commity: 4b34826, 319729b, e458454, 318ad35, bdf220a, cf433dd, f004bb2, 837db11,
 
 **Next:** Manager review -> rekomendacja dla Tomasza co do zakresu pakietu sprzedawalności (sekcja 6) ->
 BE buduje playbook + diagram -> Brama 3 -> Faza 2 (planer).
+
+---
+
+## 8. ADDENDUM (Tomasz 04/07, do mapy działań Managera - "niech o tym wszystkim pamięta")
+
+**8.1 BAZA DANYCH = NAJWYŻSZY PRIORYTET ARCHITEKTONICZNY (kanon).** Tomasz: dobrze zbudowane relacje =
+zero duplikacji danych + DOWOLNY interfejs (Telegram/web/mobile/Slack) czyta te same, aktualne dane; zmiana
+w jednym miejscu widoczna dla wszystkich. BE wykonał pełny audyt stanu faktycznego:
+`docs/db/DB_AUDIT_04072026.md` (32 tabele, 18 FK, diagram relacji mermaid, mocne strony + 5 słabości).
+Kluczowe znaleziska: (a) rdzeń CM i Researcher w pełni relacyjne; (b) ZERWANA relacja schowek->produkcja
+(inspiration_id uuid vs bigint - FK fizycznie niemożliwy); (c) brand/platform jako luzny tekst bez FK
+w post_queue/published_posts; (d) contacts ma zdublowane kolumny (ślad sklejenia dwóch projektów 31/05).
+Pakiet naprawczy przygotowany: `cm-agent/db/008_relations_fix.sql` (czeka na decyzję Tomasza).
+
+**8.2 CRM / OBSŁUGA OSÓB ("model Marty") - wizja Tomasza POTWIERDZONA W SCHEMACIE.** Warstwa danych JUŻ
+istnieje (build 31/05, 0 wierszy): `contacts` (40 pól: narracja, icp_tier, pain_points, next_action+owner,
+handles per platforma, intent_signals) + `engagement_log` (contact_id FK: action_type/channel/agent/content/
+response/metrics = "Marta zareagowała na post X komentarzem Y") + `task_queue.contact_id` (follow-upy) +
+`published_posts.contact_id`. Tomasz: to będzie NASZA SIŁA (do tych ludzi możemy pisać; kanałów będzie dużo).
+Właściciele per Blueprint v1.3: **Opiekun Relacji** (Business Manager) + **Sprzedawca**; intake: Sekretarka.
+DO MAPY: Brama 1 (research) dla warstwy CRM/Opiekuna Relacji + konsolidacja zdublowanych kolumn contacts
+PRZED pierwszym agentem CRM (dziś tanio - 0 wierszy).
+
+**8.3 BACKUP / RETENCJA / ARCHIWIZACJA - dziś BRAK BACKUPU = najwyższe ryzyko operacyjne.** Propozycja BE
+w audycie sekcja 4: pg_dump dzienny (cron na Mikrusie, rotacja 7 dni) + kopia tygodniowa POZA serwer;
+retencja tylko logów technicznych (agent_messages read >30d, n8n executions max age), tabele biznesowe
+nieczyszczone bez decyzji Tomasza. DO MAPY jako P1 (przed sprzedażą obowiązkowe: klient zapyta o backupy).
+
+**8.4 NOTION - masa danych i inspiracji.** Przypomnienie: migracja Notion->Postgres = decyzja D4 z Bramy 2
+(PO MVP, shadow-sync -> parity -> cutover per consumer). Nic nie ginie, X-agent czyta Notion jak dotąd.
+DO MAPY jako zaplanowany krok, nie zapomniany.
+
+**8.5 OBSIDIAN - dyrektywa Tomasza dla Managera AGS Cowork.** Tomasz chce wgrać do Obsidiana WSZYSTKIE
+dotychczasowe konwersacje (ChatGPT + Claude), by nie uciekła żadna myśl. Prośba: Manager prowadzi Tomasza
+ZA RĘKĘ (krok po kroku) przez eksport rozmów i przygotowanie przystępnych plików do Obsidiana.
+Wpływ na system serwerowy: ZERO zmian w agentach - kanon (decyzja z Bramy 1 CM): Obsidian = mózg STRATEGICZNY
+Managera; przepływ JEDNOKIERUNKOWY Obsidian -> Manager destyluje -> brand_config/brand_strategy w Postgres ->
+CM czyta projekcję. Agenci serwerowi nigdy nie czytają Obsidiana. Mózg CM jest już na to gotowy
+(czyta brand_strategy/brand_config live).
+
+**8.6 TRYBY PRACY SUBAGENTA (wymóg Tomasza, do kontraktu konfiguracji).** Każdy, nawet najmniejszy subagent:
+własne ustawienia zmienialne ręcznie + tryb pracy: **autonomiczny / półautonomiczny / automatyczny**
+(mechaniczna kolejka wg algorytmu). Stan: fundament jest (channels.config per cel + supervised toggle +
+autonomia z logiem), brakuje JAWNEGO pola `work_mode` w kontrakcie config. DO MAPY: dopisać do kontraktu
+konfiguracji subagenta (tani krok przy Fazie 2).
+
+**8.7 DIAGRAMY WIZUALNE.** Tomasz: grafy wizualne (co skąd dokąd przechodzi) są dla niego kluczowe -
+świadomie odłożone, ale KANONICZNE (documentation requirement: graficzny diagram przepływu danych jako
+element pakietu sprzedawalności, razem z playbookiem z sekcji 6).
