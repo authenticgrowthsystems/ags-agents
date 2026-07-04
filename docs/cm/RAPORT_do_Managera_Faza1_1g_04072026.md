@@ -27,4 +27,7 @@
 ## Uwaga wykonawcza
 Raporty cykliczne pushuję na KANAŁ LOGOWY (bot #2) zgodnie z regułą limitów Telegrama (logi/cykliczne poza czatem rozmowy); interaktywnie "raport" w rozmowie subagenta - na głównym bocie.
 
-**Next:** DDL 006 + rebuild + zgoda na cron -> E2E raportów -> Faza 1 KOMPLET -> 1h język (R6) -> Brama 3 / Faza 2 planer.
+## DOMKNIĘCIE E2E (04/07 09:31)
+DDL 006+007 zaaplikowane, cron ERweY5vHomrpw1SC ACTIVE, ręczny strzał /reports/daily -> 2 wiersze subagent_daily_reports + **2 pushe DOTARŁY na bota #2** (screenshot Tomasza). Incydent po drodze: log_bot_token siedział w app_secrets Z NAWIASAMI OSTRYMI z placeholdera DDL (48 znaków, kształt zły, sendMessage "Not Found") - zdiagnozowane read-only po kształcie wartości, naprawione btrim + restart. Lekcja procesu: placeholdery w DDL bez nawiasów ostrych (ryzyko wklejenia razem z nimi).
+
+**FAZA 1 KOMPLET Z PEŁNYM E2E (rollback R1 + 1b-1h).** Next: Manager review raportów 1b-1h -> Brama 3 Fazy 1 (Tomasz) -> Faza 2 planer. Content moment odblokowany (per cm-10-percent-correction: treści o CM czekały aż CM ma mózg - ma).
