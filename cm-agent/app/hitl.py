@@ -43,6 +43,8 @@ def send_approval(item, variants):
         httpx.post(f"https://api.telegram.org/bot{tok}/sendMessage",
                    json={"chat_id": chat, "text": text, "disable_web_page_preview": True, "reply_markup": kb},
                    timeout=15)
+        # znacznik dla STANU AWARYJNEGO (kanon 11c): od tej chwili liczy sie 24h ciszy
+        db.execute("UPDATE content_items SET approval_requested_at=NOW() WHERE id=%s", (item["id"],))
         return True
     except Exception:
         return False

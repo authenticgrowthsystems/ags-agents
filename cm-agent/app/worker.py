@@ -10,7 +10,9 @@ from fastapi import FastAPI, Header, HTTPException
 
 from . import config, db
 from .brand import load_brand
-from . import generate, compliance, channels, research, hitl, conversation, logbot, content_memory, reports
+from psycopg.types.json import Jsonb
+
+from . import generate, compliance, channels, research, hitl, conversation, logbot, content_memory, reports, planner
 
 api = FastAPI(title="AGS Content Manager")
 wake = threading.Event()
@@ -68,10 +70,12 @@ def request_content(body: dict, x_researcher_secret: str = Header(default="")):
 
 @api.post("/plan", status_code=202)
 def plan(body: dict, x_researcher_secret: str = Header(default="")):
-    """Cron entrypoint (n8n) for proactive planning. MVP: wake the loop to advance due items."""
+    """FAZA 2: proaktywny planer (cron niedziela 20:15 / na zadanie). Buduje propozycje tygodnia w tle."""
     _guard(x_researcher_secret)
+    brand_id = str(body.get("brand_id") or "AGS").strip()
+    threading.Thread(target=planner.build_plan, args=(brand_id,), daemon=True).start()
     wake.set()
-    return {"accepted": True}
+    return {"accepted": True, "planner": True}
 
 
 @api.post("/reports/{kind}", status_code=202)
@@ -151,6 +155,31 @@ def _welcome_new_channels():
                    (r["brand_id"], r["channel"]))
 
 
+def _emergency_promote():
+    """STAN AWARYJNY (kanon 11c, D-F2-3b): brak reakcji Tomasza 24h po wyslaniu approve -> automatyczne
+    zatwierdzenie najlepszej opcji (publikacja pojdzie normalnie w slocie). Log + glosne powiadomienie.
+    Wylaczalne per cel: channels.config.emergency_publish=false blokuje item, ktory celuje w ten kanal."""
+    rows = db.fetchall(
+        """SELECT * FROM content_items
+           WHERE status='needs_approval' AND approval_requested_at IS NOT NULL
+             AND approval_requested_at < NOW() - interval '24 hours'""")
+    for item in rows:
+        targets = channels.active_targets(item["brand_id"], item.get("target_channels"))
+        if not targets or not all((t.get("config") or {}).get("emergency_publish", True) for t in targets):
+            continue
+        db.set_item_status(item["id"], "approved")
+        try:
+            db.execute(
+                "INSERT INTO agent_logs (agent_id, log_type, rationale, context) VALUES ('cm','AUTONOMOUS_DECISION',%s,%s)",
+                (f"Publikacja awaryjna: brak reakcji 24h na approve - {item['master_theme'][:70]}",
+                 Jsonb({"content_item_id": str(item["id"]), "trigger": "silence_24h"})))
+        except Exception:
+            pass
+        logbot.send(f"⚠️ STAN AWARYJNY: brak reakcji 24h. Zatwierdzam automatycznie i publikuje w slocie: "
+                    f"{item['master_theme'][:80]}")
+        print(f"[cm] emergency-approved {item['id']}", flush=True)
+
+
 # ---------------- loop ----------------
 def loop():
     print("[cm] worker loop started", flush=True)
@@ -159,6 +188,7 @@ def loop():
         try:
             research.ingest_research_responses()  # researching -> drafting on Researcher callback
             _welcome_new_channels()               # R5: nowy kanal -> propozycja reuse archiwum
+            _emergency_promote()                  # F2: stan awaryjny po 24h ciszy
             item = db.claim_content_item()
             if item:
                 worked = True

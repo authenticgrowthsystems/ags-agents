@@ -14,6 +14,7 @@ import httpx
 from psycopg.types.json import Jsonb
 
 from . import db, config, tasks, content_memory, reports
+from . import planner
 from .brand import load_brand
 from .generate import client
 
@@ -244,6 +245,126 @@ def _adapt_text(inp):
     return f"Propozycja adaptacji (zrodlo: {src}):\n\n{text}\n\nJesli pasuje, powiedz 'dawaj' - zapisze jako material do zatwierdzenia."
 
 
+TOOL_PLAN_BUILD = {
+    "name": "plan_build",
+    "description": ("Zbuduj PROPOZYCJE planu tygodnia (schowek + strategia + archiwum + kadencja). "
+                    "Uzyj gdy Tomasz mowi 'zaplanuj tydzien' albo prosi o nowy plan. Wynik przyjdzie "
+                    "osobna ponumerowana wiadomoscia."),
+    "input_schema": {"type": "object", "properties": {}, "required": []},
+}
+
+TOOL_PLAN_APPROVE = {
+    "name": "plan_approve",
+    "description": ("Zatwierdz PROPOZYCJE planu (pozycje 'proposed' -> produkcja CALOSCI od razu). "
+                    "Uzyj gdy Tomasz mowi 'zatwierdz plan' / 'dawaj plan'; wyjatki podaj numerami."),
+    "input_schema": {"type": "object",
+                     "properties": {"except_numbers": {"type": "array", "items": {"type": "integer"},
+                                                        "description": "Numery pozycji do POMINIECIA (odrzucane)."}},
+                     "required": []},
+}
+
+TOOL_PLAN_EDIT = {
+    "name": "plan_edit",
+    "description": "Edytuj JEDNA pozycje propozycji planu po jej numerze: usun, zmien temat i/lub slot.",
+    "input_schema": {"type": "object",
+                     "properties": {"number": {"type": "integer"},
+                                    "new_theme": {"type": ["string", "null"]},
+                                    "new_slot": {"type": ["string", "null"], "description": "ISO 8601 z offsetem"},
+                                    "remove": {"type": "boolean"}},
+                     "required": ["number"]},
+}
+
+TOOL_TARGET_CREATE = {
+    "name": "target_create",
+    "description": ("Dodaj NOWY CEL publikacji (wiersz channels, status 'ready') kopiujac konfiguracje "
+                    "z istniejacego celu i nadpisujac wskazane pola. Aktywacja pozniej w ⚙️ Cele."),
+    "input_schema": {"type": "object",
+                     "properties": {"brand_id": {"type": "string", "description": "Marka (AGS/TNM/RDC...)."},
+                                    "channel": {"type": "string", "description": "Nazwa celu, np. linkedin, instagram."},
+                                    "copy_from_channel": {"type": ["string", "null"],
+                                                          "description": "Istniejacy cel-wzorzec (config kopiowany)."},
+                                    "language_publish": {"type": ["string", "null"]},
+                                    "secret_prefix": {"type": ["string", "null"]}},
+                     "required": ["brand_id", "channel"]},
+}
+
+TOOL_TARGET_UPDATE = {
+    "name": "target_update",
+    "description": "Zmien JEDNO pole konfiguracji istniejacego celu (channels.config), np. language_publish, posts_per_day, work_mode, emergency_publish, stats_mode, org_urn.",
+    "input_schema": {"type": "object",
+                     "properties": {"brand_id": {"type": "string"}, "channel": {"type": "string"},
+                                    "key": {"type": "string"}, "value": {"type": "string"}},
+                     "required": ["brand_id", "channel", "key", "value"]},
+}
+
+
+def _plan_build_async():
+    import threading
+    threading.Thread(target=planner.build_plan, args=("AGS",), daemon=True).start()
+    return "🗓 Buduje propozycje planu - przyjdzie osobna, ponumerowana wiadomoscia za chwile."
+
+
+def _plan_approve(inp):
+    ok, skipped = planner.approve_plan("AGS", inp.get("except_numbers") or [])
+    if not ok and not skipped:
+        return "Nie ma propozycji do zatwierdzenia (najpierw 'zaplanuj tydzien')."
+    if wake_event:
+        wake_event.set()
+    return (f"✅ Plan zatwierdzony: {ok} pozycji idzie do produkcji OD RAZU (odrzucone: {skipped}). "
+            "Materialy przyjda do zatwierdzenia pojedynczo; brak reakcji 24h = publikacja awaryjna w slocie.")
+
+
+def _plan_edit(inp):
+    return planner.edit_plan_item("AGS", int(inp.get("number") or 0),
+                                  new_theme=inp.get("new_theme"), new_slot=inp.get("new_slot"),
+                                  remove=bool(inp.get("remove")))
+
+
+def _target_create(inp):
+    brand = str(inp.get("brand_id") or "AGS").strip()
+    channel = str(inp.get("channel") or "").strip().lower()
+    if not channel:
+        return "Podaj nazwe celu."
+    base = {}
+    if inp.get("copy_from_channel"):
+        row = db.fetchone("SELECT config FROM channels WHERE brand_id=%s AND channel=%s",
+                          (brand, str(inp["copy_from_channel"]).strip()))
+        base = dict((row or {}).get("config") or {})
+    base.setdefault("publish_mode", "webhook")
+    if inp.get("language_publish"):
+        base["language_publish"] = str(inp["language_publish"]).strip().lower()
+    base["secret_prefix"] = str(inp.get("secret_prefix") or f"{brand.lower()}_{channel}").strip()
+    row = db.fetchone(
+        """INSERT INTO channels (brand_id, channel, status, adapter_path, config, supervised)
+           VALUES (%s,%s,'ready','/webhook/subagent-linkedin-publish',%s,true)
+           ON CONFLICT (brand_id, channel) DO NOTHING RETURNING id""",
+        (brand, channel, Jsonb(base)))
+    if not row:
+        return f"Cel {brand}/{channel} juz istnieje - uzyj target_update."
+    return (f"🎯 Nowy cel {brand}/{channel} dodany jako USPIONY (ready), jezyk: {base.get('language_publish', '?')}, "
+            f"klucze pod prefiksem '{base['secret_prefix']}'. Wlaczysz go w ⚙️ Cele gdy wgramy tokeny.")
+
+
+def _target_update(inp):
+    brand = str(inp.get("brand_id") or "AGS").strip()
+    channel = str(inp.get("channel") or "").strip()
+    key = str(inp.get("key") or "").strip()
+    val = str(inp.get("value") or "").strip()
+    if key in ("welcomed",):
+        return "Tego pola nie zmieniamy recznie."
+    if val.lower() in ("true", "false"):
+        val_json = val.lower() == "true"
+    else:
+        try:
+            val_json = int(val)
+        except ValueError:
+            val_json = val
+    row = db.fetchone(
+        "UPDATE channels SET config = config || %s WHERE brand_id=%s AND channel=%s RETURNING channel",
+        (Jsonb({key: val_json}), brand, channel))
+    return f"⚙️ {brand}/{channel}: {key} = {val}." if row else f"Nie znam celu {brand}/{channel}."
+
+
 TOOL_PROPOSE = {
     "name": "propose_material",
     "description": ("Zapisz uzgodniony material do kolejki produkcyjnej CM. Wywolaj TYLKO gdy Tomasz wyraznie "
@@ -273,10 +394,14 @@ def _system_blocks(brand):
         "na pytania o kolejke, a gdy Tomasz potwierdzi temat, zapisujesz material narzedziem propose_material. "
         "Model pracy: jedno zatwierdzenie. Po zapisaniu materialu pipeline generuje tekst, Tomasz klika raz "
         "Zatwierdz, a publikacja idzie automatycznie w slocie. Pomysl 'na pozniej' zapisujesz narzedziem "
-        "save_to_schowek (bez produkcji). Nie dopytuj o szczegoly, ktore mozesz sensownie "
+        "save_to_schowek (bez produkcji). PLANOWANIE: 'zaplanuj tydzien' -> plan_build; 'zatwierdz plan' -> "
+        "plan_approve (wyjatki numerami); edycje pozycji -> plan_edit. Cele: target_create / target_update. "
+        "Brak reakcji Tomasza 24h po prosbie o approve = publikacja awaryjna w slocie (poinformuj, gdy pyta). "
+        "Nie dopytuj o szczegoly, ktore mozesz sensownie "
         "zalozyc (kanaly: domyslnie x + linkedin; slot: null gdy nie podany). "
         f"\nTeraz jest {now} (Europe/Warsaw)."
         f"\n\nAKTUALNA KOLEJKA CM:\n{_queue_snapshot()}"
+        f"\n\nPROPOZYCJA PLANU (proposed, numeracja dla plan_edit/plan_approve):\n{planner.plan_text()}"
         f"\n\n{_memory_snapshot()}"
     )
     return [
@@ -330,7 +455,8 @@ def _discuss(chat_id, text):
         model=model, max_tokens=1200,
         thinking={"type": "disabled"},  # Sonnet 5/Opus: thinking off, rozmowa ma byc szybka i tania
         system=_system_blocks(brand),
-        tools=[TOOL_PROPOSE, TOOL_SCHOWEK, TOOL_ARCHIVE, TOOL_SIMILAR, TOOL_ADAPT],
+        tools=[TOOL_PROPOSE, TOOL_SCHOWEK, TOOL_ARCHIVE, TOOL_SIMILAR, TOOL_ADAPT,
+               TOOL_PLAN_BUILD, TOOL_PLAN_APPROVE, TOOL_PLAN_EDIT, TOOL_TARGET_CREATE, TOOL_TARGET_UPDATE],
         messages=history,
     )
     tasks.log_task("conversation", tier, model, source, getattr(resp, "usage", None))
@@ -348,6 +474,16 @@ def _discuss(chat_id, text):
             parts.append(_similar_text(b.input))
         elif b.name == "adapt_published":
             parts.append(_adapt_text(b.input))
+        elif b.name == "plan_build":
+            parts.append(_plan_build_async())
+        elif b.name == "plan_approve":
+            parts.append(_plan_approve(b.input))
+        elif b.name == "plan_edit":
+            parts.append(_plan_edit(b.input))
+        elif b.name == "target_create":
+            parts.append(_target_create(b.input))
+        elif b.name == "target_update":
+            parts.append(_target_update(b.input))
     reply = "\n\n".join(parts).strip() or "Przyjete."
     # history stores plain text only (tool calls are summarized in the reply line itself)
     _save_history(chat_id, history + [{"role": "assistant", "content": reply}], agent="cm")
