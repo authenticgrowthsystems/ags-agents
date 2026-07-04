@@ -735,11 +735,12 @@ def handle(update):
             return
         if _PREVIEW_RE.match(text):
             pt = planner.plan_text()
-            msg = ""
-            if pt != "(brak propozycji planu)":
-                msg += "📋 Propozycja planu (do zatwierdzenia):\n" + pt + "\n\n"
+            has_plan = pt != "(brak propozycji planu)"
+            msg = ("📋 Propozycja planu (do zatwierdzenia):\n" + pt + "\n\n") if has_plan else ""
             msg += "⚙️ Kolejka produkcyjna:\n" + _queue_snapshot()
             _reply(chat_id, msg)
+            if has_plan:
+                planner.send_plan_controls(chat_id)
             return
         if _SCHOWEK_RE.match(text):
             _reply(chat_id, _schowek_view())

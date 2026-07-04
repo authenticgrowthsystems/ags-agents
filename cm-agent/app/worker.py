@@ -88,6 +88,14 @@ def run_reports(kind: str, x_researcher_secret: str = Header(default="")):
     return {"accepted": True, "kind": kind}
 
 
+@api.post("/plannav", status_code=202)
+def plannav(body: dict, x_researcher_secret: str = Header(default="")):
+    """Nawigacja zatwierdzania planu (guziki plannav: z HITL; n8n = czysty transport)."""
+    _guard(x_researcher_secret)
+    threading.Thread(target=planner.handle_nav, args=(body, wake), daemon=True).start()
+    return {"accepted": True}
+
+
 @api.post("/message", status_code=202)
 def message(body: dict, x_researcher_secret: str = Header(default="")):
     """Conversation entry: n8n HITL forwards a Telegram text {chat_id, text, update_id}. Returns 202

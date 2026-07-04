@@ -216,9 +216,144 @@ def build_plan(brand_id="AGS", days=7):
         if outline:
             head = f"🗓 Zarys miesiaca: {outline[:400]}\n\n" + head
         _tg_send(chat, head + plan_text(brand_id) +
-                 "\n\nOdpisz: \"zatwierdz plan\" (calosc) albo edytuj: \"wywal 3\", \"przesun 2 na czwartek 14:00\", "
-                 "\"zamien 5 na temat...\". Po zatwierdzeniu generuje wszystkie materialy od razu.")
+                 "\n\nSteruj guzikami ponizej albo rozmowa: \"wywal 3\", \"przesun 2 na czwartek 14:00\", "
+                 "\"zamien 5 na temat...\".")
+        send_plan_controls(chat, brand_id)
     return n
+
+
+# ---------------- nawigacja zatwierdzania (krok 2, plannav:) ----------------
+def _tg(method, payload):
+    from . import conversation
+    return conversation._tg(method, payload)
+
+
+def send_plan_controls(chat_id, brand_id="AGS"):
+    """Osobna krotka wiadomosc z guzikami sterowania planem (tekst planu moze byc dzielony na czesci,
+    wiec guziki jada oddzielnie - zawsze na wierzchu)."""
+    n = len(plan_items(brand_id))
+    if not n:
+        return
+    kb = {"inline_keyboard": [
+        [{"text": f"✅ Zatwierdz wszystkie ({n})", "callback_data": "plannav:all:-"}],
+        [{"text": "🔍 Przegladaj po kolei", "callback_data": "plannav:first:-"}],
+    ]}
+    _tg("sendMessage", {"chat_id": chat_id, "text": "Sterowanie planem:", "reply_markup": kb})
+
+
+def _nav_card_payload(brand_id, item_id=None):
+    """(text, keyboard) karty pozycji: item_id=None -> pierwsza 'proposed'."""
+    items = plan_items(brand_id)
+    if not items:
+        return "📋 Przeglad zakonczony - brak pozycji do decyzji. Zatwierdzone poszly do produkcji.", None
+    idx = 0
+    if item_id:
+        for i, it in enumerate(items):
+            if str(it["id"]) == str(item_id):
+                idx = i
+                break
+    it = items[idx]
+    dt = it["scheduled_for"].astimezone(WARSAW) if it.get("scheduled_for") else None
+    when = f"{_DAYS_PL[dt.weekday()]} {dt.strftime('%d/%m %H:%M')}" if dt else "brak slotu"
+    ch = " + ".join(_target_label(brand_id, c) for c in (it.get("target_channels") or []))
+    text = (f"📋 Pozycja {idx + 1} z {len(items)} (status: czeka na decyzje)\n\n"
+            f"🕐 {when}\n📣 {ch}\n\n{it['master_theme']}")
+    iid = str(it["id"])
+    prev_id = str(items[idx - 1]["id"]) if idx > 0 else iid
+    next_id = str(items[idx + 1]["id"]) if idx < len(items) - 1 else iid
+    kb = {"inline_keyboard": [
+        [{"text": "✅ Zatwierdz", "callback_data": f"plannav:ok:{iid}"},
+         {"text": "❌ Odrzuc", "callback_data": f"plannav:no:{iid}"},
+         {"text": "🔄 Inny kat", "callback_data": f"plannav:angle:{iid}"}],
+        [{"text": "⬅️", "callback_data": f"plannav:show:{prev_id}"},
+         {"text": f"{idx + 1}/{len(items)}", "callback_data": "plannav:pos:-"},
+         {"text": "➡️", "callback_data": f"plannav:show:{next_id}"}],
+        [{"text": f"✅ Zatwierdz WSZYSTKIE pozostale ({len(items)})", "callback_data": "plannav:all:-"}],
+    ]}
+    return text, kb
+
+
+def _next_after(brand_id, item_id):
+    """Po decyzji o item_id: id kolejnej czekajacej pozycji (do plynnego przegladu)."""
+    items = plan_items(brand_id)
+    return str(items[0]["id"]) if items else None
+
+
+def _reangle_theme(item_id, brand_id="AGS"):
+    """'Inny kat': przeformulowanie tematu pozycji (LLM, tier plan_angle->sonnet default z routera)."""
+    row = db.fetchone("SELECT master_theme FROM content_items WHERE id=%s", (item_id,))
+    if not row:
+        return False
+    brand = load_brand(brand_id)
+    model, tier, source = tasks.model_for("plan_angle")
+    resp = client().messages.create(
+        model=model, max_tokens=300, thinking={"type": "disabled"},
+        system=[{"type": "text", "text": f"Glos marki (skrot):\n{brand['voice_bible'][:1500]}"}],
+        messages=[{"role": "user", "content":
+                   f"Przeformuluj temat posta na INNY, swiezy kat (ta sama esencja, inna perspektywa). "
+                   f"Zachowaj ewentualny prefiks [ARTYKUL]. Zwroc TYLKO nowy temat.\n\n{row['master_theme']}"}])
+    tasks.log_task("plan_angle", tier, model, source, getattr(resp, "usage", None), item_id)
+    new_theme = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
+    if not new_theme:
+        return False
+    db.execute("UPDATE content_items SET master_theme=%s, updated_at=NOW() WHERE id=%s", (new_theme, item_id))
+    return True
+
+
+def handle_nav(payload, wake_event=None):
+    """Obsluga callbackow plannav:<akcja>:<arg> (n8n = czysty transport). Edytuje karte w miejscu."""
+    raw = str(payload.get("raw") or "")
+    chat_id = payload.get("chat_id")
+    message_id = payload.get("message_id")
+    parts = raw.split(":", 2)
+    action = parts[1] if len(parts) > 1 else ""
+    arg = parts[2] if len(parts) > 2 else ""
+    brand_id = "AGS"
+
+    def edit(text, kb=None):
+        body = {"chat_id": chat_id, "message_id": message_id, "text": text[:4000]}
+        if kb:
+            body["reply_markup"] = kb
+        r = _tg("editMessageText", body)
+        if not (r and r.get("ok")):
+            _tg("sendMessage", {"chat_id": chat_id, "text": text[:4000], **({"reply_markup": kb} if kb else {})})
+
+    if action == "pos":
+        return
+    if action == "all":
+        ok, _ = approve_plan(brand_id)
+        if wake_event:
+            wake_event.set()
+        edit(f"✅ Plan zatwierdzony w calosci: {ok} pozycji poszlo do produkcji. Materialy przyjda po kolei; "
+             "brak reakcji 24h na ktorykolwiek = publikacja awaryjna w slocie.")
+        return
+    if action == "first":
+        text, kb = _nav_card_payload(brand_id)
+        edit(text, kb)
+        return
+    if action == "show":
+        text, kb = _nav_card_payload(brand_id, arg)
+        edit(text, kb)
+        return
+    if action in ("ok", "no"):
+        db.set_item_status(arg, "planned" if action == "ok" else "rejected")
+        if action == "ok" and wake_event:
+            wake_event.set()
+        nxt = _next_after(brand_id, arg)
+        if nxt:
+            text, kb = _nav_card_payload(brand_id, nxt)
+            head = "✅ Zatwierdzona -> produkcja.\n\n" if action == "ok" else "❌ Odrzucona.\n\n"
+            edit(head + text, kb)
+        else:
+            edit("📋 Przeglad zakonczony - wszystkie pozycje rozstrzygniete. Zatwierdzone sa w produkcji.")
+        return
+    if action == "angle":
+        if _reangle_theme(arg, brand_id):
+            text, kb = _nav_card_payload(brand_id, arg)
+            edit("🔄 Nowy kat:\n\n" + text, kb)
+        else:
+            edit("Nie udalo sie przeformulowac - sprobuj jeszcze raz.")
+        return
 
 
 def approve_plan(brand_id="AGS", except_numbers=None):
