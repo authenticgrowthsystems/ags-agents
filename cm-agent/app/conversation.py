@@ -121,10 +121,10 @@ def _queue_snapshot(brand_id="AGS"):
     items = db.fetchall(
         """SELECT id, master_theme, status, target_channels, scheduled_for
            FROM content_items
-           WHERE brand_id=%s AND status NOT IN ('published','rejected','failed')
+           WHERE brand_id=%s AND status NOT IN ('published','rejected','failed','proposed')
            ORDER BY COALESCE(scheduled_for, created_at) LIMIT 20""",
         (brand_id,),
-    )
+    )  # 'proposed' celowo poza kolejka - propozycje planu maja wlasny widok (planner.plan_text)
     lines = []
     for it in items:
         ch = ",".join(it.get("target_channels") or [])
@@ -734,7 +734,12 @@ def handle(update):
             _reply(chat_id, "Anulowane. Zaczynamy od nowa.")
             return
         if _PREVIEW_RE.match(text):
-            _reply(chat_id, "Kolejka CM:\n" + _queue_snapshot())
+            pt = planner.plan_text()
+            msg = ""
+            if pt != "(brak propozycji planu)":
+                msg += "📋 Propozycja planu (do zatwierdzenia):\n" + pt + "\n\n"
+            msg += "⚙️ Kolejka produkcyjna:\n" + _queue_snapshot()
+            _reply(chat_id, msg)
             return
         if _SCHOWEK_RE.match(text):
             _reply(chat_id, _schowek_view())
