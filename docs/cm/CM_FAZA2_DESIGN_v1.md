@@ -51,8 +51,27 @@ WORK_MODE per cel (kanon 10, D-F2-2):
 - **RLS przed aktywacja TNM/RDC** (kanon z Bramy 2): osobny krok przy pierwszym wlaczeniu celu 2. marki -
   policies per brand_id na tabelach contentowych; zaplanowany, nie w tym pakiecie kodu.
 
-## 4. Decyzje otwarte (guziki)
-- D-F2-1 trigger planera | D-F2-2 work_mode start | D-F2-3 moment generacji | D-F2-4 kadencja domyslna.
+## 4. Decyzje ROZSTRZYGNIETE (Tomasz, guziki 04/07)
+- **D-F2-1 trigger:** niedziela 20:15 (po raportach tygodniowych) + na zadanie ("zaplanuj tydzien").
+- **D-F2-2 work_mode:** trzy tryby od razu (supervised/semi/auto), default supervised, przelaczane per cel.
+- **D-F2-3 generacja: CALY PLAN OD RAZU po akceptacji** + CM uczy sie w locie: nowe inspiracje/sytuacje ->
+  CM sam proponuje przesuniecia/dodatki BEZ lamania kolejki (kazda taka decyzja = AUTONOMOUS_DECISION + widoczna
+  w rozmowie i raportach).
+- **D-F2-3b STAN AWARYJNY (nowy wymog, "super wazne"):** material czeka na approve, slot nadchodzi, Tomasz
+  MILCZY -> po **24h od wyslania approve** CM przechodzi w tryb awaryjny: wybiera najlepsza opcje i publikuje
+  w slocie automatycznie. Kazda publikacja awaryjna: log AUTONOMOUS_DECISION + wyrazne powiadomienie na kanale
+  logowym ("opublikowalem awaryjnie - brak reakcji 24h") + pozycja w raporcie dziennym. Wylaczalne per cel
+  (config.emergency_publish, default ON per decyzja Tomasza).
+- **D-F2-4 kadencja domyslna (per Tomasz, doslownie):** X = 3-5 postow DZIENNIE; LinkedIn = pon-pt post,
+  sobota NIC, niedziela ARTYKUL (dokladnie ten rytm) + tresci spontaniczne poza planem.
+  Zapis w channels.config: X {posts_per_day: [3,5]}, LinkedIn {weekly_pattern: {mon-fri: 'post', sat: null,
+  sun: 'article'}}. Format 'article' = dluzsza forma (taxonomy/format per slot w planie).
+- **D-F2-5 horyzonty planu:** szczegolowo TYDZIEN w przod; zarys MIESIACA generowany przy planie tygodnia
+  (zapis: brand_config 'cm_month_outline', wersjonowany); KWARTAL/ROK = warstwa strategiczna Managera
+  (Obsidian -> brand_strategy), planer ja czyta, nie tworzy.
+- **Przypomnienie Tomasza (potwierdzone w mapie):** sledzenie reakcji na posty (kto skomentowal/zareagowal ->
+  contacts + engagement_log) = warstwa CRM, kanon 9; mechanika zbierania per platforma wymaga docs-first
+  researchu API -> pakiet CRM (Opiekun Relacji), nie Faza 2.
 
 ## 5. Acceptance (calosc Fazy 2)
 (a) CM w niedziele (lub na zadanie) przysyla ponumerowany plan tygodnia zbudowany ze schowka+strategii+archiwum;
