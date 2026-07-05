@@ -102,6 +102,11 @@ Agents must screen output against this library BEFORE HITL preview.
 **Why bad:** hand-escaping free text is guaranteed to miss quotes eventually; a failed statement inside a multi-statement file does NOT stop the file, so partial loads look successful.
 **Correct (canonical, Manager 05/07 - applies to ALL future AGS/client migrations and ETL):** EVERY free-text literal in generated SQL goes through dollar-quoting (`$tag$...$tag$` with an `assert tag not in text` guard) or bind parameters; never hand-escaped quotes. Verify loads by row-count SELECT, not by absence of visible errors.
 
+### AP-304: Generated INSERTs into an existing table without reading its CHECK constraints first
+**Anti-pattern (05/07/2026, BE, #71 Faza C - TWICE in one day):** task_queue import failed on `task_type_check` ('notion_task' not allowed), then contacts import failed on `icp_tier_check` (source page used long labels "Premium $2K+" while the schema enum is short 'Premium'). Column names/types were audited, constraints were not.
+**Why bad:** CHECK violations kill every row silently row-by-row in multi-statement files; source-document labels rarely match schema enums verbatim.
+**Correct:** before generating INSERTs into ANY existing table, dump `pg_get_constraintdef` for its CHECKs and map source labels onto the allowed values (or extend the CHECK via reviewed DDL when the new value is semantically new). Add the mapping to the ETL report.
+
 ### AP-302: User-facing vocabulary invented by the agent without checking brand register
 **Anti-pattern (03/07/2026):** BE named the inspirations pool "zanadrze" in bot replies and tool names. Tomasz: "na pewno nie bedziemy tego slowa uzywac".
 **Why bad:** user-facing wording is brand voice territory; archaic/bookish words break the operator register.
