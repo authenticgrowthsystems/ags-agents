@@ -349,12 +349,30 @@ def h_inspirations_split(conn, token, src):
     return n
 
 
+def h_funnel_config(conn, token, src):
+    text = blocks_to_text(token, src["page_id"])
+    title = page_title(token, src["page_id"])
+    return upsert_simple(conn, "funnel_configs",
+                         ["brand_id", "funnel_name", "config", "content"],
+                         [src.get("brand_id", "AGS"), src["funnel_name"],
+                          Jsonb({**src.get("config", {}), "title": title}), text], src["page_id"])
+
+
+def h_sales_sequence(conn, token, src):
+    text = blocks_to_text(token, src["page_id"])
+    return upsert_simple(conn, "sales_sequences",
+                         ["brand_id", "name", "steps", "content"],
+                         [src.get("brand_id", "AGS"), src["name"],
+                          Jsonb(src.get("steps", [])), text], src["page_id"])
+
+
 HANDLERS = {"sales_playbook": h_sales_playbook, "brand_config_row": h_brand_config_row,
             "agent_prompt": h_agent_prompt, "session_state": h_session_state,
             "agent_contract": h_agent_contract, "channels_config_key": h_channels_config_key,
             "manager_daily_log": h_manager_daily_log, "content_item": h_content_item,
             "task_tracker": h_task_tracker,
-            "inspirations_split": h_inspirations_split}
+            "inspirations_split": h_inspirations_split,
+            "funnel_config": h_funnel_config, "sales_sequence": h_sales_sequence}
 
 # ---------------- rejestr zrodel per faza (mapping APPROVED 04/07) ----------------
 SOURCES = [
@@ -417,6 +435,36 @@ SOURCES = [
      "meta_type": "campaign", "brand_id": "AGS"},
     {"phase": "C", "handler": "content_item", "page_id": "34bc00c90b93816a91cce2a588a5a97f",
      "meta_type": "brief_master", "brand_id": "AGS", "status": "brief"},
+    # FAZA D - K6/K7 (audit-first 05/07). Pricing AGS Premium + vendor_registry = statyczny SQL
+    # etl/notion/phaseD_vendor_pricing.sql (male/strukturalne). Tu pelnotekstowe:
+    # K7 funnel: Blueprint Diagnostic BUILD BRIEF (Notion: ZREALIZOWANE 09/06, Triple Proof SHIPPED)
+    {"phase": "D", "handler": "funnel_config", "page_id": "32fc00c90b9381748c45f44c2be6e251",
+     "funnel_name": "blueprint_diagnostic",
+     "config": {"meta_status": "realized_09_06", "kind": "build_brief",
+                "stack": ["n8n", "claude_api", "ghl", "notion"]}},
+    # K6 sales page: DRAFT AGS Website Copy (strona AGS juz LIVE z tego promptu -> archived)
+    {"phase": "D", "handler": "content_item", "page_id": "31bc00c90b938198a36ec70d23f80549",
+     "meta_type": "sales_page", "brand_id": "AGS", "status": "archived"},
+    # K6 playbooki -> sales_playbook (handler istnieje)
+    {"phase": "D", "handler": "sales_playbook", "page_id": "34cc00c90b9381588e6fc12122729d8b",
+     "section": "growth_playbook", "version": "1"},
+    {"phase": "D", "handler": "sales_playbook", "page_id": "34cc00c90b9381fc8261da2dfcfd57c6",
+     "section": "peer_discovery", "version": "1"},
+    {"phase": "D", "handler": "sales_playbook", "page_id": "31bc00c90b9381aeb526cc6ed67d6a7a",
+     "section": "hot_lead_scripts", "version": "1.3"},
+    # K6 sekwencja ABM 48h/5dni/8dni -> sales_sequences (steps = metadane, content = pelny tekst)
+    {"phase": "D", "handler": "sales_sequence", "page_id": "31bc00c90b93811eb88ccb0d502b2a75",
+     "name": "abm_followup_48h_5d_8d",
+     "steps": [{"step": 1, "delay": "48h", "goal": "wartosc", "warianty": ["insight", "relatability", "micro-value"]},
+               {"step": 2, "delay": "5d", "goal": "case_study_tease", "warianty": ["A", "B"]},
+               {"step": 3, "delay": "8d", "goal": "last_touch", "warianty": ["A", "B"]}]},
+    # K7 GHL configs (ROZPROSZONE, znalezione notion-search): Vendor Patterns cross-brand + TNM isolation
+    {"phase": "D", "handler": "brand_config_row", "page_id": "358c00c90b93812cb270f1e5d2e9792d",
+     "brand_id": "AGS", "config_key": "ghl_config_subaccount_limitation"},
+    {"phase": "D", "handler": "brand_config_row", "page_id": "358c00c90b9381158072f8d70d36e9ca",
+     "brand_id": "AGS", "config_key": "ghl_config_dns_pattern"},
+    {"phase": "D", "handler": "brand_config_row", "page_id": "34ac00c90b9381a4b967ebb7fff8ab54",
+     "brand_id": "TNM", "config_key": "ghl_config_isolation_pattern"},
 ]
 
 
