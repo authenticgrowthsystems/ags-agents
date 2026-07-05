@@ -104,3 +104,23 @@ cd ~/ags-agents && docker run --rm --network n8n_network --env-file cm-agent/.en
 Oczekiwane wyniki: statyczny SQL - SELECT na koncu pokaze 10 wierszy pricing_tiers (7 ags_premium
 + 3 lokalna_automatyzacja) i 8 vendorow; silnik - 9 x OK z rows=1 (poza brand_config_row, ktory
 raportuje 1 przy upsert). Wklej mi output obu krokow.
+
+---
+
+## 7. WYKONANIE (05/07 wieczor) - FAZA D DONE, LICZBY Z PRODUKCJI
+
+1. Push + pull: fast-forward f87da3c..b2d5b39 na Mikrusie.
+2. pg_dump przed faza: `ags_crd_przed_71D_20260705_0834.sql.gz` (528K; szereg 452K -> 494K -> 528K).
+3. Statyczny SQL: **15 x INSERT 0 1**; SELECT kontrolne: **pricing_tiers = 10 wierszy**
+   (7 ags_premium active + 3 lokalna_automatyzacja parking_active), **vendor_registry = 8**.
+4. Silnik `--phase D --dry`: pierwsze podejscie 6/9 OK + 3 x 404 na stronach GHL.
+   **INCYDENT -> AP-305** (anti-patterns/library.md): 404 Notion = brak Connection integracji
+   do drzewa Nawrocki Business Hub, NIE zle ID; w workspace sa 3 integracje (n8n-TNM, n8n-AGS,
+   AGS Automation) i connection musi dostac ta z kluczem w app_secrets. Po dodaniu Connection
+   przez Tomasza: **dry 9/9 OK** (len: 12585/7003/11142/1993/1834/3184/4213/2743/1972).
+5. Silnik REAL: **9/9 rows=1, zero ERROR**.
+
+**FAZA D = 100% DONE. Razem w bazie z Fazy D: 24 nowe wpisy** (8 vendor + 7 pricing + 1 funnel
++ 1 sales_page + 3 sales_playbook + 1 sales_sequence + 3 brand_config ghl_config*).
+NEXT: FAZA E (K8-10: raporty subagentow, manager_decisions, monthly discovery, roadmap) -
+Connection na Nawrocki Business Hub juz otwarty, wiec zrodla E spoza AGS Hub nie wywroca sie na AP-305.

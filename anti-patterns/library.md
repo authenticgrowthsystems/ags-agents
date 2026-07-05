@@ -107,6 +107,11 @@ Agents must screen output against this library BEFORE HITL preview.
 **Why bad:** CHECK violations kill every row silently row-by-row in multi-statement files; source-document labels rarely match schema enums verbatim.
 **Correct:** before generating INSERTs into ANY existing table, dump `pg_get_constraintdef` for its CHECKs and map source labels onto the allowed values (or extend the CHECK via reviewed DDL when the new value is semantically new). Add the mapping to the ETL report.
 
+### AP-305: Notion 404 treated as a bad page ID instead of missing integration access
+**Anti-pattern (05/07/2026, BE, #71 Faza D):** ETL engine got `404 Not Found` on 3 GHL pages whose IDs were verified via MCP fetch the same day. Root cause: Notion API returns 404 also when the page EXISTS but the integration token has no Connection to its tree - MCP uses the USER's permissions (whole workspace), the `ntn_` token sees only explicitly connected page trees. Extra trap: the workspace has 3+ integrations (n8n-TNM, n8n-AGS, AGS Automation) - the Connection must go to THE integration whose key sits in app_secrets.
+**Why bad:** looks identical to a wrong ID; chasing IDs wastes paid attempts while the fix is one click in Notion UI.
+**Correct:** before adding ETL sources from a new page tree, add the integration Connection on that tree's root (inherits to children). Diagnose 404 from evidence: `GET /v1/users/me` with the vault token (bot name = which integration to look for in Connections) + `GET /v1/pages/{id}` http_code. "MCP sees it" never implies "the ETL token sees it".
+
 ### AP-302: User-facing vocabulary invented by the agent without checking brand register
 **Anti-pattern (03/07/2026):** BE named the inspirations pool "zanadrze" in bot replies and tool names. Tomasz: "na pewno nie bedziemy tego slowa uzywac".
 **Why bad:** user-facing wording is brand voice territory; archaic/bookish words break the operator register.
