@@ -227,6 +227,10 @@ def main():
     _load_secrets()
     conversation.wake_event = wake  # a material proposed in conversation wakes the loop immediately
     threading.Thread(target=loop, daemon=True).start()
+    # FAZA F #71: sync worker DB->Notion (LISTEN ags_sync + kolejka sync_queue; DDL 014).
+    # Watchdog w run_forever(); kolejka w DB = restart kontenera nic nie gubi.
+    from .sync import notion_worker
+    threading.Thread(target=notion_worker.run_forever, daemon=True).start()
     uvicorn.run(api, host="0.0.0.0", port=config.HTTP_PORT, log_level="info")
 
 
