@@ -61,3 +61,30 @@ masterpromptu sekcja 4) -> worker startuje z kontenerem; 5. testy akceptacyjne s
 
 Rollback (kontrakt sekcja 7): wylaczenie = UPDATE sync_registry SET enabled=FALSE (natychmiast,
 bez rebuildu); pelny = usuniecie naglowkow + DROP TRIGGER (odwrotnosc DDL 014).
+
+---
+
+## 5. WYKONANIE (05/07 wieczor) - FAZA F LIVE + CUTOVER DONE
+
+Deploy: backup 71F + DDL 014 (23 tabele w sync_registry, v1 enabled=2) + rebuild -> worker LIVE
+18:12:25. **Testy akceptacyjne sekcji 8 - WSZYSTKIE ZALICZONE z dowodami:**
+- **A (re_render):** edit website_canon -> callout+tresc na gorze strony w ~2s (id=1 done);
+  podmiana sekcji: id=2 done "re_render 100 blokow (+100 starych zarchiwizowanych)" = soft-clear
+  z trackingiem dziala; wpis planera (cm_month_outline) poprawnie skipped (brak page_map).
+- **B (append):** INSERT manager_daily_log -> wpis na koncu Dziennika Managera w ~2s (id=4,
+  3 bloki; potwierdzone wizualnie na stronie).
+- **C (drift) - 2 INCYDENTY ZLAPANE PRZEZ TEST, oba naprawione:**
+  1) kontrola callouta wykrywala tylko BRAK md5, nie dopiski ("XXX" przechodzilo) -> fix DDL 015
+     + callout_md5 (porownanie 1:1 pelnego tekstu), commit 2df3260;
+  2) alert Telegram nie wychodzil z one-shot kontenera (log_bot_token w app_secrets, nie w .env)
+     -> drift_check laduje token jak worker, commit b457c8f. Po fixach: wykrycie "callout zmieniony
+     recznie" + alert na bocie #2 POTWIERDZONE przez Tomasza; po sprzataniu "[drift] OK".
+- Cron drift 03:00 w crontabie (obok backupu 03:30), duplikat linii oddeduplikowany.
+
+**CUTOVER (decyzja Tomasza guzikami: TERAZ, 3 dni przed planem):** dry-run wykryl luke - 51 stron
+z kotwic wierszowych + 16 stron bez kotwic (raporty subagentow, zamkniecie miesiaca, chat registry,
+story bank, radar; commit e997ab5). Real: **67/67 stron oznaczonych, fail=0.**
+
+**STATUS #71: wszystkie fazy A-F WYKONANE. Zostal monitoring 24h (drift cron 03:00 + kontrola
+06/07) -> po czystej dobie #71 CLOSED (3 dni przed terminem 09/07).** SYSTEM_DATAFLOW.md sekcja F
+dopisana (living doc). Precedens sprzedawalnosci dziala: klient bez Notion = sync_to_notion FALSE.

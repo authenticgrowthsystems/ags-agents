@@ -169,6 +169,30 @@ Proaktywny planer (Faza 2: cron /plan -> propozycja tygodnia z brand_strategy+sc
 
 ---
 
+## F. Notion = READ-ONLY MIRROR + sync worker DB->Notion (LIVE 05/07/2026, task #71)
+
+**SSOT = PostgreSQL `ags_crd`.** Cala doktryna/prompty/raporty/decyzje/cennik/vendor/roadmapa
+zmigrowane Fazami A-E (17 nowych tabel DDL 010-013; kotwice `notion_page_id` / `entry_hash` /
+klucze naturalne). 67 stron Notion oznaczonych czerwonym calloutem "READ-ONLY MIRROR OD 05/07/2026"
+(`etl/mirror_headers.py`, ledger: brand_config `mirror_headers_done`). Nowe wpisy WYLACZNIE przez
+agentow do PostgreSQL; Notion odbija.
+
+**Sync one-way DB->Notion (DDL 014+015 + `cm-agent/app/sync/`):**
+- trigger `ags_sync_enqueue` (23 tabele) -> `sync_queue` + NOTIFY `ags_sync`;
+- worker (watek w cm-agent, watchdog, log `logs/sync_worker.log`): LISTEN + poll 60s backstop,
+  FOR UPDATE SKIP LOCKED, throttle 3 req/s, backoff 2..32s max 5 prob -> alert bot #2;
+- wzorce: `re_render` (canonical; SOFT-CLEAR z trackingiem - nowa sekcja na gorze <10s,
+  id-y blokow w `sync_mirror_state`, stara sekcja archiwizowana per blok) i `append` (dzienniki);
+- sterowanie: `sync_registry` (enable tabeli = UPDATE, zero rebuildu; page_map dla brand_config)
+  + flaga sprzedawalnosci `brand_config.sync_to_notion` per marka (v1: AGS on);
+- v1 enabled: brand_config + manager_daily_log; drift check cron 03:00 (`app.sync.drift_check`,
+  wykrywa reczne edycje callouta po md5 i zgubione triggery; alert Telegram bot #2).
+
+**Zapis czego gdzie:** `sync_queue` (ledger zmian), `sync_mirror_state` (block_ids + last_checksum
++ callout_md5 per cel), `sync_registry` (konfiguracja). Raporty: docs/cm/RAPORT_do_Managera_71-{A..F}_*.
+
+---
+
 ## D. Do udokumentowania dalej
 - [x] Researcher LIVE: diagram graficzny (`docs/researcher-dataflow.svg`) + 3 adaptery w repo (`n8n-workflows/researcher/`) + deploy/README.
 - [ ] OpenAI DR + Manus adaptery (fast-follow) - dopisać gdy zbudowane (+ do `DEPLOYED_ADAPTERS`).
