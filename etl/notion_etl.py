@@ -366,13 +366,125 @@ def h_sales_sequence(conn, token, src):
                           Jsonb(src.get("steps", [])), text], src["page_id"])
 
 
+def h_subagent_daily(conn, token, src):
+    """Raport dzienny subagenta (CM/X/LinkedIn) -> subagent_daily_reports.
+    Kotwica = klucz naturalny UNIQUE(brand_id, channel, report_date) - tabela nie ma notion_page_id."""
+    text = blocks_to_text(token, src["page_id"])
+    with conn.cursor() as cur:
+        cur.execute(
+            """INSERT INTO subagent_daily_reports (brand_id, channel, report_date, report_text)
+               VALUES (%s,%s,%s,%s) ON CONFLICT (brand_id, channel, report_date) DO NOTHING""",
+            (src.get("brand_id", "AGS"), src["channel"], src["report_date"], text))
+        n = cur.rowcount
+    conn.commit()
+    return n
+
+
+def h_subagent_weekly(conn, token, src):
+    text = blocks_to_text(token, src["page_id"])
+    with conn.cursor() as cur:
+        cur.execute(
+            """INSERT INTO subagent_weekly_reports (brand_id, channel, week_start, metrics_7d, best_content, report_text)
+               VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT (brand_id, channel, week_start) DO NOTHING""",
+            (src.get("brand_id", "AGS"), src["channel"], src["week_start"],
+             Jsonb(src.get("metrics", {})), Jsonb(src.get("best_content", [])), text))
+        n = cur.rowcount
+    conn.commit()
+    return n
+
+
+def h_monthly_discovery(conn, token, src):
+    """monthly_discovery_reports ma UNIQUE(brand_id, month), a miesiac moze miec 2 strony
+    (Discovery + Zamkniecie) -> merge: dopisz tekst, page_id-y trzymane w metrics.notion_page_ids."""
+    text = blocks_to_text(token, src["page_id"])
+    title = page_title(token, src["page_id"])
+    brand, month, page = src.get("brand_id", "AGS"), src["month"], src["page_id"]
+    with conn.cursor() as cur:
+        cur.execute("SELECT id, metrics FROM monthly_discovery_reports WHERE brand_id=%s AND month=%s",
+                    (brand, month))
+        row = cur.fetchone()
+        if row:
+            ids = (row["metrics"] or {}).get("notion_page_ids", [])
+            if page in ids:
+                return 0
+            metrics = {**(row["metrics"] or {}), "notion_page_ids": ids + [page]}
+            cur.execute(
+                """UPDATE monthly_discovery_reports
+                   SET report = report || %s, metrics = %s WHERE id = %s""",
+                (f"\n\n--- {title} ---\n\n" + text, Jsonb(metrics), row["id"]))
+        else:
+            metrics = {**src.get("metrics", {}), "notion_page_ids": [page]}
+            cur.execute(
+                """INSERT INTO monthly_discovery_reports (brand_id, month, report, metrics, notion_page_id)
+                   VALUES (%s,%s,%s,%s,%s)""",
+                (brand, month, f"--- {title} ---\n\n" + text, Jsonb(metrics), page))
+    conn.commit()
+    return 1
+
+
+def h_manager_decisions_split(conn, token, src):
+    """Strona decyzji Managera -> manager_decisions, wpis per naglowek; kotwica entry_hash (md5)."""
+    text = blocks_to_text(token, src["page_id"])
+    title = page_title(token, src["page_id"])
+    entries, cur_e = [], []
+    for line in text.split("\n"):
+        if line.startswith("#") and cur_e:
+            entries.append("\n".join(cur_e).strip())
+            cur_e = [line]
+        else:
+            cur_e.append(line)
+    if cur_e:
+        entries.append("\n".join(cur_e).strip())
+    n = 0
+    with conn.cursor() as cur:
+        for e in entries:
+            if len(e) < 30:
+                continue
+            h = hashlib.md5(e.encode("utf-8")).hexdigest()
+            topic = e.split("\n", 1)[0].lstrip("# ").strip()[:200] or title[:200]
+            cur.execute(
+                """INSERT INTO manager_decisions (decided_at, topic, decision, context, notion_page_id, entry_hash)
+                   VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT (entry_hash) DO NOTHING""",
+                (src.get("decided_at"), topic, e,
+                 Jsonb({"source_title": title}), src["page_id"], h))
+            n += cur.rowcount
+    conn.commit()
+    return n
+
+
+def h_approval_gate(conn, token, src):
+    """Briefing/gate z Notion -> agent_approval_gates (wymaga DDL 013: gate_type build_input
+    + notion_page_id). agent_id z agent_registry po ILIKE - brak agenta = widoczny ERROR."""
+    text = blocks_to_text(token, src["page_id"])
+    title = page_title(token, src["page_id"])
+    with conn.cursor() as cur:
+        cur.execute("SELECT agent_id FROM agent_registry WHERE agent_name ILIKE %s ORDER BY created_at LIMIT 1",
+                    (src["agent_like"],))
+        r = cur.fetchone()
+        if not r:
+            raise RuntimeError(f"agent_registry: brak agenta ILIKE {src['agent_like']}")
+        cur.execute(
+            """INSERT INTO agent_approval_gates (agent_id, gate_type, status, submitted_by, build_plan, approval_notes, notion_page_id)
+               SELECT %s,%s,%s,%s,%s,%s,%s
+               WHERE NOT EXISTS (SELECT 1 FROM agent_approval_gates WHERE notion_page_id=%s)""",
+            (r["agent_id"], src["gate_type"], src.get("status", "approved"), src.get("submitted_by", "manager-ags"),
+             Jsonb({"title": title, "content": text}), src.get("notes"), src["page_id"], src["page_id"]))
+        n = cur.rowcount
+    conn.commit()
+    return n
+
+
 HANDLERS = {"sales_playbook": h_sales_playbook, "brand_config_row": h_brand_config_row,
             "agent_prompt": h_agent_prompt, "session_state": h_session_state,
             "agent_contract": h_agent_contract, "channels_config_key": h_channels_config_key,
             "manager_daily_log": h_manager_daily_log, "content_item": h_content_item,
             "task_tracker": h_task_tracker,
             "inspirations_split": h_inspirations_split,
-            "funnel_config": h_funnel_config, "sales_sequence": h_sales_sequence}
+            "funnel_config": h_funnel_config, "sales_sequence": h_sales_sequence,
+            "subagent_daily": h_subagent_daily, "subagent_weekly": h_subagent_weekly,
+            "monthly_discovery": h_monthly_discovery,
+            "manager_decisions_split": h_manager_decisions_split,
+            "approval_gate": h_approval_gate}
 
 # ---------------- rejestr zrodel per faza (mapping APPROVED 04/07) ----------------
 SOURCES = [
@@ -465,6 +577,73 @@ SOURCES = [
      "brand_id": "AGS", "config_key": "ghl_config_dns_pattern"},
     {"phase": "D", "handler": "brand_config_row", "page_id": "34ac00c90b9381a4b967ebb7fff8ab54",
      "brand_id": "TNM", "config_key": "ghl_config_isolation_pattern"},
+    # ===== FAZA E (K8-10, audit-first 05/07). Wymaga DDL cm-agent/db/013 (gate_type build_input).
+    # Roadmap = statyczny SQL etl/notion/phaseE_roadmap.sql. LEGACY POMINIETE: archiwa kontenerow
+    # (w tym ARCHIWUM Raporty LinkedIn SM), X Content Queue, superseded v1.0-1.2.
+    # K8 raporty DZIENNE (kotwica = UNIQUE brand/channel/data; daty z tytulow stron)
+    {"phase": "E", "handler": "subagent_daily", "page_id": "34ac00c90b938170ac25d951c2567ed8",
+     "channel": "cm", "report_date": "2026-04-22"},
+    {"phase": "E", "handler": "subagent_daily", "page_id": "34cc00c90b9381a1a28ddfd566ebf172",
+     "channel": "cm", "report_date": "2026-04-24"},
+    {"phase": "E", "handler": "subagent_daily", "page_id": "350c00c90b93817d84ccc337f5db98d2",
+     "channel": "cm", "report_date": "2026-04-28"},
+    {"phase": "E", "handler": "subagent_daily", "page_id": "351c00c90b9381d89671d6ea065177f2",
+     "channel": "cm", "report_date": "2026-04-29"},
+    {"phase": "E", "handler": "subagent_daily", "page_id": "352c00c90b93817890a5e9d105b22ca2",
+     "channel": "cm", "report_date": "2026-04-30"},
+    {"phase": "E", "handler": "subagent_daily", "page_id": "34bc00c90b9381919c7ed258ce2c3fc1",
+     "channel": "x", "report_date": "2026-04-23"},
+    {"phase": "E", "handler": "subagent_daily", "page_id": "34fc00c90b938196912ade6b8ea15325",
+     "channel": "x", "report_date": "2026-04-27"},
+    # UWAGA audit-first: 353c...1ba3 z kontraktu to NIE LinkedIn weekly, tylko Day 12 Analytics
+    # od X Comment Specialist (01/05) -> raport dzienny kanalu x.
+    {"phase": "E", "handler": "subagent_daily", "page_id": "353c00c90b9381a996d8db6cf87d1ba3",
+     "channel": "x", "report_date": "2026-05-01"},
+    {"phase": "E", "handler": "subagent_daily", "page_id": "34fc00c90b9381df8d72cacac08fe745",
+     "channel": "linkedin", "report_date": "2026-04-27"},
+    # K8 raporty TYGODNIOWE (metryki wyciagniete audit-first z tresci stron)
+    {"phase": "E", "handler": "subagent_weekly", "page_id": "34ec00c90b9381f4b5e5e2a2d94c6983",
+     "channel": "linkedin", "week_start": "2026-04-20",
+     "metrics": {"views": 673, "reach": 306, "followers_total": 341, "followers_gain_week": 36,
+                 "ssi": 41, "geo_pl_pct": 87, "publications": 8, "comments": 75}},
+    {"phase": "E", "handler": "subagent_weekly", "page_id": "34ec00c90b9381cd9e3dd4112c685d56",
+     "channel": "x", "week_start": "2026-04-20",
+     "metrics": {"impressions": 2506, "likes": 28, "engagements": 140, "new_follows": 12,
+                 "record_day": "2026-04-25: 981 impressions"}},
+    {"phase": "E", "handler": "subagent_weekly", "page_id": "36bc00c90b9381e0aba1d98fea359374",
+     "channel": "cm", "week_start": "2026-05-17"},
+    # K8 raport miesieczny: Discovery + Zamkniecie = JEDEN wiersz 2026-04 (merge w handlerze,
+    # bo UNIQUE(brand_id, month); page_id-y w metrics.notion_page_ids)
+    {"phase": "E", "handler": "monthly_discovery", "page_id": "352c00c90b938151ae46fdb710d5993a",
+     "month": "2026-04-01",
+     "metrics": {"pivots": 3, "recommendations": 8, "sources": ["gemini_dr", "manus"]}},
+    {"phase": "E", "handler": "monthly_discovery", "page_id": "352c00c90b938125b41dfcc7ba839807",
+     "month": "2026-04-01"},
+    # K9 decyzje Managera (split po naglowkach, kotwica entry_hash)
+    {"phase": "E", "handler": "manager_decisions_split", "page_id": "341c00c90b938136bcd7c2ae97ab68a0",
+     "decided_at": "2026-04-13"},
+    {"phase": "E", "handler": "manager_decisions_split", "page_id": "347c00c90b93817ba7adcb38af39d488",
+     "decided_at": "2026-04-19"},
+    {"phase": "E", "handler": "manager_decisions_split", "page_id": "34bc00c90b9381ec8790e750adbba178",
+     "decided_at": "2026-04-23"},
+    {"phase": "E", "handler": "manager_decisions_split", "page_id": "34ec00c90b938150b779de8d8b51f6c2",
+     "decided_at": "2026-04-26"},
+    {"phase": "E", "handler": "manager_decisions_split", "page_id": "353c00c90b93814aa72de6dd79098b64",
+     "decided_at": "2026-05-01"},
+    {"phase": "E", "handler": "manager_decisions_split", "page_id": "366c00c90b93818db28afb98b7b46659",
+     "decided_at": "2026-05-20"},
+    # K9 validated patterns -> sales_playbook (Top 5 z danymi 14 dni, X Comment Specialist 01/05)
+    {"phase": "E", "handler": "sales_playbook", "page_id": "353c00c90b9381639c09cd7d1e11932b",
+     "section": "validated_patterns", "version": "1.0"},
+    # K9 BE Briefing Pack -> agent_approval_gates gate_type='build_input' (agent = Researcher;
+    # gate historycznie ZATWIERDZONY - Brama 2 zamknieta 24/06)
+    {"phase": "E", "handler": "approval_gate", "page_id": "388c00c90b9381dc968cff11c4e40b8a",
+     "agent_like": "%research%", "gate_type": "build_input", "status": "approved",
+     "notes": "Briefing Pack Day 2 Brama 2 (23/06); Brama 2 approved 24/06, Brama 3 PASSED 27/06"},
+    # K10 plan tygodniowy 23-27/06: ODSTEPSTWO od kontraktu ('proposed') -> status 'archived',
+    # bo tydzien juz MINAL; import jako proposed karmilby planer nieaktualna praca. Do raportu.
+    {"phase": "E", "handler": "content_item", "page_id": "388c00c90b93810fa3f8ed3559bcd897",
+     "meta_type": "weekly_plan", "brand_id": "AGS", "status": "archived"},
 ]
 
 
