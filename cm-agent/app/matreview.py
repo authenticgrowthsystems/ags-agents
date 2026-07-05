@@ -278,7 +278,15 @@ def sunday_guard():
         if st.get("date") == today:
             return
         items = pending_items()
-        pick = items[0]  # najblizszy slot (sort w pending_items) = wstepnie poniedzialkowy
+        # preferuj material z PRZYSZLYM slotem (wstepnie poniedzialkowy); miniony slot po approve
+        # publikowalby sie OD RAZU w nocy - przy samych minionych przypinamy poniedzialek 10:00
+        pick = next((it for it in items if it.get("scheduled_for")
+                     and it["scheduled_for"].astimezone(WARSAW) > now), None)
+        if pick is None:
+            pick = items[0]
+            monday = (now + datetime.timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
+            db.execute("UPDATE content_items SET scheduled_for=%s, updated_at=NOW() WHERE id=%s",
+                       (monday, pick["id"]))
         db.set_item_status(pick["id"], "approved")
         try:
             db.execute(
