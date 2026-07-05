@@ -37,16 +37,17 @@ def get_secret(conn, key):
         return r["value"] if r else None
 
 
-def notion_get(token, path, params=None):
-    """GET z throttlem ~3 req/s + obsluga 429/529 (Retry-After) + retry sieciowy."""
+def _notion_req(token, method, path, params=None, body=None):
+    """GET/POST z throttlem ~3 req/s + obsluga 429/529 (Retry-After) + retry sieciowy."""
     for attempt in range(6):
         wait = max(0.0, _last_req[0] + 0.34 - time.time())
         if wait:
             time.sleep(wait)
         _last_req[0] = time.time()
         try:
-            r = httpx.get(f"{NOTION}{path}", params=params or {}, timeout=30,
-                          headers={"Authorization": f"Bearer {token}", "Notion-Version": VER})
+            r = httpx.request(method, f"{NOTION}{path}", params=params or None, json=body,
+                              timeout=30,
+                              headers={"Authorization": f"Bearer {token}", "Notion-Version": VER})
         except httpx.HTTPError as e:
             print(f"  [retry {attempt}] network: {e}", flush=True)
             time.sleep(2 ** attempt)
@@ -58,7 +59,48 @@ def notion_get(token, path, params=None):
             continue
         r.raise_for_status()
         return r.json()
-    raise RuntimeError(f"notion_get failed after retries: {path}")
+    raise RuntimeError(f"notion {method} failed after retries: {path}")
+
+
+def notion_get(token, path, params=None):
+    return _notion_req(token, "GET", path, params=params)
+
+
+def query_db(token, database_id, limit=None):
+    """POST /databases/{id}/query z paginacja. Zwraca liste stron (rows) z properties."""
+    rows = []
+    cursor = None
+    while True:
+        body = {"page_size": min(100, limit - len(rows)) if limit else 100}
+        if cursor:
+            body["start_cursor"] = cursor
+        data = _notion_req(token, "POST", f"/databases/{database_id}/query", body=body)
+        rows.extend(data.get("results", []))
+        if limit and len(rows) >= limit:
+            return rows[:limit]
+        if not data.get("has_more"):
+            return rows
+        cursor = data.get("next_cursor")
+
+
+def prop_val(props, name):
+    """Wyciagnij wartosc property Notion (title/rich_text/select/multi_select/date/url/email/number/checkbox)."""
+    p = (props or {}).get(name) or {}
+    t = p.get("type")
+    v = p.get(t)
+    if t == "title" or t == "rich_text":
+        return _rt(v)
+    if t == "select":
+        return (v or {}).get("name")
+    if t == "multi_select":
+        return [x.get("name") for x in (v or [])]
+    if t == "date":
+        return (v or {}).get("start")
+    if t in ("url", "email", "phone_number", "number", "checkbox"):
+        return v
+    if t == "people":
+        return [x.get("name") for x in (v or [])]
+    return None
 
 
 def _rt(rich):
@@ -241,10 +283,46 @@ def h_content_item(conn, token, src):
     return n
 
 
+_PRIO = {"P0 (teraz)": 0, "P1 (ten tydzień)": 1, "P2 (ten miesiąc)": 2, "P3 (później)": 3}
+_TSTAT = {"⬜ Do zrobienia": "pending", "🟡 W trakcie": "in_progress", "✅ Done": "done", "🔴 Blocked": "blocked"}
+
+
+def h_task_tracker(conn, token, src):
+    """Task Tracker DB -> task_queue (mapping APPROVED K3: owner='manager-ags').
+    Schemat zweryfikowany docs-first 05/07: Zadanie(title)/Status/Priorytet/Kategoria/Milestone/Owner/
+    Deadline(date)/Notatki. Idempotencja: payload->>'notion_page_id'."""
+    rows = query_db(token, src["database_id"], limit=src.get("limit"))
+    n = 0
+    with conn.cursor() as cur:
+        for r in rows:
+            props = r.get("properties") or {}
+            title = prop_val(props, "Zadanie") or "(bez tytulu)"
+            payload = {
+                "title": title,
+                "kategoria": prop_val(props, "Kategoria"),
+                "milestone": prop_val(props, "Milestone"),
+                "owner": prop_val(props, "Owner"),
+                "notatki": prop_val(props, "Notatki"),
+                "notion_status": prop_val(props, "Status"),
+                "notion_page_id": r.get("id"),
+            }
+            cur.execute(
+                """INSERT INTO task_queue (agent_id, task_type, payload, scheduled_for, priority, status)
+                   SELECT 'manager-ags', 'notion_task', %s, %s, %s, %s
+                   WHERE NOT EXISTS (SELECT 1 FROM task_queue WHERE payload->>'notion_page_id' = %s)""",
+                (Jsonb(payload), prop_val(props, "Deadline"),
+                 _PRIO.get(prop_val(props, "Priorytet"), 3),
+                 _TSTAT.get(prop_val(props, "Status"), "pending"), r.get("id")))
+            n += cur.rowcount
+    conn.commit()
+    return n
+
+
 HANDLERS = {"sales_playbook": h_sales_playbook, "brand_config_row": h_brand_config_row,
             "agent_prompt": h_agent_prompt, "session_state": h_session_state,
             "agent_contract": h_agent_contract, "channels_config_key": h_channels_config_key,
-            "manager_daily_log": h_manager_daily_log, "content_item": h_content_item}
+            "manager_daily_log": h_manager_daily_log, "content_item": h_content_item,
+            "task_tracker": h_task_tracker}
 
 # ---------------- rejestr zrodel per faza (mapping APPROVED 04/07) ----------------
 SOURCES = [
@@ -275,6 +353,11 @@ SOURCES = [
      "config_key": "first_comment", "channel_like": "linkedin%"},
     {"phase": "B", "handler": "brand_config_row", "page_id": "34dc00c90b938140b4b7c4c9870065dd",
      "config_key": "footer_canon"},
+    # TEST HANDLERA BAZ (rekomendacja Managera 05/07): 5 wierszy Task Trackera PRZED pelna Faza C
+    {"phase": "TESTDB", "handler": "task_tracker", "database_id": "d8c99e6459c444dc894364e31b2f8fb0",
+     "limit": 5},
+    # FAZA C - K3 zywe (Task Tracker PELNY; idempotencja pominie 5 testowych)
+    {"phase": "C", "handler": "task_tracker", "database_id": "d8c99e6459c444dc894364e31b2f8fb0"},
     # FAZA C - K3 zywe (start; reszta K3/K4/K5 dopisywana per faza)
     {"phase": "C", "handler": "manager_daily_log", "page_id": "341c00c90b938130876ef0fce279babc",
      "meta_type": "daily_status"},
@@ -314,17 +397,22 @@ def main():
     print(f"[etl] faza {args.phase}: {len(todo)} zrodel", flush=True)
     report = []
     for src in todo:
+        sid = (src.get("page_id") or src.get("database_id") or "?")[:8]
         try:
             if args.dry:
-                text = blocks_to_text(token, src["page_id"])
-                report.append((src["handler"], src["page_id"][:8], f"dry len={len(text)}"))
+                if "database_id" in src:
+                    rows = query_db(token, src["database_id"], limit=src.get("limit"))
+                    report.append((src["handler"], sid, f"dry rows={len(rows)}"))
+                else:
+                    text = blocks_to_text(token, src["page_id"])
+                    report.append((src["handler"], sid, f"dry len={len(text)}"))
             else:
                 n = HANDLERS[src["handler"]](conn, token, src)
-                report.append((src["handler"], src["page_id"][:8], f"rows={n}"))
-            print(f"  OK {src['handler']} {src['page_id'][:8]} {report[-1][2]}", flush=True)
+                report.append((src["handler"], sid, f"rows={n}"))
+            print(f"  OK {src['handler']} {sid} {report[-1][2]}", flush=True)
         except Exception as e:
-            report.append((src["handler"], src["page_id"][:8], f"ERROR {e}"))
-            print(f"  ERROR {src['handler']} {src['page_id'][:8]}: {e}", flush=True)
+            report.append((src["handler"], sid, f"ERROR {e}"))
+            print(f"  ERROR {src['handler']} {sid}: {e}", flush=True)
     print("\n[etl] RAPORT:", flush=True)
     for h, p, r in report:
         print(f"  {h:22s} {p}  {r}", flush=True)

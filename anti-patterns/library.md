@@ -97,6 +97,11 @@ Agents must screen output against this library BEFORE HITL preview.
 **Why bad:** silent pass-through, no error anywhere; discovered only in Tomasz's tap-test; every broken production window costs trust and money.
 **Correct:** when adding a node to an existing workflow, COPY typeVersion + parameter shape from a WORKING node of the same type in that workflow (e.g. `Is Cm Callback?` = if 2.2, conditions.options {version:2, typeValidation:'loose'}). Verify routing with a real execution read (executions API, node-by-node), not only structure.
 
+### AP-303: SQL string literals in generated ETL without dollar-quoting
+**Anti-pattern (05/07/2026, BE, #71 Faza B):** generator built an INSERT with a Polish doctrine text embedded via `'...'` and manual `''` escaping of only SOME apostrophes - the canonical-bio INSERT failed live (`syntax error at or near "choreograf"`) while 20 sibling INSERTs (escaped via helper) passed, so the miss was silent until psql output was read line-by-line.
+**Why bad:** hand-escaping free text is guaranteed to miss quotes eventually; a failed statement inside a multi-statement file does NOT stop the file, so partial loads look successful.
+**Correct (canonical, Manager 05/07 - applies to ALL future AGS/client migrations and ETL):** EVERY free-text literal in generated SQL goes through dollar-quoting (`$tag$...$tag$` with an `assert tag not in text` guard) or bind parameters; never hand-escaped quotes. Verify loads by row-count SELECT, not by absence of visible errors.
+
 ### AP-302: User-facing vocabulary invented by the agent without checking brand register
 **Anti-pattern (03/07/2026):** BE named the inspirations pool "zanadrze" in bot replies and tool names. Tomasz: "na pewno nie bedziemy tego slowa uzywac".
 **Why bad:** user-facing wording is brand voice territory; archaic/bookish words break the operator register.
