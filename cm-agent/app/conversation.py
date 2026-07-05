@@ -255,7 +255,9 @@ def _similar_text(inp):
         return "Brak podobnych publikacji w archiwum (albo embeddingi jeszcze sie licza)."
     lines = ["Podobne publikacje:"]
     for r in rows:
-        lines.append(f"- #{r['id']} [{r['platform']}] podob. {float(r['similarity']):.2f}: {(r['content'] or '')[:70]}")
+        c = (r["content"] or "").replace("\n", " ")
+        c = c[:70] + "..." if len(c) > 70 else c  # S1 (feedback 05/07): uciete tytuly z trojkropkiem
+        lines.append(f"- #{r['id']} [{r['platform']}] podob. {float(r['similarity']):.2f}: {c}")
     return "\n".join(lines)
 
 
@@ -446,15 +448,18 @@ def _create_material(inp):
                 sched_dt = sched_dt.replace(tzinfo=WARSAW)
         except ValueError:
             sched_dt = None
-    db.fetchone(
+    # S2 (feedback 05/07): material NIE idzie cicho do produkcji - laduje jako 'draft'
+    # (status poza ACTIONABLE) i Tomasz decyduje guzikami: Do kolejki / Dzis / Odrzuc (matdec:).
+    row = db.fetchone(
         """INSERT INTO content_items (brand_id, master_theme, target_channels, status, scheduled_for)
-           VALUES ('AGS',%s,%s,'planned',%s) RETURNING id""",
+           VALUES ('AGS',%s,%s,'draft',%s) RETURNING id""",
         (theme, list(channels), sched_dt),
     )
-    if wake_event:
-        wake_event.set()
-    when = _fmt_slot(sched_dt) if sched_dt else "zaraz po zatwierdzeniu"
-    return f"✅ W kolejce: \"{theme}\" | kanaly: {', '.join(channels)} | publikacja: {when}"
+    from . import matreview
+    matreview.send_intake_buttons(row["id"], theme)
+    when = _fmt_slot(sched_dt) if sched_dt else "zaraz po zatwierdzeniu tekstu"
+    return (f"📝 Zapisany: \"{theme}\" | kanaly: {', '.join(channels)} | slot: {when}\n"
+            f"Zdecyduj guzikami (wiadomosc ponizej): Do kolejki / Dzis / Odrzuc.")
 
 
 def _save_schowek(inp, chat_id):

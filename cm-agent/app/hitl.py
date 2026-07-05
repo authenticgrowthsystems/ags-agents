@@ -20,11 +20,20 @@ def _admin_chat_id():
 
 
 def send_approval(item, variants):
-    """variants = list of (channel, text). Returns True if sent."""
+    """variants = list of (channel, text). Returns True if sent.
+    S3 (feedback 05/07): gdy czeka >=2 materialow, NIE wysylamy osobnej pelnej wiadomosci per material
+    (anty-flood) - zamiast tego jedna zbiorcza karta 'N materialow do przegladu' (matreview.batch_note),
+    a przeglad idzie kartami matnav: ze strzalkami. Znacznik 11c (approval_requested_at) zawsze ustawiany."""
     tok = config.TELEGRAM_BOT_TOKEN
     chat = _admin_chat_id()
     if not tok or not chat:
         return False
+    pending = db.fetchone("SELECT COUNT(*) AS n FROM content_items WHERE status='needs_approval'")
+    if pending and pending["n"] >= 2:
+        from . import matreview
+        matreview.batch_note()
+        db.execute("UPDATE content_items SET approval_requested_at=NOW() WHERE id=%s", (item["id"],))
+        return True
     can_tier, _ = tasks.tier_for("canonical")
     lines = [f"CM: nowy material (marka {item['brand_id']}) - {item.get('master_theme')}", ""]
     for ch, txt in variants:

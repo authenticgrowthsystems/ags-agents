@@ -12,7 +12,7 @@ from . import config, db
 from .brand import load_brand
 from psycopg.types.json import Jsonb
 
-from . import generate, compliance, channels, research, hitl, conversation, logbot, content_memory, reports, planner
+from . import generate, compliance, channels, research, hitl, conversation, logbot, content_memory, reports, planner, matreview
 
 api = FastAPI(title="AGS Content Manager")
 wake = threading.Event()
@@ -93,6 +93,14 @@ def plannav(body: dict, x_researcher_secret: str = Header(default="")):
     """Nawigacja zatwierdzania planu (guziki plannav: z HITL; n8n = czysty transport)."""
     _guard(x_researcher_secret)
     threading.Thread(target=planner.handle_nav, args=(body, wake), daemon=True).start()
+    return {"accepted": True}
+
+
+@api.post("/matnav", status_code=202)
+def matnav(body: dict, x_researcher_secret: str = Header(default="")):
+    """Decyzje intake (matdec:) + karty materialow (matnav:) - feedback 05/07 (galaz mat* w HITL)."""
+    _guard(x_researcher_secret)
+    threading.Thread(target=matreview.handle, args=(body, wake), daemon=True).start()
     return {"accepted": True}
 
 
@@ -197,6 +205,7 @@ def loop():
             research.ingest_research_responses()  # researching -> drafting on Researcher callback
             _welcome_new_channels()               # R5: nowy kanal -> propozycja reuse archiwum
             _emergency_promote()                  # F2: stan awaryjny po 24h ciszy
+            matreview.sunday_guard()              # S4: niedzielne przypomnienia + fallback 23:00
             item = db.claim_content_item()
             if item:
                 worked = True

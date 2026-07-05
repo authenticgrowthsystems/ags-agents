@@ -1,5 +1,9 @@
 # CM UX - feedback Tomasza 05/07/2026 wieczor (po master promptcie #71 i floodzie planera)
 
+> **STATUS 05/07 ~22:00: S1-S4 WDROZONE** (modul cm-agent/app/matreview.py + zmiany conversation/
+> hitl/worker + galaz n8n mat* -> POST /matnav, HITL 239 wezlow, aktywowany). Decyzja Tomasza
+> guzikami: wszystko jednego wieczora. Szczegoly implementacji ponizej w sekcjach.
+
 Zrodlo: rozmowa 05/07 ~21:00, doslowne wymagania. Status: SPEC do wdrozenia (kolejnosc = decyzja
 Tomasza guzikami). Kontekst: plannav (karty planu z ⬅️➡️) juz istnieje dla POZYCJI PLANU;
 ponizsze dotyczy (a) intake materialu z rozmowy, (b) przegladu WYGENEROWANYCH materialow,
