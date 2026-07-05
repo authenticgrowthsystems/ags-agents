@@ -77,3 +77,26 @@ Oczekiwane: DDL 013 -> SELECT pokaze CHECK z 5 wartosciami; roadmap -> 16 x INSE
 16 wierszy; dry -> 23 x OK; real -> 23 x OK (dzienne/tygodniowe rows=1, decyzje rows=N wpisow,
 monthly rows=1+1 merge). Po czystej Fazie E zostaje FAZA F (cutover 08/07: sync worker DB->Notion,
 naglowki READ-ONLY MIRROR, drift checksum 03:00).
+
+---
+
+## 5. WYKONANIE (05/07 wieczor) - FAZA E DONE, LICZBY Z PRODUKCJI
+
+1. Backup: `ags_crd_przed_71E_20260705_0946.sql.gz` (585K; wzrost z 528K po Fazie D).
+2. Roadmap: **16 x INSERT 0 1**, SELECT = 16 kamieni (M5 active, 3 done, 3 in_progress).
+3. **INCYDENT DDL 013 (AP-304 recydywa, naprawiony commit 361ff4a):** 1. wersja CHECK pominela
+   'critical_escalation' (dodane przez researcher db/007, ktorego BE nie doczytal) -> DO-block
+   wycofal sie na "violated by some row". Dowod z pg_get_constraintdef w outputcie wskazal pelna
+   liste; po fixie CHECK = 6 wartosci z 'build_input'. LEKCJA: AP-304 znaczy WSZYSTKIE DDL-e
+   dotykajace tabeli (001+005+007), nie tylko te znalezione pierwszym grepem.
+4. **INCYDENT AP-305 #2:** strona TNM Pricing Decision (347c...) = 404, bo drzewo TNM nie mialo
+   Connection integracji (Nawrocki Hub z Fazy D nie obejmowal TNM). Tomasz dodal Connection na
+   TNM Operations Hub -> dry 23/23 OK. Drzewa AGS + Nawrocki + TNM juz pokryte pod Faze F.
+5. Silnik REAL: **23/23 OK**. Rozklad: 9 raportow dziennych rows=1, 3 tygodniowe rows=1,
+   monthly 1 insert + 1 merge (Discovery+Zamkniecie = 1 wiersz 2026-04),
+   **decyzje Managera = 49 wpisow** (9+9+5+7+11+8 po splicie na naglowki, entry_hash),
+   validated_patterns rows=1, approval_gate rows=1 (build_input dla Researchera), weekly_plan rows=1.
+
+**FAZA E = 100% DONE. Razem w bazie z Fazy E: 81 nowych wpisow**
+(16 roadmap + 9 daily + 3 weekly + 1 monthly + 49 manager_decisions + 1 playbook + 1 gate + 1 content_item).
+**Stan #71: Fazy A+B+C+D+E DONE - zostaje tylko FAZA F (cutover 08/07).**
