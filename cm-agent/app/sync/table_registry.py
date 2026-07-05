@@ -78,16 +78,19 @@ def _re_render(table, row_key, page, content, checksum):
                      (table, row_key))
     if st and st["last_checksum"] == checksum:
         return "done", "checksum bez zmian"
-    blocks = [render.mirror_callout(_now(), checksum)] + render.md_to_blocks(content)
+    ts = _now()
+    blocks = [render.mirror_callout(ts, checksum)] + render.md_to_blocks(content)
     new_ids = notion_api.append_children(page, blocks, position="start")
     old_ids = (st and st["block_ids"]) or []
     archived = sum(1 for b in old_ids if notion_api.archive_block(b))
+    callout_md5 = hashlib.md5(render.mirror_text(ts, checksum).encode("utf-8")).hexdigest()
     db.execute(
-        """INSERT INTO sync_mirror_state (table_name, row_key, notion_page_id, block_ids, last_checksum, updated_at)
-           VALUES (%s,%s,%s,%s::jsonb,%s,NOW())
+        """INSERT INTO sync_mirror_state (table_name, row_key, notion_page_id, block_ids, last_checksum, callout_md5, updated_at)
+           VALUES (%s,%s,%s,%s::jsonb,%s,%s,NOW())
            ON CONFLICT (table_name, row_key) DO UPDATE SET notion_page_id=EXCLUDED.notion_page_id,
-             block_ids=EXCLUDED.block_ids, last_checksum=EXCLUDED.last_checksum, updated_at=NOW()""",
-        (table, row_key, page, json.dumps(new_ids), checksum))
+             block_ids=EXCLUDED.block_ids, last_checksum=EXCLUDED.last_checksum,
+             callout_md5=EXCLUDED.callout_md5, updated_at=NOW()""",
+        (table, row_key, page, json.dumps(new_ids), checksum, callout_md5))
     return "done", f"re_render {len(new_ids)} blokow (+{archived} starych zarchiwizowanych)"
 
 

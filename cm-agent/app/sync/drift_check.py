@@ -24,7 +24,7 @@ def main():
     if q["failed"]:
         problems.append(f"kolejka: {q['failed']} failed w 24h (szczegoly: sync_queue.last_error)")
 
-    states = db.fetchall("""SELECT m.table_name, m.row_key, m.block_ids, m.last_checksum
+    states = db.fetchall("""SELECT m.table_name, m.row_key, m.block_ids, m.last_checksum, m.callout_md5
                             FROM sync_mirror_state m JOIN sync_registry r ON r.table_name=m.table_name
                             WHERE r.enabled AND r.render_pattern='re_render'""")
     for st in states:
@@ -36,9 +36,15 @@ def main():
         except Exception as e:
             problems.append(f"mirror {st['table_name']}/{st['row_key']}: callout nieosiagalny ({e})")
             continue
-        if (st["last_checksum"] or "")[:12] not in txt:
-            problems.append(f"mirror {st['table_name']}/{st['row_key']}: callout zmieniony/bez md5 "
-                            f"- reczna edycja w Notion (DB jest kanoniczne!)")
+        # fix po tescie C: porownanie 1:1 md5 calego tekstu callouta (dopiski typu 'XXX' = drift);
+        # fallback substring dla stanow sprzed DDL 015
+        if st.get("callout_md5"):
+            drifted = hashlib.md5(txt.encode("utf-8")).hexdigest() != st["callout_md5"]
+        else:
+            drifted = (st["last_checksum"] or "")[:12] not in txt
+        if drifted:
+            problems.append(f"mirror {st['table_name']}/{st['row_key']}: callout zmieniony recznie "
+                            f"w Notion (DB jest kanoniczne!)")
 
     rows = db.fetchall("""SELECT brand_id, config_key, config_value FROM brand_config bc
                           WHERE EXISTS (SELECT 1 FROM sync_registry WHERE table_name='brand_config' AND enabled)""")

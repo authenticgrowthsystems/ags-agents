@@ -39,11 +39,16 @@ def md_to_blocks(text, max_blocks=280):
     return blocks or [_para("(pusto)")]
 
 
+def mirror_text(ts, checksum):
+    """Tekst callouta - deterministyczny, md5 tego tekstu = kotwica drift checku (fix po tescie C)."""
+    return (f"MIRROR Z POSTGRESQL - sekcja nadpisywana przez sync worker. "
+            f"Ostatnia synchronizacja: {ts} UTC, md5 {checksum[:12]}. NIE EDYTOWAC.")
+
+
 def mirror_callout(ts, checksum):
     return {"object": "block", "type": "callout",
             "callout": {"icon": {"type": "emoji", "emoji": "\U0001F512"},
-                        "rich_text": _rt(f"MIRROR Z POSTGRESQL - sekcja nadpisywana przez sync worker. "
-                                         f"Ostatnia synchronizacja: {ts} UTC, md5 {checksum[:12]}. NIE EDYTOWAC.")}}
+                        "rich_text": _rt(mirror_text(ts, checksum))}}
 
 
 def entry_blocks(ts, meta, text):
