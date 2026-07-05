@@ -1,8 +1,9 @@
 -- TASK #71 FAZA E (05/07/2026): agent_approval_gates przyjmuje gate_type 'build_input'
 -- (BE Briefing Pack z Notion) + kotwica idempotencji notion_page_id.
--- AP-304: CHECK w zywej bazie = research/build/acceptance/model_selection (db researcher 001+005);
--- 'build_input' NIE przechodzi bez tego DDL. Wzorzec DO-blocku = ags-researcher/db/005 (constraint
--- inline/unnamed -> znajdz realna nazwe, drop, add named). Idempotentne.
+-- AP-304: CHECK w zywej bazie (dowod: pg_get_constraintdef przy 1. probie 05/07) =
+-- research/build/acceptance/model_selection/critical_escalation ('critical_escalation' dodal
+-- researcher db/007 - 1. wersja tego DDL ja pominela i DO-block sie wycofal na "violated by some
+-- row"). Nowy CHECK = PELNA lista zywych wartosci + 'build_input'. Wzorzec DO-blocku = db/005.
 
 DO $$
 DECLARE cname text;
@@ -18,7 +19,8 @@ BEGIN
     END IF;
     ALTER TABLE agent_approval_gates
         ADD CONSTRAINT agent_approval_gates_gate_type_check
-        CHECK (gate_type IN ('research','build','acceptance','model_selection','build_input'));
+        CHECK (gate_type IN ('research','build','acceptance','model_selection',
+                             'critical_escalation','build_input'));
 END $$;
 
 ALTER TABLE agent_approval_gates ADD COLUMN IF NOT EXISTS notion_page_id TEXT;
