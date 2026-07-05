@@ -112,20 +112,24 @@ def _card(item_id=None, brand_id="AGS"):
                 idx = i
                 break
     it = items[idx]
+    now = datetime.datetime.now(WARSAW)
     dt = it["scheduled_for"].astimezone(WARSAW) if it.get("scheduled_for") else None
     when = f"{_DAYS_PL[dt.weekday()]} {dt.strftime('%d/%m %H:%M')}" if dt else "zaraz po zatwierdzeniu"
+    stale = "\n⚠️ SLOT MINAL - 'Zatwierdz' publikuje OD RAZU; 'Na koniec kolejki' przesunie slot." \
+        if dt and dt < now else ""
     ch = " + ".join(_target_label(brand_id, c) for c in (it.get("target_channels") or []))
     body = (it.get("canonical_body") or "(tekst w produkcji)").strip()
-    if len(body) > 2600:
-        body = body[:2600] + "\n[...]"
-    text = (f"📦 Material {idx + 1} z {len(items)}\n\n🕐 {when}\n📣 {ch}\n"
+    if len(body) > 2500:
+        body = body[:2500] + "\n[...]"
+    text = (f"📦 Material {idx + 1} z {len(items)}\n\n🕐 {when}{stale}\n📣 {ch}\n"
             f"📌 {it['master_theme'][:200]}\n\n{body}")
     iid = str(it["id"])
     prev_id = str(items[idx - 1]["id"]) if idx > 0 else iid
     next_id = str(items[idx + 1]["id"]) if idx < len(items) - 1 else iid
     kb = {"inline_keyboard": [
         [{"text": "✅ Zatwierdz", "callback_data": f"matnav:ok:{iid}"},
-         {"text": "❌ Odrzuc", "callback_data": f"matnav:no:{iid}"},
+         {"text": "✅⏭ Na koniec kolejki", "callback_data": f"matnav:okq:{iid}"}],
+        [{"text": "❌ Odrzuc", "callback_data": f"matnav:no:{iid}"},
          {"text": "🔄 Inny kat", "callback_data": f"matnav:angle:{iid}"}],
         [{"text": "⬅️", "callback_data": f"matnav:show:{prev_id}"},
          {"text": f"{idx + 1}/{len(items)}", "callback_data": "matnav:pos:-"},
@@ -133,6 +137,22 @@ def _card(item_id=None, brand_id="AGS"):
         [{"text": f"✅ Zatwierdz WSZYSTKIE ({len(items)})", "callback_data": "matnav:all:-"}],
     ]}
     return text, kb
+
+
+def _end_of_queue_slot(item_id, brand_id="AGS"):
+    """Koniec kolejki = dzien PO ostatnim zaplanowanym slocie, o godzinie z oryginalnego slotu
+    (fallback 10:00). Dokladne dopasowanie kadencji robi planer/rozmowa ('przesun na czwartek 14')."""
+    row = db.fetchone(
+        """SELECT MAX(scheduled_for) AS m FROM content_items
+           WHERE brand_id=%s AND scheduled_for IS NOT NULL
+             AND status IN ('planned','drafting','needs_approval','approved','dispatching')""", (brand_id,))
+    now = datetime.datetime.now(WARSAW)
+    m = row.get("m") if row else None
+    base = m.astimezone(WARSAW) if m and m > now else now
+    orig = db.fetchone("SELECT scheduled_for FROM content_items WHERE id=%s", (item_id,))
+    o = orig["scheduled_for"].astimezone(WARSAW) if orig and orig.get("scheduled_for") else None
+    hh, mm = (o.hour, o.minute) if o else (10, 0)
+    return (base + datetime.timedelta(days=1)).replace(hour=hh, minute=mm, second=0, microsecond=0)
 
 
 def handle(payload, wake_event=None):
@@ -198,6 +218,17 @@ def handle(payload, wake_event=None):
         head = "✅ Zatwierdzony -> publikacja w slocie.\n\n" if action == "ok" else "❌ Odrzucony.\n\n"
         text, kb = _card()
         edit(head + text, kb)
+        return
+    if action == "okq":
+        # feedback Tomasza 05/07 v2: 'zatwierdz, ale przerzuc na koniec kolejki' (minione sloty!)
+        slot = _end_of_queue_slot(arg)
+        db.execute("UPDATE content_items SET scheduled_for=%s, updated_at=NOW() WHERE id=%s", (slot, arg))
+        db.set_item_status(arg, "approved")
+        if wake_event:
+            wake_event.set()
+        when = f"{slot.strftime('%d/%m %H:%M')}"
+        text, kb = _card()
+        edit(f"✅⏭ Zatwierdzony na koniec kolejki -> publikacja {when}.\n\n" + text, kb)
         return
     if action == "angle":
         from .planner import _reangle_theme
