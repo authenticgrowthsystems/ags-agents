@@ -9,11 +9,17 @@ Uruchomienie: docker run --rm ... cm-agent:latest python -m app.sync.drift_check
 Wynik: raport na stdout + Telegram alert (bot #2) TYLKO gdy drift."""
 import hashlib
 
-from .. import db, logbot
+from .. import config, db, logbot
 from . import notion_api, table_registry
 
 
 def main():
+    # FIX (test C, 05/07): drift_check biega w osobnym one-shot kontenerze - token bota logowego
+    # zyje w app_secrets, nie w .env, wiec trzeba go zaladowac jak worker w _load_secrets().
+    if not config.LOG_BOT_TOKEN:
+        tok = db.get_secret("log_bot_token")
+        if tok:
+            config.LOG_BOT_TOKEN = tok
     problems = []
 
     q = db.fetchone("""SELECT
