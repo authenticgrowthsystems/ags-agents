@@ -71,6 +71,21 @@ def main():
         done = set(json.loads(r["config_value"])) if r else set()
         cur.execute(ANCHOR_SQL)
         pages = [x["notion_page_id"] for x in cur.fetchall()]
+        # strony zmigrowane BEZ kotwicy notion_page_id w wierszach (klucze naturalne / kotwice
+        # strona#wpis): raporty subagentow (12), zamkniecie miesiaca, chat registry, story bank, radar
+        pages += [
+            "34ac00c90b938170ac25d951c2567ed8", "34cc00c90b9381a1a28ddfd566ebf172",
+            "350c00c90b93817d84ccc337f5db98d2", "351c00c90b9381d89671d6ea065177f2",
+            "352c00c90b93817890a5e9d105b22ca2", "34bc00c90b9381919c7ed258ce2c3fc1",
+            "34fc00c90b938196912ade6b8ea15325", "353c00c90b9381a996d8db6cf87d1ba3",
+            "34fc00c90b9381df8d72cacac08fe745",  # 9x daily (CM/X/LinkedIn)
+            "34ec00c90b9381f4b5e5e2a2d94c6983", "34ec00c90b9381cd9e3dd4112c685d56",
+            "36bc00c90b9381e0aba1d98fea359374",  # 3x weekly
+            "352c00c90b938125b41dfcc7ba839807",  # RAPORT ZAMKNIECIA Kwiecien (merge do monthly)
+            "31fc00c90b9381078595cfa7451596f6",  # Chat Registry (kotwice strona#slug)
+            "331c00c90b9381eeb995cc757bfc89a4",  # Story Bank (kotwice strona#sNN)
+            "33cc00c90b9381119968efd19fdd92fe",  # Content Intelligence Radar (inspirations split)
+        ]
         # + cele z sync_registry.page_map (brand_config nie ma kolumny notion_page_id)
         cur.execute("SELECT config FROM sync_registry")
         for row in cur.fetchall():
