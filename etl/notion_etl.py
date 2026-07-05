@@ -318,11 +318,43 @@ def h_task_tracker(conn, token, src):
     return n
 
 
+def h_inspirations_split(conn, token, src):
+    """Strona z wieloma wpisami (np. Content Intelligence Radar) -> inspirations, wpis per naglowek.
+    Kotwica: notion_page_id = page#md5-12 tresci wpisu."""
+    text = blocks_to_text(token, src["page_id"])
+    entries, cur_e = [], []
+    for line in text.split("\n"):
+        if line.startswith("#") and cur_e:
+            entries.append("\n".join(cur_e).strip())
+            cur_e = [line]
+        else:
+            cur_e.append(line)
+    if cur_e:
+        entries.append("\n".join(cur_e).strip())
+    n = 0
+    with conn.cursor() as cur:
+        for e in entries:
+            if len(e) < 40:
+                continue
+            h = hashlib.md5(e.encode("utf-8")).hexdigest()[:12]
+            anchor = f"{src['page_id']}#{h}"
+            cur.execute(
+                """INSERT INTO inspirations (source, content, brand, status, notion_page_id, metadata)
+                   SELECT 'notion', %s, %s, %s, %s, %s
+                   WHERE NOT EXISTS (SELECT 1 FROM inspirations WHERE notion_page_id = %s)""",
+                (e[:4000], src.get("brand", "AGS"), src.get("status", "new"), anchor,
+                 Jsonb({"meta_type": src.get("meta_type", "note")}), anchor))
+            n += cur.rowcount
+    conn.commit()
+    return n
+
+
 HANDLERS = {"sales_playbook": h_sales_playbook, "brand_config_row": h_brand_config_row,
             "agent_prompt": h_agent_prompt, "session_state": h_session_state,
             "agent_contract": h_agent_contract, "channels_config_key": h_channels_config_key,
             "manager_daily_log": h_manager_daily_log, "content_item": h_content_item,
-            "task_tracker": h_task_tracker}
+            "task_tracker": h_task_tracker,
+            "inspirations_split": h_inspirations_split}
 
 # ---------------- rejestr zrodel per faza (mapping APPROVED 04/07) ----------------
 SOURCES = [
@@ -353,6 +385,11 @@ SOURCES = [
      "config_key": "first_comment", "channel_like": "linkedin%"},
     {"phase": "B", "handler": "brand_config_row", "page_id": "34dc00c90b938140b4b7c4c9870065dd",
      "config_key": "footer_canon"},
+    # FAZA C2 - koncowki C (audit-first: Founders List = metodologia -> sales_playbook)
+    {"phase": "C2", "handler": "sales_playbook", "page_id": "353c00c90b9381569394f780eabd10ac",
+     "section": "founders_list_guide", "version": "1"},
+    {"phase": "C2", "handler": "inspirations_split", "page_id": "33cc00c90b9381119968efd19fdd92fe",
+     "meta_type": "competitor_observation"},
     # TEST HANDLERA BAZ (rekomendacja Managera 05/07): 5 wierszy Task Trackera PRZED pelna Faza C
     {"phase": "TESTDB", "handler": "task_tracker", "database_id": "d8c99e6459c444dc894364e31b2f8fb0",
      "limit": 5},
