@@ -248,9 +248,8 @@ HANDLERS = {"sales_playbook": h_sales_playbook, "brand_config_row": h_brand_conf
 
 # ---------------- rejestr zrodel per faza (mapping APPROVED 04/07) ----------------
 SOURCES = [
-    # FAZA B - K1 pelnotekstowe
-    {"phase": "B", "handler": "sales_playbook", "page_id": "31fc00c90b938114be2cf25c4041edbb",
-     "section": "sales_bible", "version": "0.2"},
+    # FAZA B - K1 pelnotekstowe (Sales Bible wyjety: decyzja Managera #1 = content z pliku workspace,
+    # statyczny SQL phaseB_salesbible.sql; Website Canon zostaje w silniku - brak pliku workspace)
     {"phase": "B", "handler": "brand_config_row", "page_id": "320c00c90b938119bd5ff118ff95b5c8",
      "config_key": "website_canon"},
     # FAZA B - K2 agenci
