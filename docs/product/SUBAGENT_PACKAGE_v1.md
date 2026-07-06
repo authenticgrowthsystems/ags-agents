@@ -51,8 +51,8 @@ albo SUPERVISED (pod Content Managerem, ktory nadzoruje wiele kanalow).
 | # | Brak | Stan | Uwagi |
 |---|---|---|---|
 | 1 | ~~Sloty+okna: CM decyduje KIEDY~~ | **ZBUDOWANE 06/07** (slots.py) | czeka deploy |
-| 2 | Multimedia: zdjecia/grafiki do postow (wlasne z Telegrama, potem generowane), animacje, wideo | BRAK - najwiekszy brak produktowy | seam file_id->X v2 upload zbadany; kontrakt content-creator-image (higgsfield) w DB |
-| 3 | Semi-auto (kanon 10): CM sam zaczepia - propozycje, konsultacje, dziury w kadencji | BRAK | work_mode w config jest, egzekucji brak |
+| 2 | Multimedia: WLASNE zdjecie z Telegrama w poscie na X | **ZBUDOWANE 06/07** (etap 1: schowek->attach_last_photo->karta 🖼->publikacja z obrazem; oba publishery X z uploadem v2 chunked) | zostalo: obraz na LinkedIn (etap 1b), generowane grafiki (etap 2, kontrakt higgsfield), wideo/animacje (etap 3) |
+| 3 | Semi-auto (kanon 10): CM sam zaczepia | **ZBUDOWANE 06/07** (odprawa poranna + luki kadencji z propozycjami; cm_work_mode=semi) | rozbudowa zaczepek iteracyjnie |
 | 4 | Artykul-gotowiec LinkedIn: formatowanie + grafiki + checklist | BRAK | FAKT: LinkedIn API nie publikuje artykulow - gotowiec do wklejenia |
 | 5 | LinkedIn multi-kanal (strony AGS/TNM/RDC + profil) pod jednym subagentem | ARCHITEKTURA JEST (cele+toggle), tokeny stron po review App 2 + RLS | |
 | 6 | Zywe metryki profilu ("co sie dzieje na profilu") | LinkedIn: po review App 2 (kolektor gotowy); X: platny tier -> wpis reczny | |
