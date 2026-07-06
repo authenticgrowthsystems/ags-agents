@@ -449,7 +449,10 @@ def _attach_last_photo(inp):
         return "Nie znajduje materialu docelowego - podaj fragment tematu."
     desc = {"source": "telegram", "file_id": photo["metadata"]["media"]["file_id"],
             "kind": photo["metadata"]["media"].get("kind", "photo"), "inspiration_id": photo["id"]}
-    row = db.fetchone("SELECT status FROM content_items WHERE id=%s", (item["id"],))
+    row = db.fetchone("SELECT status, media FROM content_items WHERE id=%s", (item["id"],))
+    # antydubel (06/07): to samo zdjecie dopiete drugi raz = dwa identyczne obrazy w tweecie
+    if any((m or {}).get("file_id") == desc["file_id"] for m in ((row or {}).get("media") or [])):
+        return f"To zdjecie jest juz dopiete do: \"{item['master_theme'][:120]}\" - nic nie dublowalem."
     db.execute("UPDATE content_items SET media = media || %s::jsonb, updated_at=NOW() WHERE id=%s",
                (json.dumps([desc]), item["id"]))
     # zalacznik dopiety do materialu W KOLEJCE; juz zestagowane warianty tez go dostaja
