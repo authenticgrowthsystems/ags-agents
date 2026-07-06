@@ -30,13 +30,29 @@ TRUTH_GUARD = (
     "build-in-public brand. When unsure whether something happened - it did not.")
 
 
+def _learned_style(brand_id="AGS"):
+    """Nauka poziom 2 (06/07): regulki wydestylowane z RECZNYCH korekt Tomasza (VOICE_EDIT),
+    trzymane w brand_config 'style_learned' - dokladane do KAZDEJ generacji."""
+    import json as _json
+    row = _db.fetchone("SELECT config_value FROM brand_config WHERE brand_id=%s AND config_key='style_learned'",
+                       (brand_id,))
+    try:
+        rules = (_json.loads(row["config_value"]).get("rules") or []) if row and row.get("config_value") else []
+    except Exception:
+        rules = []
+    if not rules:
+        return ""
+    return ("\nOWNER STYLE PREFERENCES (learned from his manual edits - follow them):\n"
+            + "\n".join(f"- {r}" for r in rules[-15:]))
+
+
 def generate_canonical(brand, master_theme, research_context="", content_item_id=None):
     """Tekst-matka; model per task z routera R4 (default sonnet, override brand_config cm_tier_canonical)."""
     model, tier, source = tasks.model_for("canonical")
     msg = f"Write a canonical post for the theme: {master_theme}."
     if research_context:
         msg += f"\n\nGround it in this evidence (use what is relevant, do not list sources):\n{research_context[:6000]}"
-    msg += f"\n\n{TRUTH_GUARD}\n\nReturn ONLY the post body. Brand voice. Zero em dashes."
+    msg += f"\n\n{TRUTH_GUARD}{_learned_style(brand.get('brand_id', 'AGS'))}\n\nReturn ONLY the post body. Brand voice. Zero em dashes."
     resp = client().messages.create(
         model=model, max_tokens=1500,
         thinking={"type": "disabled"},  # Sonnet 5 defaults thinking ON when omitted; keep it off (preserves budget)
@@ -97,7 +113,8 @@ def generate_variant(brand, canonical_body, channel, content_item_id=None):
     guide = CHANNEL_GUIDE.get(channel, f"{channel}: adapt naturally for this platform.")
     lang = _language_publish(brand.get("brand_id", "AGS"), channel)
     lang_guide = LANGUAGE_GUIDE.get(lang, f"Write the adaptation in language code '{lang}'.")
-    msg = (f"Adapt the canonical post below for {channel}. {guide}\n{lang_guide}\n{TRUTH_GUARD}\n"
+    msg = (f"Adapt the canonical post below for {channel}. {guide}\n{lang_guide}\n{TRUTH_GUARD}"
+           f"{_learned_style(brand.get('brand_id', 'AGS'))}\n"
            f"Keep the brand voice. Zero em dashes. Return ONLY the adapted text.\n\nCANONICAL:\n{canonical_body}")
     resp = client().messages.create(
         model=model, max_tokens=2000,

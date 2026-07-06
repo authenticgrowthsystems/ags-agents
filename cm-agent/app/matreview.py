@@ -134,9 +134,10 @@ def _card(item_id=None, brand_id="AGS", full=False):
         if dt and dt < now else ""
     ch = " + ".join(_target_label(brand_id, c) for c in (it.get("target_channels") or []))
     body = (it.get("canonical_body") or "(tekst w produkcji)").strip()
-    truncated = len(body) > 500
+    cap = 3300 if full else 500  # v6: Calosc = w TYM SAMYM okienku (limit Telegrama), Zwin wraca
+    truncated = len(body) > cap
     if truncated:
-        body = body[:500] + "..."
+        body = body[:cap] + ("\n[koniec podgladu - pelny tekst przy ✏️ Edytuj]" if full else "...")
     media_all = it.get("media") or []
     n_media = sum(1 for m in media_all if (m or {}).get("file_id"))
     hint = next((m.get("text") for m in media_all if (m or {}).get("kind") == "suggestion"), None)
@@ -154,8 +155,9 @@ def _card(item_id=None, brand_id="AGS", full=False):
     row2 = [{"text": "❌ Odrzuc", "callback_data": f"matnav:no:{iid}"},
             {"text": "🔄 Inny kat", "callback_data": f"matnav:angle:{iid}"},
             {"text": "✏️ Edytuj", "callback_data": f"matnav:edit:{iid}"}]
-    if truncated:
-        # v5: Calosc = PELNY tekst osobnymi wiadomosciami na dole (zero ucinania [...])
+    if full:
+        row2.append({"text": "📕 Zwin", "callback_data": f"matnav:show:{iid}"})
+    elif truncated:
         row2.append({"text": "📖 Calosc", "callback_data": f"matnav:full:{iid}"})
     kb = {"inline_keyboard": [
         [{"text": "✅ Zatwierdz", "callback_data": f"matnav:ok:{iid}"},
@@ -256,12 +258,9 @@ def handle(payload, wake_event=None):
             _tg("sendMessage", {"chat_id": chat_id, "text": body[i:i + 3900]})
         return
     if action == "full":
-        # v5: pelny tekst leci OSOBNYMI wiadomosciami (Telegram limit 4096; karta zostaje w miejscu)
-        row = db.fetchone("SELECT master_theme, canonical_body FROM content_items WHERE id=%s", (arg,))
-        body = ((row or {}).get("canonical_body") or "(brak tekstu)").strip()
-        _tg("sendMessage", {"chat_id": chat_id, "text": f"📖 CALOSC: {(row or {}).get('master_theme', '')[:150]}"})
-        for i in range(0, len(body), 3900):
-            _tg("sendMessage", {"chat_id": chat_id, "text": body[i:i + 3900]})
+        # v6 (feedback): Calosc w TYM SAMYM okienku karty (+ Zwin); osobne wiadomosci tylko przy Edytuj
+        text, kb = _card(arg, full=True)
+        edit(text, kb)
         return
     if action == "all":
         items = pending_items()
@@ -345,28 +344,62 @@ def apply_edit(new_text, wake_event=None):
     brand = load_brand(item["brand_id"])
     old = (item.get("canonical_body") or "").strip()
     new = compliance.fix_dashes(new_text.strip())
+    rules = _distill_style_rules(brand, old, new, iid)
     try:
         db.execute(
             "INSERT INTO agent_logs (agent_id, log_type, rationale, context) VALUES ('cm','VOICE_EDIT',%s,%s)",
             (f"Reczna korekta Tomasza: {item['master_theme'][:80]}",
-             _Jsonb({"content_item_id": str(iid), "before": old[:4000], "after": new[:4000]})))
+             _Jsonb({"content_item_id": str(iid), "before": old[:4000], "after": new[:4000],
+                     "rules": rules})))
     except Exception:
         pass
     db.execute("UPDATE content_items SET canonical_body=%s, updated_at=NOW() WHERE id=%s", (new, iid))
     db.execute("DELETE FROM post_queue WHERE content_item_id=%s AND status='review'", (iid,))
     item["canonical_body"] = new
-    variants = []
     for ch in channels.active_targets(item["brand_id"], item.get("target_channels")):
         vtext, _ = generate.generate_variant(brand, new, ch["channel"], content_item_id=iid)
         vtext = compliance.enforce(brand, vtext, content_item_id=iid)
         channels.stage_variant(item, ch, vtext)
-        variants.append((ch["channel"], vtext))
-    db.set_item_status(iid, "needs_approval")
-    hitl.send_approval(item, variants)
+    # EDYCJA = AKCEPTACJA (Tomasz 06/07): poprawiony material NIE wraca do przegladu
+    db.set_item_status(iid, "approved")
     if wake_event:
         wake_event.set()
-    return (f"✏️ Przyjete - tekst podmieniony Twoja wersja, poprawki zapamietane (ucze sie stylu). "
-            f"Warianty kanalow przegenerowane z Twojej wersji - material wraca do zatwierdzenia.")
+    dt = item.get("scheduled_for")
+    when = dt.astimezone(WARSAW).strftime("%a %d/%m %H:%M") if dt else "najblizszy wolny slot (CM przydzieli)"
+    extra = ("\n📚 Wyuczone z tej korekty: " + "; ".join(rules)) if rules else ""
+    return (f"✏️ Przyjete i ZATWIERDZONE (Twoja edycja = akceptacja). Warianty kanalow "
+            f"przegenerowane z Twojej wersji, publikacja: {when}.{extra}")
+
+
+def _distill_style_rules(brand, old, new, item_id):
+    """Nauka poziom 2 (06/07): z pary przed/po destyluj 1-3 regulki stylu i doloz do
+    brand_config 'style_learned' (ostatnie 30) - kazda generacja dostaje je w prompcie."""
+    if not old or not new or old == new:
+        return []
+    try:
+        from .generate import client
+        from . import tasks
+        model, tier, source = tasks.model_for("compliance")
+        resp = client().messages.create(
+            model=model, max_tokens=250, thinking={"type": "disabled"},
+            messages=[{"role": "user", "content":
+                       "Porownaj wersje PRZED (agenta) i PO (reczna korekta wlasciciela). Wypisz 1-3 "
+                       "KROTKIE regulki stylu, ktore wynikaja z korekty (np. 'zamiast X pisze Y', "
+                       "'unika slowa Z', 'lagodzi kategoryczne tezy'). Tylko regulki przenosne na inne "
+                       "teksty, po polsku, kazda w nowej linii z '- '. Zero komentarza.\n\n"
+                       f"PRZED:\n{old[:2500]}\n\nPO:\n{new[:2500]}"}])
+        tasks.log_task("style_distill", tier, model, source, getattr(resp, "usage", None), item_id)
+        rules = [ln.lstrip("- ").strip() for ln in
+                 "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").split("\n")
+                 if ln.strip().startswith("-")][:3]
+        if rules:
+            cur = _state_get("style_learned")
+            arr = (cur.get("rules") or []) if isinstance(cur, dict) else []
+            arr = (arr + rules)[-30:]
+            _state_set("style_learned", {"rules": arr})
+        return rules
+    except Exception:
+        return []
 
 
 def pending_angle():
