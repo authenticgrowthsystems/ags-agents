@@ -104,6 +104,13 @@ def _propose_for_gap(brand_id, channel, day, missing):
     sch_txt = "\n".join(f"- (schowek #{r['id']}) {(r['content'] or '')[:90]}" for r in schowek) or "(pusty)"
     recent = content_memory.get_published(brand_id, days_ago=14, limit=15)
     rec_txt = "\n".join(f"- {(p['content'] or '')[:70]}" for p in recent) or "(brak)"
+    # ANTYDUBEL (incydent 06/07: dwie wariacje 'Tolerance of difficulty'): propozycja MUSI omijac
+    # tematy juz czekajace w kolejce i szkicach
+    queued = db.fetchall(
+        """SELECT master_theme FROM content_items WHERE brand_id=%s
+           AND status IN ('draft','proposed','planned','drafting','needs_approval','approved')
+           ORDER BY updated_at DESC LIMIT 40""", (brand_id,))
+    q_txt = "\n".join(f"- {(r['master_theme'] or '')[:80]}" for r in queued) or "(pusto)"
     model, tier, source = tasks.model_for("planner")
     n = min(missing, PROPOSALS_PER_GAP)
     resp = client().messages.create(
@@ -113,8 +120,11 @@ def _propose_for_gap(brand_id, channel, day, missing):
         messages=[{"role": "user", "content":
                    f"Subagent kanalu {channel} zglasza luke w kadencji: {day.strftime('%A %d/%m')} brakuje "
                    f"{missing} publikacji. Zaproponuj DOKLADNIE {n} tematy-matki (konkretny kat, brand voice, "
-                   f"build-in-public gdzie pasuje).\n\nSCHOWEK (wykorzystaj najlepsze):\n{sch_txt}\n\n"
-                   f"OSTATNIE PUBLIKACJE (nie dubluj):\n{rec_txt}\n\nWywolaj emit_themes."}])
+                   f"build-in-public gdzie pasuje). Pisz NIENAGANNA polszczyzna.\n\n"
+                   f"SCHOWEK (wykorzystaj najlepsze):\n{sch_txt}\n\n"
+                   f"OSTATNIE PUBLIKACJE (nie dubluj):\n{rec_txt}\n\n"
+                   f"JUZ W KOLEJCE/SZKICACH (ZAKAZ tematow podobnych do ponizszych - nawet innym katem):\n{q_txt}\n\n"
+                   f"Wywolaj emit_themes."}])
     tasks.log_task("planner", tier, model, source, getattr(resp, "usage", None))
     tu = next((b for b in resp.content if getattr(b, "type", "") == "tool_use"), None)
     themes = [str(t).strip() for t in ((tu.input or {}).get("themes") or [])][:n] if tu else []

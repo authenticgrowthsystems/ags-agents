@@ -263,16 +263,20 @@ def handle(payload, wake_event=None):
         edit(f"✅⏭ Zatwierdzony na koniec kolejki -> publikacja {when}.\n\n" + text, kb)
         return
     if action == "angle":
-        # v3 (feedback 06/07): Tomasz SAM mowi jaki kat i co ma byc w tresci - CM czeka na wiadomosc.
-        # Material parkuje jako 'draft' (znika z kart, nie lapie go stan awaryjny) do czasu wskazowek.
+        # v3 (feedback 06/07): Tomasz SAM mowi jaki kat - CM czeka na wiadomosc. v4: prosba o
+        # wskazowki idzie NOWA wiadomoscia NA DOL czatu (nie w gore historii), karta w miejscu
+        # przechodzi do nastepnego materialu.
         row = db.fetchone("SELECT master_theme FROM content_items WHERE id=%s", (arg,))
         db.set_item_status(arg, "draft")
         _state_set("cm_pending_angle", {"item_id": str(arg),
                                         "ts": datetime.datetime.now(WARSAW).isoformat()})
         text, kb = _card()
-        edit(f"🔄 OK - napisz mi teraz JEDNA wiadomoscia: jaki kat i co ma byc w tresci dla:\n"
-             f"\"{(row or {}).get('master_theme', '')[:150]}\"\n"
-             f"(albo napisz 'auto' - sam przeformuluje). Material czeka poza kolejka.\n\n" + text, kb)
+        edit(text, kb)
+        _tg("sendMessage", {"chat_id": chat_id,
+                            "text": f"🔄 Napisz mi teraz JEDNA wiadomoscia: jaki kat i co ma byc w tresci dla:\n"
+                                    f"\"{(row or {}).get('master_theme', '')[:180]}\"\n"
+                                    f"(albo 'auto' - sam przeformuluje). Material czeka poza kolejka; "
+                                    f"po Twojej odpowiedzi potwierdze nowy temat i pojdzie do produkcji."})
         return
 
 
