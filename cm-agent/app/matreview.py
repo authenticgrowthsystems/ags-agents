@@ -226,15 +226,20 @@ def _send_media_preview(chat_id, item):
     ponownie dla tego samego materialu z rzedu."""
     if not item:
         return
-    files = [m["file_id"] for m in (item.get("media") or []) if (m or {}).get("file_id")][:4]
+    files = [(m["file_id"], (m or {}).get("kind", "photo")) for m in (item.get("media") or [])
+             if (m or {}).get("file_id")][:4]
     if not files:
         return
     st = _state_get("cm_last_media_preview")
     if st.get("item_id") == str(item["id"]):
         return
-    for fid in files:
-        _tg("sendPhoto", {"chat_id": chat_id, "photo": fid,
-                          "caption": f"🖼 POLECI Z POSTEM: {(item.get('master_theme') or '')[:140]}"})
+    for fid, kind in files:
+        if kind == "video":
+            _tg("sendVideo", {"chat_id": chat_id, "video": fid,
+                              "caption": f"🎬 POLECI Z POSTEM: {(item.get('master_theme') or '')[:140]}"})
+        else:
+            _tg("sendPhoto", {"chat_id": chat_id, "photo": fid,
+                              "caption": f"🖼 POLECI Z POSTEM: {(item.get('master_theme') or '')[:140]}"})
     _state_set("cm_last_media_preview", {"item_id": str(item["id"])})
 
 
@@ -347,7 +352,8 @@ def handle(payload, wake_event=None):
         _state_set("cm_pending_madd", {"item_id": str(arg),
                                        "ts": datetime.datetime.now(WARSAW).isoformat()})
         if photos:
-            album = [{"type": "photo", "media": p["metadata"]["media"]["file_id"],
+            album = [{"type": ("video" if p["metadata"]["media"].get("kind") == "video" else "photo"),
+                      "media": p["metadata"]["media"]["file_id"],
                       "caption": f"{i + 1}. {(p.get('content') or '')[:80]}"}
                      for i, p in enumerate(photos)]
             _tg("sendMediaGroup", {"chat_id": chat_id, "media": album})
