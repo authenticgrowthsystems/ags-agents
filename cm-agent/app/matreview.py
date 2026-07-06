@@ -118,18 +118,35 @@ def batch_note():
     return True
 
 
-def send_review_card(chat_id=None, theme_fragment=None, only_with_media=False):
+def _match_day(it, day):
+    """(d): czy material celuje w 'today'/'tomorrow' wg scheduled_for (czas WAW)."""
+    dt = it.get("scheduled_for")
+    if not dt:
+        return False
+    d = dt.astimezone(WARSAW).date()
+    today = datetime.datetime.now(WARSAW).date()
+    if day == "today":
+        return d == today
+    if day == "tomorrow":
+        return d == today + datetime.timedelta(days=1)
+    return False
+
+
+def send_review_card(chat_id=None, theme_fragment=None, only_with_media=False, day=None):
     """SWIEZA karta przegladu na dole czatu. v2 (feedback 06/07 'pokaz mi TE karte'):
-    theme_fragment / only_with_media = karta KONKRETNEGO materialu, nie 1/N od poczatku."""
+    theme_fragment / only_with_media / day = karta KONKRETNEGO materialu, nie 1/N od poczatku.
+    day (d): 'karty jutro'/'karty dzis' skacze do pierwszego materialu z tego dnia."""
     chat = chat_id or _admin_chat()
     if not chat:
         return False
     item_id = None
-    if theme_fragment or only_with_media:
+    if theme_fragment or only_with_media or day:
         for it in pending_items():
             if theme_fragment and theme_fragment.lower() not in (it.get("master_theme") or "").lower():
                 continue
             if only_with_media and not any((m or {}).get("file_id") for m in (it.get("media") or [])):
+                continue
+            if day and not _match_day(it, day):
                 continue
             item_id = str(it["id"])
             break
@@ -176,6 +193,18 @@ def _card(item_id=None, brand_id="AGS", full=False):
     now = datetime.datetime.now(WARSAW)
     dt = it["scheduled_for"].astimezone(WARSAW) if it.get("scheduled_for") else None
     when = f"{_DAYS_PL[dt.weekday()]} {dt.strftime('%d/%m %H:%M')}" if dt else "zaraz po zatwierdzeniu"
+    # (d): nagłówek dnia - DZIŚ/JUTRO/nazwa dnia, do szybkiego skanowania kart
+    if dt:
+        _dd = dt.date()
+        _today = now.date()
+        if _dd == _today:
+            day_hdr = "📅 DZIŚ"
+        elif _dd == _today + datetime.timedelta(days=1):
+            day_hdr = "📅 JUTRO"
+        else:
+            day_hdr = f"📅 {_DAYS_PL[dt.weekday()]} {dt.strftime('%d/%m')}"
+    else:
+        day_hdr = "📅 bez terminu"
     stale = "\n⚠️ SLOT MINAL - po 'Zatwierdz' CM sam przydzieli najblizszy wolny slot (okna+kadencja)." \
         if dt and dt < now else ""
     ch = " + ".join(_target_label(brand_id, c) for c in (it.get("target_channels") or []))
@@ -192,7 +221,7 @@ def _card(item_id=None, brand_id="AGS", full=False):
         med += f"\n🎨 propozycja wizualu: {hint[:220]}"
     if not n_media:
         med += "\n➕ dodasz: wyslij zdjecie botowi i napisz 'dolacz ostatnie zdjecie'"
-    text = (f"📦 Material {idx + 1} z {len(items)}\n\n🕐 {when}{stale}\n📣 {ch}{med}\n"
+    text = (f"{day_hdr}   ·   📦 Material {idx + 1} z {len(items)}\n\n🕐 {when}{stale}\n📣 {ch}{med}\n"
             f"📌 {it['master_theme'][:200]}\n\n{body}")
     iid = str(it["id"])
     # zawijanie (fix 06/07): ⬅️ z pierwszej karty = ostatnia, ➡️ z ostatniej = pierwsza

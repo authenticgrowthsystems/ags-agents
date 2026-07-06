@@ -27,8 +27,8 @@ TG_LIMIT = 4096
 
 _PREVIEW_RE = re.compile(r"^\s*(/plan|/kolejka|plan|kolejka|status|poka[zż]\s+(plan|kolejk\w*))\s*\??\s*$", re.IGNORECASE)
 _SCHOWEK_RE = re.compile(r"^\s*(/schowek|schowek|baza\s+pomys\w*|poka[zż]\s+(schowek|baz\w*))\s*\??\s*$", re.IGNORECASE)
-_KARTY_RE = re.compile(r"^\s*(/karty|karty|przegl[aą]daj|poka[zż]\s+(karty|materia\w*)|materia[lł]y\s+do\s+przegl[aą]du)\s*\??\s*$",
-                       re.IGNORECASE)
+_KARTY_RE = re.compile(r"^\s*(?:/karty|karty|przegl[aą]daj|poka[zż]\s+(?:karty|materia\w*)|materia[lł]y\s+do\s+przegl[aą]du)"
+                       r"(?:\s+(dzi[sś]|dzisiaj|jutro|jutrzejsze))?\s*\??\s*$", re.IGNORECASE)
 _DECYZJE_RE = re.compile(r"^\s*(/decyzje|decyzje|poka[zż]\s+decyzje|czekaj[aą]ce\s+decyzje)\s*\??\s*$", re.IGNORECASE)
 _CANCEL_RE = re.compile(r"^\s*(/cancel|anuluj)\s*$", re.IGNORECASE)
 
@@ -954,11 +954,16 @@ def handle(update):
         if not active:
             row = db.fetchone("SELECT active_agent FROM user_agent_state WHERE chat_id=%s", (chat_id,))
             active = (row or {}).get("active_agent") or "cm"
-        if _KARTY_RE.match(text):
+        _km = _KARTY_RE.match(text)
+        if _km:
             # feedback 06/07: karty przywolywalne Z KAZDEGO kontekstu rozmowy, swieze na dole czatu
+            # (d): opcjonalny filtr dnia - 'karty jutro' / 'karty dzis'
             from . import matreview
-            if not matreview.send_review_card(chat_id):
-                _reply(chat_id, "Brak materialow do przegladu.")
+            _q = (_km.group(1) or "").lower()
+            day = "tomorrow" if _q.startswith("jutr") else ("today" if _q.startswith("dzi") else None)
+            if not matreview.send_review_card(chat_id, day=day):
+                _reply(chat_id, "Brak materialow do przegladu" +
+                       (" na jutro." if day == "tomorrow" else (" na dzis." if day == "today" else ".")))
             return
         if _DECYZJE_RE.match(text):
             from . import matreview
