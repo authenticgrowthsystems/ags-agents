@@ -107,6 +107,30 @@ def generate_media_hint(brand, canonical_body, content_item_id=None):
     return _text(resp)[:300]
 
 
+_openai_key = [None]
+
+
+def generate_image(prompt):
+    """ETAP 2a (decyzja Tomasza 06/07): obraz z sugestii wizualu przez OpenAI gpt-image
+    (klucz 'openai_api_key' juz w sejfie - uzywa go tez content_memory). Zwraca bytes PNG.
+    Regula prawdy dla obrazow: estetyka grafiki/ilustracji, zero udawania zdjec realnych wydarzen."""
+    import base64
+    import httpx as _httpx
+    if not _openai_key[0]:
+        _openai_key[0] = _db.fetchone("SELECT value FROM app_secrets WHERE key='openai_api_key'")
+        _openai_key[0] = _openai_key[0]["value"] if _openai_key[0] else ""
+    if not _openai_key[0]:
+        raise RuntimeError("brak openai_api_key w app_secrets")
+    r = _httpx.post("https://api.openai.com/v1/images/generations",
+                    headers={"Authorization": f"Bearer {_openai_key[0]}"},
+                    json={"model": "gpt-image-1", "prompt": prompt[:3500],
+                          "size": "1536x1024", "quality": "medium"},
+                    timeout=120)
+    r.raise_for_status()
+    b64 = r.json()["data"][0]["b64_json"]
+    return base64.b64decode(b64)
+
+
 def generate_variant(brand, canonical_body, channel, content_item_id=None):
     """Adaptacja per kanal; model per task z routera R4 (default haiku); jezyk per cel (R6)."""
     model, tier, source = tasks.model_for("variant")

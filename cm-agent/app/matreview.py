@@ -24,6 +24,25 @@ def _tg(method, payload):
     return conversation._tg(method, payload)
 
 
+def _tg_upload_photo(chat_id, png_bytes, caption):
+    """Upload bajtow obrazu do Telegrama (multipart). Zwraca file_id (Telegram = magazyn,
+    my trzymamy tylko identyfikator) albo None."""
+    import httpx
+    from . import config
+    tok = config.TELEGRAM_BOT_TOKEN
+    if not tok:
+        return None
+    try:
+        r = httpx.post(f"https://api.telegram.org/bot{tok}/sendPhoto",
+                       data={"chat_id": str(chat_id), "caption": caption[:1000]},
+                       files={"photo": ("gen.png", png_bytes, "image/png")}, timeout=60)
+        j = r.json()
+        photos = ((j.get("result") or {}).get("photo") or [])
+        return photos[-1]["file_id"] if photos else None
+    except Exception:
+        return None
+
+
 def _admin_chat():
     from . import hitl
     return hitl._admin_chat_id()
@@ -190,7 +209,8 @@ def _card(item_id=None, brand_id="AGS", full=False):
     rows.append([{"text": "❌ Odrzuc", "callback_data": f"matnav:no:{iid}"},
                  {"text": "🔄 Inny kat", "callback_data": f"matnav:angle:{iid}"},
                  {"text": "✏️ Edytuj", "callback_data": f"matnav:edit:{iid}"}])
-    media_row = [{"text": "➕ Media", "callback_data": f"matnav:madd:{iid}"}]
+    media_row = [{"text": "➕ Media", "callback_data": f"matnav:madd:{iid}"},
+                 {"text": "🎨 Generuj", "callback_data": f"matnav:gen:{iid}"}]
     if n_media:
         media_row.append({"text": f"🗑 Media ({n_media})", "callback_data": f"matnav:mdel:{iid}"})
     rows.append(media_row)
@@ -370,6 +390,44 @@ def handle(payload, wake_event=None):
         _note_attach(item["master_theme"])
         edit(f"🖼 Dopiete do: \"{item['master_theme'][:150]}\" - poleci razem z publikacja. "
              f"Chcesz wiecej? Tap ➕ Media na karcie jeszcze raz.")
+        return
+    if action == "gen":
+        # ETAP 2a (06/07): 🎨 Generuj - obraz z sugestii wizualu (OpenAI), podglad NA Telegramie
+        # staje sie magazynem (file_id z sendPhoto = zalacznik). ~pol minuty.
+        import json as _json
+        row = db.fetchone("SELECT master_theme, canonical_body, media FROM content_items WHERE id=%s", (arg,))
+        if not row:
+            edit("Nie znajduje materialu.")
+            return
+        hint = next((m.get("text") for m in (row.get("media") or [])
+                     if (m or {}).get("kind") == "suggestion"), "")
+        _tg("sendMessage", {"chat_id": chat_id,
+                            "text": f"🎨 Generuje obraz (~pol minuty): {(hint or row['master_theme'])[:150]}"})
+        from .generate import generate_image
+        prompt = (f"Social media graphic for a tech build-in-public post. Visual idea: "
+                  f"{hint or 'clean conceptual illustration of the post theme'}. Post theme: "
+                  f"{row['master_theme'][:300]}. Style: clean, professional, modern tech aesthetic, "
+                  f"high contrast, no watermarks, no fake photographs of real events, "
+                  f"no real people's faces; illustration/diagram/typographic style welcome.")
+        try:
+            png = generate_image(prompt)
+        except Exception as e:
+            _tg("sendMessage", {"chat_id": chat_id, "text": f"🎨 Generowanie nie wyszlo: {str(e)[:200]}"})
+            return
+        fid = _tg_upload_photo(chat_id, png,
+                               f"🎨 WYGENEROWANE - POLECI Z POSTEM: {row['master_theme'][:120]}")
+        if not fid:
+            _tg("sendMessage", {"chat_id": chat_id, "text": "Nie udalo sie wgrac obrazu na Telegram."})
+            return
+        desc = {"source": "telegram", "file_id": fid, "kind": "photo", "generated": True}
+        db.execute("UPDATE content_items SET media = media || %s::jsonb, updated_at=NOW() WHERE id=%s",
+                   (_json.dumps([desc]), arg))
+        db.execute("UPDATE post_queue SET media = media || %s::jsonb WHERE content_item_id=%s AND status IN ('review','held','scheduled')",
+                   (_json.dumps([desc]), arg))
+        _note_attach(row["master_theme"])
+        _state_set("cm_last_media_preview", {"item_id": str(arg)})
+        text, kb, it = _card(arg)
+        edit(text, kb)
         return
     if action == "mnew":
         _state_set("cm_pending_madd", {"item_id": str(arg),
