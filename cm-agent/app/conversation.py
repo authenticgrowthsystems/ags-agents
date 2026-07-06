@@ -749,6 +749,13 @@ def handle(update):
             if not matreview.send_review_card(chat_id):
                 _reply(chat_id, "Brak materialow do przegladu.")
             return
+        from . import matreview as _mr
+        if _mr.pending_angle() and not text.startswith("/"):
+            # 'Inny kat' v3: ta wiadomosc = wskazowki Tomasza (kat + wymagana tresc)
+            ans = _mr.apply_angle_guidance(text, wake_event)
+            if ans:
+                _reply(chat_id, ans)
+                return
         if active.startswith("subagent:"):
             if _CANCEL_RE.match(text):
                 _reset_state(chat_id)

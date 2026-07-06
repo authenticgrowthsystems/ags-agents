@@ -245,16 +245,67 @@ def handle(payload, wake_event=None):
         edit(f"✅⏭ Zatwierdzony na koniec kolejki -> publikacja {when}.\n\n" + text, kb)
         return
     if action == "angle":
-        from .planner import _reangle_theme
-        if _reangle_theme(arg):
-            db.set_item_status(arg, "planned")  # nowy kat -> ponowna produkcja tekstu
-            if wake_event:
-                wake_event.set()
-            text, kb = _card()
-            edit("🔄 Nowy kat przyjety - material wraca do produkcji i przyjdzie ponownie.\n\n" + text, kb)
-        else:
-            edit("Nie udalo sie przeformulowac - sprobuj jeszcze raz.")
+        # v3 (feedback 06/07): Tomasz SAM mowi jaki kat i co ma byc w tresci - CM czeka na wiadomosc.
+        # Material parkuje jako 'draft' (znika z kart, nie lapie go stan awaryjny) do czasu wskazowek.
+        row = db.fetchone("SELECT master_theme FROM content_items WHERE id=%s", (arg,))
+        db.set_item_status(arg, "draft")
+        _state_set("cm_pending_angle", {"item_id": str(arg),
+                                        "ts": datetime.datetime.now(WARSAW).isoformat()})
+        text, kb = _card()
+        edit(f"🔄 OK - napisz mi teraz JEDNA wiadomoscia: jaki kat i co ma byc w tresci dla:\n"
+             f"\"{(row or {}).get('master_theme', '')[:150]}\"\n"
+             f"(albo napisz 'auto' - sam przeformuluje). Material czeka poza kolejka.\n\n" + text, kb)
         return
+
+
+def pending_angle():
+    """Czy CM czeka na wskazowki kata od Tomasza (okno 45 min)? Zwraca item_id albo None."""
+    st = _state_get("cm_pending_angle")
+    iid, ts = st.get("item_id"), st.get("ts")
+    if not (iid and ts):
+        return None
+    age = datetime.datetime.now(WARSAW) - datetime.datetime.fromisoformat(ts)
+    return iid if age.total_seconds() < 45 * 60 else None
+
+
+def apply_angle_guidance(text, wake_event=None):
+    """Wiadomosc Tomasza po 'Inny kat': przeformuluj temat WG JEGO wskazowek (kat + wymagana tresc
+    laduja w temacie-matce, ktory jest promptem generatora) -> produkcja."""
+    iid = pending_angle()
+    if not iid:
+        return None
+    _state_set("cm_pending_angle", {})
+    row = db.fetchone("SELECT master_theme, brand_id FROM content_items WHERE id=%s", (iid,))
+    if not row:
+        return "Nie znajduje juz tego materialu - odpal karty jeszcze raz."
+    if text.strip().lower() in ("auto", "sam", "sam wybierz"):
+        from .planner import _reangle_theme
+        _reangle_theme(iid, row["brand_id"])
+    else:
+        from .brand import load_brand
+        from .generate import client
+        from . import tasks
+        brand = load_brand(row["brand_id"])
+        model, tier, source = tasks.model_for("plan_angle")
+        resp = client().messages.create(
+            model=model, max_tokens=400, thinking={"type": "disabled"},
+            system=[{"type": "text", "text": f"Glos marki (skrot):\n{brand['voice_bible'][:1500]}"}],
+            messages=[{"role": "user", "content":
+                       f"Przeformuluj temat-matke posta wg WSKAZOWEK wlasciciela (jego kat jest "
+                       f"nadrzedny; wymagania tresci wpisz do tematu, bo temat = prompt generatora). "
+                       f"Zachowaj ewentualny prefiks [ARTYKUL]. Zwroc TYLKO nowy temat.\n\n"
+                       f"OBECNY TEMAT: {row['master_theme']}\n\nWSKAZOWKI: {text.strip()[:800]}"}])
+        tasks.log_task("plan_angle", tier, model, source, getattr(resp, "usage", None), iid)
+        new_theme = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
+        if new_theme:
+            db.execute("UPDATE content_items SET master_theme=%s, updated_at=NOW() WHERE id=%s",
+                       (new_theme, iid))
+    db.set_item_status(iid, "planned")
+    if wake_event:
+        wake_event.set()
+    nrow = db.fetchone("SELECT master_theme FROM content_items WHERE id=%s", (iid,))
+    return (f"🔄 Przyjete. Nowy temat: \"{(nrow or {}).get('master_theme', '')[:200]}\"\n"
+            f"Material wraca do produkcji - przyjdzie jako karta do zatwierdzenia.")
 
 
 # ---------------- S4: niedzielne przypomnienia + fallback 23:00 ----------------
