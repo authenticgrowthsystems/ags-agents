@@ -707,6 +707,14 @@ TOOL_SUB_COMMENT = {
 
 def _sub_escalate(inp, brand, channel):
     from .proactive import _agent_id
+    # antydubel (fix 06/07: 'i jak zatwierdzil?' wyslalo propozycje 2. raz)
+    pending = db.fetchone(
+        """SELECT 1 AS x FROM agent_messages
+           WHERE message_type='request' AND status IN ('unread','processing')
+             AND payload->>'kind'='channel_proposal' AND payload->>'channel'=%s
+             AND payload->>'topic'=%s LIMIT 1""", (channel, inp.get("topic", "inne")))
+    if pending:
+        return "📨 Ta propozycja JUZ czeka u CM - odpowiedz przyjdzie za chwile, nie dubluje."
     sub_id = _agent_id(f"%{channel.split('_')[0]}%")
     cm_id = _agent_id("%content-manager%")
     if not (sub_id and cm_id):
@@ -851,6 +859,8 @@ def _sub_system(brand_row, brand, channel):
         f"ustawionym WYLACZNIE na ['{channel}'] (material przejdzie przez normalne zatwierdzenie Tomasza). "
         "Nie wychodz poza swoj kanal. SPRAWY STRATEGICZNE kanalu (siatka slotow, kadencja, okno) "
         "zalatwiasz SAM z Content Managerem narzedziem escalate_to_cm - NIE odsylaj Tomasza. "
+        "WYNIK eskalacji czytasz z sekcji USTALENIA Z CM ponizej - gdy Tomasz pyta 'i jak "
+        "zatwierdzil?', ODPOWIEDZ z USTALEN, NIGDY nie eskaluj ponownie. "
         "Gdy Tomasz wkleja CUDZY post, proponuj komentarze narzedziem suggest_comment "
         "(comment-first: wartosc, zero pitchu). Metryki wpisuje Tomasz recznie (subagent_set_metrics) - "
         "raz w tygodniu sam sie o nie upominasz."

@@ -279,6 +279,10 @@ def handle_agent_requests(brand_id="AGS"):
             logbot.send(f"🤝 CM<->[{p.get('channel')}] {p.get('topic')}: "
                         f"{'ZATWIERDZONE' if dec.get('approve') else 'ODRZUCONE'} - "
                         f"{dec.get('reply', '')[:200]}{applied}")
+            # domkniecie petli W CZACIE (feedback 06/07): subagent melduje wynik Tomaszowi
+            _send(f"📣 [{p.get('channel')}] CM odpowiedzial na moja propozycje ({p.get('topic')}): "
+                  f"{'✅ ZATWIERDZONE' if dec.get('approve') else '❌ ODRZUCONE'}. "
+                  f"{dec.get('reply', '')[:250]}{applied}")
         except Exception as e:
             db.execute("UPDATE agent_messages SET status='failed' WHERE message_id=%s", (rq["message_id"],))
             logbot.send(f"⚠️ CM nie rozpatrzyl propozycji subagenta ({p.get('topic')}): {str(e)[:150]}")
