@@ -161,6 +161,26 @@ def _schowek_view():
     return "\n".join(lines)
 
 
+def _channels_snapshot(brand_id="AGS"):
+    """Konfiguracja CELOW dla rozmowy (fix 06/07: CM nie znal okien publikacji/kadencji)."""
+    rows = db.fetchall(
+        "SELECT channel, status, supervised, config FROM channels WHERE brand_id=%s ORDER BY channel",
+        (brand_id,))
+    lines = []
+    for r in rows:
+        cfg = r.get("config") or {}
+        bits = [f"status={r['status']}" + ("/supervised" if r.get("supervised") else "/standalone")]
+        if cfg.get("publish_windows"):
+            bits.append(f"okno={cfg['publish_windows']}")
+        if r["channel"] == "x":
+            bits.append(f"kadencja={cfg.get('posts_per_day', '3-5')}/dzien")
+        elif r["channel"].startswith("linkedin"):
+            bits.append("kadencja=pn-pt post, sob nic, nd artykul")
+        bits.append(f"jezyk={cfg.get('language_publish', 'en')}")
+        lines.append(f"- {r['channel']}: " + ", ".join(bits))
+    return "\n".join(lines) or "(brak celow)"
+
+
 def _memory_snapshot(brand_id="AGS"):
     """Kontekst pamieci do rozmowy: ostatnie publikacje + rozmiar schowka (pelny modul content_memory = krok 1f)."""
     pub = db.fetchall(
@@ -515,6 +535,11 @@ def _system_blocks(brand):
         f"\nTeraz jest {now} (Europe/Warsaw)."
         f"\n\nSTAN OPERACYJNY (o mechanizmach mow WYLACZNIE wg tego stanu - zero zgadywania; "
         f"przypinanie zdjec robi automat, nie Ty):\n{_mrv.modes_snapshot()}"
+        f"\n\nCELE I KONFIGURACJA (okna publikacji w czasie Europe/Warsaw; zmiany przez target_update):\n"
+        f"{_channels_snapshot()}"
+        f"\nMECHANIKA SLOTOW: material 'approved' bez slotu albo z minionym slotem dostaje slot "
+        f"AUTOMATYCZNIE (najblizszy wolny wg okna i kadencji) - NIE trzeba budowac planu, zeby "
+        f"poukladac sloty zatwierdzonych."
         f"\n\nAKTUALNA KOLEJKA CM:\n{_queue_snapshot()}"
         f"\n\nPROPOZYCJA PLANU (proposed, numeracja dla plan_edit/plan_approve):\n{planner.plan_text()}"
         f"\n\n{_memory_snapshot()}"
