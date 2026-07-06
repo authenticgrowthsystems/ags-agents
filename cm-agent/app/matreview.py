@@ -99,6 +99,20 @@ def batch_note():
     return True
 
 
+def send_review_card(chat_id=None):
+    """SWIEZA karta przegladu na dole czatu (feedback 06/07: 'musialem scrollowac na gore').
+    Wolane z rozmowy (/karty, narzedzie LLM) - zero szukania starych wiadomosci."""
+    chat = chat_id or _admin_chat()
+    if not chat:
+        return False
+    text, kb = _card()
+    body = {"chat_id": chat, "text": text[:4000]}
+    if kb:
+        body["reply_markup"] = kb
+    r = _tg("sendMessage", body)
+    return bool(r and r.get("ok"))
+
+
 def _card(item_id=None, brand_id="AGS"):
     """(text, kb) karty materialu; item_id=None -> pierwszy czekajacy."""
     from .planner import _DAYS_PL, _target_label

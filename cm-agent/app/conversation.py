@@ -27,6 +27,8 @@ TG_LIMIT = 4096
 
 _PREVIEW_RE = re.compile(r"^\s*(/plan|/kolejka|plan|kolejka|status|poka[zż]\s+(plan|kolejk\w*))\s*\??\s*$", re.IGNORECASE)
 _SCHOWEK_RE = re.compile(r"^\s*(/schowek|schowek|baza\s+pomys\w*|poka[zż]\s+(schowek|baz\w*))\s*\??\s*$", re.IGNORECASE)
+_KARTY_RE = re.compile(r"^\s*(/karty|karty|przegl[aą]daj|poka[zż]\s+(karty|materia\w*)|materia[lł]y\s+do\s+przegl[aą]du)\s*\??\s*$",
+                       re.IGNORECASE)
 _CANCEL_RE = re.compile(r"^\s*(/cancel|anuluj)\s*$", re.IGNORECASE)
 
 
@@ -410,6 +412,15 @@ TOOL_PROPOSE = {
 }
 
 
+TOOL_REVIEW_CARDS = {
+    "name": "show_review_cards",
+    "description": ("Wyslij Tomaszowi SWIEZA karte przegladu materialow (needs_approval) z guzikami "
+                    "decyzji i strzalkami, na dole czatu. Wywoluj gdy Tomasz chce przejrzec/zatwierdzic "
+                    "materialy TUTAJ w rozmowie (np. 'daj mi je tutaj', 'chce je przejrzec teraz')."),
+    "input_schema": {"type": "object", "properties": {}},
+}
+
+
 def _system_blocks(brand):
     now = datetime.datetime.now(WARSAW).strftime("%A %d/%m/%Y %H:%M")
     role = (
@@ -483,7 +494,8 @@ def _discuss(chat_id, text):
         thinking={"type": "disabled"},  # Sonnet 5/Opus: thinking off, rozmowa ma byc szybka i tania
         system=_system_blocks(brand),
         tools=[TOOL_PROPOSE, TOOL_SCHOWEK, TOOL_ARCHIVE, TOOL_SIMILAR, TOOL_ADAPT,
-               TOOL_PLAN_BUILD, TOOL_PLAN_APPROVE, TOOL_PLAN_EDIT, TOOL_TARGET_CREATE, TOOL_TARGET_UPDATE],
+               TOOL_PLAN_BUILD, TOOL_PLAN_APPROVE, TOOL_PLAN_EDIT, TOOL_TARGET_CREATE, TOOL_TARGET_UPDATE,
+               TOOL_REVIEW_CARDS],
         messages=history,
     )
     tasks.log_task("conversation", tier, model, source, getattr(resp, "usage", None))
@@ -511,6 +523,10 @@ def _discuss(chat_id, text):
             parts.append(_target_create(b.input))
         elif b.name == "target_update":
             parts.append(_target_update(b.input))
+        elif b.name == "show_review_cards":
+            from . import matreview
+            parts.append("📦 Karta przegladu leci ponizej." if matreview.send_review_card(chat_id)
+                         else "Brak materialow do przegladu.")
     reply = "\n\n".join(parts).strip() or "Przyjete."
     # history stores plain text only (tool calls are summarized in the reply line itself)
     _save_history(chat_id, history + [{"role": "assistant", "content": reply}], agent="cm")
@@ -727,6 +743,12 @@ def handle(update):
         if not active:
             row = db.fetchone("SELECT active_agent FROM user_agent_state WHERE chat_id=%s", (chat_id,))
             active = (row or {}).get("active_agent") or "cm"
+        if _KARTY_RE.match(text):
+            # feedback 06/07: karty przywolywalne Z KAZDEGO kontekstu rozmowy, swieze na dole czatu
+            from . import matreview
+            if not matreview.send_review_card(chat_id):
+                _reply(chat_id, "Brak materialow do przegladu.")
+            return
         if active.startswith("subagent:"):
             if _CANCEL_RE.match(text):
                 _reset_state(chat_id)
