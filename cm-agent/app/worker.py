@@ -121,6 +121,18 @@ def _draft(item):
     ctx = research.research_context(item.get("research_job_id"))
     canonical, _ = generate.generate_canonical(brand, item["master_theme"], ctx, content_item_id=item["id"])
     canonical = compliance.enforce(brand, canonical, content_item_id=item["id"])
+    # sugestia wizualu per material (06/07); podmiana starej sugestii przy regeneracji
+    try:
+        hint = generate.generate_media_hint(brand, canonical, content_item_id=item["id"])
+        media = [m for m in (item.get("media") or []) if (m or {}).get("kind") != "suggestion"]
+        if hint:
+            media.append({"kind": "suggestion", "text": hint})
+        import json as _json
+        db.execute("UPDATE content_items SET media=%s::jsonb, updated_at=NOW() WHERE id=%s",
+                   (_json.dumps(media), item["id"]))
+        item["media"] = media
+    except Exception:
+        traceback.print_exc()
     variants = []
     for ch in channels.active_targets(item["brand_id"], item.get("target_channels")):
         vtext, _ = generate.generate_variant(brand, canonical, ch["channel"], content_item_id=item["id"])

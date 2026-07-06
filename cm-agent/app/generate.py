@@ -73,6 +73,24 @@ def _language_publish(brand_id, channel):
     return (((row or {}).get("config") or {}).get("language_publish") or "en").lower()
 
 
+def generate_media_hint(brand, canonical_body, content_item_id=None):
+    """Propozycja wizualu per material (feedback 06/07: 'przy kazdym materiale sugestia grafiki/
+    zdjecia/filmu'). Jedno zdanie, tylko wizuale WYKONALNE przez autora (screenshot, zdjecie biurka,
+    prosta grafika z teza) - regula prawdy obowiazuje takze obrazy."""
+    model, tier, source = tasks.model_for("variant")
+    resp = client().messages.create(
+        model=model, max_tokens=150, thinking={"type": "disabled"},
+        system=system_blocks(brand),
+        messages=[{"role": "user", "content":
+                   "Zaproponuj JEDNA konkretna forme wizualna do ponizszego posta: autentyczne zdjecie "
+                   "(np. biurko/ekran autora), screenshot systemu, prosta grafika z jedna teza, albo "
+                   "krotkie wideo. Napisz JEDNO zdanie po polsku: co dokladnie ma przedstawiac. ZAKAZ: "
+                   "wizuale wydarzen, ktore sie nie odbyly, zdjecia stockowe udajace zycie autora.\n\n"
+                   f"POST:\n{canonical_body[:1500]}"}])
+    tasks.log_task("media_hint", tier, model, source, getattr(resp, "usage", None), content_item_id)
+    return _text(resp)[:300]
+
+
 def generate_variant(brand, canonical_body, channel, content_item_id=None):
     """Adaptacja per kanal; model per task z routera R4 (default haiku); jezyk per cel (R6)."""
     model, tier, source = tasks.model_for("variant")

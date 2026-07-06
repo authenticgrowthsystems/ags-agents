@@ -137,8 +137,14 @@ def _card(item_id=None, brand_id="AGS", full=False):
     truncated = len(body) > 500
     if truncated:
         body = body[:500] + "..."
-    n_media = len(it.get("media") or [])
+    media_all = it.get("media") or []
+    n_media = sum(1 for m in media_all if (m or {}).get("file_id"))
+    hint = next((m.get("text") for m in media_all if (m or {}).get("kind") == "suggestion"), None)
     med = f"\n🖼 zalaczniki: {n_media}" if n_media else ""
+    if hint:
+        med += f"\n🎨 propozycja wizualu: {hint[:220]}"
+    if not n_media:
+        med += "\n➕ dodasz: wyslij zdjecie botowi i napisz 'dolacz ostatnie zdjecie'"
     text = (f"📦 Material {idx + 1} z {len(items)}\n\n🕐 {when}{stale}\n📣 {ch}{med}\n"
             f"📌 {it['master_theme'][:200]}\n\n{body}")
     iid = str(it["id"])
