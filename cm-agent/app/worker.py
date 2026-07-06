@@ -12,7 +12,7 @@ from . import config, db
 from .brand import load_brand
 from psycopg.types.json import Jsonb
 
-from . import generate, compliance, channels, research, hitl, conversation, logbot, content_memory, reports, planner, matreview
+from . import generate, compliance, channels, research, hitl, conversation, logbot, content_memory, reports, planner, matreview, slots
 
 api = FastAPI(title="AGS Content Manager")
 wake = threading.Event()
@@ -144,6 +144,14 @@ def process_item(item):
     if st in ("planned", "drafting"):
         return _draft(item)
     if st in ("approved", "dispatching"):
+        if st == "approved":
+            # decyzja Tomasza 06/07: Tomasz zatwierdza TRESC, CM proponuje KIEDY. Slot NULL/miniony
+            # NIE publikuje natychmiast - CM przydziela najblizszy wolny wg okien+kadencji i melduje.
+            slot, changed = slots.assign_if_needed(item)
+            if changed and slot:
+                logbot.send(f"🗓 CM przydzielil slot: {slot.strftime('%a %d/%m %H:%M')} - "
+                            f"{item['master_theme'][:70]} (zmiana? napisz do CM: 'przesun na ...')")
+                return f"slot_assigned({slot:%d/%m %H:%M})"
         db.set_item_status(item["id"], "dispatching")
         n = channels.dispatch_item(item)
         db.set_item_status(item["id"], "published")

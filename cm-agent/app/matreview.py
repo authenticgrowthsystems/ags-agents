@@ -115,7 +115,7 @@ def _card(item_id=None, brand_id="AGS"):
     now = datetime.datetime.now(WARSAW)
     dt = it["scheduled_for"].astimezone(WARSAW) if it.get("scheduled_for") else None
     when = f"{_DAYS_PL[dt.weekday()]} {dt.strftime('%d/%m %H:%M')}" if dt else "zaraz po zatwierdzeniu"
-    stale = "\n⚠️ SLOT MINAL - 'Zatwierdz' publikuje OD RAZU; 'Na koniec kolejki' przesunie slot." \
+    stale = "\n⚠️ SLOT MINAL - po 'Zatwierdz' CM sam przydzieli najblizszy wolny slot (okna+kadencja)." \
         if dt and dt < now else ""
     ch = " + ".join(_target_label(brand_id, c) for c in (it.get("target_channels") or []))
     body = (it.get("canonical_body") or "(tekst w produkcji)").strip()
@@ -187,8 +187,8 @@ def handle(payload, wake_event=None):
             db.set_item_status(item_id, "planned")
             if wake_event:
                 wake_event.set()
-            edit(f"🚀 Na dzis: \"{row['master_theme'][:200]}\" - produkcja od razu, publikacja zaraz po "
-                 f"Twoim zatwierdzeniu tekstu.")
+            edit(f"🚀 Na dzis: \"{row['master_theme'][:200]}\" - produkcja od razu; po zatwierdzeniu "
+                 f"tekstu CM przydzieli najblizszy wolny slot (dzis, w oknie publikacji).")
         elif act == "drop":
             db.set_item_status(item_id, "rejected")
             edit(f"❌ Odrzucony: \"{row['master_theme'][:200]}\".")

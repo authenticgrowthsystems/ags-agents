@@ -55,13 +55,16 @@ def _cadence_text(brand_id):
     lines = []
     for r in rows:
         cfg = r.get("config") or {}
+        win = cfg.get("publish_windows")  # okno per cel (decyzja 06/07), zmienialne przez target_update
         if r["channel"] == "x":
-            lines.append(f"- x: {cfg.get('posts_per_day', '3-5')} postow DZIENNIE, rozlozone miedzy 09:00 a 21:00")
+            lines.append(f"- x: {cfg.get('posts_per_day', '3-5')} postow DZIENNIE, "
+                         f"WYLACZNIE w oknie {win or '09:00-21:00'}")
         elif r["channel"].startswith("linkedin"):
             lines.append(f"- {r['channel']}: poniedzialek-piatek 1 post (ok. 10:00), sobota NIC, "
-                         "niedziela ARTYKUL (format article, ok. 11:00)")
+                         f"niedziela ARTYKUL (format article, ok. 11:00); okno {win or '08:00-18:00'}")
         else:
-            lines.append(f"- {r['channel']}: {json.dumps(cfg.get('weekly_pattern', 'wg uznania'), ensure_ascii=False)}")
+            lines.append(f"- {r['channel']}: {json.dumps(cfg.get('weekly_pattern', 'wg uznania'), ensure_ascii=False)}"
+                         + (f"; okno {win}" if win else ""))
     return "\n".join(lines) or "(brak aktywnych celow)"
 
 
