@@ -184,6 +184,8 @@ def _card(item_id=None, brand_id="AGS", full=False):
         row2.append({"text": "📕 Zwin", "callback_data": f"matnav:show:{iid}"})
     elif truncated:
         row2.append({"text": "📖 Calosc", "callback_data": f"matnav:full:{iid}"})
+    if n_media:
+        row2.append({"text": "🖼 Podglad", "callback_data": f"matnav:pic:{iid}"})
     kb = {"inline_keyboard": [
         [{"text": "✅ Zatwierdz", "callback_data": f"matnav:ok:{iid}"},
          {"text": "✅⏭ Na koniec kolejki", "callback_data": f"matnav:okq:{iid}"}],
@@ -281,6 +283,18 @@ def handle(payload, wake_event=None):
                                     f"wersji i zapamietam poprawki (ucze sie Twojego stylu). 'anuluj' = wycofaj."})
         for i in range(0, len(body), 3900):
             _tg("sendMessage", {"chat_id": chat_id, "text": body[i:i + 3900]})
+        return
+    if action == "pic":
+        # 🖼 Podglad (06/07 'gdzie jest zdjecie?'): wyslij zalaczniki pod karte (file_id dziala
+        # w sendPhoto bezposrednio - Telegram trzyma pliki trwale)
+        row = db.fetchone("SELECT master_theme, media FROM content_items WHERE id=%s", (arg,))
+        files = [m["file_id"] for m in ((row or {}).get("media") or []) if (m or {}).get("file_id")][:4]
+        if not files:
+            edit("Ten material nie ma zalacznikow.")
+            return
+        for fid in files:
+            _tg("sendPhoto", {"chat_id": chat_id, "photo": fid,
+                              "caption": f"🖼 Zalacznik: {(row or {}).get('master_theme', '')[:120]}"})
         return
     if action == "full":
         # v6 (feedback): Calosc w TYM SAMYM okienku karty (+ Zwin); osobne wiadomosci tylko przy Edytuj
