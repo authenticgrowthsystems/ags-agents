@@ -143,8 +143,9 @@ def _card(item_id=None, brand_id="AGS", full=False):
     text = (f"📦 Material {idx + 1} z {len(items)}\n\n🕐 {when}{stale}\n📣 {ch}{med}\n"
             f"📌 {it['master_theme'][:200]}\n\n{body}")
     iid = str(it["id"])
-    prev_id = str(items[idx - 1]["id"]) if idx > 0 else iid
-    next_id = str(items[idx + 1]["id"]) if idx < len(items) - 1 else iid
+    # zawijanie (fix 06/07): ⬅️ z pierwszej karty = ostatnia, ➡️ z ostatniej = pierwsza
+    prev_id = str(items[(idx - 1) % len(items)]["id"])
+    next_id = str(items[(idx + 1) % len(items)]["id"])
     toggle = ({"text": "📕 Zwin", "callback_data": f"matnav:show:{iid}"} if full
               else {"text": "📖 Calosc", "callback_data": f"matnav:full:{iid}"})
     row2 = [{"text": "❌ Odrzuc", "callback_data": f"matnav:no:{iid}"},
@@ -191,6 +192,9 @@ def handle(payload, wake_event=None):
             body["reply_markup"] = kb
         r = _tg("editMessageText", body)
         if not (r and r.get("ok")):
+            # 'message is not modified' = ta sama tresc (np. 1 karta w kolejce) - NIE duplikuj (fix 06/07)
+            if "not modified" in str((r or {}).get("description", "")):
+                return
             _tg("sendMessage", {"chat_id": chat_id, "text": text[:4000], **({"reply_markup": kb} if kb else {})})
 
     parts = raw.split(":", 2)

@@ -262,8 +262,9 @@ def _nav_card_payload(brand_id, item_id=None):
     text = (f"📋 Pozycja {idx + 1} z {len(items)} (status: czeka na decyzje)\n\n"
             f"🕐 {when}\n📣 {ch}\n\n{it['master_theme']}")
     iid = str(it["id"])
-    prev_id = str(items[idx - 1]["id"]) if idx > 0 else iid
-    next_id = str(items[idx + 1]["id"]) if idx < len(items) - 1 else iid
+    # zawijanie jak w matnav (fix 06/07)
+    prev_id = str(items[(idx - 1) % len(items)]["id"])
+    next_id = str(items[(idx + 1) % len(items)]["id"])
     kb = {"inline_keyboard": [
         [{"text": "✅ Zatwierdz", "callback_data": f"plannav:ok:{iid}"},
          {"text": "❌ Odrzuc", "callback_data": f"plannav:no:{iid}"},
@@ -319,6 +320,8 @@ def handle_nav(payload, wake_event=None):
             body["reply_markup"] = kb
         r = _tg("editMessageText", body)
         if not (r and r.get("ok")):
+            if "not modified" in str((r or {}).get("description", "")):
+                return  # ta sama tresc - nie duplikuj karty (fix 06/07)
             _tg("sendMessage", {"chat_id": chat_id, "text": text[:4000], **({"reply_markup": kb} if kb else {})})
 
     if action == "pos":
