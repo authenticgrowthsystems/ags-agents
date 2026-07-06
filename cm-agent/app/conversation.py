@@ -125,7 +125,7 @@ def _queue_snapshot(brand_id="AGS"):
         """SELECT id, master_theme, status, target_channels, scheduled_for, media
            FROM content_items
            WHERE brand_id=%s AND status NOT IN ('published','rejected','failed','proposed')
-           ORDER BY COALESCE(scheduled_for, created_at) LIMIT 20""",
+           ORDER BY COALESCE(scheduled_for, created_at) LIMIT 60""",
         (brand_id,),
     )  # 'proposed' celowo poza kolejka - propozycje planu maja wlasny widok (planner.plan_text)
     lines = []
@@ -134,6 +134,9 @@ def _queue_snapshot(brand_id="AGS"):
         n_media = sum(1 for m in (it.get("media") or []) if (m or {}).get("file_id"))
         med = f" 🖼x{n_media}" if n_media else ""  # 06/07: CM MUSI widziec zalaczniki w kolejce
         lines.append(f"- [{it['status']}]{med} {it['master_theme'][:80]} | {ch} | slot: {_fmt_slot(it.get('scheduled_for'))}")
+    if len(items) == 60:
+        lines.append("(...kolejka dluzsza - to pierwsze 60; ZANIM powiesz ze materialu nie ma, "
+                     "sprawdz show_review_cards z theme_fragment)")
     return "\n".join(lines) if lines else "(kolejka pusta)"
 
 
@@ -506,6 +509,9 @@ def _system_blocks(brand):
         "Brak reakcji Tomasza 24h po prosbie o approve = publikacja awaryjna w slocie (poinformuj, gdy pyta). "
         "Nie dopytuj o szczegoly, ktore mozesz sensownie "
         "zalozyc (kanaly: domyslnie x + linkedin; slot: null gdy nie podany). "
+        "Gdy Tomasz pyta o KONKRETNY material: NAJPIERW show_review_cards z theme_fragment "
+        "(przeszukuje PELNA baze) - migawka kolejki bywa przycieta; NIE twierdz, ze materialu "
+        "nie ma, dopoki narzedzie tego nie potwierdzi. "
         f"\nTeraz jest {now} (Europe/Warsaw)."
         f"\n\nSTAN OPERACYJNY (o mechanizmach mow WYLACZNIE wg tego stanu - zero zgadywania; "
         f"przypinanie zdjec robi automat, nie Ty):\n{_mrv.modes_snapshot()}"
