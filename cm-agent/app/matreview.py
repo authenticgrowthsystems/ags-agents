@@ -152,7 +152,8 @@ def _card(item_id=None, brand_id="AGS", full=False):
     prev_id = str(items[(idx - 1) % len(items)]["id"])
     next_id = str(items[(idx + 1) % len(items)]["id"])
     row2 = [{"text": "❌ Odrzuc", "callback_data": f"matnav:no:{iid}"},
-            {"text": "🔄 Inny kat", "callback_data": f"matnav:angle:{iid}"}]
+            {"text": "🔄 Inny kat", "callback_data": f"matnav:angle:{iid}"},
+            {"text": "✏️ Edytuj", "callback_data": f"matnav:edit:{iid}"}]
     if truncated:
         # v5: Calosc = PELNY tekst osobnymi wiadomosciami na dole (zero ucinania [...])
         row2.append({"text": "📖 Calosc", "callback_data": f"matnav:full:{iid}"})
@@ -235,6 +236,25 @@ def handle(payload, wake_event=None):
         text, kb = _card(arg if action == "show" else None)
         edit(text, kb)
         return
+    if action == "edit":
+        # feedback 06/07: 'edytuj tekst' - bot wysyla PELNY tekst, Tomasz odsyla poprawiony,
+        # agent podmienia + przegenerowuje warianty + UCZY SIE z roznicy (VOICE_EDIT)
+        row = db.fetchone("SELECT master_theme, canonical_body FROM content_items WHERE id=%s", (arg,))
+        body = ((row or {}).get("canonical_body") or "").strip()
+        if not body:
+            edit("Ten material nie ma jeszcze tekstu do edycji.")
+            return
+        db.set_item_status(arg, "draft")  # poza kartami/awaryjnym na czas edycji
+        _state_set("cm_pending_edit", {"item_id": str(arg),
+                                       "ts": datetime.datetime.now(WARSAW).isoformat()})
+        _tg("sendMessage", {"chat_id": chat_id,
+                            "text": f"✏️ EDYCJA: \"{(row or {}).get('master_theme', '')[:150]}\"\n"
+                                    f"Ponizej pelny tekst-matka. Skopiuj, popraw i ODESLIJ CALOSC jedna "
+                                    f"wiadomoscia - podmienie tekst, przegeneruje warianty kanalow z Twojej "
+                                    f"wersji i zapamietam poprawki (ucze sie Twojego stylu). 'anuluj' = wycofaj."})
+        for i in range(0, len(body), 3900):
+            _tg("sendMessage", {"chat_id": chat_id, "text": body[i:i + 3900]})
+        return
     if action == "full":
         # v5: pelny tekst leci OSOBNYMI wiadomosciami (Telegram limit 4096; karta zostaje w miejscu)
         row = db.fetchone("SELECT master_theme, canonical_body FROM content_items WHERE id=%s", (arg,))
@@ -297,6 +317,56 @@ def resend_intake(brand_id="AGS", limit=6):
     for r in rows:
         send_intake_buttons(r["id"], r["master_theme"])
     return len(rows)
+
+
+def pending_edit():
+    """Czy CM czeka na poprawiona wersje tekstu od Tomasza (okno 60 min)? item_id albo None."""
+    st = _state_get("cm_pending_edit")
+    iid, ts = st.get("item_id"), st.get("ts")
+    if not (iid and ts):
+        return None
+    age = datetime.datetime.now(WARSAW) - datetime.datetime.fromisoformat(ts)
+    return iid if age.total_seconds() < 60 * 60 else None
+
+
+def apply_edit(new_text, wake_event=None):
+    """Poprawiona wersja od Tomasza: podmien tekst-matke, ZALOGUJ pare przed/po (VOICE_EDIT -
+    korpus nauki stylu), skasuj stare warianty i przegeneruj z JEGO wersji -> needs_approval."""
+    from psycopg.types.json import Jsonb as _Jsonb
+    iid = pending_edit()
+    if not iid:
+        return None
+    _state_set("cm_pending_edit", {})
+    item = db.fetchone("SELECT * FROM content_items WHERE id=%s", (iid,))
+    if not item:
+        return "Nie znajduje juz tego materialu."
+    from . import compliance, generate, channels, hitl
+    from .brand import load_brand
+    brand = load_brand(item["brand_id"])
+    old = (item.get("canonical_body") or "").strip()
+    new = compliance.fix_dashes(new_text.strip())
+    try:
+        db.execute(
+            "INSERT INTO agent_logs (agent_id, log_type, rationale, context) VALUES ('cm','VOICE_EDIT',%s,%s)",
+            (f"Reczna korekta Tomasza: {item['master_theme'][:80]}",
+             _Jsonb({"content_item_id": str(iid), "before": old[:4000], "after": new[:4000]})))
+    except Exception:
+        pass
+    db.execute("UPDATE content_items SET canonical_body=%s, updated_at=NOW() WHERE id=%s", (new, iid))
+    db.execute("DELETE FROM post_queue WHERE content_item_id=%s AND status='review'", (iid,))
+    item["canonical_body"] = new
+    variants = []
+    for ch in channels.active_targets(item["brand_id"], item.get("target_channels")):
+        vtext, _ = generate.generate_variant(brand, new, ch["channel"], content_item_id=iid)
+        vtext = compliance.enforce(brand, vtext, content_item_id=iid)
+        channels.stage_variant(item, ch, vtext)
+        variants.append((ch["channel"], vtext))
+    db.set_item_status(iid, "needs_approval")
+    hitl.send_approval(item, variants)
+    if wake_event:
+        wake_event.set()
+    return (f"✏️ Przyjete - tekst podmieniony Twoja wersja, poprawki zapamietane (ucze sie stylu). "
+            f"Warianty kanalow przegenerowane z Twojej wersji - material wraca do zatwierdzenia.")
 
 
 def pending_angle():

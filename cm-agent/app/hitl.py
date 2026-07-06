@@ -28,14 +28,24 @@ def send_approval(item, variants):
     chat = _admin_chat_id()
     if not tok or not chat:
         return False
+    import datetime
+    from . import matreview
     pending = db.fetchone("SELECT COUNT(*) AS n FROM content_items WHERE status='needs_approval'")
-    if pending and pending["n"] >= 2:
-        from . import matreview
+    st = matreview._state_get("cm_last_single_approval")
+    burst = False
+    if st.get("ts"):
+        try:
+            age = datetime.datetime.now(datetime.timezone.utc) - datetime.datetime.fromisoformat(st["ts"])
+            burst = age.total_seconds() < 600  # seria: pojedyncza wiadomosc <10 min temu -> zbijaj do karty
+        except Exception:
+            burst = False
+    if (pending and pending["n"] >= 2) or burst:
         matreview.batch_note()
         db.execute("UPDATE content_items SET approval_requested_at=NOW() WHERE id=%s", (item["id"],))
         return True
     can_tier, _ = tasks.tier_for("canonical")
-    lines = [f"CM: nowy material (marka {item['brand_id']}) - {item.get('master_theme')}", ""]
+    lines = [f"CM: nowy material (marka {item['brand_id']}) - {item.get('master_theme')}",
+             "", "Ponizej FINALNE teksty do publikacji (jezyk wg celu; AGS = EN):", ""]
     for ch, txt in variants:
         lines.append(f"--- {ch} ---\n{txt}\n")
     lines.append(f"Model tekstu-matki: {can_tier} (zmiana guzikiem 🎚 dziala od nastepnego materialu)")
@@ -43,6 +53,7 @@ def send_approval(item, variants):
     kb = {"inline_keyboard": [
         [{"text": "✅ Zatwierdz", "callback_data": f"cm:{item['id']}:approve"},
          {"text": "❌ Odrzuc", "callback_data": f"cm:{item['id']}:reject"}],
+        [{"text": "✏️ Edytuj tekst", "callback_data": f"matnav:edit:{item['id']}"}],
         # korekta tieru = approval-learning (R4): zapis do agent_approval_gates + brand_config przez galaz cmtier: w HITL
         [{"text": "🎚 haiku", "callback_data": "cmtier:canonical:haiku"},
          {"text": "🎚 sonnet", "callback_data": "cmtier:canonical:sonnet"},
@@ -54,6 +65,8 @@ def send_approval(item, variants):
                    timeout=15)
         # znacznik dla STANU AWARYJNEGO (kanon 11c): od tej chwili liczy sie 24h ciszy
         db.execute("UPDATE content_items SET approval_requested_at=NOW() WHERE id=%s", (item["id"],))
+        matreview._state_set("cm_last_single_approval",
+                             {"ts": datetime.datetime.now(datetime.timezone.utc).isoformat()})
         return True
     except Exception:
         return False

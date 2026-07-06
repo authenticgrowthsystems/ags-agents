@@ -808,6 +808,12 @@ def handle(update):
                    else "Zero czekajacych decyzji intake.")
             return
         from . import matreview as _mr
+        if _mr.pending_edit() and not text.startswith("/") and not _CANCEL_RE.match(text):
+            # '✏️ Edytuj' (06/07): ta wiadomosc = poprawiona wersja calego tekstu od Tomasza
+            ans = _mr.apply_edit(text, wake_event)
+            if ans:
+                _reply(chat_id, ans)
+                return
         if _mr.pending_angle() and not text.startswith("/") and not _CANCEL_RE.match(text):
             # 'Inny kat' v3: ta wiadomosc = wskazowki Tomasza (kat + wymagana tresc)
             ans = _mr.apply_angle_guidance(text, wake_event)
@@ -824,6 +830,7 @@ def handle(update):
         if _CANCEL_RE.match(text):
             _reset_state(chat_id)
             _mr._state_set("cm_pending_angle", {})  # /cancel zamyka tez oczekiwanie na kat (fix 06/07)
+            _mr._state_set("cm_pending_edit", {})   # ...i na edycje tekstu
             _reply(chat_id, "Anulowane. Zaczynamy od nowa.")
             return
         if _PREVIEW_RE.match(text):
