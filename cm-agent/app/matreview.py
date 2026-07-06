@@ -318,14 +318,40 @@ def handle(payload, wake_event=None):
                               "caption": f"🖼 Zalacznik: {(row or {}).get('master_theme', '')[:120]}"})
         return
     if action == "madd":
-        # v7: ➕ Media - wyslij zdjecie, straznik petli przypnie je do TEGO materialu
-        row = db.fetchone("SELECT master_theme FROM content_items WHERE id=%s", (arg,))
+        # v8 (feedback 06/07 'nieintuicyjne'): ➕ Media NAJPIERW przypina OSTATNIE zdjecie ze schowka
+        # (to zwykle o nie chodzi), z podgladem; inne zdjecie = wyslij w oknie 15 min (straznik doda)
+        import json as _json
+        row = db.fetchone("SELECT master_theme, media FROM content_items WHERE id=%s", (arg,))
+        photo = db.fetchone(
+            """SELECT id, metadata FROM inspirations
+               WHERE metadata->'media'->>'file_id' IS NOT NULL ORDER BY created_at DESC LIMIT 1""")
+        attached = False
+        if photo and row:
+            fid = photo["metadata"]["media"]["file_id"]
+            if not any((m or {}).get("file_id") == fid for m in (row.get("media") or [])):
+                desc = {"source": "telegram", "file_id": fid,
+                        "kind": photo["metadata"]["media"].get("kind", "photo"),
+                        "inspiration_id": photo["id"]}
+                db.execute("UPDATE content_items SET media = media || %s::jsonb, updated_at=NOW() WHERE id=%s",
+                           (_json.dumps([desc]), arg))
+                db.execute("UPDATE post_queue SET media = media || %s::jsonb WHERE content_item_id=%s AND status IN ('review','held','scheduled')",
+                           (_json.dumps([desc]), arg))
+                attached = True
         _state_set("cm_pending_madd", {"item_id": str(arg),
                                        "ts": datetime.datetime.now(WARSAW).isoformat()})
-        _tg("sendMessage", {"chat_id": chat_id,
-                            "text": f"➕ Wyslij mi TERAZ zdjecie (zwykla wiadomosc z foto) - przypne je do:\n"
-                                    f"\"{(row or {}).get('master_theme', '')[:150]}\"\n"
-                                    f"(okno 15 min; 'anuluj' = wycofaj)."})
+        if attached:
+            _state_set("cm_last_media_preview", {})
+            text, kb, it = _card(arg)
+            edit(text, kb)
+            _send_media_preview(chat_id, it)
+            _tg("sendMessage", {"chat_id": chat_id,
+                                "text": "🖼 Przypialem OSTATNIE zdjecie (podglad wyzej). Chcesz inne albo "
+                                        "dodatkowe? Wyslij je teraz (okno 15 min) - dolacze. 'anuluj' = koniec."})
+        else:
+            _tg("sendMessage", {"chat_id": chat_id,
+                                "text": f"➕ Wyslij mi TERAZ zdjecie - przypne je do:\n"
+                                        f"\"{(row or {}).get('master_theme', '')[:150]}\"\n"
+                                        f"(okno 15 min; 'anuluj' = wycofaj)."})
         return
     if action == "mdel":
         # v7: 🗑 Media - zdejmij zalaczniki (sugestia wizualu zostaje)
