@@ -515,6 +515,24 @@ TOOL_STYLE_RULE = {
 }
 
 
+TOOL_RESCHEDULE = {
+    "name": "reschedule_material",
+    "description": ("Przesun SLOT publikacji istniejacego materialu (feedback 06/07 'zatwierdz w innym "
+                    "terminie' / 'przesun na ...'). Wywoluj gdy Tomasz chce zmienic KIEDY cos pojdzie: "
+                    "'przesun Tolerancje na czwartek 14:00', 'daj to jutro rano', 'na nastepny wolny slot'. "
+                    "Podaj theme_fragment (ktory material). Czas: scheduled_for = ISO 8601 Europe/Warsaw "
+                    "(policz z aktualnej daty podanej w kontekscie), ALBO to_next_free=true = najblizszy "
+                    "wolny slot w oknie kadencji. NIE tworzy nowego materialu."),
+    "input_schema": {"type": "object", "properties": {
+        "theme_fragment": {"type": "string", "description": "Fragment tematu materialu do przesuniecia."},
+        "scheduled_for": {"type": ["string", "null"],
+                          "description": "Docelowy termin ISO 8601 (np. 2026-07-09T14:00). Pomin gdy to_next_free."},
+        "to_next_free": {"type": ["boolean", "null"],
+                         "description": "true = przydziel najblizszy wolny slot wg okien+kadencji (ignoruje scheduled_for)."}},
+        "required": ["theme_fragment"]},
+}
+
+
 def _system_blocks(brand):
     from . import matreview as _mrv
     now = datetime.datetime.now(WARSAW).strftime("%A %d/%m/%Y %H:%M")
@@ -539,7 +557,9 @@ def _system_blocks(brand):
         f"{_channels_snapshot()}"
         f"\nMECHANIKA SLOTOW: material 'approved' bez slotu albo z minionym slotem dostaje slot "
         f"AUTOMATYCZNIE (najblizszy wolny wg okna i kadencji) - NIE trzeba budowac planu, zeby "
-        f"poukladac sloty zatwierdzonych."
+        f"poukladac sloty zatwierdzonych. PRZESUWANIE: 'przesun <material> na <termin>' / 'zatwierdz w "
+        f"innym terminie' -> reschedule_material (policz ISO z 'Teraz jest' powyzej; 'nastepny wolny' "
+        f"-> to_next_free=true)."
         f"\n\nAKTUALNA KOLEJKA CM:\n{_queue_snapshot()}"
         f"\n\nPROPOZYCJA PLANU (proposed, numeracja dla plan_edit/plan_approve):\n{planner.plan_text()}"
         f"\n\n{_memory_snapshot()}"
@@ -578,6 +598,64 @@ def _create_material(inp):
             f"Zdecyduj guzikami (wiadomosc ponizej): Do kolejki / Dzis / Odrzuc.")
 
 
+def _within_windows(brand_id, channels_list, slot):
+    """Miekki sygnal: czy godzina slotu miesci sie w oknach publikacji WSZYSTKICH kanalow."""
+    from . import slots as _sl
+    rules = _sl.channel_rules(brand_id, channels_list)
+    if not rules:
+        return True
+    tt = slot.time()
+    return all(ws <= tt <= we for _ch, ws, we, _gap, _grid in rules)
+
+
+def _reschedule_material(inp):
+    """(o): przesun slot istniejacego materialu (nie tworzy nowego). Aktualizuje content_items ORAZ
+    powiazane wiersze post_queue (zeby Scheduler wzial nowy czas). Tomasz nadrzedny - poza oknem tez
+    ustawi, tylko z uwaga."""
+    frag = (inp.get("theme_fragment") or "").strip()
+    if not frag:
+        return "Podaj ktory material przesunac (fragment tematu)."
+    row = db.fetchone(
+        """SELECT id, master_theme, brand_id, target_channels, scheduled_for, status
+           FROM content_items
+           WHERE brand_id='AGS' AND status IN
+             ('draft','planned','drafting','needs_approval','approved','dispatching')
+             AND master_theme ILIKE %s
+           ORDER BY updated_at DESC LIMIT 1""",
+        (f"%{frag}%",))
+    if not row:
+        return f"Nie znajduje w kolejce materialu pasujacego do \"{frag[:80]}\" (moze juz opublikowany albo odrzucony?)."
+    from . import slots
+    from .planner import _DAYS_PL
+    now = datetime.datetime.now(WARSAW)
+    note = ""
+    if inp.get("to_next_free") or not inp.get("scheduled_for"):
+        is_article = str(row.get("master_theme") or "").startswith("[ARTYKUL]")
+        slot = slots.next_slot(row["brand_id"], row.get("target_channels") or ["x"],
+                               is_article=is_article, prefer_today=True)
+        if not slot:
+            return "Nie znalazlem wolnego slotu w oknach na najblizsze 2 tygodnie."
+    else:
+        try:
+            slot = datetime.datetime.fromisoformat(str(inp["scheduled_for"]))
+        except (ValueError, TypeError):
+            return f"Nie rozumiem terminu \"{inp.get('scheduled_for')}\" - podaj np. 'czwartek 14:00' albo 'jutro 9:00'."
+        if slot.tzinfo is None:
+            slot = slot.replace(tzinfo=WARSAW)
+        slot = slot.astimezone(WARSAW)
+        if slot <= now + datetime.timedelta(minutes=2):
+            return f"Termin {_fmt_slot(slot)} jest w przeszlosci - podaj przyszly."
+        if not _within_windows(row["brand_id"], row.get("target_channels") or ["x"], slot):
+            note = "\n(uwaga: to poza standardowym oknem publikacji tego kanalu - ustawiam mimo to, bo Ty decydujesz o terminie)"
+    db.execute("UPDATE content_items SET scheduled_for=%s, updated_at=NOW() WHERE id=%s", (slot, row["id"]))
+    db.execute(
+        """UPDATE post_queue SET scheduled_for=%s
+           WHERE content_item_id=%s AND status IN ('review','held','scheduled','queued','dispatching')""",
+        (slot, row["id"]))
+    return (f"🗓 Przesuniete: \"{row['master_theme'][:90]}\"\n"
+            f"   nowy slot: {_DAYS_PL[slot.weekday()]} {_fmt_slot(slot)}.{note}")
+
+
 def _save_schowek(inp, chat_id):
     idea = (inp.get("idea") or "").strip()
     if not idea:
@@ -600,7 +678,7 @@ def _discuss(chat_id, text):
         system=_system_blocks(brand),
         tools=[TOOL_PROPOSE, TOOL_SCHOWEK, TOOL_ARCHIVE, TOOL_SIMILAR, TOOL_ADAPT,
                TOOL_PLAN_BUILD, TOOL_PLAN_APPROVE, TOOL_PLAN_EDIT, TOOL_TARGET_CREATE, TOOL_TARGET_UPDATE,
-               TOOL_REVIEW_CARDS, TOOL_ATTACH_PHOTO, TOOL_STYLE_RULE],
+               TOOL_REVIEW_CARDS, TOOL_ATTACH_PHOTO, TOOL_STYLE_RULE, TOOL_RESCHEDULE],
         messages=history,
     )
     tasks.log_task("conversation", tier, model, source, getattr(resp, "usage", None))
@@ -640,6 +718,8 @@ def _discuss(chat_id, text):
             from . import matreview
             n = matreview.add_style_rule((b.input or {}).get("rule"))
             parts.append(f"📚 Regula zapisana NA STALE (lacznie regul: {n}) - obowiazuje od nastepnej generacji.")
+        elif b.name == "reschedule_material":
+            parts.append(_reschedule_material(b.input))
     reply = "\n\n".join(parts).strip() or "Przyjete."
     # history stores plain text only (tool calls are summarized in the reply line itself)
     _save_history(chat_id, history + [{"role": "assistant", "content": reply}], agent="cm")
