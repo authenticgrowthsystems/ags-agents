@@ -574,6 +574,11 @@ def _system_blocks(brand):
 
 def _create_material(inp):
     theme = (inp.get("master_theme") or "").strip()
+    # guard (06/07 wieczor): CM potrafi puscic propose_material z pustym master_theme (np. przy
+    # 'osobnym drugim poscie') -> gola karta ""; nie wstawiaj smiecia, powiedz CM zeby dokonczyl temat.
+    if len(theme) < 4:
+        return ("⚠️ Nie zapisuje - brak konkretnego tematu-matki (dostalem pusty). Jesli to mial byc "
+                "drugi/wspierajacy material, najpierw ulóz jego temat, potem zapisz.")
     channels = [c for c in (inp.get("target_channels") or ["x", "linkedin"]) if c]
     sched_dt = None
     raw = inp.get("scheduled_for")
