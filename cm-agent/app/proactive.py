@@ -209,15 +209,119 @@ def morning_nudge(brand_id="AGS"):
     _state_set("cm_morning_nudge", {"date": today})
 
 
+DECIDE_TOOL = {
+    "name": "emit_decision",
+    "description": "Decyzja CM w sprawie propozycji subagenta.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "approve": {"type": "boolean"},
+            "slot_grid": {"type": ["array", "null"], "items": {"type": "string"},
+                          "description": "Zatwierdzona siatka godzin HH:MM (moze byc zmodyfikowana), null gdy odmowa/nie dotyczy."},
+            "reply": {"type": "string", "description": "Krotka odpowiedz CM do subagenta (po polsku)."},
+        },
+        "required": ["approve", "reply"],
+    },
+}
+
+
+def handle_agent_requests(brand_id="AGS"):
+    """AGENCI GADAJA MIEDZY SOBA (Tomasz 06/07: 'on ma to zalatwic z CM sam'): CM czyta
+    nieprzeczytane agent_messages typu channel_proposal, DECYDUJE (LLM z kontekstem kadencji),
+    wpisuje config, odpowiada subagentowi (response) i melduje Tomaszowi na bocie logowym."""
+    from .brand import load_brand
+    from .generate import client
+    from . import logbot
+    cm_id = _agent_id("%content-manager%")
+    if not cm_id:
+        return
+    reqs = db.fetchall(
+        """SELECT message_id, from_agent_id, payload FROM agent_messages
+           WHERE to_agent_id=%s AND status='unread' AND message_type='request'
+             AND payload->>'kind'='channel_proposal' LIMIT 3""", (cm_id,))
+    for rq in reqs:
+        p = rq["payload"] if isinstance(rq["payload"], dict) else json.loads(rq["payload"])
+        db.execute("UPDATE agent_messages SET status='processing', read_at=NOW() WHERE message_id=%s",
+                   (rq["message_id"],))
+        try:
+            brand = load_brand(brand_id)
+            ch_row = db.fetchone("SELECT config FROM channels WHERE brand_id=%s AND channel=%s",
+                                 (brand_id, p.get("channel")))
+            model, tier, source = tasks.model_for("planner")
+            resp = client().messages.create(
+                model=model, max_tokens=400, thinking={"type": "disabled"},
+                system=[{"type": "text", "text": f"Jestes Content Managerem marki {brand_id} - decydujesz "
+                                                 f"o strategii kanalow. Kadencja kanoniczna: X 3-5/dzien "
+                                                 f"w oknie publikacji; publicznosc AGS = USA/UK."}],
+                tools=[DECIDE_TOOL], tool_choice={"type": "tool", "name": "emit_decision"},
+                messages=[{"role": "user", "content":
+                           f"Subagent kanalu {p.get('channel')} proponuje ({p.get('topic')}):\n"
+                           f"{p.get('proposal', '')[:500]}\n\n"
+                           f"Obecna konfiguracja celu: {json.dumps((ch_row or {}).get('config') or {}, ensure_ascii=False)[:400]}\n"
+                           f"Ocen propozycje (sensownosc vs kadencja i okno) i wywolaj emit_decision. "
+                           f"Jesli zatwierdzasz siatke slotow, podaj godziny HH:MM."}])
+            tasks.log_task("planner", tier, model, source, getattr(resp, "usage", None))
+            tu = next((b for b in resp.content if getattr(b, "type", "") == "tool_use"), None)
+            dec = (tu.input if tu else {}) or {}
+            applied = ""
+            if dec.get("approve") and p.get("topic") == "slot_grid" and dec.get("slot_grid"):
+                db.execute("UPDATE channels SET config = config || %s::jsonb WHERE brand_id=%s AND channel=%s",
+                           (json.dumps({"slot_grid": dec["slot_grid"]}), brand_id, p.get("channel")))
+                applied = f" Siatka wpisana do configu: {', '.join(dec['slot_grid'])}."
+            db.execute(
+                """INSERT INTO agent_messages (from_agent_id, to_agent_id, message_type, payload, correlation_id)
+                   VALUES (%s,%s,'response',%s,%s)""",
+                (cm_id, rq["from_agent_id"],
+                 json.dumps({"kind": "channel_proposal_reply", "channel": p.get("channel"),
+                             "approve": bool(dec.get("approve")), "reply": dec.get("reply", ""),
+                             "slot_grid": dec.get("slot_grid")}), rq["message_id"]))
+            db.execute("UPDATE agent_messages SET status='done' WHERE message_id=%s", (rq["message_id"],))
+            logbot.send(f"🤝 CM<->[{p.get('channel')}] {p.get('topic')}: "
+                        f"{'ZATWIERDZONE' if dec.get('approve') else 'ODRZUCONE'} - "
+                        f"{dec.get('reply', '')[:200]}{applied}")
+        except Exception as e:
+            db.execute("UPDATE agent_messages SET status='failed' WHERE message_id=%s", (rq["message_id"],))
+            logbot.send(f"⚠️ CM nie rozpatrzyl propozycji subagenta ({p.get('topic')}): {str(e)[:150]}")
+
+
+def weekly_metrics_reminder(brand_id="AGS"):
+    """Poniedzialek 09:30-11:30: subagent x UPOMINA SIE o metryki tygodnia (decyzja Tomasza 06/07:
+    recznie raz w tygodniu; wpis przez rozmowe z subagentem, narzedzie subagent_set_metrics)."""
+    now = datetime.datetime.now(WARSAW)
+    if now.weekday() != 0:
+        return
+    minutes = now.hour * 60 + now.minute
+    if not (9 * 60 + 30 <= minutes <= 11 * 60 + 30):
+        return
+    week = now.strftime("%G-%V")
+    st = _state_get("cm_metrics_reminder")
+    if st.get("week") == week:
+        return
+    pub = db.fetchall(
+        """SELECT id, left(content, 60) AS c FROM post_queue
+           WHERE brand=%s AND platform='x' AND status='published'
+             AND published_at > NOW() - interval '8 days' ORDER BY id DESC LIMIT 10""", (brand_id,)) \
+        if _column_exists("post_queue", "published_at") else db.fetchall(
+        """SELECT id, left(content, 60) AS c FROM post_queue
+           WHERE brand=%s AND platform='x' AND status='published' ORDER BY id DESC LIMIT 10""", (brand_id,))
+    lst = "\n".join(f"- #{r['id']} {r['c']}" for r in pub) or "(brak publikacji)"
+    _send(f"🐦 [x] Poniedzialkowa prosba subagenta: wgraj metryki zeszlego tygodnia.\n"
+          f"Przelacz /agents na AGS x i wpisz np. \"metryki #34: impressions 250, engagement 12\".\n"
+          f"Publikacje:\n{lst}")
+    _state_set("cm_metrics_reminder", {"week": week})
+
+
+def _column_exists(table, col):
+    r = db.fetchone("SELECT 1 AS x FROM information_schema.columns WHERE table_name=%s AND column_name=%s",
+                    (table, col))
+    return bool(r)
+
+
 def tick():
     """Wolane z petli workera (30s); wszystkie funkcje maja wlasne anty-spam stany."""
-    try:
-        check_gaps()
-    except Exception:
-        import traceback
-        traceback.print_exc()
-    try:
-        morning_nudge()
-    except Exception:
-        import traceback
-        traceback.print_exc()
+    for fn in (check_gaps, morning_nudge, handle_agent_requests, weekly_metrics_reminder):
+        try:
+            fn()
+        except Exception:
+            import traceback
+            traceback.print_exc()

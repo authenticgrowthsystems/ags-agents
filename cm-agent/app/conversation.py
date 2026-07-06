@@ -680,6 +680,82 @@ TOOL_SUB_METRICS = {
 }
 
 
+TOOL_SUB_ESCALATE = {
+    "name": "escalate_to_cm",
+    "description": ("Zglos Content Managerowi SPRAWE STRATEGICZNA kanalu (siatka slotow, kadencja, "
+                    "okno publikacji). CM rozpatrzy, przy zgodzie wpisze do configu i odpowie - "
+                    "agenci dogaduja to MIEDZY SOBA, bez posrednictwa Tomasza. Uzywaj zamiast "
+                    "odsylania Tomasza do /agents."),
+    "input_schema": {"type": "object", "properties": {
+        "topic": {"type": "string", "enum": ["slot_grid", "kadencja", "inne"]},
+        "proposal": {"type": "string", "description": "Konkretna propozycja (np. 'siatka 14:00,16:00,18:00,20:00 bo publicznosc US')."}},
+        "required": ["topic", "proposal"]},
+}
+
+
+TOOL_SUB_COMMENT = {
+    "name": "suggest_comment",
+    "description": ("Zaproponuj 3 komentarze w glosie marki pod CUDZY post (Tomasz wkleja tresc "
+                    "posta i ew. autora). Doktryna comment-first: realna wartosc merytoryczna, "
+                    "peer-level, 2-4 zdania, ZERO linkow i pitchu."),
+    "input_schema": {"type": "object", "properties": {
+        "post_text": {"type": "string", "description": "Tresc cudzego posta (wklejona przez Tomasza)."},
+        "author": {"type": ["string", "null"], "description": "Autor/handle, jesli podany."}},
+        "required": ["post_text"]},
+}
+
+
+def _sub_escalate(inp, brand, channel):
+    from .proactive import _agent_id
+    sub_id = _agent_id(f"%{channel.split('_')[0]}%")
+    cm_id = _agent_id("%content-manager%")
+    if not (sub_id and cm_id):
+        return "Nie moge wyslac - brak wpisow agentow w rejestrze (zglos BE)."
+    db.execute(
+        """INSERT INTO agent_messages (from_agent_id, to_agent_id, message_type, payload)
+           VALUES (%s,%s,'request',%s)""",
+        (sub_id, cm_id, json.dumps({"kind": "channel_proposal", "topic": inp.get("topic", "inne"),
+                                    "proposal": (inp.get("proposal") or "")[:800],
+                                    "brand": brand, "channel": channel}, ensure_ascii=False)))
+    return ("📨 Przekazane do Content Managera (kontrakt agent->agent). CM rozpatrzy w ciagu minuty, "
+            "przy zgodzie wpisze do configu; wynik zobaczysz w USTALENIACH Z CM i na bocie logowym.")
+
+
+def _sub_comment(inp, brand, channel):
+    """Komentarze pod cudze posty (decyzja Tomasza 06/07: element wzrostu zasiegow; sonnet)."""
+    from .generate import _language_publish, TRUTH_GUARD
+    brand_data = load_brand(brand)
+    lang = _language_publish(brand, channel)
+    model, tier, source = tasks.model_for("canonical")  # sonnet default - jakosc komentarzy
+    author = (inp.get("author") or "").strip()
+    resp = client().messages.create(
+        model=model, max_tokens=700, thinking={"type": "disabled"},
+        system=[{"type": "text", "text": f"Glos marki:\n{brand_data['voice_bible'][:2500]}"}],
+        messages=[{"role": "user", "content":
+                   f"Zaproponuj DOKLADNIE 3 rozne komentarze pod ponizszy cudzy post na {channel}"
+                   f"{(' (autor: ' + author + ')') if author else ''}. Doktryna comment-first: "
+                   f"kazdy komentarz wnosi KONKRETNA wartosc merytoryczna (doswiadczenie, kontrprzyklad, "
+                   f"pogłebienie), ton peer-level, 2-4 zdania, ZERO linkow, zero pitchu, zero pochlebstw "
+                   f"typu 'great post'. Jezyk: {'polski' if lang == 'pl' else 'angielski'}. {TRUTH_GUARD}\n"
+                   f"Format: 1) ... 2) ... 3) ...\n\nPOST:\n{(inp.get('post_text') or '')[:1500]}"}])
+    tasks.log_task("comment_suggest", tier, model, source, getattr(resp, "usage", None))
+    out = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
+    return "💬 Propozycje komentarzy:\n" + out if out else "Nie wyszlo - sprobuj jeszcze raz."
+
+
+def _sub_cm_agreements(channel):
+    rows = db.fetchall(
+        """SELECT payload, created_at FROM agent_messages
+           WHERE message_type='response' AND payload->>'kind'='channel_proposal_reply'
+             AND payload->>'channel'=%s ORDER BY created_at DESC LIMIT 2""", (channel,))
+    out = []
+    for r in rows:
+        p = r["payload"] if isinstance(r["payload"], dict) else json.loads(r["payload"])
+        out.append(f"- {r['created_at'].astimezone(WARSAW).strftime('%d/%m %H:%M')}: "
+                   f"{'OK' if p.get('approve') else 'ODMOWA'} - {p.get('reply', '')[:120]}")
+    return "\n".join(out) or "(brak)"
+
+
 def _log_autonomous(brand, channel, rationale, context=None):
     """Blueprint zasada 4: kazde wyjscie poza plan CM = wpis AUTONOMOUS_DECISION (widoczny w raportach)."""
     try:
@@ -773,11 +849,16 @@ def _sub_system(brand_row, brand, channel):
         "Odpowiadasz za SWOJ kanal: kolejka publikacji, sloty, historia. Mozesz usuwac i przesuwac pozycje "
         "(narzedzia) oraz proponowac material ad-hoc narzedziem propose_material z target_channels "
         f"ustawionym WYLACZNIE na ['{channel}'] (material przejdzie przez normalne zatwierdzenie Tomasza). "
-        "Nie wychodz poza swoj kanal. Jesli pytanie dotyczy strategii calosci, odeslij do Content Managera (/agents)."
+        "Nie wychodz poza swoj kanal. SPRAWY STRATEGICZNE kanalu (siatka slotow, kadencja, okno) "
+        "zalatwiasz SAM z Content Managerem narzedziem escalate_to_cm - NIE odsylaj Tomasza. "
+        "Gdy Tomasz wkleja CUDZY post, proponuj komentarze narzedziem suggest_comment "
+        "(comment-first: wartosc, zero pitchu). Metryki wpisuje Tomasz recznie (subagent_set_metrics) - "
+        "raz w tygodniu sam sie o nie upominasz."
         f"\nKonfiguracja celu: {json.dumps(cfg, ensure_ascii=False)[:400]}"
         f"\nTeraz jest {now} (Europe/Warsaw)."
         f"\n\nKOLEJKA ({channel}):\n{_sub_queue_text(brand, channel)}"
         f"\n\nOSTATNIE PUBLIKACJE:\n{_sub_published_text(brand, channel, 5)}"
+        f"\n\nUSTALENIA Z CM (agent->agent):\n{_sub_cm_agreements(channel)}"
     )
     return [{"type": "text", "text": role}]
 
@@ -808,7 +889,8 @@ def _subagent_handle(chat_id, text, active):
         model=model, max_tokens=900,
         thinking={"type": "disabled"},
         system=_sub_system(brand_row, brand, channel),
-        tools=[TOOL_SUB_REMOVE, TOOL_SUB_RESCHEDULE, TOOL_SUB_METRICS, TOOL_PROPOSE],
+        tools=[TOOL_SUB_REMOVE, TOOL_SUB_RESCHEDULE, TOOL_SUB_METRICS, TOOL_PROPOSE,
+               TOOL_SUB_ESCALATE, TOOL_SUB_COMMENT],
         messages=history,
     )
     tasks.log_task("subagent_chat", tier, model, source, getattr(resp, "usage", None))
@@ -832,6 +914,12 @@ def _subagent_handle(chat_id, text, active):
             m = reports.set_manual_metrics(int(b.input.get("published_id") or 0), dict(b.input), brand, channel)
             parts.append(f"📈 Metryki zapisane dla #{b.input.get('published_id')}." if m
                          else f"Nie znalazlem publikacji #{b.input.get('published_id')} w {channel}.")
+        elif b.name == "escalate_to_cm":
+            _log_autonomous(brand, channel, f"Eskalacja do CM ({b.input.get('topic')}): {b.input.get('proposal', '')[:80]}",
+                            {"tool": "escalate_to_cm", "input": dict(b.input)})
+            parts.append(_sub_escalate(b.input, brand, channel))
+        elif b.name == "suggest_comment":
+            parts.append(_sub_comment(b.input, brand, channel))
         elif b.name == "propose_material":
             inp = dict(b.input)
             inp["target_channels"] = [channel]  # subagent nie wychodzi poza swoj kanal
