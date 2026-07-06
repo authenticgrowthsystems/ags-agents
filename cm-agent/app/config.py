@@ -54,8 +54,14 @@ HTTP_PORT = _i("HTTP_PORT", 8089)            # Researcher = 8088
 POLL_INTERVAL_S = _i("POLL_INTERVAL_S", 30)  # slow backstop; /request + callbacks wake the loop
 RESEARCH_TIER = os.getenv("CM_RESEARCH_TIER", "medium")  # CM is capped to <=medium (critical-restriction)
 
-# content_items states the loop actively advances (researching / needs_approval are external-callback waits).
-ACTIONABLE_STATUSES = ("planned", "needs_research", "drafting", "approved", "dispatching")
+# content_items states the loop actively advances. 'dispatching' is NO LONGER here (backlog b):
+# once dispatched, the item waits for the REAL publish callback (post_queue -> 'published' via Scheduler /
+# sub-agent adapter) reconciled by worker.reconcile_publications - NOT re-claimed by the loop.
+ACTIONABLE_STATUSES = ("planned", "needs_research", "drafting", "approved")
+
+# backlog b: how long an item may sit in 'dispatching' (waiting for the publish callback) before CM
+# raises a loud alert on the log bot - this is what surfaces a silent X publish/media failure.
+DISPATCH_TIMEOUT_H = _i("DISPATCH_TIMEOUT_H", 2)
 
 # --- channel publish modes (channels.config.publish_mode) ---
 PUBLISH_POST_QUEUE = "post_queue"  # write a post_queue row; the existing per-minute Scheduler publishes (X)

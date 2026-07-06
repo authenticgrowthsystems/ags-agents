@@ -155,21 +155,132 @@ def process_item(item):
         return _draft(item)  # research could not be enqueued -> draft without it
     if st in ("planned", "drafting"):
         return _draft(item)
-    if st in ("approved", "dispatching"):
-        if st == "approved":
-            # decyzja Tomasza 06/07: Tomasz zatwierdza TRESC, CM proponuje KIEDY. Slot NULL/miniony
-            # NIE publikuje natychmiast - CM przydziela najblizszy wolny wg okien+kadencji i melduje.
-            slot, changed = slots.assign_if_needed(item)
-            if changed and slot:
-                logbot.send(f"🗓 CM przydzielil slot: {slot.strftime('%a %d/%m %H:%M')} - "
-                            f"{item['master_theme'][:70]} (zmiana? napisz do CM: 'przesun na ...')")
-                return f"slot_assigned({slot:%d/%m %H:%M})"
+    if st == "approved":
+        # decyzja Tomasza 06/07: Tomasz zatwierdza TRESC, CM proponuje KIEDY. Slot NULL/miniony
+        # NIE publikuje natychmiast - CM przydziela najblizszy wolny wg okien+kadencji i melduje.
+        slot, changed = slots.assign_if_needed(item)
+        if changed and slot:
+            logbot.send(f"🗓 CM przydzielil slot: {slot.strftime('%a %d/%m %H:%M')} - "
+                        f"{item['master_theme'][:70]} (zmiana? napisz do CM: 'przesun na ...')")
+            return f"slot_assigned({slot:%d/%m %H:%M})"
+        # backlog b: dispatch = HAND-OFF, nie publikacja. Item zostaje 'dispatching' (poza ACTIONABLE),
+        # reconcile_publications zamelduje realny sukces/porazke po callbacku (Scheduler/subagent).
         db.set_item_status(item["id"], "dispatching")
-        n = channels.dispatch_item(item)
-        db.set_item_status(item["id"], "published")
-        logbot.send(f"✅ CM opublikowal: {item['master_theme']} ({n} kanalow)")
-        return f"published({n})"
+        handoff = channels.dispatch_item(item)
+        logbot.send(_dispatch_ack(item, handoff))
+        return f"dispatching({len(handoff)})"
     return "noop"
+
+
+# ---------------- backlog b: meldunek po CALLBACKU (nie przy delegacji) ----------------
+# Slownik statusow post_queue: w locie / terminalny-OK / terminalny-porazka. Nieznany status = traktuj
+# jak 'w locie' (konserwatywnie - timeout alert zlapie realny zwis, np. X media_errors).
+_DISPATCH_PENDING = ("review", "dispatching", "scheduled", "queued")
+_DISPATCH_OK = ("published", "held")
+_DISPATCH_FAIL = ("failed", "error", "rejected")
+
+
+def _chan_label(brand_id, platform):
+    try:
+        return planner._target_label(brand_id, platform)
+    except Exception:
+        return platform
+
+
+def _dispatch_ack(item, handoff):
+    """Prawdziwy meldunek W MOMENCIE delegacji: 'wyslane/zaplanowane/czeka recznie' - NIE 'opublikowal'.
+    Sukces potwierdza dopiero reconcile_publications po callbacku."""
+    if not handoff:
+        return f"⚠️ Nic do wyslania: {item['master_theme'][:80]} (brak wariantow w kolejce - sprawdz kanaly celu)."
+    lines = [f"📤 CM wyslal do publikacji: {item['master_theme'][:90]}"]
+    for h in handoff:
+        lab = _chan_label(item["brand_id"], h["platform"])
+        if h["mode"] == config.PUBLISH_POST_QUEUE:
+            lines.append(f"   • {lab}: zaplanowane (Scheduler opublikuje w slocie - potwierdze PO fakcie)")
+        elif h["mode"] == config.PUBLISH_WEBHOOK:
+            lines.append(f"   • {lab}: zlecone subagentowi (potwierdze po jego callbacku)")
+        else:
+            lines.append(f"   • {lab}: gotowiec czeka na Twoje reczne wklejenie")
+    return "\n".join(lines)
+
+
+def _publish_report(item, pq):
+    """Meldunek PO potwierdzeniu: per-kanal opublikowane / czeka recznie / NIE POSZLO (surfacuje X media_errors)."""
+    oks = [r for r in pq if r["status"] == "published"]
+    held = [r for r in pq if r["status"] == "held"]
+    fails = [r for r in pq if r["status"] in _DISPATCH_FAIL]
+    parts = []
+    if oks:
+        parts.append("✅ opublikowane: " + ", ".join(_chan_label(item["brand_id"], r["platform"]) for r in oks))
+    if held:
+        parts.append("📋 czeka na reczne wklejenie: " + ", ".join(_chan_label(item["brand_id"], r["platform"]) for r in held))
+    if fails:
+        parts.append("⚠️ NIE POSZLO: " + ", ".join(_chan_label(item["brand_id"], r["platform"]) for r in fails)
+                     + " - sprawdz egzekucje Publishera/Schedulera (media_errors?)")
+    head = ("⚠️ CM: publikacja z problemem" if fails else
+            ("✅ CM opublikowal" if oks else "📋 CM: gotowiec do wklejenia"))
+    return f"{head}: {item['master_theme'][:90]}\n   " + "\n   ".join(parts)
+
+
+def _dispatch_alert_state():
+    r = db.fetchone("SELECT config_value FROM brand_config WHERE brand_id='AGS' AND config_key='cm_dispatch_alerted'")
+    try:
+        import json as _json
+        return _json.loads(r["config_value"]) if r and r.get("config_value") else {}
+    except Exception:
+        return {}
+
+
+def _dispatch_alert_set(obj):
+    import json as _json
+    db.execute(
+        """INSERT INTO brand_config (brand_id, config_key, config_value, version, updated_by, updated_at)
+           VALUES ('AGS','cm_dispatch_alerted',%s,1,'cm-worker',NOW())
+           ON CONFLICT (brand_id, config_key) DO UPDATE SET config_value=EXCLUDED.config_value,
+             version=brand_config.version+1, updated_by='cm-worker', updated_at=NOW()""",
+        (_json.dumps(obj, ensure_ascii=False),))
+
+
+def _dispatch_timeout_alert(item, pending):
+    """Zwis publikacji: item siedzi w 'dispatching' dluzej niz DISPATCH_TIMEOUT_H bez potwierdzenia ->
+    JEDEN glosny alert (to jest to, co wczesniej ginelo pod optymistycznym 'opublikowal')."""
+    upd = item.get("updated_at")
+    if not upd:
+        return
+    try:
+        age_h = (_now() - upd).total_seconds() / 3600.0
+    except Exception:
+        return
+    if age_h < config.DISPATCH_TIMEOUT_H:
+        return
+    st = _dispatch_alert_state()
+    ids = st.get("ids", [])
+    if str(item["id"]) in ids:
+        return
+    st["ids"] = (ids + [str(item["id"])])[-100:]
+    _dispatch_alert_set(st)
+    chans = ", ".join(sorted({_chan_label(item["brand_id"], r["platform"]) for r in pending}))
+    logbot.send(f"⏱️ ZWIS PUBLIKACJI ({age_h:.0f} h bez potwierdzenia): {item['master_theme'][:80]}\n"
+                f"   Kanaly wciaz w locie: {chans}. Sprawdz egzekucje Schedulera/Publishera (media_errors?).")
+
+
+def reconcile_publications():
+    """backlog b: awansuj 'dispatching' -> 'published' DOPIERO gdy wiersze post_queue osiagnely stan
+    terminalny (realny callback Schedulera/subagenta), i DOPIERO WTEDY meldunek - z porazkami wlacznie.
+    Optymistyczny 'opublikowal' przy delegacji ukrywal nieudane publikacje X (media_errors)."""
+    rows = db.fetchall(
+        "SELECT id, brand_id, master_theme, updated_at FROM content_items WHERE status='dispatching'")
+    for item in rows:
+        pq = db.fetchall("SELECT platform, status FROM post_queue WHERE content_item_id=%s", (item["id"],))
+        if not pq:
+            continue  # nic nie zdazylo trafic do kolejki - nastepny tick
+        pending = [r for r in pq if r["status"] not in (_DISPATCH_OK + _DISPATCH_FAIL)]
+        if pending:
+            _dispatch_timeout_alert(item, pending)
+            continue
+        db.set_item_status(item["id"], "published")
+        logbot.send(_publish_report(item, pq))
+        print(f"[cm] reconciled -> published {item['id']}", flush=True)
 
 
 def _welcome_new_channels():
@@ -223,6 +334,7 @@ def loop():
         worked = False
         try:
             research.ingest_research_responses()  # researching -> drafting on Researcher callback
+            reconcile_publications()              # backlog b: dispatching -> published PO callbacku (+ zwis alert)
             _welcome_new_channels()               # R5: nowy kanal -> propozycja reuse archiwum
             _emergency_promote()                  # F2: stan awaryjny po 24h ciszy
             matreview.sunday_guard()              # S4: niedzielne przypomnienia + fallback 23:00

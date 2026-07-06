@@ -49,13 +49,18 @@ def _delegate(item, row):
 def dispatch_item(item):
     """On approval: publish this item's staged 'review' rows by channel publish_mode.
     webhook mode -> DELEGATE to the channel sub-agent adapter (e.g. X); post_queue mode -> 'scheduled'
-    (existing per-minute Scheduler); draft mode -> 'held' (manual, e.g. LinkedIn until its API is wired)."""
+    (existing per-minute Scheduler); draft mode -> 'held' (manual, e.g. LinkedIn until its API is wired).
+    NOTE (backlog b): dispatching is NOT publishing. Every mode here just HANDS OFF - the real publish
+    happens later (Scheduler minute-cron / sub-agent callback / Tomasz pasting). Returns a per-channel
+    handoff summary so the caller reports the truth ('wyslane/zaplanowane/czeka recznie'), not a premature
+    'opublikowal'. reconcile_publications fires the real success/failure report on the callback."""
     rows = db.fetchall(
         """SELECT pq.id, pq.platform, pq.content, pq.media, c.config, c.adapter_path
            FROM post_queue pq JOIN channels c ON c.brand_id=pq.brand AND c.channel=pq.platform
            WHERE pq.content_item_id=%s AND pq.status='review'""",
         (item["id"],),
     )
+    handoff = []
     for r in rows:
         mode = (r.get("config") or {}).get("publish_mode", config.PUBLISH_DRAFT)
         if mode == config.PUBLISH_WEBHOOK and r.get("adapter_path"):
@@ -64,4 +69,5 @@ def dispatch_item(item):
             db.execute("UPDATE post_queue SET status='scheduled', scheduled_for=COALESCE(scheduled_for, NOW()) WHERE id=%s", (r["id"],))
         else:
             db.execute("UPDATE post_queue SET status='held' WHERE id=%s", (r["id"],))
-    return len(rows)
+        handoff.append({"platform": r["platform"], "mode": mode, "queue_id": r["id"]})
+    return handoff
