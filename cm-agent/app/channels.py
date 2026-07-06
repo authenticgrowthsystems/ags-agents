@@ -20,12 +20,14 @@ def active_targets(brand_id, target_channels):
 
 
 def stage_variant(item, channel_row, variant_text):
-    """Eager staging: write the variant as a post_queue row in 'review' (shown at the HITL gate)."""
+    """Eager staging: write the variant as a post_queue row in 'review' (shown at the HITL gate).
+    Media (etap 1, 06/07): zalaczniki materialu jada do wiersza kolejki - publisher wgrywa je przy publikacji."""
+    import json
     row = db.fetchone(
-        """INSERT INTO post_queue (content, brand, platform, topic, status, content_item_id, scheduled_for)
-           VALUES (%s,%s,%s,%s,'review',%s,%s) RETURNING id""",
+        """INSERT INTO post_queue (content, brand, platform, topic, status, content_item_id, scheduled_for, media)
+           VALUES (%s,%s,%s,%s,'review',%s,%s,%s::jsonb) RETURNING id""",
         (variant_text, item["brand_id"], channel_row["channel"], item.get("master_theme"),
-         item["id"], item.get("scheduled_for")),
+         item["id"], item.get("scheduled_for"), json.dumps(item.get("media") or [])),
     )
     return row["id"] if row else None
 
@@ -37,7 +39,8 @@ def _delegate(item, row):
     try:
         httpx.post(config.N8N_BASE_URL + row["adapter_path"],
                    json={"content_item_id": str(item["id"]), "brand_id": item["brand_id"],
-                         "content": row.get("content") or "", "correlation_id": str(item["id"])},
+                         "content": row.get("content") or "", "correlation_id": str(item["id"]),
+                         "media": row.get("media") or []},
                    headers={"X-Researcher-Secret": config.RESEARCHER_WEBHOOK_SECRET}, timeout=25)
     except Exception:
         pass  # sub-agent unreachable; row stays 'dispatching', retriable
@@ -48,7 +51,7 @@ def dispatch_item(item):
     webhook mode -> DELEGATE to the channel sub-agent adapter (e.g. X); post_queue mode -> 'scheduled'
     (existing per-minute Scheduler); draft mode -> 'held' (manual, e.g. LinkedIn until its API is wired)."""
     rows = db.fetchall(
-        """SELECT pq.id, pq.platform, pq.content, c.config, c.adapter_path
+        """SELECT pq.id, pq.platform, pq.content, pq.media, c.config, c.adapter_path
            FROM post_queue pq JOIN channels c ON c.brand_id=pq.brand AND c.channel=pq.platform
            WHERE pq.content_item_id=%s AND pq.status='review'""",
         (item["id"],),

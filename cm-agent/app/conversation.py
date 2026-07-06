@@ -412,6 +412,48 @@ TOOL_PROPOSE = {
 }
 
 
+TOOL_ATTACH_PHOTO = {
+    "name": "attach_last_photo",
+    "description": ("Dolacz OSTATNIE zdjecie wyslane botu (trafia do schowka z file_id) do materialu. "
+                    "Wywoluj gdy Tomasz prosi o dodanie zdjecia/grafiki do posta/materialu. "
+                    "theme_fragment = fragment tematu materialu (pusty = ostatnio tworzony material)."),
+    "input_schema": {"type": "object", "properties": {
+        "theme_fragment": {"type": ["string", "null"],
+                           "description": "Fragment tematu materialu docelowego (albo null)."}}},
+}
+
+
+def _attach_last_photo(inp):
+    """Etap 1 multimediow (06/07): zdjecia lapane przez bota leza w inspirations.metadata.media
+    (file_id) - dolaczamy descriptor do content_items.media; publisher X wgrywa przy publikacji."""
+    photo = db.fetchone(
+        """SELECT id, metadata FROM inspirations
+           WHERE metadata->'media'->>'file_id' IS NOT NULL ORDER BY created_at DESC LIMIT 1""")
+    if not photo:
+        return "Nie widze zadnego zdjecia w schowku - wyslij je najpierw botu (jak pomysl)."
+    frag = (inp.get("theme_fragment") or "").strip()
+    if frag:
+        item = db.fetchone(
+            """SELECT id, master_theme FROM content_items
+               WHERE brand_id='AGS' AND status IN ('draft','planned','needs_approval','proposed')
+                 AND master_theme ILIKE %s ORDER BY updated_at DESC LIMIT 1""", (f"%{frag}%",))
+    else:
+        item = db.fetchone(
+            """SELECT id, master_theme FROM content_items
+               WHERE brand_id='AGS' AND status IN ('draft','planned','needs_approval','proposed')
+               ORDER BY updated_at DESC LIMIT 1""")
+    if not item:
+        return "Nie znajduje materialu docelowego - podaj fragment tematu."
+    desc = {"source": "telegram", "file_id": photo["metadata"]["media"]["file_id"],
+            "kind": photo["metadata"]["media"].get("kind", "photo"), "inspiration_id": photo["id"]}
+    db.execute("UPDATE content_items SET media = media || %s::jsonb, updated_at=NOW() WHERE id=%s",
+               (json.dumps([desc]), item["id"]))
+    # zalacznik dopiety do materialu W KOLEJCE; juz zestagowane warianty tez go dostaja
+    db.execute("UPDATE post_queue SET media = media || %s::jsonb WHERE content_item_id=%s AND status IN ('review','held','scheduled')",
+               (json.dumps([desc]), item["id"]))
+    return f"🖼 Zdjecie dopiete do: \"{item['master_theme'][:120]}\" (poleci razem z publikacja na X)."
+
+
 TOOL_REVIEW_CARDS = {
     "name": "show_review_cards",
     "description": ("Wyslij Tomaszowi SWIEZA karte przegladu materialow (needs_approval) z guzikami "
@@ -495,7 +537,7 @@ def _discuss(chat_id, text):
         system=_system_blocks(brand),
         tools=[TOOL_PROPOSE, TOOL_SCHOWEK, TOOL_ARCHIVE, TOOL_SIMILAR, TOOL_ADAPT,
                TOOL_PLAN_BUILD, TOOL_PLAN_APPROVE, TOOL_PLAN_EDIT, TOOL_TARGET_CREATE, TOOL_TARGET_UPDATE,
-               TOOL_REVIEW_CARDS],
+               TOOL_REVIEW_CARDS, TOOL_ATTACH_PHOTO],
         messages=history,
     )
     tasks.log_task("conversation", tier, model, source, getattr(resp, "usage", None))
@@ -527,6 +569,8 @@ def _discuss(chat_id, text):
             from . import matreview
             parts.append("📦 Karta przegladu leci ponizej." if matreview.send_review_card(chat_id)
                          else "Brak materialow do przegladu.")
+        elif b.name == "attach_last_photo":
+            parts.append(_attach_last_photo(b.input))
     reply = "\n\n".join(parts).strip() or "Przyjete."
     # history stores plain text only (tool calls are summarized in the reply line itself)
     _save_history(chat_id, history + [{"role": "assistant", "content": reply}], agent="cm")

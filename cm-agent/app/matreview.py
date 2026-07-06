@@ -68,7 +68,7 @@ def send_intake_buttons(item_id, theme):
 # ---------------- S3: paczka + karty (matnav:) ----------------
 def pending_items(brand_id="AGS"):
     return db.fetchall(
-        """SELECT id, master_theme, target_channels, scheduled_for, canonical_body FROM content_items
+        """SELECT id, master_theme, target_channels, scheduled_for, canonical_body, media FROM content_items
            WHERE brand_id=%s AND status='needs_approval'
            ORDER BY scheduled_for NULLS LAST, created_at""", (brand_id,))
 
@@ -135,7 +135,9 @@ def _card(item_id=None, brand_id="AGS"):
     body = (it.get("canonical_body") or "(tekst w produkcji)").strip()
     if len(body) > 2500:
         body = body[:2500] + "\n[...]"
-    text = (f"📦 Material {idx + 1} z {len(items)}\n\n🕐 {when}{stale}\n📣 {ch}\n"
+    n_media = len(it.get("media") or [])
+    med = f"\n🖼 zalaczniki: {n_media}" if n_media else ""
+    text = (f"📦 Material {idx + 1} z {len(items)}\n\n🕐 {when}{stale}\n📣 {ch}{med}\n"
             f"📌 {it['master_theme'][:200]}\n\n{body}")
     iid = str(it["id"])
     prev_id = str(items[idx - 1]["id"]) if idx > 0 else iid
