@@ -11,7 +11,11 @@ pelny plik przy iteracji. JEDEN atomowy krok, raport po kazdym. Verify PRZED pro
 - **PELNE SCIEZKI + PELNE KOMENDY za kazdym razem** (PowerShell vs SSH oznaczone) - twarda regula 05/07.
 - **AP-301:** nowy wezel n8n = typeVersion SKOPIOWANY z dzialajacego wezla tego typu (IF=2.2!). **AP-302:**
   slownictwo user-facing do potwierdzenia (schowek, nie zanadrze). **AP-303:** KAZDY literal w generowanym SQL
-  przez dollar-quote. **AP-304:** przed INSERT do istniejacej tabeli zrzut CHECK constraintow + mapping etykiet.
+  przez dollar-quote. **AP-304:** przed INSERT do istniejacej tabeli zrzut WSZYSTKICH CHECK constraintow
+  (pg_get_constraintdef; wszystkie DDL-e tabeli, nie pierwszy grep) + mapping etykiet. **AP-305:** Notion 404
+  = brak Connection integracji do parent tree, NIE zle page ID; przed ETL z nowego drzewa dodaj Connection na
+  root (dziedziczy); diagnoza: GET /users/me tokenem z sejfu + GET /pages/id http_code; "MCP widzi" != "token
+  widzi". Biblioteka: anti-patterns/library.md (indeks) + docs/anti-patterns/AP-30x_*.md (AP-301..305 komplet).
 - n8n = TYLKO transport, logika w Pythonie; po KAZDYM PUT deactivate+activate (czasem 400 -> retry);
   PUT tylko {name,nodes,connections,settings przefiltrowane}. DB zapisy = Tomasz SSH; ja read-only przez
   temp webhook (wzorzec: create workflow webhook->pg, call, DELETE). NIE pushuj Gita (Tomasz).
