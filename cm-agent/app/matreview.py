@@ -318,40 +318,67 @@ def handle(payload, wake_event=None):
                               "caption": f"🖼 Zalacznik: {(row or {}).get('master_theme', '')[:120]}"})
         return
     if action == "madd":
-        # v8 (feedback 06/07 'nieintuicyjne'): ➕ Media NAJPIERW przypina OSTATNIE zdjecie ze schowka
-        # (to zwykle o nie chodzi), z podgladem; inne zdjecie = wyslij w oknie 15 min (straznik doda)
-        import json as _json
-        row = db.fetchone("SELECT master_theme, media FROM content_items WHERE id=%s", (arg,))
-        photo = db.fetchone(
-            """SELECT id, metadata FROM inspirations
-               WHERE metadata->'media'->>'file_id' IS NOT NULL ORDER BY created_at DESC LIMIT 1""")
-        attached = False
-        if photo and row:
-            fid = photo["metadata"]["media"]["file_id"]
-            if not any((m or {}).get("file_id") == fid for m in (row.get("media") or [])):
-                desc = {"source": "telegram", "file_id": fid,
-                        "kind": photo["metadata"]["media"].get("kind", "photo"),
-                        "inspiration_id": photo["id"]}
-                db.execute("UPDATE content_items SET media = media || %s::jsonb, updated_at=NOW() WHERE id=%s",
-                           (_json.dumps([desc]), arg))
-                db.execute("UPDATE post_queue SET media = media || %s::jsonb WHERE content_item_id=%s AND status IN ('review','held','scheduled')",
-                           (_json.dumps([desc]), arg))
-                attached = True
+        # v9 (feedback 06/07): ➕ Media = GALERIA WYBORU - album ostatnich zdjec ze schowka
+        # (ponumerowane) + guziki [1..N] / [Wyslij nowe] / [Anuluj]; okno trybu 10 min z auto-wyjsciem
+        row = db.fetchone("SELECT master_theme FROM content_items WHERE id=%s", (arg,))
+        photos = db.fetchall(
+            """SELECT id, content, metadata FROM inspirations
+               WHERE metadata->'media'->>'file_id' IS NOT NULL ORDER BY created_at DESC LIMIT 6""")
         _state_set("cm_pending_madd", {"item_id": str(arg),
                                        "ts": datetime.datetime.now(WARSAW).isoformat()})
-        if attached:
-            _state_set("cm_last_media_preview", {})
-            text, kb, it = _card(arg)
-            edit(text, kb)
-            _send_media_preview(chat_id, it)
+        if photos:
+            album = [{"type": "photo", "media": p["metadata"]["media"]["file_id"],
+                      "caption": f"{i + 1}. {(p.get('content') or '')[:80]}"}
+                     for i, p in enumerate(photos)]
+            _tg("sendMediaGroup", {"chat_id": chat_id, "media": album})
+            pick_row = [{"text": str(i + 1), "callback_data": f"matnav:mpick:{arg}:{p['id']}"}
+                        for i, p in enumerate(photos)]
+            kb = {"inline_keyboard": [pick_row,
+                  [{"text": "📤 Wyslij nowe", "callback_data": f"matnav:mnew:{arg}"},
+                   {"text": "✖ Anuluj", "callback_data": "matnav:mcancel:-"}]]}
             _tg("sendMessage", {"chat_id": chat_id,
-                                "text": "🖼 Przypialem OSTATNIE zdjecie (podglad wyzej). Chcesz inne albo "
-                                        "dodatkowe? Wyslij je teraz (okno 15 min) - dolacze. 'anuluj' = koniec."})
+                                "text": f"➕ Media dla: \"{(row or {}).get('master_theme', '')[:120]}\"\n"
+                                        f"Wybierz numer z galerii wyzej albo wyslij nowe zdjecie "
+                                        f"(tryb zamknie sie sam po 10 min).", "reply_markup": kb})
         else:
             _tg("sendMessage", {"chat_id": chat_id,
-                                "text": f"➕ Wyslij mi TERAZ zdjecie - przypne je do:\n"
+                                "text": f"➕ Schowek bez zdjec. Wyslij mi TERAZ zdjecie - przypne je do:\n"
                                         f"\"{(row or {}).get('master_theme', '')[:150]}\"\n"
-                                        f"(okno 15 min; 'anuluj' = wycofaj)."})
+                                        f"(tryb zamknie sie sam po 10 min; 'anuluj' = wycofaj)."})
+        return
+    if action == "mpick":
+        # wybor z galerii: matnav:mpick:<item_id>:<inspiration_id>
+        import json as _json
+        item_id, insp_id = (arg.split(":", 1) + [""])[:2]
+        photo = db.fetchone("SELECT id, metadata FROM inspirations WHERE id=%s", (insp_id,))
+        item = db.fetchone("SELECT master_theme, media FROM content_items WHERE id=%s", (item_id,))
+        if not (photo and item):
+            edit("Nie znajduje tego zdjecia albo materialu.")
+            return
+        fid = photo["metadata"]["media"]["file_id"]
+        if any((mm or {}).get("file_id") == fid for mm in (item.get("media") or [])):
+            edit(f"To zdjecie jest juz dopiete do: \"{item['master_theme'][:120]}\".")
+            return
+        desc = {"source": "telegram", "file_id": fid,
+                "kind": photo["metadata"]["media"].get("kind", "photo"), "inspiration_id": photo["id"]}
+        db.execute("UPDATE content_items SET media = media || %s::jsonb, updated_at=NOW() WHERE id=%s",
+                   (_json.dumps([desc]), item_id))
+        db.execute("UPDATE post_queue SET media = media || %s::jsonb WHERE content_item_id=%s AND status IN ('review','held','scheduled')",
+                   (_json.dumps([desc]), item_id))
+        _state_set("cm_pending_madd", {})
+        _state_set("cm_last_media_preview", {})
+        edit(f"🖼 Dopiete do: \"{item['master_theme'][:150]}\" - poleci razem z publikacja. "
+             f"Chcesz wiecej? Tap ➕ Media na karcie jeszcze raz.")
+        return
+    if action == "mnew":
+        _state_set("cm_pending_madd", {"item_id": str(arg),
+                                       "ts": datetime.datetime.now(WARSAW).isoformat()})
+        edit("📤 Wyslij mi teraz zdjecie (zwykla wiadomosc z foto) - dopne je automatycznie. "
+             "Tryb zamknie sie sam po 10 min.")
+        return
+    if action == "mcancel":
+        _state_set("cm_pending_madd", {})
+        edit("✖ Tryb dodawania mediow zamkniety.")
         return
     if action == "mdel":
         # v7: 🗑 Media - zdejmij zalaczniki (sugestia wizualu zostaje)
@@ -424,8 +451,12 @@ def media_attach_watch():
     iid, ts = st.get("item_id"), st.get("ts")
     if not (iid and ts):
         return
-    if (datetime.datetime.now(WARSAW) - datetime.datetime.fromisoformat(ts)).total_seconds() > 15 * 60:
+    if (datetime.datetime.now(WARSAW) - datetime.datetime.fromisoformat(ts)).total_seconds() > 10 * 60:
+        # v9: auto-wyjscie po 10 min ('rozne rzeczy moga sie w zyciu dziac') + powiadomienie
         _state_set("cm_pending_madd", {})
+        chat = _admin_chat()
+        if chat:
+            _tg("sendMessage", {"chat_id": chat, "text": "⌛ Tryb dodawania mediow zamknal sie sam (10 min bez zdjecia)."})
         return
     photo = db.fetchone(
         """SELECT id, metadata FROM inspirations
