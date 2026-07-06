@@ -214,7 +214,7 @@ def _send_media_preview(chat_id, item):
         return
     for fid in files:
         _tg("sendPhoto", {"chat_id": chat_id, "photo": fid,
-                          "caption": f"🖼 {(item.get('master_theme') or '')[:150]}"})
+                          "caption": f"🖼 POLECI Z POSTEM: {(item.get('master_theme') or '')[:140]}"})
     _state_set("cm_last_media_preview", {"item_id": str(item["id"])})
 
 
