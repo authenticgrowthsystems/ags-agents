@@ -122,7 +122,7 @@ def _fmt_slot(dt):
 
 def _queue_snapshot(brand_id="AGS"):
     items = db.fetchall(
-        """SELECT id, master_theme, status, target_channels, scheduled_for
+        """SELECT id, master_theme, status, target_channels, scheduled_for, media
            FROM content_items
            WHERE brand_id=%s AND status NOT IN ('published','rejected','failed','proposed')
            ORDER BY COALESCE(scheduled_for, created_at) LIMIT 20""",
@@ -131,7 +131,9 @@ def _queue_snapshot(brand_id="AGS"):
     lines = []
     for it in items:
         ch = ",".join(it.get("target_channels") or [])
-        lines.append(f"- [{it['status']}] {it['master_theme'][:80]} | {ch} | slot: {_fmt_slot(it.get('scheduled_for'))}")
+        n_media = sum(1 for m in (it.get("media") or []) if (m or {}).get("file_id"))
+        med = f" 🖼x{n_media}" if n_media else ""  # 06/07: CM MUSI widziec zalaczniki w kolejce
+        lines.append(f"- [{it['status']}]{med} {it['master_theme'][:80]} | {ch} | slot: {_fmt_slot(it.get('scheduled_for'))}")
     return "\n".join(lines) if lines else "(kolejka pusta)"
 
 
