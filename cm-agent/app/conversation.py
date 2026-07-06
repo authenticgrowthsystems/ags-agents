@@ -470,9 +470,23 @@ def _attach_last_photo(inp):
 TOOL_REVIEW_CARDS = {
     "name": "show_review_cards",
     "description": ("Wyslij Tomaszowi SWIEZA karte przegladu materialow (needs_approval) z guzikami "
-                    "decyzji i strzalkami, na dole czatu. Wywoluj gdy Tomasz chce przejrzec/zatwierdzic "
-                    "materialy TUTAJ w rozmowie (np. 'daj mi je tutaj', 'chce je przejrzec teraz')."),
-    "input_schema": {"type": "object", "properties": {}},
+                    "decyzji i strzalkami, na dole czatu. Gdy Tomasz pyta o KONKRETNY material "
+                    "(np. 'pokaz post ze zdjeciem', 'ta o tolerancji') - podaj theme_fragment i/lub "
+                    "only_with_media, zeby karta otworzyla sie NA TYM materiale."),
+    "input_schema": {"type": "object", "properties": {
+        "theme_fragment": {"type": ["string", "null"], "description": "Fragment tematu szukanego materialu."},
+        "only_with_media": {"type": ["boolean", "null"], "description": "true = pierwszy material z zalacznikiem."}}},
+}
+
+
+TOOL_STYLE_RULE = {
+    "name": "add_style_rule",
+    "description": ("Zapisz NA STALE regule stylu/jezyka podana wprost przez Tomasza (np. 'przed i nie "
+                    "stawia sie przecinkow', 'nie uzywaj slowa X'). Wywoluj ZAWSZE gdy Tomasz mowi "
+                    "'zapamietaj' o stylu pisania - sama rozmowa NIE jest trwala pamiecia."),
+    "input_schema": {"type": "object", "properties": {
+        "rule": {"type": "string", "description": "Regula w 1 zdaniu, po polsku."}},
+        "required": ["rule"]},
 }
 
 
@@ -550,7 +564,7 @@ def _discuss(chat_id, text):
         system=_system_blocks(brand),
         tools=[TOOL_PROPOSE, TOOL_SCHOWEK, TOOL_ARCHIVE, TOOL_SIMILAR, TOOL_ADAPT,
                TOOL_PLAN_BUILD, TOOL_PLAN_APPROVE, TOOL_PLAN_EDIT, TOOL_TARGET_CREATE, TOOL_TARGET_UPDATE,
-               TOOL_REVIEW_CARDS, TOOL_ATTACH_PHOTO],
+               TOOL_REVIEW_CARDS, TOOL_ATTACH_PHOTO, TOOL_STYLE_RULE],
         messages=history,
     )
     tasks.log_task("conversation", tier, model, source, getattr(resp, "usage", None))
@@ -580,10 +594,16 @@ def _discuss(chat_id, text):
             parts.append(_target_update(b.input))
         elif b.name == "show_review_cards":
             from . import matreview
-            parts.append("📦 Karta przegladu leci ponizej." if matreview.send_review_card(chat_id)
-                         else "Brak materialow do przegladu.")
+            ok = matreview.send_review_card(chat_id, theme_fragment=(b.input or {}).get("theme_fragment"),
+                                            only_with_media=bool((b.input or {}).get("only_with_media")))
+            parts.append("📦 Karta leci ponizej." if ok
+                         else "Nie znajduje takiego materialu w przegladzie.")
         elif b.name == "attach_last_photo":
             parts.append(_attach_last_photo(b.input))
+        elif b.name == "add_style_rule":
+            from . import matreview
+            n = matreview.add_style_rule((b.input or {}).get("rule"))
+            parts.append(f"📚 Regula zapisana NA STALE (lacznie regul: {n}) - obowiazuje od nastepnej generacji.")
     reply = "\n\n".join(parts).strip() or "Przyjete."
     # history stores plain text only (tool calls are summarized in the reply line itself)
     _save_history(chat_id, history + [{"role": "assistant", "content": reply}], agent="cm")

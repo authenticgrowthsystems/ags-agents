@@ -99,18 +99,43 @@ def batch_note():
     return True
 
 
-def send_review_card(chat_id=None):
-    """SWIEZA karta przegladu na dole czatu (feedback 06/07: 'musialem scrollowac na gore').
-    Wolane z rozmowy (/karty, narzedzie LLM) - zero szukania starych wiadomosci."""
+def send_review_card(chat_id=None, theme_fragment=None, only_with_media=False):
+    """SWIEZA karta przegladu na dole czatu. v2 (feedback 06/07 'pokaz mi TE karte'):
+    theme_fragment / only_with_media = karta KONKRETNEGO materialu, nie 1/N od poczatku."""
     chat = chat_id or _admin_chat()
     if not chat:
         return False
-    text, kb = _card()
+    item_id = None
+    if theme_fragment or only_with_media:
+        for it in pending_items():
+            if theme_fragment and theme_fragment.lower() not in (it.get("master_theme") or "").lower():
+                continue
+            if only_with_media and not any((m or {}).get("file_id") for m in (it.get("media") or [])):
+                continue
+            item_id = str(it["id"])
+            break
+        if item_id is None:
+            return False
+    text, kb = _card(item_id)
     body = {"chat_id": chat, "text": text[:4000]}
     if kb:
         body["reply_markup"] = kb
     r = _tg("sendMessage", body)
     return bool(r and r.get("ok"))
+
+
+def add_style_rule(rule):
+    """Regula stylu podana WPROST przez Tomasza w rozmowie ('zapamietaj na zawsze') -> style_learned
+    (trwale; kazda generacja dostaje regulki w prompcie)."""
+    rule = (rule or "").strip()
+    if not rule:
+        return 0
+    cur = _state_get("style_learned")
+    arr = (cur.get("rules") or []) if isinstance(cur, dict) else []
+    if rule not in arr:
+        arr = (arr + [rule])[-30:]
+        _state_set("style_learned", {"rules": arr})
+    return len(arr)
 
 
 def _card(item_id=None, brand_id="AGS", full=False):
