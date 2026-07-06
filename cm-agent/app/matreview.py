@@ -116,11 +116,12 @@ def send_review_card(chat_id=None, theme_fragment=None, only_with_media=False):
             break
         if item_id is None:
             return False
-    text, kb = _card(item_id)
+    text, kb, it = _card(item_id)
     body = {"chat_id": chat, "text": text[:4000]}
     if kb:
         body["reply_markup"] = kb
     r = _tg("sendMessage", body)
+    _send_media_preview(chat, it)
     return bool(r and r.get("ok"))
 
 
@@ -139,12 +140,13 @@ def add_style_rule(rule):
 
 
 def _card(item_id=None, brand_id="AGS", full=False):
-    """(text, kb) karty materialu; item_id=None -> pierwszy czekajacy.
-    v4 (feedback 06/07): KOMPAKT domyslnie (temat + ~500 zn.) + guzik 📖 Calosc / 📕 Zwin."""
+    """(text, kb, item) karty materialu; item_id=None -> pierwszy czekajacy.
+    v7 (feedback 06/07 11:35): Rozwin/Zwin = pierwszy SZEROKI guzik; ➕/🗑 Media na karcie;
+    zdjecia pokazywane AUTOMATYCZNIE pod karta (handle -> _send_media_preview)."""
     from .planner import _DAYS_PL, _target_label
     items = pending_items(brand_id)
     if not items:
-        return "📦 Przeglad zakonczony - brak materialow do decyzji.", None
+        return "📦 Przeglad zakonczony - brak materialow do decyzji.", None, None
     idx = 0
     if item_id:
         for i, it in enumerate(items):
@@ -177,25 +179,43 @@ def _card(item_id=None, brand_id="AGS", full=False):
     # zawijanie (fix 06/07): ⬅️ z pierwszej karty = ostatnia, ➡️ z ostatniej = pierwsza
     prev_id = str(items[(idx - 1) % len(items)]["id"])
     next_id = str(items[(idx + 1) % len(items)]["id"])
-    row2 = [{"text": "❌ Odrzuc", "callback_data": f"matnav:no:{iid}"},
-            {"text": "🔄 Inny kat", "callback_data": f"matnav:angle:{iid}"},
-            {"text": "✏️ Edytuj", "callback_data": f"matnav:edit:{iid}"}]
+    rows = []
+    # v7: rozwijanie = PIERWSZY szeroki guzik (wzorzec 'pionowej kreski')
     if full:
-        row2.append({"text": "📕 Zwin", "callback_data": f"matnav:show:{iid}"})
+        rows.append([{"text": "▲ Zwin tresc ▲", "callback_data": f"matnav:show:{iid}"}])
     elif truncated:
-        row2.append({"text": "📖 Calosc", "callback_data": f"matnav:full:{iid}"})
+        rows.append([{"text": "▼ Rozwin cala tresc ▼", "callback_data": f"matnav:full:{iid}"}])
+    rows.append([{"text": "✅ Zatwierdz", "callback_data": f"matnav:ok:{iid}"},
+                 {"text": "✅⏭ Na koniec kolejki", "callback_data": f"matnav:okq:{iid}"}])
+    rows.append([{"text": "❌ Odrzuc", "callback_data": f"matnav:no:{iid}"},
+                 {"text": "🔄 Inny kat", "callback_data": f"matnav:angle:{iid}"},
+                 {"text": "✏️ Edytuj", "callback_data": f"matnav:edit:{iid}"}])
+    media_row = [{"text": "➕ Media", "callback_data": f"matnav:madd:{iid}"}]
     if n_media:
-        row2.append({"text": "🖼 Podglad", "callback_data": f"matnav:pic:{iid}"})
-    kb = {"inline_keyboard": [
-        [{"text": "✅ Zatwierdz", "callback_data": f"matnav:ok:{iid}"},
-         {"text": "✅⏭ Na koniec kolejki", "callback_data": f"matnav:okq:{iid}"}],
-        row2,
-        [{"text": "⬅️", "callback_data": f"matnav:show:{prev_id}"},
-         {"text": f"{idx + 1}/{len(items)}", "callback_data": "matnav:pos:-"},
-         {"text": "➡️", "callback_data": f"matnav:show:{next_id}"}],
-        [{"text": f"✅ Zatwierdz WSZYSTKIE ({len(items)})", "callback_data": "matnav:all:-"}],
-    ]}
-    return text, kb
+        media_row.append({"text": f"🗑 Media ({n_media})", "callback_data": f"matnav:mdel:{iid}"})
+    rows.append(media_row)
+    rows.append([{"text": "⬅️", "callback_data": f"matnav:show:{prev_id}"},
+                 {"text": f"{idx + 1}/{len(items)}", "callback_data": "matnav:pos:-"},
+                 {"text": "➡️", "callback_data": f"matnav:show:{next_id}"}])
+    rows.append([{"text": f"✅ Zatwierdz WSZYSTKIE ({len(items)})", "callback_data": "matnav:all:-"}])
+    return text, {"inline_keyboard": rows}, it
+
+
+def _send_media_preview(chat_id, item):
+    """v7: multimedia widoczne OD RAZU pod karta (bez klikania). Anty-powtorka: nie wysylaj
+    ponownie dla tego samego materialu z rzedu."""
+    if not item:
+        return
+    files = [m["file_id"] for m in (item.get("media") or []) if (m or {}).get("file_id")][:4]
+    if not files:
+        return
+    st = _state_get("cm_last_media_preview")
+    if st.get("item_id") == str(item["id"]):
+        return
+    for fid in files:
+        _tg("sendPhoto", {"chat_id": chat_id, "photo": fid,
+                          "caption": f"🖼 {(item.get('master_theme') or '')[:150]}"})
+    _state_set("cm_last_media_preview", {"item_id": str(item["id"])})
 
 
 def _end_of_queue_slot(item_id, brand_id="AGS"):
@@ -262,8 +282,9 @@ def handle(payload, wake_event=None):
     if action == "pos":
         return
     if action in ("first", "show"):
-        text, kb = _card(arg if action == "show" else None)
+        text, kb, it = _card(arg if action == "show" else None)
         edit(text, kb)
+        _send_media_preview(chat_id, it)
         return
     if action == "edit":
         # feedback 06/07: 'edytuj tekst' - bot wysyla PELNY tekst, Tomasz odsyla poprawiony,
@@ -296,9 +317,32 @@ def handle(payload, wake_event=None):
             _tg("sendPhoto", {"chat_id": chat_id, "photo": fid,
                               "caption": f"🖼 Zalacznik: {(row or {}).get('master_theme', '')[:120]}"})
         return
+    if action == "madd":
+        # v7: ➕ Media - wyslij zdjecie, straznik petli przypnie je do TEGO materialu
+        row = db.fetchone("SELECT master_theme FROM content_items WHERE id=%s", (arg,))
+        _state_set("cm_pending_madd", {"item_id": str(arg),
+                                       "ts": datetime.datetime.now(WARSAW).isoformat()})
+        _tg("sendMessage", {"chat_id": chat_id,
+                            "text": f"➕ Wyslij mi TERAZ zdjecie (zwykla wiadomosc z foto) - przypne je do:\n"
+                                    f"\"{(row or {}).get('master_theme', '')[:150]}\"\n"
+                                    f"(okno 15 min; 'anuluj' = wycofaj)."})
+        return
+    if action == "mdel":
+        # v7: 🗑 Media - zdejmij zalaczniki (sugestia wizualu zostaje)
+        import json as _json
+        row = db.fetchone("SELECT media FROM content_items WHERE id=%s", (arg,))
+        kept = [m for m in ((row or {}).get("media") or []) if not (m or {}).get("file_id")]
+        db.execute("UPDATE content_items SET media=%s::jsonb, updated_at=NOW() WHERE id=%s",
+                   (_json.dumps(kept), arg))
+        db.execute("UPDATE post_queue SET media='[]'::jsonb WHERE content_item_id=%s AND status IN ('review','held','scheduled')",
+                   (arg,))
+        _state_set("cm_last_media_preview", {})
+        text, kb, it = _card(arg)
+        edit("🗑 Zalaczniki usuniete.\n\n" + text, kb)
+        return
     if action == "full":
         # v6 (feedback): Calosc w TYM SAMYM okienku karty (+ Zwin); osobne wiadomosci tylko przy Edytuj
-        text, kb = _card(arg, full=True)
+        text, kb, it = _card(arg, full=True)
         edit(text, kb)
         return
     if action == "all":
@@ -336,7 +380,7 @@ def handle(payload, wake_event=None):
         db.set_item_status(arg, "draft")
         _state_set("cm_pending_angle", {"item_id": str(arg),
                                         "ts": datetime.datetime.now(WARSAW).isoformat()})
-        text, kb = _card()
+        text, kb, it = _card()
         edit(text, kb)
         _tg("sendMessage", {"chat_id": chat_id,
                             "text": f"🔄 Napisz mi teraz JEDNA wiadomoscia: jaki kat i co ma byc w tresci dla:\n"
@@ -344,6 +388,43 @@ def handle(payload, wake_event=None):
                                     f"(albo 'auto' - sam przeformuluje). Material czeka poza kolejka; "
                                     f"po Twojej odpowiedzi potwierdze nowy temat i pojdzie do produkcji."})
         return
+
+
+def media_attach_watch():
+    """Straznik petli workera (v7, ➕ Media): po tapnieciu Tomasz wysyla zdjecie -> laduje w schowku
+    (HITL/vision) -> tu wykrywamy SWIEZA inspiracje z file_id i przypinamy do wskazanego materialu."""
+    import json as _json
+    st = _state_get("cm_pending_madd")
+    iid, ts = st.get("item_id"), st.get("ts")
+    if not (iid and ts):
+        return
+    if (datetime.datetime.now(WARSAW) - datetime.datetime.fromisoformat(ts)).total_seconds() > 15 * 60:
+        _state_set("cm_pending_madd", {})
+        return
+    photo = db.fetchone(
+        """SELECT id, metadata FROM inspirations
+           WHERE metadata->'media'->>'file_id' IS NOT NULL AND created_at > %s::timestamptz
+           ORDER BY created_at DESC LIMIT 1""", (ts,))
+    if not photo:
+        return
+    _state_set("cm_pending_madd", {})
+    item = db.fetchone("SELECT master_theme, media FROM content_items WHERE id=%s", (iid,))
+    if not item:
+        return
+    fid = photo["metadata"]["media"]["file_id"]
+    if any((m or {}).get("file_id") == fid for m in (item.get("media") or [])):
+        return
+    desc = {"source": "telegram", "file_id": fid,
+            "kind": photo["metadata"]["media"].get("kind", "photo"), "inspiration_id": photo["id"]}
+    db.execute("UPDATE content_items SET media = media || %s::jsonb, updated_at=NOW() WHERE id=%s",
+               (_json.dumps([desc]), iid))
+    db.execute("UPDATE post_queue SET media = media || %s::jsonb WHERE content_item_id=%s AND status IN ('review','held','scheduled')",
+               (_json.dumps([desc]), iid))
+    chat = _admin_chat()
+    if chat:
+        _tg("sendMessage", {"chat_id": chat,
+                            "text": f"🖼 Przypiete do: \"{(item.get('master_theme') or '')[:150]}\" - "
+                                    f"poleci razem z publikacja."})
 
 
 def resend_intake(brand_id="AGS", limit=6):

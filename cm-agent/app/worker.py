@@ -226,6 +226,7 @@ def loop():
             _welcome_new_channels()               # R5: nowy kanal -> propozycja reuse archiwum
             _emergency_promote()                  # F2: stan awaryjny po 24h ciszy
             matreview.sunday_guard()              # S4: niedzielne przypomnienia + fallback 23:00
+            matreview.media_attach_watch()        # v7: ➕ Media - swieze zdjecie -> przypiecie do materialu
             proactive.tick()                      # 06/07: luka kadencji -> subagent wola CM; odprawa semi
             item = db.claim_content_item()
             if item:

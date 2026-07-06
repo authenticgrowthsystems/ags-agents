@@ -856,6 +856,7 @@ def handle(update):
             _reset_state(chat_id)
             _mr._state_set("cm_pending_angle", {})  # /cancel zamyka tez oczekiwanie na kat (fix 06/07)
             _mr._state_set("cm_pending_edit", {})   # ...i na edycje tekstu
+            _mr._state_set("cm_pending_madd", {})   # ...i na doslanie zdjecia (➕ Media)
             _reply(chat_id, "Anulowane. Zaczynamy od nowa.")
             return
         if _PREVIEW_RE.match(text):
