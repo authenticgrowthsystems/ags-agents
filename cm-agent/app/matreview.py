@@ -134,10 +134,9 @@ def _card(item_id=None, brand_id="AGS", full=False):
         if dt and dt < now else ""
     ch = " + ".join(_target_label(brand_id, c) for c in (it.get("target_channels") or []))
     body = (it.get("canonical_body") or "(tekst w produkcji)").strip()
-    cap = 2600 if full else 500
-    truncated = len(body) > cap
+    truncated = len(body) > 500
     if truncated:
-        body = body[:cap] + ("\n[...]" if full else "...")
+        body = body[:500] + "..."
     n_media = len(it.get("media") or [])
     med = f"\n🖼 zalaczniki: {n_media}" if n_media else ""
     text = (f"📦 Material {idx + 1} z {len(items)}\n\n🕐 {when}{stale}\n📣 {ch}{med}\n"
@@ -146,12 +145,11 @@ def _card(item_id=None, brand_id="AGS", full=False):
     # zawijanie (fix 06/07): ⬅️ z pierwszej karty = ostatnia, ➡️ z ostatniej = pierwsza
     prev_id = str(items[(idx - 1) % len(items)]["id"])
     next_id = str(items[(idx + 1) % len(items)]["id"])
-    toggle = ({"text": "📕 Zwin", "callback_data": f"matnav:show:{iid}"} if full
-              else {"text": "📖 Calosc", "callback_data": f"matnav:full:{iid}"})
     row2 = [{"text": "❌ Odrzuc", "callback_data": f"matnav:no:{iid}"},
             {"text": "🔄 Inny kat", "callback_data": f"matnav:angle:{iid}"}]
-    if truncated or full:
-        row2.append(toggle)
+    if truncated:
+        # v5: Calosc = PELNY tekst osobnymi wiadomosciami na dole (zero ucinania [...])
+        row2.append({"text": "📖 Calosc", "callback_data": f"matnav:full:{iid}"})
     kb = {"inline_keyboard": [
         [{"text": "✅ Zatwierdz", "callback_data": f"matnav:ok:{iid}"},
          {"text": "✅⏭ Na koniec kolejki", "callback_data": f"matnav:okq:{iid}"}],
@@ -232,8 +230,12 @@ def handle(payload, wake_event=None):
         edit(text, kb)
         return
     if action == "full":
-        text, kb = _card(arg, full=True)
-        edit(text, kb)
+        # v5: pelny tekst leci OSOBNYMI wiadomosciami (Telegram limit 4096; karta zostaje w miejscu)
+        row = db.fetchone("SELECT master_theme, canonical_body FROM content_items WHERE id=%s", (arg,))
+        body = ((row or {}).get("canonical_body") or "(brak tekstu)").strip()
+        _tg("sendMessage", {"chat_id": chat_id, "text": f"📖 CALOSC: {(row or {}).get('master_theme', '')[:150]}"})
+        for i in range(0, len(body), 3900):
+            _tg("sendMessage", {"chat_id": chat_id, "text": body[i:i + 3900]})
         return
     if action == "all":
         items = pending_items()

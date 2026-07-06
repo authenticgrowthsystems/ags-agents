@@ -20,13 +20,23 @@ def _text(resp):
     return "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
 
 
+# TWARDA REGULA PRAWDY (Tomasz 06/07: "nie moge oszukiwac swojej publicznosci") - generator
+# wymyslal pierwszoosobowe anegdoty, ktore nigdy sie nie wydarzyly. Doklejana do KAZDEGO promptu.
+TRUTH_GUARD = (
+    "HARD TRUTH RULE: do NOT invent events, anecdotes, client stories, numbers or first-person "
+    "experiences. First person is allowed ONLY for facts explicitly present in the theme or the "
+    "provided evidence. If a concrete example is missing, write in general terms or clearly "
+    "hypothetically ('imagine...', 'a typical pattern is...'). One fabricated story destroys the "
+    "build-in-public brand. When unsure whether something happened - it did not.")
+
+
 def generate_canonical(brand, master_theme, research_context="", content_item_id=None):
     """Tekst-matka; model per task z routera R4 (default sonnet, override brand_config cm_tier_canonical)."""
     model, tier, source = tasks.model_for("canonical")
     msg = f"Write a canonical post for the theme: {master_theme}."
     if research_context:
         msg += f"\n\nGround it in this evidence (use what is relevant, do not list sources):\n{research_context[:6000]}"
-    msg += "\n\nReturn ONLY the post body. Brand voice. Zero em dashes."
+    msg += f"\n\n{TRUTH_GUARD}\n\nReturn ONLY the post body. Brand voice. Zero em dashes."
     resp = client().messages.create(
         model=model, max_tokens=1500,
         thinking={"type": "disabled"},  # Sonnet 5 defaults thinking ON when omitted; keep it off (preserves budget)
@@ -38,7 +48,11 @@ def generate_canonical(brand, master_theme, research_context="", content_item_id
 
 
 CHANNEL_GUIDE = {
-    "x": "X/Twitter: at most 280 characters, one strong hook line, at most one hashtag.",
+    # format X (Tomasz 06/07): krotkie formy ~500-600 zn. (konto Premium); dluga tresc = NITKA
+    "x": ("X/Twitter: short punchy posts. If the canonical is short, write ONE post of at most ~550 "
+          "characters with a strong hook. If the canonical is long or article-like, write a THREAD of "
+          "3-6 posts, each 300-550 characters, separated by lines containing exactly ===TWEET=== ; "
+          "post 1 = a hook that stands alone, last post = the takeaway. At most one hashtag total."),
     "linkedin": "LinkedIn: up to ~1300 characters, problem then decision then mechanism then result, professional but human.",
     "youtube": "YouTube: a title line plus a 2 to 3 line description.",
     "facebook": "Facebook: a short conversational post.",
@@ -65,10 +79,10 @@ def generate_variant(brand, canonical_body, channel, content_item_id=None):
     guide = CHANNEL_GUIDE.get(channel, f"{channel}: adapt naturally for this platform.")
     lang = _language_publish(brand.get("brand_id", "AGS"), channel)
     lang_guide = LANGUAGE_GUIDE.get(lang, f"Write the adaptation in language code '{lang}'.")
-    msg = (f"Adapt the canonical post below for {channel}. {guide}\n{lang_guide}\n"
+    msg = (f"Adapt the canonical post below for {channel}. {guide}\n{lang_guide}\n{TRUTH_GUARD}\n"
            f"Keep the brand voice. Zero em dashes. Return ONLY the adapted text.\n\nCANONICAL:\n{canonical_body}")
     resp = client().messages.create(
-        model=model, max_tokens=800,
+        model=model, max_tokens=2000,
         thinking={"type": "disabled"},  # gdy config podbije tier na Sonnet 5, thinking nie moze wlaczyc sie domyslnie
         system=system_blocks(brand),
         messages=[{"role": "user", "content": msg}],

@@ -124,6 +124,8 @@ def _propose_for_gap(brand_id, channel, day, missing):
                    f"SCHOWEK (wykorzystaj najlepsze):\n{sch_txt}\n\n"
                    f"OSTATNIE PUBLIKACJE (nie dubluj):\n{rec_txt}\n\n"
                    f"JUZ W KOLEJCE/SZKICACH (ZAKAZ tematow podobnych do ponizszych - nawet innym katem):\n{q_txt}\n\n"
+                   f"REGULA PRAWDY: tematy WYLACZNIE na faktach ze schowka/archiwum - ZERO zmyslonych "
+                   f"anegdot i wydarzen z zycia wlasciciela; brak faktu = ujecie ogolne/hipotetyczne.\n\n"
                    f"Wywolaj emit_themes."}])
     tasks.log_task("planner", tier, model, source, getattr(resp, "usage", None))
     tu = next((b for b in resp.content if getattr(b, "type", "") == "tool_use"), None)

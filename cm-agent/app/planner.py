@@ -170,7 +170,9 @@ def build_plan(brand_id="AGS", days=7):
         f"OSTATNIE PUBLIKACJE (NIE dubluj tematow):\n{recent_txt}\n\n"
         f"JUZ ZAPLANOWANE (nie koliduj slotami):\n{_current_plan_text(brand_id)}\n\n"
         "Kazdy temat: konkretny kat, brand voice, build-in-public gdzie pasuje. Sloty rozlozone naturalnie. "
-        "Niedzielny LinkedIn = format article. Wywolaj emit_plan."
+        "Niedzielny LinkedIn = format article. REGULA PRAWDY: tematy WYLACZNIE na faktach ze schowka/"
+        "strategii/archiwum - ZERO zmyslonych anegdot, wydarzen i liczb z zycia wlasciciela; brak faktu = "
+        "ujecie ogolne albo jawnie hipotetyczne. Wywolaj emit_plan."
     )
     resp = client().messages.create(
         model=model, max_tokens=4096,
