@@ -51,7 +51,7 @@ albo SUPERVISED (pod Content Managerem, ktory nadzoruje wiele kanalow).
 | # | Brak | Stan | Uwagi |
 |---|---|---|---|
 | 1 | ~~Sloty+okna: CM decyduje KIEDY~~ | **ZBUDOWANE 06/07** (slots.py) | czeka deploy |
-| 2 | Multimedia: WLASNE zdjecie z Telegrama w poscie na X | **ZBUDOWANE 06/07** (etap 1: schowek->attach_last_photo->karta 🖼->publikacja z obrazem; oba publishery X z uploadem v2 chunked) | zostalo: obraz na LinkedIn (etap 1b), generowane grafiki (etap 2, kontrakt higgsfield), wideo/animacje (etap 3) |
+| 2 | Multimedia: WLASNE zdjecie z Telegrama w poscie na X i LINKEDIN | **ZBUDOWANE 06/07** (etap 1 X: v2 chunked upload w obu publisherach; etap 1b LinkedIn: assets registerUpload -> post IMAGE; UX: auto-podglad pod karta, ➕/🗑 Media, sugestia wizualu per material) | zostalo: generowane grafiki (etap 2, kontrakt higgsfield, ZDJECIA REFERENCYJNE Tomasza), wideo/animacje (etap 3) |
 | 3 | Semi-auto (kanon 10): CM sam zaczepia | **ZBUDOWANE 06/07** (odprawa poranna + luki kadencji z propozycjami; cm_work_mode=semi) | rozbudowa zaczepek iteracyjnie |
 | 4 | Artykul-gotowiec LinkedIn: formatowanie + grafiki + checklist | BRAK | FAKT: LinkedIn API nie publikuje artykulow - gotowiec do wklejenia |
 | 5 | LinkedIn multi-kanal (strony AGS/TNM/RDC + profil) pod jednym subagentem | ARCHITEKTURA JEST (cele+toggle), tokeny stron po review App 2 + RLS | |
