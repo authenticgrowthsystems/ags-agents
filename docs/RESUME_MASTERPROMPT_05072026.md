@@ -15,7 +15,10 @@ pelny plik przy iteracji. JEDEN atomowy krok, raport po kazdym. Verify PRZED pro
   (pg_get_constraintdef; wszystkie DDL-e tabeli, nie pierwszy grep) + mapping etykiet. **AP-305:** Notion 404
   = brak Connection integracji do parent tree, NIE zle page ID; przed ETL z nowego drzewa dodaj Connection na
   root (dziedziczy); diagnoza: GET /users/me tokenem z sejfu + GET /pages/id http_code; "MCP widzi" != "token
-  widzi". Biblioteka: anti-patterns/library.md (indeks) + docs/anti-patterns/AP-30x_*.md (AP-301..305 komplet).
+  widzi". **AP-306:** one-shot kontener (python -m app.tool) NIE ma sekretow workera - laduj wlasne klucze
+  z app_secrets na starcie main() i padaj GLOSNO gdy brak (2x incydent: drift_check alert w prozne,
+  bulk_polish "poprawil" nic nie robiac). Biblioteka: anti-patterns/library.md (indeks) +
+  docs/anti-patterns/AP-30x_*.md (AP-301..306 komplet).
 - n8n = TYLKO transport, logika w Pythonie; po KAZDYM PUT deactivate+activate (czasem 400 -> retry);
   PUT tylko {name,nodes,connections,settings przefiltrowane}. DB zapisy = Tomasz SSH; ja read-only przez
   temp webhook (wzorzec: create workflow webhook->pg, call, DELETE). NIE pushuj Gita (Tomasz).

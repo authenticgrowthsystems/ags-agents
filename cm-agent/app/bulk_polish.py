@@ -7,10 +7,19 @@ karty, popraw polszczyzne' - zamiast klikania po jednej). Przepuszcza przez filt
 Uruchomienie (Mikrus):
   docker run --rm --network n8n_network --env-file cm-agent/.env cm-agent:latest python -m app.bulk_polish
 """
-from . import db, compliance
+from . import db, config, compliance
 
 
 def main():
+    # AP-306: one-shot kontener NIE przechodzi przez worker._load_secrets - klucze z app_secrets
+    # trzeba zaladowac samemu (incydenty: drift_check log_bot_token 05/07, bulk_polish anthropic 06/07)
+    if not config.ANTHROPIC_API_KEY:
+        v = db.get_secret("anthropic_api_key")
+        if v:
+            config.ANTHROPIC_API_KEY = v
+        else:
+            print("[polish] BRAK anthropic_api_key w app_secrets - korekta LLM nie ruszy", flush=True)
+            return
     fixed_theme = fixed_body = fixed_var = 0
     items = db.fetchall(
         """SELECT id, master_theme, canonical_body, status FROM content_items

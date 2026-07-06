@@ -112,6 +112,11 @@ Agents must screen output against this library BEFORE HITL preview.
 **Why bad:** looks identical to a wrong ID; chasing IDs wastes paid attempts while the fix is one click in Notion UI.
 **Correct:** before adding ETL sources from a new page tree, add the integration Connection on that tree's root (inherits to children). Diagnose 404 from evidence: `GET /v1/users/me` with the vault token (bot name = which integration to look for in Connections) + `GET /v1/pages/{id}` http_code. "MCP sees it" never implies "the ETL token sees it".
 
+### AP-306: One-shot container assumes worker-loaded secrets and fails silently
+**Anti-pattern (05-06/07/2026, BE, TWICE):** `drift_check` sent Telegram alerts into the void (log_bot_token not loaded) and `bulk_polish` "corrected" 37 texts while every LLM call silently failed (anthropic_api_key not loaded) - one-shot `docker run` containers skip `worker._load_secrets`, env carries only POSTGRES_DSN.
+**Why bad:** success-shaped output while doing nothing; false confidence, invisible user-facing gap.
+**Correct:** every one-shot `python -m app.<tool>` loads its own required keys from app_secrets at top of main() and fails LOUDLY when one is missing; grep new one-shots for `config.*KEY|TOKEN` usage and cover each.
+
 ### AP-302: User-facing vocabulary invented by the agent without checking brand register
 **Anti-pattern (03/07/2026):** BE named the inspirations pool "zanadrze" in bot replies and tool names. Tomasz: "na pewno nie bedziemy tego slowa uzywac".
 **Why bad:** user-facing wording is brand voice territory; archaic/bookish words break the operator register.
