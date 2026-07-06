@@ -218,11 +218,28 @@ DECIDE_TOOL = {
             "approve": {"type": "boolean"},
             "slot_grid": {"type": ["array", "null"], "items": {"type": "string"},
                           "description": "Zatwierdzona siatka godzin HH:MM (moze byc zmodyfikowana), null gdy odmowa/nie dotyczy."},
+            "needs_human": {"type": ["boolean", "null"],
+                            "description": ("true gdy prosba wymaga ZASOBU albo DECYZJI Tomasza, ktorych CM sam "
+                                            "nie przyzna: dostep do danych/metryk, dane o odbiorcach, budzet, "
+                                            "konto/API, integracja. Wtedy NIE odrzucaj - przekażemy Tomaszowi.")},
             "reply": {"type": "string", "description": "Krotka odpowiedz CM do subagenta (po polsku)."},
         },
         "required": ["approve", "reply"],
     },
 }
+
+
+def _log_channel_need(brand_id, channel, topic, proposal, reply):
+    """Realna potrzeba subagenta (dane/dostep/budzet), ktorej CM sam nie przyzna -> agent_logs
+    CHANNEL_NEED (widoczna w raportach, nie ginie w golym ODRZUCONE). Decyzja Tomasza 06/07 wieczor."""
+    try:
+        db.execute(
+            "INSERT INTO agent_logs (agent_id, log_type, rationale, context) VALUES (%s,'CHANNEL_NEED',%s,%s::jsonb)",
+            (f"{brand_id}:{channel}", (proposal or "")[:400],
+             json.dumps({"topic": topic, "cm_reply": (reply or "")[:400], "channel": channel},
+                        ensure_ascii=False)))
+    except Exception:
+        pass
 
 
 def handle_agent_requests(brand_id="AGS"):
@@ -252,37 +269,56 @@ def handle_agent_requests(brand_id="AGS"):
                 model=model, max_tokens=400, thinking={"type": "disabled"},
                 system=[{"type": "text", "text": f"Jestes Content Managerem marki {brand_id} - decydujesz "
                                                  f"o strategii kanalow. Kadencja kanoniczna: X 3-5/dzien "
-                                                 f"w oknie publikacji; publicznosc AGS = USA/UK."}],
+                                                 f"w oknie publikacji; publicznosc AGS = USA/UK. Rozrozniaj: "
+                                                 f"STRATEGIA kanalu (siatka/kadencja/okno) = decydujesz sam; "
+                                                 f"ZASOB albo decyzja Tomasza (dane o odbiorcach, dostep do "
+                                                 f"metryk, budzet, konto, API) = NIE odrzucaj, ustaw "
+                                                 f"needs_human=true i przekażemy to Tomaszowi."}],
                 tools=[DECIDE_TOOL], tool_choice={"type": "tool", "name": "emit_decision"},
                 messages=[{"role": "user", "content":
                            f"Subagent kanalu {p.get('channel')} proponuje ({p.get('topic')}):\n"
                            f"{p.get('proposal', '')[:500]}\n\n"
                            f"Obecna konfiguracja celu: {json.dumps((ch_row or {}).get('config') or {}, ensure_ascii=False)[:400]}\n"
-                           f"Ocen propozycje (sensownosc vs kadencja i okno) i wywolaj emit_decision. "
-                           f"Jesli zatwierdzasz siatke slotow, podaj godziny HH:MM."}])
+                           f"Ocen propozycje i wywolaj emit_decision. Jesli zatwierdzasz siatke slotow, podaj "
+                           f"godziny HH:MM. Jesli subagent prosi o ZASOB/dane/dostep, ktorych sam nie masz - "
+                           f"needs_human=true (nie gole ODRZUCONE)."}])
             tasks.log_task("planner", tier, model, source, getattr(resp, "usage", None))
             tu = next((b for b in resp.content if getattr(b, "type", "") == "tool_use"), None)
             dec = (tu.input if tu else {}) or {}
             applied = ""
+            need_human = bool(dec.get("needs_human"))
             if dec.get("approve") and p.get("topic") == "slot_grid" and dec.get("slot_grid"):
                 db.execute("UPDATE channels SET config = config || %s::jsonb WHERE brand_id=%s AND channel=%s",
                            (json.dumps({"slot_grid": dec["slot_grid"]}), brand_id, p.get("channel")))
                 applied = f" Siatka wpisana do configu: {', '.join(dec['slot_grid'])}."
+            if need_human:
+                # decyzja Tomasza 06/07 wieczor: realna potrzeba subagenta (dane/dostep/budzet) NIE ginie
+                # w golym ODRZUCONE - CM loguje ja i przekazuje Tomaszowi (widoczna w raportach).
+                _log_channel_need(brand_id, p.get("channel"), p.get("topic"),
+                                  p.get("proposal", ""), dec.get("reply", ""))
             db.execute(
                 """INSERT INTO agent_messages (from_agent_id, to_agent_id, message_type, payload, correlation_id)
                    VALUES (%s,%s,'response',%s,%s)""",
                 (cm_id, rq["from_agent_id"],
                  json.dumps({"kind": "channel_proposal_reply", "channel": p.get("channel"),
                              "approve": bool(dec.get("approve")), "reply": dec.get("reply", ""),
-                             "slot_grid": dec.get("slot_grid")}), rq["message_id"]))
+                             "slot_grid": dec.get("slot_grid"), "routed_to_human": need_human}), rq["message_id"]))
             db.execute("UPDATE agent_messages SET status='done' WHERE message_id=%s", (rq["message_id"],))
-            logbot.send(f"🤝 CM<->[{p.get('channel')}] {p.get('topic')}: "
-                        f"{'ZATWIERDZONE' if dec.get('approve') else 'ODRZUCONE'} - "
-                        f"{dec.get('reply', '')[:200]}{applied}")
-            # domkniecie petli W CZACIE (feedback 06/07): subagent melduje wynik Tomaszowi
-            _send(f"📣 [{p.get('channel')}] CM odpowiedzial na moja propozycje ({p.get('topic')}): "
-                  f"{'✅ ZATWIERDZONE' if dec.get('approve') else '❌ ODRZUCONE'}. "
-                  f"{dec.get('reply', '')[:250]}{applied}")
+            if need_human:
+                logbot.send(f"📌 SUBAGENT[{p.get('channel')}] POTRZEBUJE (do decyzji Tomasza): "
+                            f"{p.get('proposal', '')[:200]}\n   CM: {dec.get('reply', '')[:200]}")
+                # domkniecie petli W CZACIE - ale jako PRZEKAZANIE, nie odmowa
+                _send(f"📌 [{p.get('channel')}] Zglaszam Tomaszowi potrzebe do JEGO decyzji: "
+                      f"{p.get('proposal', '')[:220]}\n   CM: {dec.get('reply', '')[:220]}\n"
+                      f"   (zapisane w logu, wroci w raporcie - nie odrzucone).")
+            else:
+                logbot.send(f"🤝 CM<->[{p.get('channel')}] {p.get('topic')}: "
+                            f"{'ZATWIERDZONE' if dec.get('approve') else 'ODRZUCONE'} - "
+                            f"{dec.get('reply', '')[:200]}{applied}")
+                # domkniecie petli W CZACIE (feedback 06/07): subagent melduje wynik Tomaszowi
+                _send(f"📣 [{p.get('channel')}] CM odpowiedzial na moja propozycje ({p.get('topic')}): "
+                      f"{'✅ ZATWIERDZONE' if dec.get('approve') else '❌ ODRZUCONE'}. "
+                      f"{dec.get('reply', '')[:250]}{applied}")
         except Exception as e:
             db.execute("UPDATE agent_messages SET status='failed' WHERE message_id=%s", (rq["message_id"],))
             logbot.send(f"⚠️ CM nie rozpatrzyl propozycji subagenta ({p.get('topic')}): {str(e)[:150]}")

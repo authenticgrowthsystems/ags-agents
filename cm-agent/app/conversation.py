@@ -844,8 +844,10 @@ def _sub_cm_agreements(channel):
     out = []
     for r in rows:
         p = r["payload"] if isinstance(r["payload"], dict) else json.loads(r["payload"])
+        verdict = ("PRZEKAZANE TOMASZOWI" if p.get("routed_to_human")
+                   else ("OK" if p.get("approve") else "ODMOWA"))
         out.append(f"- {r['created_at'].astimezone(WARSAW).strftime('%d/%m %H:%M')}: "
-                   f"{'OK' if p.get('approve') else 'ODMOWA'} - {p.get('reply', '')[:120]}")
+                   f"{verdict} - {p.get('reply', '')[:120]}")
     return "\n".join(out) or "(brak)"
 
 
