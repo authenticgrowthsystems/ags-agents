@@ -367,6 +367,7 @@ def handle(payload, wake_event=None):
                    (_json.dumps([desc]), item_id))
         _state_set("cm_pending_madd", {})
         _state_set("cm_last_media_preview", {})
+        _note_attach(item["master_theme"])
         edit(f"🖼 Dopiete do: \"{item['master_theme'][:150]}\" - poleci razem z publikacja. "
              f"Chcesz wiecej? Tap ➕ Media na karcie jeszcze raz.")
         return
@@ -443,6 +444,30 @@ def handle(payload, wake_event=None):
         return
 
 
+def modes_snapshot():
+    """Migawka stanu trybow dla ROZMOWY CM (fix 06/07: LLM twierdzil 'nie dopialem zadnego
+    zdjecia' sekunde przed prawdziwym przypieciem przez straznika). Zwraca tekst PL."""
+    lines = []
+    st = _state_get("cm_pending_madd")
+    if st.get("item_id"):
+        row = db.fetchone("SELECT master_theme FROM content_items WHERE id=%s", (st["item_id"],))
+        lines.append(f"- TRYB ➕ MEDIA AKTYWNY: czekam na zdjecie dla \"{(row or {}).get('master_theme', '?')[:80]}\" "
+                     f"(przypne AUTOMATYCZNIE do ~30 s od wyslania - jesli Tomasz pyta, powiedz to, NIE zgaduj)")
+    if _state_get("cm_pending_edit").get("item_id"):
+        lines.append("- TRYB ✏️ EDYCJA AKTYWNY: czekam na poprawiona wersje tekstu od Tomasza")
+    if _state_get("cm_pending_angle").get("item_id"):
+        lines.append("- TRYB 🔄 INNY KAT AKTYWNY: czekam na wskazowki kata od Tomasza")
+    la = _state_get("cm_last_attach")
+    if la.get("theme"):
+        lines.append(f"- OSTATNIE PRZYPIECIE ZDJECIA: \"{la['theme'][:80]}\" o {la.get('ts', '?')[11:16]}")
+    return "\n".join(lines) or "(zadnych aktywnych trybow)"
+
+
+def _note_attach(theme):
+    _state_set("cm_last_attach", {"theme": (theme or "")[:120],
+                                  "ts": datetime.datetime.now(WARSAW).isoformat()})
+
+
 def media_attach_watch():
     """Straznik petli workera (v7, ➕ Media): po tapnieciu Tomasz wysyla zdjecie -> laduje w schowku
     (HITL/vision) -> tu wykrywamy SWIEZA inspiracje z file_id i przypinamy do wskazanego materialu."""
@@ -477,6 +502,7 @@ def media_attach_watch():
                (_json.dumps([desc]), iid))
     db.execute("UPDATE post_queue SET media = media || %s::jsonb WHERE content_item_id=%s AND status IN ('review','held','scheduled')",
                (_json.dumps([desc]), iid))
+    _note_attach(item.get("master_theme"))
     chat = _admin_chat()
     if chat:
         _tg("sendMessage", {"chat_id": chat,

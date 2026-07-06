@@ -453,6 +453,8 @@ def _attach_last_photo(inp):
     # antydubel (06/07): to samo zdjecie dopiete drugi raz = dwa identyczne obrazy w tweecie
     if any((m or {}).get("file_id") == desc["file_id"] for m in ((row or {}).get("media") or [])):
         return f"To zdjecie jest juz dopiete do: \"{item['master_theme'][:120]}\" - nic nie dublowalem."
+    from . import matreview as _mrv
+    _mrv._note_attach(item["master_theme"])
     db.execute("UPDATE content_items SET media = media || %s::jsonb, updated_at=NOW() WHERE id=%s",
                (json.dumps([desc]), item["id"]))
     # zalacznik dopiety do materialu W KOLEJCE; juz zestagowane warianty tez go dostaja
@@ -491,6 +493,7 @@ TOOL_STYLE_RULE = {
 
 
 def _system_blocks(brand):
+    from . import matreview as _mrv
     now = datetime.datetime.now(WARSAW).strftime("%A %d/%m/%Y %H:%M")
     role = (
         "Jestes Content Managerem AGS (Agent Growth Systems) i rozmawiasz na Telegramie z Tomaszem, wlascicielem. "
@@ -504,6 +507,8 @@ def _system_blocks(brand):
         "Nie dopytuj o szczegoly, ktore mozesz sensownie "
         "zalozyc (kanaly: domyslnie x + linkedin; slot: null gdy nie podany). "
         f"\nTeraz jest {now} (Europe/Warsaw)."
+        f"\n\nSTAN OPERACYJNY (o mechanizmach mow WYLACZNIE wg tego stanu - zero zgadywania; "
+        f"przypinanie zdjec robi automat, nie Ty):\n{_mrv.modes_snapshot()}"
         f"\n\nAKTUALNA KOLEJKA CM:\n{_queue_snapshot()}"
         f"\n\nPROPOZYCJA PLANU (proposed, numeracja dla plan_edit/plan_approve):\n{planner.plan_text()}"
         f"\n\n{_memory_snapshot()}"
