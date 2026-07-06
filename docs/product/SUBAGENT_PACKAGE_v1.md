@@ -57,7 +57,8 @@ albo SUPERVISED (pod Content Managerem, ktory nadzoruje wiele kanalow).
 | 5 | LinkedIn multi-kanal (strony AGS/TNM/RDC + profil) pod jednym subagentem | ARCHITEKTURA JEST (cele+toggle), tokeny stron po review App 2 + RLS | |
 | 6 | Zywe metryki profilu ("co sie dzieje na profilu") | LinkedIn: po review App 2 (kolektor gotowy); X: platny tier -> wpis reczny | |
 | 7 | Instalator-kreator u klienta (kanon 11b) | playbook v2 jest; kreator klikany = backlog przed uwolnieniem sprzedazy | |
-| 8 | **Subagent-pracownik** (Tomasz 06/07): luka w kadencji -> subagent SAM wola CM o tresc; reaguje na siec, szuka postow realnych ICP (zasiegi/obserwujacy) | BRAK - mechanizm kluczowy dla wizji "pracownika" | (b) = event wewn. subagent->CM; (d) = X read platny tier / LinkedIn po App 2 - Comment Radar SOP istnieje jako proces reczny |
+| 8 | Subagent-pracownik: luka w kadencji -> subagent SAM wola CM o tresc | **ZBUDOWANE 06/07** (agent_messages + propozycje z antydublem + intake guziki); czesc (d) ICP-hunting = BRAK (X read platny tier / LinkedIn po App 2) | Comment Radar SOP = proces reczny do czasu decyzji kosztowej |
+| 9 | **Media storage: Google Drive jako zrodlo** (Tomasz 06/07): dzis trzymamy TYLKO file_id (bajty u Telegrama, zero dysku Mikrusa; Telegram getFile limit 20MB - filmy dluzsze wymagaja GDrive); przy publikacji pobranie z GDrive | BRAK - backlog | seam source-descriptor gotowy ({"source":"gdrive","id":...}); wymaga konektora + auth |
 
 ## 3. ZASADA PRODUKTOWA
 Kazda funkcja z sekcji 1 = pozycja w wartosci pakietu; kazdy punkt sekcji 2 po zbudowaniu
