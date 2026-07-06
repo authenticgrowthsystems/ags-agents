@@ -113,8 +113,9 @@ def send_review_card(chat_id=None):
     return bool(r and r.get("ok"))
 
 
-def _card(item_id=None, brand_id="AGS"):
-    """(text, kb) karty materialu; item_id=None -> pierwszy czekajacy."""
+def _card(item_id=None, brand_id="AGS", full=False):
+    """(text, kb) karty materialu; item_id=None -> pierwszy czekajacy.
+    v4 (feedback 06/07): KOMPAKT domyslnie (temat + ~500 zn.) + guzik 📖 Calosc / 📕 Zwin."""
     from .planner import _DAYS_PL, _target_label
     items = pending_items(brand_id)
     if not items:
@@ -133,8 +134,10 @@ def _card(item_id=None, brand_id="AGS"):
         if dt and dt < now else ""
     ch = " + ".join(_target_label(brand_id, c) for c in (it.get("target_channels") or []))
     body = (it.get("canonical_body") or "(tekst w produkcji)").strip()
-    if len(body) > 2500:
-        body = body[:2500] + "\n[...]"
+    cap = 2600 if full else 500
+    truncated = len(body) > cap
+    if truncated:
+        body = body[:cap] + ("\n[...]" if full else "...")
     n_media = len(it.get("media") or [])
     med = f"\n🖼 zalaczniki: {n_media}" if n_media else ""
     text = (f"📦 Material {idx + 1} z {len(items)}\n\n🕐 {when}{stale}\n📣 {ch}{med}\n"
@@ -142,11 +145,16 @@ def _card(item_id=None, brand_id="AGS"):
     iid = str(it["id"])
     prev_id = str(items[idx - 1]["id"]) if idx > 0 else iid
     next_id = str(items[idx + 1]["id"]) if idx < len(items) - 1 else iid
+    toggle = ({"text": "📕 Zwin", "callback_data": f"matnav:show:{iid}"} if full
+              else {"text": "📖 Calosc", "callback_data": f"matnav:full:{iid}"})
+    row2 = [{"text": "❌ Odrzuc", "callback_data": f"matnav:no:{iid}"},
+            {"text": "🔄 Inny kat", "callback_data": f"matnav:angle:{iid}"}]
+    if truncated or full:
+        row2.append(toggle)
     kb = {"inline_keyboard": [
         [{"text": "✅ Zatwierdz", "callback_data": f"matnav:ok:{iid}"},
          {"text": "✅⏭ Na koniec kolejki", "callback_data": f"matnav:okq:{iid}"}],
-        [{"text": "❌ Odrzuc", "callback_data": f"matnav:no:{iid}"},
-         {"text": "🔄 Inny kat", "callback_data": f"matnav:angle:{iid}"}],
+        row2,
         [{"text": "⬅️", "callback_data": f"matnav:show:{prev_id}"},
          {"text": f"{idx + 1}/{len(items)}", "callback_data": "matnav:pos:-"},
          {"text": "➡️", "callback_data": f"matnav:show:{next_id}"}],
@@ -219,6 +227,10 @@ def handle(payload, wake_event=None):
         text, kb = _card(arg if action == "show" else None)
         edit(text, kb)
         return
+    if action == "full":
+        text, kb = _card(arg, full=True)
+        edit(text, kb)
+        return
     if action == "all":
         items = pending_items()
         for it in items:
@@ -258,6 +270,17 @@ def handle(payload, wake_event=None):
              f"\"{(row or {}).get('master_theme', '')[:150]}\"\n"
              f"(albo napisz 'auto' - sam przeformuluje). Material czeka poza kolejka.\n\n" + text, kb)
         return
+
+
+def resend_intake(brand_id="AGS", limit=6):
+    """Przywolaj NA DOL czatu guziki decyzji dla wszystkich czekajacych draftow (komenda 'decyzje') -
+    koniec szukania starych wiadomosci intake w historii."""
+    rows = db.fetchall(
+        """SELECT id, master_theme FROM content_items WHERE brand_id=%s AND status='draft'
+           ORDER BY updated_at DESC LIMIT %s""", (brand_id, limit))
+    for r in rows:
+        send_intake_buttons(r["id"], r["master_theme"])
+    return len(rows)
 
 
 def pending_angle():

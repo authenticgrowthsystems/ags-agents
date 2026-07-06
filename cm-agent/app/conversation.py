@@ -29,6 +29,7 @@ _PREVIEW_RE = re.compile(r"^\s*(/plan|/kolejka|plan|kolejka|status|poka[zż]\s+(
 _SCHOWEK_RE = re.compile(r"^\s*(/schowek|schowek|baza\s+pomys\w*|poka[zż]\s+(schowek|baz\w*))\s*\??\s*$", re.IGNORECASE)
 _KARTY_RE = re.compile(r"^\s*(/karty|karty|przegl[aą]daj|poka[zż]\s+(karty|materia\w*)|materia[lł]y\s+do\s+przegl[aą]du)\s*\??\s*$",
                        re.IGNORECASE)
+_DECYZJE_RE = re.compile(r"^\s*(/decyzje|decyzje|poka[zż]\s+decyzje|czekaj[aą]ce\s+decyzje)\s*\??\s*$", re.IGNORECASE)
 _CANCEL_RE = re.compile(r"^\s*(/cancel|anuluj)\s*$", re.IGNORECASE)
 
 
@@ -446,11 +447,18 @@ def _attach_last_photo(inp):
         return "Nie znajduje materialu docelowego - podaj fragment tematu."
     desc = {"source": "telegram", "file_id": photo["metadata"]["media"]["file_id"],
             "kind": photo["metadata"]["media"].get("kind", "photo"), "inspiration_id": photo["id"]}
+    row = db.fetchone("SELECT status FROM content_items WHERE id=%s", (item["id"],))
     db.execute("UPDATE content_items SET media = media || %s::jsonb, updated_at=NOW() WHERE id=%s",
                (json.dumps([desc]), item["id"]))
     # zalacznik dopiety do materialu W KOLEJCE; juz zestagowane warianty tez go dostaja
     db.execute("UPDATE post_queue SET media = media || %s::jsonb WHERE content_item_id=%s AND status IN ('review','held','scheduled')",
                (json.dumps([desc]), item["id"]))
+    if row and row["status"] == "draft":
+        # material czeka na decyzje intake - przywolaj guziki NA DOL (feedback 06/07: zero scrollowania)
+        from . import matreview
+        matreview.send_intake_buttons(item["id"], item["master_theme"])
+        return (f"🖼 Zdjecie dopiete do: \"{item['master_theme'][:120]}\" - material czeka na Twoja "
+                f"decyzje, guziki lecia ponizej.")
     return f"🖼 Zdjecie dopiete do: \"{item['master_theme'][:120]}\" (poleci razem z publikacja na X)."
 
 
@@ -792,6 +800,12 @@ def handle(update):
             from . import matreview
             if not matreview.send_review_card(chat_id):
                 _reply(chat_id, "Brak materialow do przegladu.")
+            return
+        if _DECYZJE_RE.match(text):
+            from . import matreview
+            n = matreview.resend_intake()
+            _reply(chat_id, f"Przywolalem {n} czekajacych decyzji (guziki ponizej)." if n
+                   else "Zero czekajacych decyzji intake.")
             return
         from . import matreview as _mr
         if _mr.pending_angle() and not text.startswith("/"):
