@@ -728,62 +728,87 @@ def _save_schowek(inp, chat_id):
     return f"🗃 W schowku: \"{idea[:120]}\""
 
 
+_CM_TOOLS = None
+_MAX_TOOL_STEPS = 5
+
+
+def _cm_tools():
+    global _CM_TOOLS
+    if _CM_TOOLS is None:
+        _CM_TOOLS = [TOOL_PROPOSE, TOOL_SCHOWEK, TOOL_ARCHIVE, TOOL_SIMILAR, TOOL_ADAPT,
+                     TOOL_PLAN_BUILD, TOOL_PLAN_APPROVE, TOOL_PLAN_EDIT, TOOL_TARGET_CREATE, TOOL_TARGET_UPDATE,
+                     TOOL_REVIEW_CARDS, TOOL_ATTACH_PHOTO, TOOL_STYLE_RULE, TOOL_RESCHEDULE, TOOL_REPLACE]
+    return _CM_TOOLS
+
+
+def _dispatch_tool(name, inp, chat_id):
+    """Wykonaj narzedzie CM i zwroc WYNIK jako tekst (wraca do modelu w petli agentowej -> CM moze
+    zareagowac: po find_similar zaproponowac kat/podmiane, nie utknac na liscie)."""
+    from . import matreview
+    inp = inp or {}
+    if name == "propose_material":
+        return _create_material(inp)
+    if name == "save_to_schowek":
+        return _save_schowek(inp, chat_id)
+    if name == "show_archive":
+        return _archive_text(inp)
+    if name == "find_similar_published":
+        return _similar_text(inp)
+    if name == "adapt_published":
+        return _adapt_text(inp)
+    if name == "plan_build":
+        return _plan_build_async()
+    if name == "plan_approve":
+        return _plan_approve(inp)
+    if name == "plan_edit":
+        return _plan_edit(inp)
+    if name == "target_create":
+        return _target_create(inp)
+    if name == "target_update":
+        return _target_update(inp)
+    if name == "show_review_cards":
+        ok = matreview.send_review_card(chat_id, theme_fragment=inp.get("theme_fragment"),
+                                        only_with_media=bool(inp.get("only_with_media")))
+        return "Karta wyslana ponizej (widoczna dla Tomasza)." if ok else "Nie znajduje takiego materialu w przegladzie."
+    if name == "attach_last_photo":
+        return _attach_last_photo(inp)
+    if name == "add_style_rule":
+        n = matreview.add_style_rule(inp.get("rule"))
+        return f"Regula stylu zapisana na stale (lacznie {n})."
+    if name == "reschedule_material":
+        return _reschedule_material(inp)
+    if name == "replace_material":
+        return _replace_material(inp)
+    return "ok"
+
+
 def _discuss(chat_id, text):
+    """Petla agentowa (fix 07/07 'zero opcji, zero propozycji'): model moze zawolac narzedzie, DOSTAC
+    wynik z powrotem i dzialac dalej (np. find_similar -> zaproponuj kat + podmiane), az zwroci finalny
+    tekst. Efekty uboczne (guziki intake, karty) leca bezposrednio z narzedzi; do Tomasza idzie tekst CM."""
     history = _load_history(chat_id) + [{"role": "user", "content": text}]
     brand = load_brand("AGS")
     model, tier, source = tasks.model_for("conversation")  # R4: default opus, override cm_tier_conversation
-    resp = client().messages.create(
-        model=model, max_tokens=1200,
-        thinking={"type": "disabled"},  # Sonnet 5/Opus: thinking off, rozmowa ma byc szybka i tania
-        system=_system_blocks(brand),
-        tools=[TOOL_PROPOSE, TOOL_SCHOWEK, TOOL_ARCHIVE, TOOL_SIMILAR, TOOL_ADAPT,
-               TOOL_PLAN_BUILD, TOOL_PLAN_APPROVE, TOOL_PLAN_EDIT, TOOL_TARGET_CREATE, TOOL_TARGET_UPDATE,
-               TOOL_REVIEW_CARDS, TOOL_ATTACH_PHOTO, TOOL_STYLE_RULE, TOOL_RESCHEDULE, TOOL_REPLACE],
-        messages=history,
-    )
-    tasks.log_task("conversation", tier, model, source, getattr(resp, "usage", None))
-    parts = [b.text for b in resp.content if getattr(b, "type", "") == "text" and b.text.strip()]
-    for b in resp.content:
-        if getattr(b, "type", "") != "tool_use":
-            continue
-        if b.name == "propose_material":
-            parts.append(_create_material(b.input))
-        elif b.name == "save_to_schowek":
-            parts.append(_save_schowek(b.input, chat_id))
-        elif b.name == "show_archive":
-            parts.append(_archive_text(b.input))
-        elif b.name == "find_similar_published":
-            parts.append(_similar_text(b.input))
-        elif b.name == "adapt_published":
-            parts.append(_adapt_text(b.input))
-        elif b.name == "plan_build":
-            parts.append(_plan_build_async())
-        elif b.name == "plan_approve":
-            parts.append(_plan_approve(b.input))
-        elif b.name == "plan_edit":
-            parts.append(_plan_edit(b.input))
-        elif b.name == "target_create":
-            parts.append(_target_create(b.input))
-        elif b.name == "target_update":
-            parts.append(_target_update(b.input))
-        elif b.name == "show_review_cards":
-            from . import matreview
-            ok = matreview.send_review_card(chat_id, theme_fragment=(b.input or {}).get("theme_fragment"),
-                                            only_with_media=bool((b.input or {}).get("only_with_media")))
-            parts.append("📦 Karta leci ponizej." if ok
-                         else "Nie znajduje takiego materialu w przegladzie.")
-        elif b.name == "attach_last_photo":
-            parts.append(_attach_last_photo(b.input))
-        elif b.name == "add_style_rule":
-            from . import matreview
-            n = matreview.add_style_rule((b.input or {}).get("rule"))
-            parts.append(f"📚 Regula zapisana NA STALE (lacznie regul: {n}) - obowiazuje od nastepnej generacji.")
-        elif b.name == "reschedule_material":
-            parts.append(_reschedule_material(b.input))
-        elif b.name == "replace_material":
-            parts.append(_replace_material(b.input))
-    reply = "\n\n".join(parts).strip() or "Przyjete."
-    # history stores plain text only (tool calls are summarized in the reply line itself)
+    sysblocks = _system_blocks(brand)
+    msgs = list(history)
+    reply_texts = []
+    for _step in range(_MAX_TOOL_STEPS):
+        resp = client().messages.create(
+            model=model, max_tokens=1200, thinking={"type": "disabled"},
+            system=sysblocks, tools=_cm_tools(), messages=msgs)
+        tasks.log_task("conversation", tier, model, source, getattr(resp, "usage", None))
+        reply_texts += [b.text for b in resp.content
+                        if getattr(b, "type", "") == "text" and b.text.strip()]
+        tool_uses = [b for b in resp.content if getattr(b, "type", "") == "tool_use"]
+        if not tool_uses:
+            break
+        msgs.append({"role": "assistant", "content": resp.content})
+        results = []
+        for tu in tool_uses:
+            out = _dispatch_tool(tu.name, tu.input, chat_id) or "ok"
+            results.append({"type": "tool_result", "tool_use_id": tu.id, "content": str(out)[:3000]})
+        msgs.append({"role": "user", "content": results})
+    reply = "\n\n".join(reply_texts).strip() or "Przyjete."
     _save_history(chat_id, history + [{"role": "assistant", "content": reply}], agent="cm")
     return reply
 
