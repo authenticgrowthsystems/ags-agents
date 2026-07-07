@@ -26,6 +26,16 @@ diagram/awatar oznaczony; twarz tylko z autoryzowanych zdjęć referencyjnych To
 - Sugestia wizualu per materiał: `generate_media_hint` (reguła prawdy: tylko wykonalne).
 
 ## 2. MISJA (co ma powstać)
+
+**ARCHITEKTURA (decyzja Tomasza 07/07): to są DEDYKOWANE SUBAGENTY, nie narzędzia media doklejone
+do subagentów kanału.** Buduj osobne, pluggable subagenty-operatory modeli:
+- **Subagent GRAFIKI** (operator modeli obrazu: gen + edycja + awatar z referencji),
+- **Subagent WIDEO** (operator modeli wideo: talking-head/awatar + b-roll),
+- **Subagent GŁOSU** (klon głosu + TTS, ElevenLabs) - zasila wideo.
+CM i subagenci kanału (X/LinkedIn/IG/FB) DELEGUJĄ do nich na kontrakcie konektora (jak X-publisher),
+a wynik (file_id/asset) wraca do `content_items.media`. To pasuje do wizji OOP/modularnej: każda
+zdolność = osobny sprzedawalny obiekt z toggle, kupowany sam albo w pakiecie.
+
 Kompletna, modularna warstwa wizualna jako pluggable część produktu (sprzedawalna):
 1. **Generacja grafik/obrazów** wysokiej jakości, spójnych ze stylem marki i (opcjonalnie) z TWARZĄ
    Tomasza jako awatara - na podstawie ZDJĘĆ REFERENCYJNYCH.
