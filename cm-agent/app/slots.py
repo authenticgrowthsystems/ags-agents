@@ -143,4 +143,9 @@ def assign_if_needed(item):
         return cur, False
     db.execute("UPDATE content_items SET scheduled_for=%s, updated_at=NOW() WHERE id=%s",
                (slot, item["id"]))
+    # FIX 07/07: trzymaj post_queue w zgodzie z content_item (zrodlo prawdy). Bez tego wiersze
+    # post_queue zostawaly na starym slocie (subagent czytal 10:00, choc ci = 13:00) - rozjazd.
+    db.execute("""UPDATE post_queue SET scheduled_for=%s WHERE content_item_id=%s
+                  AND status IN ('review','held','scheduled','queued','dispatching')""",
+               (slot, item["id"]))
     return slot, True
