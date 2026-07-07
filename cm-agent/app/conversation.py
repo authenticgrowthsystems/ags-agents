@@ -533,6 +533,20 @@ TOOL_RESCHEDULE = {
 }
 
 
+TOOL_REPLACE = {
+    "name": "replace_material",
+    "description": ("PODMIEN zaplanowany post na nowa, lepsza wersje ZACHOWUJAC jego slot (feedback 07/07). "
+                    "Wywoluj gdy wykryjesz bliski duplikat/mocniejszy kat i Tomasz zgadza sie podmienic "
+                    "(zamiast dodawac drugi podobny post). Znajdz zaplanowany post po target_theme_fragment "
+                    "i nadaj mu new_master_theme - system przegeneruje tresc, slot i kanaly zostaja. "
+                    "NIE tworzy drugiego materialu, NIE kasuje slotu."),
+    "input_schema": {"type": "object", "properties": {
+        "target_theme_fragment": {"type": "string", "description": "Fragment tematu zaplanowanego postu do podmiany."},
+        "new_master_theme": {"type": "string", "description": "Nowy temat-matka (mocniejszy kat), konkretny."}},
+        "required": ["target_theme_fragment", "new_master_theme"]},
+}
+
+
 def _system_blocks(brand):
     from . import matreview as _mrv
     now = datetime.datetime.now(WARSAW).strftime("%A %d/%m/%Y %H:%M")
@@ -551,9 +565,10 @@ def _system_blocks(brand):
         "plan_approve (wyjatki numerami); edycje pozycji -> plan_edit. Cele: target_create / target_update. "
         "Brak reakcji Tomasza 24h po prosbie o approve = publikacja awaryjna w slocie (poinformuj, gdy pyta). "
         "Domyslne zalozenia gdy nie podano: kanaly x + linkedin, slot null - nie pytaj o to. Gdy dedup "
-        "wykryje podobny temat w kolejce/archiwum, NIE poprzestawaj na liscie 'podobne publikacje': powiedz "
-        "czym TEN post bylby INNY (nowy kat, inne otwarcie), albo spytaj wprost czy to celowa kontynuacja "
-        "serii czy mam dac swieze ujecie. Nie zostawiaj Tomasza z sama lista. "
+        "wykryje podobny/blizniaczy temat w kolejce, NIE poprzestawaj na liscie 'podobne publikacje': jesli "
+        "Twoj nowy kat jest MOCNIEJSZY, ZAPROPONUJ PODMIANE tamtego zaplanowanego postu na nowa wersje "
+        "(replace_material - slot zostaje, kolejka sie nie dubluje), albo spytaj wprost 'podmienic tamten "
+        "czy zostawic oba / seria czy swieze ujecie?'. Nie zostawiaj Tomasza z sama lista. "
         "Gdy Tomasz pyta o KONKRETNY material: NAJPIERW show_review_cards z theme_fragment "
         "(przeszukuje PELNA baze) - migawka kolejki bywa przycieta; NIE twierdz, ze materialu "
         "nie ma, dopoki narzedzie tego nie potwierdzi. "
@@ -668,6 +683,35 @@ def _reschedule_material(inp):
             f"   nowy slot: {_DAYS_PL[slot.weekday()]} {_fmt_slot(slot)}.{note}")
 
 
+def _replace_material(inp):
+    """(B, feedback 07/07): podmien zaplanowany post na nowa wersje ZACHOWUJAC slot i kanaly.
+    Zamiast dodawac duplikat - nadaj istniejacemu materialowi nowy temat, skasuj stare warianty,
+    wroc do produkcji (status 'planned'). Petla przegeneruje i przyjdzie karta do zatwierdzenia."""
+    frag = (inp.get("target_theme_fragment") or "").strip()
+    new_theme = (inp.get("new_master_theme") or "").strip()
+    if not frag:
+        return "Podaj ktory zaplanowany post podmienic (fragment tematu)."
+    if len(new_theme) < 4:
+        return "Podaj nowy temat-matke (konkretny) do podmiany."
+    row = db.fetchone(
+        """SELECT id, master_theme, scheduled_for FROM content_items
+           WHERE brand_id='AGS' AND status IN
+             ('draft','planned','drafting','needs_approval','approved','dispatching')
+             AND master_theme ILIKE %s ORDER BY updated_at DESC LIMIT 1""",
+        (f"%{frag}%",))
+    if not row:
+        return f"Nie znajduje w kolejce postu do podmiany pasujacego do \"{frag[:80]}\"."
+    old_theme = row["master_theme"]
+    db.execute("UPDATE content_items SET master_theme=%s, status='planned', updated_at=NOW() WHERE id=%s",
+               (new_theme, row["id"]))
+    db.execute("DELETE FROM post_queue WHERE content_item_id=%s AND status IN ('review','held','scheduled','queued')",
+               (row["id"],))
+    when = _fmt_slot(row.get("scheduled_for"))
+    return (f"🔁 Podmieniam zaplanowany post (slot {when} zostaje):\n"
+            f"   bylo: \"{old_theme[:90]}\"\n   jest: \"{new_theme[:90]}\"\n"
+            f"   Produkuje nowa tresc, przyjdzie jako karta do zatwierdzenia (~min).")
+
+
 def _save_schowek(inp, chat_id):
     idea = (inp.get("idea") or "").strip()
     if not idea:
@@ -690,7 +734,7 @@ def _discuss(chat_id, text):
         system=_system_blocks(brand),
         tools=[TOOL_PROPOSE, TOOL_SCHOWEK, TOOL_ARCHIVE, TOOL_SIMILAR, TOOL_ADAPT,
                TOOL_PLAN_BUILD, TOOL_PLAN_APPROVE, TOOL_PLAN_EDIT, TOOL_TARGET_CREATE, TOOL_TARGET_UPDATE,
-               TOOL_REVIEW_CARDS, TOOL_ATTACH_PHOTO, TOOL_STYLE_RULE, TOOL_RESCHEDULE],
+               TOOL_REVIEW_CARDS, TOOL_ATTACH_PHOTO, TOOL_STYLE_RULE, TOOL_RESCHEDULE, TOOL_REPLACE],
         messages=history,
     )
     tasks.log_task("conversation", tier, model, source, getattr(resp, "usage", None))
@@ -732,6 +776,8 @@ def _discuss(chat_id, text):
             parts.append(f"📚 Regula zapisana NA STALE (lacznie regul: {n}) - obowiazuje od nastepnej generacji.")
         elif b.name == "reschedule_material":
             parts.append(_reschedule_material(b.input))
+        elif b.name == "replace_material":
+            parts.append(_replace_material(b.input))
     reply = "\n\n".join(parts).strip() or "Przyjete."
     # history stores plain text only (tool calls are summarized in the reply line itself)
     _save_history(chat_id, history + [{"role": "assistant", "content": reply}], agent="cm")
