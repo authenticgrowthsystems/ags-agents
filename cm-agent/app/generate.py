@@ -69,11 +69,31 @@ CHANNEL_GUIDE = {
           "characters with a strong hook. If the canonical is long or article-like, write a THREAD of "
           "3-6 posts, each 300-550 characters, separated by lines containing exactly ===TWEET=== ; "
           "post 1 = a hook that stands alone, last post = the takeaway. At most one hashtag total."),
-    "linkedin": "LinkedIn: up to ~1300 characters, problem then decision then mechanism then result, professional but human.",
+    # C (feedback 07/07): personal profile = PIERWSZOOSOBOWY glos czlowieka, nie ujawniaj maszynowego
+    # autorstwa POSTU (LinkedIn preferuje ludzi, wiarygodnosc Tomasza); o agentach ktore buduje - moze.
+    "linkedin": ("LinkedIn (Tomasz's PERSONAL profile): up to ~1300 characters, problem then decision then "
+                 "mechanism then result. Write as Tomasz's own FIRST-PERSON human post, authentic founder "
+                 "voice. He may talk about the agents and systems he builds (that is his work), but the post "
+                 "MUST read as written by a human and MUST NOT reveal or imply that this post itself was "
+                 "generated or published by a machine/agent."),
+    "linkedin_page": ("LinkedIn AGS COMPANY page: up to ~1300 characters, problem then mechanism then result, "
+                      "company voice. May speak openly about AGS building agents and autonomous systems "
+                      "('AGS builds', 'we build'). Human-readable, zero AI-slop."),
     "youtube": "YouTube: a title line plus a 2 to 3 line description.",
     "facebook": "Facebook: a short conversational post.",
     "instagram": "Instagram: a caption with a strong first line.",
 }
+
+
+def _channel_voice_note(brand_id, channel):
+    """C: per-konto notka glosu/autorstwa z channels.config.voice_note (edytowalna przez target_update).
+    Nadpisuje/uzupelnia domyslny CHANNEL_GUIDE - substrat pod multi-konto (D)."""
+    try:
+        r = _db.fetchone("SELECT config->>'voice_note' AS vn FROM channels WHERE brand_id=%s AND channel=%s",
+                         (brand_id, channel))
+        return ((r or {}).get("vn") or "").strip()
+    except Exception:
+        return ""
 
 
 LANGUAGE_GUIDE = {
@@ -135,6 +155,9 @@ def generate_variant(brand, canonical_body, channel, content_item_id=None):
     """Adaptacja per kanal; model per task z routera R4 (default haiku); jezyk per cel (R6)."""
     model, tier, source = tasks.model_for("variant")
     guide = CHANNEL_GUIDE.get(channel, f"{channel}: adapt naturally for this platform.")
+    note = _channel_voice_note(brand.get("brand_id", "AGS"), channel)  # C: per-konto override
+    if note:
+        guide = f"{guide} ACCOUNT-SPECIFIC RULE: {note}"
     lang = _language_publish(brand.get("brand_id", "AGS"), channel)
     lang_guide = LANGUAGE_GUIDE.get(lang, f"Write the adaptation in language code '{lang}'.")
     msg = (f"Adapt the canonical post below for {channel}. {guide}\n{lang_guide}\n{TRUTH_GUARD}"
