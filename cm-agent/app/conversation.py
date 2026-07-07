@@ -992,16 +992,58 @@ def _sub_reschedule(inp, brand, channel):
     return f"🕐 Pozycja #{pid} przesunieta na {_fmt_slot(new_dt)}."
 
 
+def _sub_surfaces_text(family, current_brand, current_channel):
+    """D (feedback 07/07): subagent zna WSZYSTKIE swoje powierzchnie danej rodziny (np. linkedin*)
+    z charakterystyka - marka, status, jezyk, okno, glos per konto. Substrat: channels + voice_note (C)."""
+    from .planner import _target_label
+    rows = db.fetchall(
+        "SELECT brand_id, channel, status, supervised, config FROM channels WHERE channel LIKE %s ORDER BY brand_id, channel",
+        (family + "%",))
+    if not rows:
+        return "(brak zarejestrowanych powierzchni)"
+    out = []
+    for r in rows:
+        cfg = r.get("config") or {}
+        lang = cfg.get("language_publish") or "?"
+        win = cfg.get("publish_windows") or "(domyslne)"
+        vn = (cfg.get("voice_note") or "").strip()
+        here = r["brand_id"] == current_brand and r["channel"] == current_channel
+        state = "AKTYWNY (publikuje)" if (r.get("supervised") and r["status"] in ("active", "draft")) \
+            else f"{r['status']} (jeszcze NIE publikuje - czeka na tokeny/aktywacje)"
+        line = (f"- {_target_label(r['brand_id'], r['channel'])} [{r['brand_id']}/{r['channel']}]: {state}, "
+                f"jezyk={lang}, okno={win}" + ("  <- TU JESTES" if here else ""))
+        if vn:
+            line += f"\n    glos konta: {vn[:110]}"
+        out.append(line)
+    return "\n".join(out)
+
+
+def _sub_strategy_text(family):
+    """D: skrot strategii publikacji od CM dla rodziny (kto co ustala + kadencja kanoniczna)."""
+    if family.startswith("linkedin"):
+        return ("Kadencja: pon-pt 1 post, sobota nic, niedziela ARTYKUL. Podzial rol: CM ustala TRESC i "
+                "KIEDY; TY realizujesz i wybierasz KONTO. Personal = pierwszoosobowy glos czlowieka (nie "
+                "ujawniaj maszyny); strona firmowa = glos firmy.")
+    if family == "x":
+        return "Kadencja: 3-5 postow dziennie w oknie. CM ustala TRESC i KIEDY; Ty realizujesz i pilnujesz rytmu."
+    return "CM ustala TRESC i KIEDY; Ty realizujesz w swoim oknie."
+
+
 def _sub_system(brand_row, brand, channel):
     cfg = brand_row.get("config") or {}
     now = datetime.datetime.now(WARSAW).strftime("%A %d/%m/%Y %H:%M")
+    family = channel.split("_")[0]
     role = (
         f"Jestes SUBAGENTEM publikacji dla celu: marka {brand}, kanal {channel}. Rozmawiasz na Telegramie "
         f"z Tomaszem, wlascicielem. {comm_guide()} "
         "Odpowiadasz za SWOJ kanal: kolejka publikacji, sloty, historia. Mozesz usuwac i przesuwac pozycje "
         "(narzedzia) oraz proponowac material ad-hoc narzedziem propose_material z target_channels "
         f"ustawionym WYLACZNIE na ['{channel}'] (material przejdzie przez normalne zatwierdzenie Tomasza). "
-        "Nie wychodz poza swoj kanal. SPRAWY STRATEGICZNE kanalu (siatka slotow, kadencja, okno) "
+        "ZNASZ WSZYSTKIE swoje powierzchnie (sekcja TWOJE POWIERZCHNIE nizej): ile ich jest, ich status "
+        "(aktywne vs czekajace na aktywacje), jezyk, okno i glos per konto. Gdy material moze isc na WIECEJ "
+        "niz jedno Twoje AKTYWNE konto, PYTASZ Tomasza na ktore (personal / strona / oba) - nie zakladaj "
+        "sam. O kontach jeszcze nieaktywnych mow uczciwie, ze czekaja na aktywacje. "
+        "Nie wychodz poza swoja rodzine kanalow. SPRAWY STRATEGICZNE kanalu (siatka slotow, kadencja, okno) "
         "zalatwiasz SAM z Content Managerem narzedziem escalate_to_cm - NIE odsylaj Tomasza. "
         "WYNIK eskalacji czytasz z sekcji USTALENIA Z CM ponizej - gdy Tomasz pyta 'i jak "
         "zatwierdzil?', ODPOWIEDZ z USTALEN, NIGDY nie eskaluj ponownie. "
@@ -1016,6 +1058,9 @@ def _sub_system(brand_row, brand, channel):
         f"\nKonfiguracja celu: {json.dumps(cfg, ensure_ascii=False)[:400]}"
         f"\nOkno publikacji tego celu: {cfg.get('publish_windows', '(domyslne)')} (Europe/Warsaw)."
         f"\nTeraz jest {now} (Europe/Warsaw)."
+        f"\n\nTWOJE POWIERZCHNIE (rodzina {family}) - znasz kazda i jej charakterystyke:\n"
+        f"{_sub_surfaces_text(family, brand, channel)}"
+        f"\n\nSTRATEGIA PUBLIKACJI (od CM):\n{_sub_strategy_text(family)}"
         f"\n\nKOLEJKA ({channel}) - JEDYNE zrodlo prawdy o slotach:\n{_sub_queue_text(brand, channel)}"
         f"\n\nOSTATNIE PUBLIKACJE:\n{_sub_published_text(brand, channel, 5)}"
         f"\n\nUSTALENIA Z CM (agent->agent):\n{_sub_cm_agreements(channel)}"
