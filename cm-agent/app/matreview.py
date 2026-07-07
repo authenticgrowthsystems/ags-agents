@@ -654,7 +654,7 @@ def apply_edit(new_text, wake_event=None):
     item["canonical_body"] = new
     for ch in channels.active_targets(item["brand_id"], item.get("target_channels")):
         vtext, _ = generate.generate_variant(brand, new, ch["channel"], content_item_id=iid)
-        vtext = compliance.enforce(brand, vtext, content_item_id=iid)
+        vtext = compliance.enforce(brand, vtext, content_item_id=iid, channel=ch["channel"])
         channels.stage_variant(item, ch, vtext)
     # EDYCJA = AKCEPTACJA (Tomasz 06/07): poprawiony material NIE wraca do przegladu
     db.set_item_status(iid, "approved")

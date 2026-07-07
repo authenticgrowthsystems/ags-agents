@@ -136,7 +136,7 @@ def _draft(item):
     variants = []
     for ch in channels.active_targets(item["brand_id"], item.get("target_channels")):
         vtext, _ = generate.generate_variant(brand, canonical, ch["channel"], content_item_id=item["id"])
-        vtext = compliance.enforce(brand, vtext, content_item_id=item["id"])
+        vtext = compliance.enforce(brand, vtext, content_item_id=item["id"], channel=ch["channel"])
         channels.stage_variant(item, ch, vtext)
         variants.append((ch["channel"], vtext))
     db.set_item_status(item["id"], "needs_approval", canonical_body=canonical, voice_hash=brand["voice_hash"])

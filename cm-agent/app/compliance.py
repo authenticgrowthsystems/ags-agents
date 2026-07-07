@@ -3,11 +3,21 @@ banned vocabulary is present, plus (06/07, feedback Tomasza) a PURE-POLISH pass 
 poprawna odmiana i skladnia, zero kalk z angielskiego (doktryna jezykowa: 'test mamy')."""
 import re
 
-from . import config, tasks
+from psycopg.types.json import Jsonb
+
+from . import config, tasks, db
 from .generate import client
 
 _DASH = re.compile(r"\s*[—–]\s*")  # em dash + en dash with surrounding space
 _PL_DIACRITICS = re.compile(r"[ąćęłńóśżź]")
+
+# Voice Bible v2.1 / Task #75: Re-Introduction Line dla LinkedIn (Zasada 10 Lara Acosta).
+RE_INTRO_LINE_PROMPT = (
+    "Sprawdz czy ponizszy tekst LinkedIn zawiera Re-Introduction Line: JEDNO zdanie (ok. 10-25 slow) "
+    "laczace trzy elementy - kim jest autor + co konkretnie robi/buduje + dla kogo. NIE liczy sie: "
+    "sama rola bez mechanizmu ('Founder of AGS'), samo CTA ('Book a call'), generyczne haslo "
+    "('Helping people grow'), ani wielozdaniowy blok o autorze. Odpowiedz PIERWSZYM slowem: TAK albo NIE."
+)
 
 
 def fix_dashes(text):
@@ -57,9 +67,33 @@ def polish_pl(text, content_item_id=None):
         text, content_item_id, task_name="polish_pl"))
 
 
-def enforce(brand, text, content_item_id=None):
+def check_re_intro_line(text, channel, content_item_id=None):
+    """Voice Bible v2.1 / Task #75: LinkedIn content ma zawierac Re-Introduction Line (kim/co/dla kogo).
+    FAZA 1 (decyzja Tomasza 07/07): WARN+log do agent_logs, NIE blokuje (nie ryzykujemy pierwszego
+    postu falszywym blokiem). Hard-block po weryfikacji 2-3 postow. Nieblokujacy - zwraca tekst bez zmian."""
+    if not channel or not str(channel).startswith("linkedin") or not (text or "").strip():
+        return
+    try:
+        model, tier, source = tasks.model_for("compliance")  # haiku (spec v2.1)
+        resp = client().messages.create(
+            model=model, max_tokens=40, thinking={"type": "disabled"},
+            messages=[{"role": "user", "content": f"{RE_INTRO_LINE_PROMPT}\n\nTEKST:\n{text[:2000]}"}])
+        tasks.log_task("re_intro_check", tier, model, source, getattr(resp, "usage", None), content_item_id)
+        out = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip().upper()
+        if not out.startswith("TAK"):
+            db.execute(
+                "INSERT INTO agent_logs (agent_id, log_type, rationale, context) VALUES ('cm','RE_INTRO_MISSING',%s,%s)",
+                (f"LinkedIn {channel}: brak Re-Introduction Line (Voice Bible v2.1, warn-only faza 1)",
+                 Jsonb({"channel": channel,
+                        "content_item_id": str(content_item_id) if content_item_id else None})))
+    except Exception:
+        pass
+
+
+def enforce(brand, text, content_item_id=None, channel=None):
     """Return clean text: dashes deterministically; banned vocab -> LLM rewrite; polski tekst ->
-    filtr czystej polszczyzny (jeden przebieg, tier compliance)."""
+    filtr czystej polszczyzny (jeden przebieg, tier compliance). channel (v2.1): dla LinkedIn odpala
+    nieblokujacy check Re-Introduction Line (warn+log)."""
     text = fix_dashes(text)
     banned = find_banned(text, brand.get("banned_vocab"))
     if banned:
@@ -68,4 +102,5 @@ def enforce(brand, text, content_item_id=None):
             f"meaning and voice: {', '.join(banned)}. Zero em dashes. Return ONLY the rewritten text.",
             text, content_item_id))
     text = polish_pl(text, content_item_id)
+    check_re_intro_line(text, channel, content_item_id)  # v2.1: warn-only na razie
     return text
