@@ -13,7 +13,7 @@ Po całości: BE buduje braki -> re-test -> Tomasz orzeka "przeszło" -> projekt
 | T6 Multimedia | LinkedIn | ❌ (arch) | Subagent kanału nie ma media (zgodnie z oczekiwaniem). DECYZJA ARCH Tomasza 07/07: NIE doklejać media do subagenta kanału - zbudować DEDYKOWANE subagenty grafiki/wideo (operatory modeli) na kontrakcie konektora; CM/subagent kanału DELEGUJĄ do nich. Master prompt zaktualizowany. |
 | T7 Multi-konto routing | | | |
 | T8 Język komunikacji/publikacji | | | |
-| T9 Comment radar/engagement | | | |
+| T9 Comment radar/engagement | LinkedIn | ❌ (build) | POTWIERDZONE zrzutem: obraz z 2 postami (Pascal Bornet + Gary Vee) + „daj komentarz" → poszło do IDEA BOTA jako pomysł (triage), zamiast komentarzy per post. Wizja DZIAŁA (opisał oba posty), zły PRZEPŁYW. BUDOWA (śr): (a) intencja „daj komentarz"=komenda nie pomysł [backlog e]; (b) obraz→aktywny agent→wizja Claude→komentarz PER POST (Pascal osobno, Gary osobno). suggest_comment dziś tylko post_text. Live metryki osobno (API/App 2). |
 | T10 Metryki/raporty | | | |
 | T11 Tryb pracy/standalone | | | |
 | T12 Jakość dialogu | | | |

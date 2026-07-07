@@ -75,10 +75,15 @@ CHANNEL_GUIDE = {
                  "mechanism then result. Write as Tomasz's own FIRST-PERSON human post, authentic founder "
                  "voice. He may talk about the agents and systems he builds (that is his work), but the post "
                  "MUST read as written by a human and MUST NOT reveal or imply that this post itself was "
-                 "generated or published by a machine/agent."),
+                 "generated or published by a machine/agent. "
+                 "MANDATORY Re-Introduction Line (Voice Bible v2.1): include EXACTLY ONE sentence (~10-25 words) "
+                 "that says who Tomasz is + what he concretely builds + for whom, woven naturally into the post "
+                 "(opening, mid-bridge, or signature), varied each time, NOT a template banner and NOT a CTA."),
     "linkedin_page": ("LinkedIn AGS COMPANY page: up to ~1300 characters, problem then mechanism then result, "
                       "company voice. May speak openly about AGS building agents and autonomous systems "
-                      "('AGS builds', 'we build'). Human-readable, zero AI-slop."),
+                      "('AGS builds', 'we build'). Human-readable, zero AI-slop. "
+                      "MANDATORY Re-Introduction Line (Voice Bible v2.1): include EXACTLY ONE sentence saying what "
+                      "AGS builds and for whom, woven naturally (slide 1 or outro), not a template banner."),
     "youtube": "YouTube: a title line plus a 2 to 3 line description.",
     "facebook": "Facebook: a short conversational post.",
     "instagram": "Instagram: a caption with a strong first line.",

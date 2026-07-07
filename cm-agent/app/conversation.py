@@ -831,6 +831,25 @@ TOOL_SUB_RESCHEDULE = {
                      "required": ["post_queue_id", "new_time"]},
 }
 
+TOOL_SUB_SHOW = {
+    "name": "subagent_show_post",
+    "description": ("Pokaz PELNA tresc pozycji z kolejki TEGO subagenta (numer #id z listy KOLEJKA). "
+                    "Uzyj gdy Tomasz chce zobaczyc caly tekst zaplanowanego posta, nie skrot."),
+    "input_schema": {"type": "object",
+                     "properties": {"post_queue_id": {"type": "integer"}},
+                     "required": ["post_queue_id"]},
+}
+
+TOOL_SUB_EDIT = {
+    "name": "subagent_edit_post",
+    "description": ("Podmien TRESC zaplanowanej pozycji z kolejki TEGO subagenta na wersje podana przez "
+                    "Tomasza (edycja = akceptacja). Uzyj gdy Tomasz podaje nowy/poprawiony pelny tekst dla #id."),
+    "input_schema": {"type": "object",
+                     "properties": {"post_queue_id": {"type": "integer"},
+                                    "new_content": {"type": "string", "description": "Pelna nowa tresc posta."}},
+                     "required": ["post_queue_id", "new_content"]},
+}
+
 TOOL_SUB_METRICS = {
     "name": "subagent_set_metrics",
     "description": ("Zapisz RECZNIE podane metryki publikacji (numer #id z sekcji OSTATNIE PUBLIKACJE). "
@@ -998,6 +1017,34 @@ def _sub_remove(inp, brand, channel):
     return f"🗑 Usunieta pozycja #{pid}." if row else f"Nie znalazlem pozycji #{pid} w kolejce {channel}."
 
 
+def _sub_show(inp, brand, channel):
+    """B (feedback 07/07): PELNA tresc zaplanowanej pozycji - subagent musi umiec pokazac caly tekst,
+    nie tylko skrot z KOLEJKI."""
+    pid = int(inp.get("post_queue_id") or 0)
+    row = db.fetchone("SELECT id, status, content, scheduled_for FROM post_queue WHERE id=%s AND brand=%s AND platform=%s",
+                      (pid, brand, channel))
+    if not row:
+        return f"Nie znajduje pozycji #{pid} w kolejce {channel}."
+    body = (row.get("content") or "(brak tresci - jeszcze w produkcji)").strip()
+    return f"#{pid} [{row['status']}] slot: {_fmt_slot(row.get('scheduled_for'))}\n\n{body}"
+
+
+def _sub_edit(inp, brand, channel):
+    """B (feedback 07/07): podmien TRESC pozycji na wersje Tomasza (edycja = akceptacja). Trzyma zasade
+    zero em-dash. Edytuje wariant kanalu (post_queue.content) - to co realnie poleci na tym kanale."""
+    from . import compliance
+    pid = int(inp.get("post_queue_id") or 0)
+    new = compliance.fix_dashes((inp.get("new_content") or "").strip())
+    if len(new) < 4:
+        return "Podaj pelna nowa tresc do podmiany (dostalem pusta)."
+    row = db.fetchone(
+        "UPDATE post_queue SET content=%s WHERE id=%s AND brand=%s AND platform=%s AND status IN ('review','held','scheduled','queued') RETURNING id",
+        (new, pid, brand, channel))
+    if not row:
+        return f"Nie znajduje edytowalnej pozycji #{pid} w kolejce {channel} (moze juz opublikowana?)."
+    return f"✏️ Tresc #{pid} podmieniona (Twoja edycja = akceptacja). Ta wersja poleci w slocie."
+
+
 def _sub_reschedule(inp, brand, channel):
     pid = int(inp.get("post_queue_id") or 0)
     try:
@@ -1061,8 +1108,9 @@ def _sub_system(brand_row, brand, channel):
     role = (
         f"Jestes SUBAGENTEM publikacji dla celu: marka {brand}, kanal {channel}. Rozmawiasz na Telegramie "
         f"z Tomaszem, wlascicielem. {comm_guide()} "
-        "Odpowiadasz za SWOJ kanal: kolejka publikacji, sloty, historia. Mozesz usuwac i przesuwac pozycje "
-        "(narzedzia) oraz proponowac material ad-hoc narzedziem propose_material z target_channels "
+        "Odpowiadasz za SWOJ kanal: kolejka publikacji, sloty, historia. Mozesz POKAZAC PELNA TRESC pozycji "
+        "(subagent_show_post), EDYTOWAC tresc na wersje Tomasza (subagent_edit_post = edycja=akceptacja), "
+        "usuwac i przesuwac pozycje, oraz proponowac material ad-hoc narzedziem propose_material z target_channels "
         f"ustawionym WYLACZNIE na ['{channel}'] (material przejdzie przez normalne zatwierdzenie Tomasza). "
         "ZNASZ WSZYSTKIE swoje powierzchnie (sekcja TWOJE POWIERZCHNIE nizej): ile ich jest, ich status "
         "(aktywne vs czekajace na aktywacje), jezyk, okno i glos per konto. Gdy material moze isc na WIECEJ "
@@ -1119,8 +1167,8 @@ def _subagent_handle(chat_id, text, active):
         model=model, max_tokens=900,
         thinking={"type": "disabled"},
         system=_sub_system(brand_row, brand, channel),
-        tools=[TOOL_SUB_REMOVE, TOOL_SUB_RESCHEDULE, TOOL_SUB_METRICS, TOOL_PROPOSE,
-               TOOL_SUB_ESCALATE, TOOL_SUB_COMMENT],
+        tools=[TOOL_SUB_REMOVE, TOOL_SUB_RESCHEDULE, TOOL_SUB_SHOW, TOOL_SUB_EDIT, TOOL_SUB_METRICS,
+               TOOL_PROPOSE, TOOL_SUB_ESCALATE, TOOL_SUB_COMMENT],
         messages=history,
     )
     tasks.log_task("subagent_chat", tier, model, source, getattr(resp, "usage", None))
@@ -1139,6 +1187,14 @@ def _subagent_handle(chat_id, text, active):
             if out.startswith("🕐"):
                 _log_autonomous(brand, channel, f"Przesuniecie slotu pozycji #{b.input.get('post_queue_id')} na {b.input.get('new_time')}",
                                 {"tool": "reschedule", "input": dict(b.input)})
+            parts.append(out)
+        elif b.name == "subagent_show_post":
+            parts.append(_sub_show(b.input, brand, channel))
+        elif b.name == "subagent_edit_post":
+            out = _sub_edit(b.input, brand, channel)
+            if out.startswith("✏️"):
+                _log_autonomous(brand, channel, f"Reczna edycja tresci #{b.input.get('post_queue_id')} w rozmowie",
+                                {"tool": "edit", "post_queue_id": b.input.get("post_queue_id")})
             parts.append(out)
         elif b.name == "subagent_set_metrics":
             m = reports.set_manual_metrics(int(b.input.get("published_id") or 0), dict(b.input), brand, channel)
