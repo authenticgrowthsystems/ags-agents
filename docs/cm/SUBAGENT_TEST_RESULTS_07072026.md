@@ -6,7 +6,8 @@ Po całości: BE buduje braki -> re-test -> Tomasz orzeka "przeszło" -> projekt
 | Test | Kanał | Wynik | Uwagi / co do naprawy |
 |---|---|---|---|
 | T1 Świadomość kanałów | LinkedIn | ✅ | Wzorcowo: 4 powierzchnie, statusy, języki, okna, głos/konto, strategia CM, pytanie o konto. Drobne: echo starej eskalacji 10:00 (stare pending do wyczyszczenia kiedyś). |
-| T2 Przegląd+edycja treści | LinkedIn | ❌ | Potwierdzone: „pokaż kolejkę” OK (lista+#id+sloty), ale „pełna treść #96” = nie ma dostępu (tylko skróty), „edytuj #125” = brak narzędzia. BUDOWA B: subagent_show_post (pełny tekst) + subagent_edit_post (podmiana treści post_queue, ew. + canonical). Sloty 13-17 w oknie US = OK. |
+| T2 Przegląd+edycja treści | LinkedIn | ✅ ZBUDOWANE (fcdb932) | subagent_show_post (pełny tekst) + subagent_edit_post (edycja=akceptacja). POTWIERDZONE re-testem: „pełna treść #101” → cały tekst, „edytuj #21” → flow edycji. |
+| T8b Dwujęzyczność (PL review) | LinkedIn | ✅ ZBUDOWANE (df42119) | Wymóg 07/08: komunikacja PL, publikacja EN → kopia PL do przeglądu. Wybór A: native EN publikuje + review_pl w content_items.media; _sub_show pokazuje PL, _sub_edit tłumaczy PL→EN. Tylko NOWE posty dostają review_pl (istniejące - edycja PL działa on-demand). |
 | T3 Generowanie ad-hoc | LinkedIn | ✅ | Znakomicie: świetny post (choreografia→architektura, głos człowieka, Sovereign Architect). Sam ocenił „to pasuje do RDC nie AGS", dał opcje. FIX: wygenerowany post BEZ Re-Intro Line (v2.1) - wzmocnić generację (jawna instrukcja Re-Intro w CHANNEL_GUIDE linkedin). |
 | T4 Sloty/okna/luki | LinkedIn | ✅ (obserwacja) | W T3: znał okno 13-18, past-window→następny dzień, wybrał wolny slot 11/07. Dedykowany test luki kadencji (escalate) do zrobienia osobno jeśli chcesz. |
 | T5 Publikacja+callback | X + LinkedIn | ✅ | POTWIERDZONE w AGS Alerts wielokrotnie: „wysłał do publikacji (zlecone, potwierdzę po callbacku)" → „opublikował (opublikowane X/LI)". Fix (b) działa per kanał. |
