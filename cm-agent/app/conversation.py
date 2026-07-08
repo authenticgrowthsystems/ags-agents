@@ -842,12 +842,16 @@ TOOL_SUB_SHOW = {
 
 TOOL_SUB_EDIT = {
     "name": "subagent_edit_post",
-    "description": ("Podmien TRESC zaplanowanej pozycji z kolejki TEGO subagenta na wersje podana przez "
-                    "Tomasza (edycja = akceptacja). Uzyj gdy Tomasz podaje nowy/poprawiony pelny tekst dla #id."),
+    "description": ("Podmien TRESC zaplanowanej pozycji z kolejki TEGO subagenta na wersje Tomasza "
+                    "(edycja = akceptacja). Tomasz moze podac tresc PO POLSKU nawet dla kanalu EN - NIE PYTAJ "
+                    "o jezyk, po prostu przyjmij: system przetlumaczy do publikacji i zachowa PL do przegladu. "
+                    "Gdy Tomasz mowi tylko 'edytuj #id' bez tresci - wywolaj to narzedzie z samym post_queue_id "
+                    "(new_content pusty/pominiety); system poprosi o tresc i przyjmie JEGO NASTEPNA wiadomosc jako edycje."),
     "input_schema": {"type": "object",
                      "properties": {"post_queue_id": {"type": "integer"},
-                                    "new_content": {"type": "string", "description": "Pelna nowa tresc posta."}},
-                     "required": ["post_queue_id", "new_content"]},
+                                    "new_content": {"type": ["string", "null"],
+                                                    "description": "Pelna nowa tresc posta; pomin gdy Tomasz jeszcze jej nie podal (tryb dwuetapowy)."}},
+                     "required": ["post_queue_id"]},
 }
 
 TOOL_SUB_METRICS = {
@@ -1017,6 +1021,16 @@ def _sub_remove(inp, brand, channel):
     return f"🗑 Usunieta pozycja #{pid}." if row else f"Nie znalazlem pozycji #{pid} w kolejce {channel}."
 
 
+def _mrv_state(key):
+    from . import matreview
+    return matreview._state_get(key)
+
+
+def _mrv_state_set(key, obj):
+    from . import matreview
+    matreview._state_set(key, obj)
+
+
 def _review_copy(media, lang=None):
     """T8: wyciagnij kopie do przegladu (kind='review_<lang>') z media content_itemu."""
     for m in (media or []):
@@ -1054,15 +1068,13 @@ def _sub_show(inp, brand, channel):
     return out
 
 
-def _sub_edit(inp, brand, channel):
-    """B (feedback 07/07): podmien TRESC pozycji na wersje Tomasza (edycja = akceptacja). T8: jesli Tomasz
-    edytuje PO POLSKU a kanal publikuje EN - tlumaczymy do publikacji, a PL zostaje jako kopia do przegladu.
-    Trzyma zasade zero em-dash. Edytuje wariant kanalu (post_queue.content)."""
+def _apply_sub_edit(pid, brand, channel, raw):
+    """Zastosuj edycje tresci #pid (jedno-strzalowo albo z pending-edit). T8: PL na kanale EN ->
+    tlumacz do publikacji, PL zachowaj do przegladu. Zero em-dash."""
     from . import compliance, generate
-    pid = int(inp.get("post_queue_id") or 0)
-    raw = (inp.get("new_content") or "").strip()
+    raw = (raw or "").strip()
     if len(raw) < 4:
-        return "Podaj pelna nowa tresc do podmiany (dostalem pusta)."
+        return "Pusta tresc - nic nie zmieniam."
     pub_lang = generate._language_publish(brand, channel)
     note, review_pl = "", None
     publish_text = raw
@@ -1074,12 +1086,27 @@ def _sub_edit(inp, brand, channel):
     row = db.fetchone(
         "UPDATE post_queue SET content=%s WHERE id=%s AND brand=%s AND platform=%s "
         "AND status IN ('review','held','scheduled','queued') RETURNING id, content_item_id",
-        (publish_text, pid, brand, channel))
+        (publish_text, int(pid), brand, channel))
     if not row:
         return f"Nie znajduje edytowalnej pozycji #{pid} w kolejce {channel} (moze juz opublikowana?)."
     if review_pl and row.get("content_item_id"):
         _update_review_copy(row["content_item_id"], "pl", review_pl)
     return f"✏️ Tresc #{pid} podmieniona (Twoja edycja = akceptacja).{note} Ta wersja poleci w slocie."
+
+
+def _sub_edit(inp, brand, channel):
+    """B (feedback 07/07): podmien TRESC pozycji na wersje Tomasza. Dwa tryby: (1) jedno-strzalowo gdy
+    tresc w new_content; (2) DWUETAPOWO gdy 'edytuj #id' bez tresci -> ustaw pending-edit, kolejna
+    wiadomosc Tomasza = tresc (fix 07/08 'dostalem pusta')."""
+    from . import matreview
+    pid = int(inp.get("post_queue_id") or 0)
+    raw = (inp.get("new_content") or "").strip()
+    if len(raw) < 4:
+        matreview._state_set("sub_pending_edit", {"pid": pid, "brand": brand, "channel": channel,
+                                                  "ts": datetime.datetime.now(WARSAW).isoformat()})
+        return (f"✏️ Wklej teraz PELNA nowa tresc dla #{pid} jedna wiadomoscia. Moze byc PO POLSKU nawet "
+                f"dla kanalu EN - przetlumacze do publikacji, a Twoja wersja PL zostanie do przegladu.")
+    return _apply_sub_edit(pid, brand, channel, raw)
 
 
 def _sub_reschedule(inp, brand, channel):
@@ -1195,6 +1222,22 @@ def _subagent_handle(chat_id, text, active):
         return
     if re.match(r"^/?raport\s*(dzienny|tygodniowy)?\s*$", low):
         _reply(chat_id, _sub_report(brand, channel))
+        return
+    # DWUETAPOWA EDYCJA (fix 07/08): jesli czekamy na tresc dla pozycji TEGO subagenta, ta wiadomosc = tresc
+    pe = _mrv_state("sub_pending_edit")
+    if (pe.get("pid") and pe.get("brand") == brand and pe.get("channel") == channel
+            and not text.startswith("/") and not _CANCEL_RE.match(text) and len(text.strip()) >= 4):
+        try:
+            age = (datetime.datetime.now(WARSAW) - datetime.datetime.fromisoformat(pe["ts"])).total_seconds()
+        except Exception:
+            age = 0
+        if age < 60 * 60:
+            _mrv_state_set("sub_pending_edit", {})
+            _reply(chat_id, _apply_sub_edit(pe["pid"], brand, channel, text))
+            return
+    if _CANCEL_RE.match(low) and _mrv_state("sub_pending_edit").get("pid"):
+        _mrv_state_set("sub_pending_edit", {})
+        _reply(chat_id, "Anulowane - edycja wycofana.")
         return
     ph = _tg("sendMessage", {"chat_id": chat_id, "text": "⏳"})
     ph_id = ((ph or {}).get("result") or {}).get("message_id")
