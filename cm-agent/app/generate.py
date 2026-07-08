@@ -101,6 +101,17 @@ def _channel_voice_note(brand_id, channel):
         return ""
 
 
+def _channel_rules(brand_id, channel):
+    """T (07/08): zasady konta z channels.config.rules (subagent_remember_rule) - generacja ich
+    przestrzega (np. 'zadnych threadow do 1000 followers')."""
+    try:
+        r = _db.fetchone("SELECT config->'rules' AS rules FROM channels WHERE brand_id=%s AND channel=%s",
+                         (brand_id, channel))
+        return (r or {}).get("rules") or []
+    except Exception:
+        return []
+
+
 LANGUAGE_GUIDE = {
     "pl": ("Write the adaptation in PURE POLISH: natural, everyday Polish with ZERO anglicisms "
            "(the 'mom test' - a non-technical Polish speaker must understand every word)."),
@@ -206,6 +217,9 @@ def generate_variant(brand, canonical_body, channel, content_item_id=None):
     note = _channel_voice_note(brand.get("brand_id", "AGS"), channel)  # C: per-konto override
     if note:
         guide = f"{guide} ACCOUNT-SPECIFIC RULE: {note}"
+    rules = _channel_rules(brand.get("brand_id", "AGS"), channel)  # T: zasady konta (nadrzedne)
+    if rules:
+        guide = f"{guide} OWNER RULES FOR THIS ACCOUNT (obey strictly, override defaults if conflict): " + "; ".join(rules[-10:])
     lang = _language_publish(brand.get("brand_id", "AGS"), channel)
     lang_guide = LANGUAGE_GUIDE.get(lang, f"Write the adaptation in language code '{lang}'.")
     msg = (f"Adapt the canonical post below for {channel}. {guide}\n{lang_guide}\n{TRUTH_GUARD}"

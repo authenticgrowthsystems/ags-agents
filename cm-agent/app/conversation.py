@@ -1014,6 +1014,44 @@ def _sub_comment_vision(brand, channel):
     return "💬 Propozycje komentarzy (z analizy zrzutu, per autor):\n\n" + out
 
 
+TOOL_SUB_RULE = {
+    "name": "subagent_remember_rule",
+    "description": ("Zapisz NA STALE zasade operacyjna TEGO konta podana przez Tomasza (np. 'zadnych "
+                    "threadow do 1000 followers', 'material wieloczesciowy rozkladaj po slotach dnia', "
+                    "'jitter 2-15 min'). Wywoluj gdy Tomasz mowi 'zapamietaj', 'zasada', 'od teraz zawsze', "
+                    "'nie rob wiecej'. Zasada trafia do configu konta - obowiazuje Ciebie I CM, nie ginie w czacie."),
+    "input_schema": {"type": "object", "properties": {
+        "rule": {"type": "string", "description": "Zasada w 1 zdaniu, konkretnie."}},
+        "required": ["rule"]},
+}
+
+
+def _sub_remember_rule(inp, brand, channel):
+    """T (07/08): trwale ZASADY KONTA -> channels.config.rules. Zeby ustalenia z czatu nie ginely
+    ('przeniesc do bazy, wynosic sie z czatow'). Widza je subagent (kontekst) i generacja (_channel_rules)."""
+    import json as _json
+    rule = (inp.get("rule") or "").strip()
+    if len(rule) < 4:
+        return "Podaj konkretna zasade do zapamietania (dostalem pusta)."
+    row = db.fetchone("SELECT config FROM channels WHERE brand_id=%s AND channel=%s", (brand, channel))
+    cfg = (row or {}).get("config") or {}
+    rules = cfg.get("rules") or []
+    if rule in rules:
+        return f"Ta zasada juz jest zapisana dla {channel}."
+    rules = (rules + [rule])[-20:]
+    db.execute("UPDATE channels SET config = jsonb_set(COALESCE(config,'{}'::jsonb), '{rules}', %s::jsonb) "
+               "WHERE brand_id=%s AND channel=%s", (_json.dumps(rules), brand, channel))
+    return (f"✅ Zapisane NA STALE jako zasada konta (lacznie {len(rules)}): \"{rule[:160]}\". "
+            f"Obowiazuje mnie i CM od teraz - nie zginie w czacie.")
+
+
+def _sub_rules_text(brand, channel):
+    row = db.fetchone("SELECT config->'rules' AS rules FROM channels WHERE brand_id=%s AND channel=%s",
+                      (brand, channel))
+    rules = (row or {}).get("rules") or []
+    return "\n".join(f"- {r}" for r in rules[-12:]) if rules else "(brak zapamietanych zasad)"
+
+
 def _sub_engagement_text(brand, channel, limit=5):
     """T9: OSTATNIE interakcje tego konta (pamiec) do kontekstu subagenta - 'co juz bylo'."""
     try:
@@ -1272,6 +1310,9 @@ def _sub_system(brand_row, brand, channel):
         "zalatwiasz SAM z Content Managerem narzedziem escalate_to_cm - NIE odsylaj Tomasza. "
         "WYNIK eskalacji czytasz z sekcji USTALENIA Z CM ponizej - gdy Tomasz pyta 'i jak "
         "zatwierdzil?', ODPOWIEDZ z USTALEN, NIGDY nie eskaluj ponownie. "
+        "Gdy Tomasz ustala ZASADE dzialania konta ('zapamietaj', 'od teraz zawsze', 'zadnych X do ...') - "
+        "ZAPISZ ja narzedziem subagent_remember_rule (trafia do configu konta, nie ginie w czacie); "
+        "zasady masz w sekcji ZASADY TEGO KONTA i STOSUJESZ je bez przypominania. "
         "Gdy Tomasz wkleja CUDZY post TEKSTEM - suggest_comment; gdy wysyla ZRZUT/obraz posta lub "
         "komentarza (albo mowi 'skomentuj ostatni zrzut') - suggest_comment_from_image (Claude analizuje "
         "OBRAZ, proponuje odpowiedz per autor). Kazda taka interakcja zapisuje sie w pamieci konta - "
@@ -1289,6 +1330,8 @@ def _sub_system(brand_row, brand, channel):
         f"\n\nTWOJE POWIERZCHNIE (rodzina {family}) - znasz kazda i jej charakterystyke:\n"
         f"{_sub_surfaces_text(family, brand, channel)}"
         f"\n\nSTRATEGIA PUBLIKACJI (od CM):\n{_sub_strategy_text(family)}"
+        f"\n\nZASADY TEGO KONTA (zapamietane NA STALE - obowiazuja Ciebie i CM, stosuj bez przypominania):\n"
+        f"{_sub_rules_text(brand, channel)}"
         f"\n\nOSTATNIE INTERAKCJE NA KONCIE (pamiec - wiesz co juz bylo i jak reagowaliscie):\n"
         f"{_sub_engagement_text(brand, channel)}"
         f"\n\nKOLEJKA ({channel}) - JEDYNE zrodlo prawdy o slotach:\n{_sub_queue_text(brand, channel)}"
@@ -1363,7 +1406,7 @@ def _subagent_handle(chat_id, text, active):
         thinking={"type": "disabled"},
         system=_sub_system(brand_row, brand, channel),
         tools=[TOOL_SUB_REMOVE, TOOL_SUB_RESCHEDULE, TOOL_SUB_SHOW, TOOL_SUB_EDIT, TOOL_SUB_METRICS,
-               TOOL_PROPOSE, TOOL_SUB_ESCALATE, TOOL_SUB_COMMENT, TOOL_SUB_COMMENT_VISION],
+               TOOL_PROPOSE, TOOL_SUB_ESCALATE, TOOL_SUB_COMMENT, TOOL_SUB_COMMENT_VISION, TOOL_SUB_RULE],
         messages=history,
     )
     tasks.log_task("subagent_chat", tier, model, source, getattr(resp, "usage", None))
@@ -1403,6 +1446,12 @@ def _subagent_handle(chat_id, text, active):
             parts.append(_sub_comment(b.input, brand, channel))
         elif b.name == "suggest_comment_from_image":
             parts.append(_sub_comment_vision(brand, channel))
+        elif b.name == "subagent_remember_rule":
+            out = _sub_remember_rule(b.input, brand, channel)
+            if out.startswith("✅"):
+                _log_autonomous(brand, channel, f"Zasada konta zapisana: {(b.input or {}).get('rule', '')[:80]}",
+                                {"tool": "remember_rule"})
+            parts.append(out)
         elif b.name == "propose_material":
             inp = dict(b.input)
             inp["target_channels"] = [channel]  # subagent nie wychodzi poza swoj kanal
