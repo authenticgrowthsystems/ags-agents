@@ -121,12 +121,26 @@ def _draft(item):
     ctx = research.research_context(item.get("research_job_id"))
     canonical, _ = generate.generate_canonical(brand, item["master_theme"], ctx, content_item_id=item["id"])
     canonical = compliance.enforce(brand, canonical, content_item_id=item["id"])
+    targets = channels.active_targets(item["brand_id"], item.get("target_channels"))
     # sugestia wizualu per material (06/07); podmiana starej sugestii przy regeneracji
     try:
         hint = generate.generate_media_hint(brand, canonical, content_item_id=item["id"])
-        media = [m for m in (item.get("media") or []) if (m or {}).get("kind") != "suggestion"]
+        media = [m for m in (item.get("media") or [])
+                 if (m or {}).get("kind") not in ("suggestion",) and not str((m or {}).get("kind", "")).startswith("review_")]
         if hint:
             media.append({"kind": "suggestion", "text": hint})
+        # T8 (feedback 07/08): kopia PL do przegladu, gdy publikacja idzie w innym jezyku niz komunikacja.
+        # Native EN publikuje; PL trzymamy obok (kind='review_pl'), zeby Tomasz czytal/edytowal po polsku.
+        try:
+            from .conversation import language_comm
+            comm = language_comm()
+            pubs = {generate._language_publish(item["brand_id"], t["channel"]) for t in targets}
+            if comm and any(p != comm for p in pubs):
+                review = generate.translate_text(canonical, comm, content_item_id=item["id"])
+                if review:
+                    media.append({"kind": f"review_{comm}", "text": review})
+        except Exception:
+            traceback.print_exc()
         import json as _json
         db.execute("UPDATE content_items SET media=%s::jsonb, updated_at=NOW() WHERE id=%s",
                    (_json.dumps(media), item["id"]))
@@ -134,7 +148,7 @@ def _draft(item):
     except Exception:
         traceback.print_exc()
     variants = []
-    for ch in channels.active_targets(item["brand_id"], item.get("target_channels")):
+    for ch in targets:
         vtext, _ = generate.generate_variant(brand, canonical, ch["channel"], content_item_id=item["id"])
         vtext = compliance.enforce(brand, vtext, content_item_id=item["id"], channel=ch["channel"])
         channels.stage_variant(item, ch, vtext)

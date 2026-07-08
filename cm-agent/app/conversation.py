@@ -1017,32 +1017,69 @@ def _sub_remove(inp, brand, channel):
     return f"🗑 Usunieta pozycja #{pid}." if row else f"Nie znalazlem pozycji #{pid} w kolejce {channel}."
 
 
+def _review_copy(media, lang=None):
+    """T8: wyciagnij kopie do przegladu (kind='review_<lang>') z media content_itemu."""
+    for m in (media or []):
+        k = str((m or {}).get("kind", ""))
+        if k.startswith("review_") and (lang is None or k == f"review_{lang}"):
+            return m.get("text")
+    return None
+
+
+def _update_review_copy(content_item_id, lang, text):
+    """T8: zapisz/nadpisz kopie do przegladu w jezyku komunikacji na content_item."""
+    import json as _json
+    row = db.fetchone("SELECT media FROM content_items WHERE id=%s", (content_item_id,))
+    media = [m for m in ((row or {}).get("media") or []) if not str((m or {}).get("kind", "")).startswith("review_")]
+    media.append({"kind": f"review_{lang}", "text": text})
+    db.execute("UPDATE content_items SET media=%s::jsonb, updated_at=NOW() WHERE id=%s",
+               (_json.dumps(media), content_item_id))
+
+
 def _sub_show(inp, brand, channel):
-    """B (feedback 07/07): PELNA tresc zaplanowanej pozycji - subagent musi umiec pokazac caly tekst,
-    nie tylko skrot z KOLEJKI."""
+    """B (feedback 07/07): PELNA tresc zaplanowanej pozycji. T8: + odpowiednik w jezyku komunikacji (PL)
+    do przegladu, gdy publikacja idzie w innym jezyku."""
     pid = int(inp.get("post_queue_id") or 0)
-    row = db.fetchone("SELECT id, status, content, scheduled_for FROM post_queue WHERE id=%s AND brand=%s AND platform=%s",
-                      (pid, brand, channel))
+    row = db.fetchone(
+        "SELECT pq.id, pq.status, pq.content, pq.scheduled_for, ci.media FROM post_queue pq "
+        "LEFT JOIN content_items ci ON ci.id=pq.content_item_id WHERE pq.id=%s AND pq.brand=%s AND pq.platform=%s",
+        (pid, brand, channel))
     if not row:
         return f"Nie znajduje pozycji #{pid} w kolejce {channel}."
     body = (row.get("content") or "(brak tresci - jeszcze w produkcji)").strip()
-    return f"#{pid} [{row['status']}] slot: {_fmt_slot(row.get('scheduled_for'))}\n\n{body}"
+    out = f"#{pid} [{row['status']}] slot: {_fmt_slot(row.get('scheduled_for'))}\n\n{body}"
+    review = _review_copy(row.get("media"))
+    if review:
+        out += f"\n\n———\n🇵🇱 Odpowiednik do przegladu (NIE publikuje sie):\n{review.strip()}"
+    return out
 
 
 def _sub_edit(inp, brand, channel):
-    """B (feedback 07/07): podmien TRESC pozycji na wersje Tomasza (edycja = akceptacja). Trzyma zasade
-    zero em-dash. Edytuje wariant kanalu (post_queue.content) - to co realnie poleci na tym kanale."""
-    from . import compliance
+    """B (feedback 07/07): podmien TRESC pozycji na wersje Tomasza (edycja = akceptacja). T8: jesli Tomasz
+    edytuje PO POLSKU a kanal publikuje EN - tlumaczymy do publikacji, a PL zostaje jako kopia do przegladu.
+    Trzyma zasade zero em-dash. Edytuje wariant kanalu (post_queue.content)."""
+    from . import compliance, generate
     pid = int(inp.get("post_queue_id") or 0)
-    new = compliance.fix_dashes((inp.get("new_content") or "").strip())
-    if len(new) < 4:
+    raw = (inp.get("new_content") or "").strip()
+    if len(raw) < 4:
         return "Podaj pelna nowa tresc do podmiany (dostalem pusta)."
+    pub_lang = generate._language_publish(brand, channel)
+    note, review_pl = "", None
+    publish_text = raw
+    if compliance.looks_polish(raw) and pub_lang != "pl":
+        publish_text = generate.translate_text(raw, pub_lang) or raw
+        review_pl = raw
+        note = f" (Twoja wersja PL przetlumaczona do publikacji {pub_lang.upper()}; PL zachowany do przegladu)"
+    publish_text = compliance.fix_dashes(publish_text)
     row = db.fetchone(
-        "UPDATE post_queue SET content=%s WHERE id=%s AND brand=%s AND platform=%s AND status IN ('review','held','scheduled','queued') RETURNING id",
-        (new, pid, brand, channel))
+        "UPDATE post_queue SET content=%s WHERE id=%s AND brand=%s AND platform=%s "
+        "AND status IN ('review','held','scheduled','queued') RETURNING id, content_item_id",
+        (publish_text, pid, brand, channel))
     if not row:
         return f"Nie znajduje edytowalnej pozycji #{pid} w kolejce {channel} (moze juz opublikowana?)."
-    return f"✏️ Tresc #{pid} podmieniona (Twoja edycja = akceptacja). Ta wersja poleci w slocie."
+    if review_pl and row.get("content_item_id"):
+        _update_review_copy(row["content_item_id"], "pl", review_pl)
+    return f"✏️ Tresc #{pid} podmieniona (Twoja edycja = akceptacja).{note} Ta wersja poleci w slocie."
 
 
 def _sub_reschedule(inp, brand, channel):

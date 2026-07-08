@@ -156,6 +156,27 @@ def generate_image(prompt):
     return base64.b64decode(b64)
 
 
+_LANG_NAME = {"pl": "polski", "en": "English", "de": "Deutsch"}
+
+
+def translate_text(text, target_lang, content_item_id=None):
+    """T8 (feedback 07/08): wierny przeklad tresci na jezyk komunikacji (kopia do przegladu/edycji).
+    Publikacja zostaje native w swoim jezyku; PL trzymamy obok, zeby Tomasz czytal/edytowal po polsku."""
+    text = (text or "").strip()
+    if not text:
+        return ""
+    model, tier, source = tasks.model_for("variant")  # haiku, tanie
+    name = _LANG_NAME.get(target_lang, target_lang)
+    resp = client().messages.create(
+        model=model, max_tokens=2000, thinking={"type": "disabled"},
+        messages=[{"role": "user", "content":
+                   f"Przetlumacz WIERNIE ponizszy tekst na jezyk: {name}. Zachowaj sens, ton, akapity i "
+                   f"dlugosc. Zero em-dash. To kopia do przegladu wlasciciela, nie do publikacji. Zwroc "
+                   f"WYLACZNIE tlumaczenie.\n\n{text}"}])
+    tasks.log_task("translate_review", tier, model, source, getattr(resp, "usage", None), content_item_id)
+    return _text(resp)
+
+
 def generate_variant(brand, canonical_body, channel, content_item_id=None):
     """Adaptacja per kanal; model per task z routera R4 (default haiku); jezyk per cel (R6)."""
     model, tier, source = tasks.model_for("variant")
