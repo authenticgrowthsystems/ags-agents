@@ -1223,6 +1223,23 @@ def _subagent_handle(chat_id, text, active):
     if re.match(r"^/?raport\s*(dzienny|tygodniowy)?\s*$", low):
         _reply(chat_id, _sub_report(brand, channel))
         return
+    # DETERMINISTYCZNY start edycji (fix 07/08): 'edytuj #21' / 'popraw #21' bez tresci -> ustaw pending
+    # (nie polegaj na tym, ze LLM zawola narzedzie). 'edytuj #21 na: ...' z trescia zostawiamy LLM.
+    m_edit = re.match(r"^/?(edytuj|edit|popraw|zmien)\s+#?(\d+)\s*$", low)
+    if m_edit:
+        epid = int(m_edit.group(2))
+        exists = db.fetchone(
+            "SELECT id FROM post_queue WHERE id=%s AND brand=%s AND platform=%s AND status IN ('review','held','scheduled','queued')",
+            (epid, brand, channel))
+        if not exists:
+            _reply(chat_id, f"Nie znajduje edytowalnej pozycji #{epid} w kolejce {channel} (moze juz opublikowana?).")
+            return
+        _mrv_state_set("sub_pending_edit", {"pid": epid, "brand": brand, "channel": channel,
+                                            "ts": datetime.datetime.now(WARSAW).isoformat()})
+        _reply(chat_id, f"✏️ Wklej teraz PELNA nowa tresc dla #{epid} jedna wiadomoscia. Moze byc PO POLSKU "
+                        f"nawet dla kanalu EN - przetlumacze do publikacji, a Twoja wersja PL zostanie do "
+                        f"przegladu. '/anuluj' = wycofaj.")
+        return
     # DWUETAPOWA EDYCJA (fix 07/08): jesli czekamy na tresc dla pozycji TEGO subagenta, ta wiadomosc = tresc
     pe = _mrv_state("sub_pending_edit")
     if (pe.get("pid") and pe.get("brand") == brand and pe.get("channel") == channel
