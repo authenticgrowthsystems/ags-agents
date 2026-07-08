@@ -1,6 +1,12 @@
 # SPEC: zdjęcie ma iść do AKTYWNEGO agenta, nie zawsze do Idea Bota (n8n)
 
-Status: DO WYKONANIA (n8n, tap-test Tomasza). Docs-first zrobione 08/07. AP-301.
+Status: **WDROZONE 08/07 (patcher hitl-photo-routing.cjs, HITL 244 wezly, active; backup bk_hitl_photoroute_*).**
+Implementacja = spec + 2 korekty docs-first: (1) Save Idea zbiera 4 typy (tekst/glos/foto/wideo) ->
+RETURNING +idea_type, gate TYLKO dla 'photo'; (2) tryb ➕ Media (cm_pending_madd swiezy) ma
+pierwszenstwo -> ga³az triage (wycisza sie istniejacym guardem), zeby zdjecie do dopiecia nie
+wywolywalo auto-komentarza. Wezly: Photo Route Lookup (pg 2.4: active_agent + secret jedna kwerenda),
+Photo Route Decide (code 2), Is Photo For Subagent? (if 2.2), Photo To Subagent (http 4.2 -> POST
+/message 'skomentuj ostatni zrzut'). CZEKA: tap-test E2E Tomasza (sekcja Kroki pkt 4).
 Feedback Tomasza 08/07 23:03: „nie może się idea bot tu włączać" - był w Subagencie X, wysłał zrzut
 posta do skomentowania, a Idea Bot go przechwycił (triage „Co z tym zrobić?").
 
