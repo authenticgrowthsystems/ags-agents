@@ -320,8 +320,19 @@ def handle_agent_requests(brand_id="AGS"):
                       f"{'✅ ZATWIERDZONE' if dec.get('approve') else '❌ ODRZUCONE'}. "
                       f"{dec.get('reply', '')[:250]}{applied}")
         except Exception as e:
-            db.execute("UPDATE agent_messages SET status='failed' WHERE message_id=%s", (rq["message_id"],))
-            logbot.send(f"⚠️ CM nie rozpatrzyl propozycji subagenta ({p.get('topic')}): {str(e)[:150]}")
+            msg = str(e)
+            transient = any(s in msg for s in ("529", "overloaded", "Overloaded", "rate_limit", "429",
+                                               "500", "502", "503", "Timeout", "timeout", "Connection", "APIStatus"))
+            attempts = int(p.get("_attempts") or 0) + 1
+            if transient and attempts < 6:
+                # fix 07/08: API przeciazone/limit (529 overloaded) NIE gubi propozycji - ponow w nastepnym ticku (60s)
+                p["_attempts"] = attempts
+                db.execute("UPDATE agent_messages SET status='unread', read_at=NULL, payload=%s WHERE message_id=%s",
+                           (json.dumps(p, ensure_ascii=False), rq["message_id"]))
+                print(f"[cm] agent_request transient error (proba {attempts}), ponawiam: {msg[:120]}", flush=True)
+            else:
+                db.execute("UPDATE agent_messages SET status='failed' WHERE message_id=%s", (rq["message_id"],))
+                logbot.send(f"⚠️ CM nie rozpatrzyl propozycji subagenta ({p.get('topic')}) po {attempts} probach: {msg[:150]}")
 
 
 def weekly_metrics_reminder(brand_id="AGS"):

@@ -12,7 +12,8 @@ _client = None
 def client():
     global _client
     if _client is None:
-        _client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+        # max_retries: SDK ponawia 429/5xx/529 z backoffem (fix 07/08: 529 overloaded gubil propozycje/generacje)
+        _client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY, max_retries=5)
     return _client
 
 
