@@ -45,6 +45,26 @@ def _tg(method, payload):
         return None
 
 
+def _fetch_telegram_image(file_id):
+    """T9 (07/08): pobierz bajty obrazu z Telegrama (getFile -> download) do analizy Claude vision.
+    Zwraca (bytes, media_type) albo (None, None)."""
+    tok = config.TELEGRAM_BOT_TOKEN
+    if not (tok and file_id):
+        return None, None
+    try:
+        r = _tg("getFile", {"file_id": file_id})
+        path = ((r or {}).get("result") or {}).get("file_path")
+        if not path:
+            return None, None
+        resp = httpx.get(f"https://api.telegram.org/file/bot{tok}/{path}", timeout=30)
+        resp.raise_for_status()
+        ct = (resp.headers.get("content-type") or "").lower()
+        mt = ct if ct.startswith("image/") else ("image/png" if path.lower().endswith(".png") else "image/jpeg")
+        return resp.content, mt
+    except Exception:
+        return None, None
+
+
 def _split(text, limit=TG_LIMIT):
     """Chunk long replies on paragraph boundaries (Telegram hard limit 4096)."""
     chunks = []
@@ -885,13 +905,23 @@ TOOL_SUB_ESCALATE = {
 
 TOOL_SUB_COMMENT = {
     "name": "suggest_comment",
-    "description": ("Zaproponuj 3 komentarze w glosie marki pod CUDZY post (Tomasz wkleja tresc "
-                    "posta i ew. autora). Doktryna comment-first: realna wartosc merytoryczna, "
+    "description": ("Zaproponuj 3 komentarze w glosie marki pod CUDZY post podany TEKSTEM (Tomasz wkleja "
+                    "tresc posta i ew. autora). Doktryna comment-first: realna wartosc merytoryczna, "
                     "peer-level, 2-4 zdania, ZERO linkow i pitchu."),
     "input_schema": {"type": "object", "properties": {
         "post_text": {"type": "string", "description": "Tresc cudzego posta (wklejona przez Tomasza)."},
         "author": {"type": ["string", "null"], "description": "Autor/handle, jesli podany."}},
         "required": ["post_text"]},
+}
+
+
+TOOL_SUB_COMMENT_VISION = {
+    "name": "suggest_comment_from_image",
+    "description": ("Skomentuj OSTATNI ZRZUT/obraz ze schowka (Tomasz wyslal zrzut posta/komentarza z "
+                    "LinkedIn/X). Claude analizuje OBRAZ i proponuje odpowiedz PER element (kazdy autor "
+                    "osobno). Uzyj gdy Tomasz mowi 'skomentuj ostatni zrzut', 'odpowiedz na ten screen', "
+                    "'daj komentarz do obrazu'. Interakcja zapisuje sie do pamieci (engagement_log)."),
+    "input_schema": {"type": "object", "properties": {}},
 }
 
 
@@ -938,7 +968,65 @@ def _sub_comment(inp, brand, channel):
                    f"Format: 1) ... 2) ... 3) ...\n\nPOST:\n{(inp.get('post_text') or '')[:1500]}"}])
     tasks.log_task("comment_suggest", tier, model, source, getattr(resp, "usage", None))
     out = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
-    return "💬 Propozycje komentarzy:\n" + out if out else "Nie wyszlo - sprobuj jeszcze raz."
+    if out:
+        _log_engagement(brand, channel, (inp.get("post_text") or "")[:500], out, kind="comment", who=author)
+        return "💬 Propozycje komentarzy:\n" + out
+    return "Nie wyszlo - sprobuj jeszcze raz."
+
+
+_ENG_CHANNEL = {"x": "X", "linkedin": "LinkedIn", "instagram": "Instagram", "facebook": "Facebook"}
+
+
+def _log_engagement(brand, channel, incoming, response, kind="comment", who=None):
+    """T9 (07/08): pamiec interakcji na koncie -> engagement_log. Subagent widzi to potem w kontekscie
+    ('co juz bylo i jak reagowalismy')."""
+    fam = channel.split("_")[0]
+    try:
+        db.execute(
+            """INSERT INTO engagement_log (action_type, channel, agent, content, response, notes)
+               VALUES (%s,%s,%s,%s,%s,%s)""",
+            (f"{fam}_comment" if kind == "comment" else "other", _ENG_CHANNEL.get(fam, "Other"),
+             f"{brand}:{channel}", (incoming or "")[:1000], (response or "")[:3000],
+             (f"od: {who}; " if who else "") + "propozycja subagenta (comment-first)"))
+    except Exception:
+        traceback.print_exc()
+
+
+def _sub_comment_vision(brand, channel):
+    """T9 (07/08): pobierz OSTATNI obraz ze schowka -> Claude vision -> komentarze PER element ->
+    zapis do engagement_log. Dziala bez zmian n8n (obraz laduje w schowku starym torem wizji)."""
+    photo = db.fetchone(
+        """SELECT id, content, metadata FROM inspirations
+           WHERE metadata->'media'->>'file_id' IS NOT NULL ORDER BY created_at DESC LIMIT 1""")
+    if not photo:
+        return ("Nie widze zadnego obrazu w schowku. Wyslij najpierw ZRZUT posta/komentarza (zwykle "
+                "zdjecie), potem powiedz 'skomentuj ostatni zrzut'.")
+    fid = photo["metadata"]["media"]["file_id"]
+    img, mt = _fetch_telegram_image(fid)
+    if not img:
+        return "Nie moge pobrac obrazu z Telegrama - sprobuj wyslac zrzut jeszcze raz."
+    from .generate import comment_from_image, _language_publish
+    lang = _language_publish(brand, channel)
+    out = comment_from_image(img, mt, load_brand(brand), channel, lang)
+    if not out:
+        return "Nie wyszlo - sprobuj jeszcze raz."
+    _log_engagement(brand, channel, (photo.get("content") or "zrzut")[:500], out, kind="comment")
+    return "💬 Propozycje komentarzy (z analizy zrzutu, per autor):\n\n" + out
+
+
+def _sub_engagement_text(brand, channel, limit=5):
+    """T9: OSTATNIE interakcje tego konta (pamiec) do kontekstu subagenta - 'co juz bylo'."""
+    try:
+        rows = db.fetchall(
+            """SELECT created_at, content, response FROM engagement_log
+               WHERE agent=%s ORDER BY created_at DESC LIMIT %s""", (f"{brand}:{channel}", limit))
+    except Exception:
+        return "(brak)"
+    if not rows:
+        return "(brak zapisanych interakcji)"
+    return "\n".join(
+        f"- {r['created_at'].astimezone(WARSAW).strftime('%d/%m %H:%M')}: na \"{(r.get('content') or '')[:50]}\" "
+        f"-> zaproponowano \"{(r.get('response') or '')[:60]}\"" for r in rows)
 
 
 def _sub_cm_agreements(channel):
@@ -1184,8 +1272,11 @@ def _sub_system(brand_row, brand, channel):
         "zalatwiasz SAM z Content Managerem narzedziem escalate_to_cm - NIE odsylaj Tomasza. "
         "WYNIK eskalacji czytasz z sekcji USTALENIA Z CM ponizej - gdy Tomasz pyta 'i jak "
         "zatwierdzil?', ODPOWIEDZ z USTALEN, NIGDY nie eskaluj ponownie. "
-        "Gdy Tomasz wkleja CUDZY post, proponuj komentarze narzedziem suggest_comment "
-        "(comment-first: wartosc, zero pitchu). Metryki wpisuje Tomasz recznie (subagent_set_metrics) - "
+        "Gdy Tomasz wkleja CUDZY post TEKSTEM - suggest_comment; gdy wysyla ZRZUT/obraz posta lub "
+        "komentarza (albo mowi 'skomentuj ostatni zrzut') - suggest_comment_from_image (Claude analizuje "
+        "OBRAZ, proponuje odpowiedz per autor). Kazda taka interakcja zapisuje sie w pamieci konta - "
+        "znasz OSTATNIE INTERAKCJE (sekcja nizej), wiec wiesz co juz bylo i nie powtarzasz sie. "
+        "Metryki wpisuje Tomasz recznie (subagent_set_metrics) - "
         "raz w tygodniu sam sie o nie upominasz. "
         "PRAWDA O KOLEJCE I SLOTACH (twarda zasada, zero wyjatkow): gdy Tomasz pyta o sloty / kolejke / "
         "kiedy i gdzie publikujesz, podawaj WYLACZNIE pozycje z sekcji KOLEJKA ponizej wraz z ICH slotami. "
@@ -1198,6 +1289,8 @@ def _sub_system(brand_row, brand, channel):
         f"\n\nTWOJE POWIERZCHNIE (rodzina {family}) - znasz kazda i jej charakterystyke:\n"
         f"{_sub_surfaces_text(family, brand, channel)}"
         f"\n\nSTRATEGIA PUBLIKACJI (od CM):\n{_sub_strategy_text(family)}"
+        f"\n\nOSTATNIE INTERAKCJE NA KONCIE (pamiec - wiesz co juz bylo i jak reagowaliscie):\n"
+        f"{_sub_engagement_text(brand, channel)}"
         f"\n\nKOLEJKA ({channel}) - JEDYNE zrodlo prawdy o slotach:\n{_sub_queue_text(brand, channel)}"
         f"\n\nOSTATNIE PUBLIKACJE:\n{_sub_published_text(brand, channel, 5)}"
         f"\n\nUSTALENIA Z CM (agent->agent):\n{_sub_cm_agreements(channel)}"
@@ -1222,6 +1315,11 @@ def _subagent_handle(chat_id, text, active):
         return
     if re.match(r"^/?raport\s*(dzienny|tygodniowy)?\s*$", low):
         _reply(chat_id, _sub_report(brand, channel))
+        return
+    # T9 (07/08): 'skomentuj ostatni zrzut' / 'odpowiedz na ten screen' -> wizja Claude na obrazie ze schowka
+    if (re.search(r"\b(skomentuj|odpowiedz|komentarz)\b", low)
+            and re.search(r"\b(zrzut|screen|obraz|obrazek|ekran|ostatni)\b", low)):
+        _reply(chat_id, _sub_comment_vision(brand, channel))
         return
     # DETERMINISTYCZNY start edycji (fix 07/08): 'edytuj #21' / 'popraw #21' bez tresci -> ustaw pending
     # (nie polegaj na tym, ze LLM zawola narzedzie). 'edytuj #21 na: ...' z trescia zostawiamy LLM.
@@ -1265,7 +1363,7 @@ def _subagent_handle(chat_id, text, active):
         thinking={"type": "disabled"},
         system=_sub_system(brand_row, brand, channel),
         tools=[TOOL_SUB_REMOVE, TOOL_SUB_RESCHEDULE, TOOL_SUB_SHOW, TOOL_SUB_EDIT, TOOL_SUB_METRICS,
-               TOOL_PROPOSE, TOOL_SUB_ESCALATE, TOOL_SUB_COMMENT],
+               TOOL_PROPOSE, TOOL_SUB_ESCALATE, TOOL_SUB_COMMENT, TOOL_SUB_COMMENT_VISION],
         messages=history,
     )
     tasks.log_task("subagent_chat", tier, model, source, getattr(resp, "usage", None))
@@ -1303,6 +1401,8 @@ def _subagent_handle(chat_id, text, active):
             parts.append(_sub_escalate(b.input, brand, channel))
         elif b.name == "suggest_comment":
             parts.append(_sub_comment(b.input, brand, channel))
+        elif b.name == "suggest_comment_from_image":
+            parts.append(_sub_comment_vision(brand, channel))
         elif b.name == "propose_material":
             inp = dict(b.input)
             inp["target_channels"] = [channel]  # subagent nie wychodzi poza swoj kanal

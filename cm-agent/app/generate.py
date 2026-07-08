@@ -177,6 +177,28 @@ def translate_text(text, target_lang, content_item_id=None):
     return _text(resp)
 
 
+def comment_from_image(image_bytes, media_type, brand, channel, lang="en"):
+    """T9 (07/08): Claude VISION analizuje zrzut z 1+ postami/komentarzami i proponuje odpowiedz
+    comment-first PER element (autor osobno). Jezyk celu. Glos marki. Zero pitchu."""
+    import base64
+    model, tier, source = tasks.model_for("canonical")  # sonnet - jakosc komentarzy
+    b64 = base64.b64encode(image_bytes).decode()
+    prompt = (f"Na obrazie sa JEDEN lub WIECEJ postow/komentarzy z {channel}. Dla KAZDEGO osobno "
+              f"(podaj autora jesli widoczny) zaproponuj 1 wartosciowy komentarz-odpowiedz (doktryna "
+              f"comment-first): konkretna wartosc, doswiadczenie albo kontrprzyklad, ton peer-level, "
+              f"2-4 zdania, ZERO linkow, zero pitchu, zero pustych pochlebstw ('great post'). "
+              f"Jezyk: {'polski (czysty, test mamy)' if lang == 'pl' else 'angielski'}. {TRUTH_GUARD}\n"
+              f"Format:\n### <Autor 1>\n<komentarz>\n\n### <Autor 2>\n<komentarz>")
+    resp = client().messages.create(
+        model=model, max_tokens=1200, thinking={"type": "disabled"},
+        system=[{"type": "text", "text": f"Glos marki:\n{brand['voice_bible'][:2500]}"}],
+        messages=[{"role": "user", "content": [
+            {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": b64}},
+            {"type": "text", "text": prompt}]}])
+    tasks.log_task("comment_vision", tier, model, source, getattr(resp, "usage", None))
+    return _text(resp)
+
+
 def generate_variant(brand, canonical_body, channel, content_item_id=None):
     """Adaptacja per kanal; model per task z routera R4 (default haiku); jezyk per cel (R6)."""
     model, tier, source = tasks.model_for("variant")
