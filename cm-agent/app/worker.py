@@ -104,6 +104,15 @@ def matnav(body: dict, x_researcher_secret: str = Header(default="")):
     return {"accepted": True}
 
 
+@api.post("/cmt", status_code=202)
+def cmt(body: dict, x_researcher_secret: str = Header(default="")):
+    """Decyzje dla propozycji komentarzy (guziki cmt:ok|angle|no) - zapis w engagement_log,
+    zatwierdzone dodatkowo do task_queue 'comment'. Wymog Tomasza 08/07."""
+    _guard(x_researcher_secret)
+    threading.Thread(target=conversation.handle_cmt, args=(body, wake), daemon=True).start()
+    return {"accepted": True}
+
+
 @api.post("/message", status_code=202)
 def message(body: dict, x_researcher_secret: str = Header(default="")):
     """Conversation entry: n8n HITL forwards a Telegram text {chat_id, text, update_id}. Returns 202

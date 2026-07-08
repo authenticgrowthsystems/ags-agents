@@ -977,19 +977,104 @@ def _sub_comment(inp, brand, channel):
 _ENG_CHANNEL = {"x": "X", "linkedin": "LinkedIn", "instagram": "Instagram", "facebook": "Facebook"}
 
 
+_LAST_ENG_ID = [None]  # ostatnia propozycja w TYM watku obslugi -> guziki decyzji (pojedynczy operator, Pareto)
+
+
 def _log_engagement(brand, channel, incoming, response, kind="comment", who=None):
     """T9 (07/08): pamiec interakcji na koncie -> engagement_log. Subagent widzi to potem w kontekscie
-    ('co juz bylo i jak reagowalismy')."""
+    ('co juz bylo i jak reagowalismy'). Zwraca id wiersza (kotwica dla guzikow decyzji cmt:)."""
     fam = channel.split("_")[0]
     try:
-        db.execute(
+        row = db.fetchone(
             """INSERT INTO engagement_log (action_type, channel, agent, content, response, notes)
-               VALUES (%s,%s,%s,%s,%s,%s)""",
+               VALUES (%s,%s,%s,%s,%s,%s) RETURNING id""",
             (f"{fam}_comment" if kind == "comment" else "other", _ENG_CHANNEL.get(fam, "Other"),
              f"{brand}:{channel}", (incoming or "")[:1000], (response or "")[:3000],
              (f"od: {who}; " if who else "") + "propozycja subagenta (comment-first)"))
+        _LAST_ENG_ID[0] = str(row["id"]) if row else None
+        return _LAST_ENG_ID[0]
     except Exception:
         traceback.print_exc()
+        return None
+
+
+def _send_comment_controls(chat_id):
+    """Guziki decyzji pod ostatnimi propozycjami komentarzy (wymog Tomasza 08/07: decyzja MUSI zapisac sie
+    w bazie). Rodzina cmt: -> n8n czysty transport -> POST /cmt."""
+    eng_id = _LAST_ENG_ID[0]
+    if not eng_id:
+        return
+    _LAST_ENG_ID[0] = None
+    kb = {"inline_keyboard": [[
+        {"text": "✅ Zatwierdz", "callback_data": f"cmt:ok:{eng_id}"},
+        {"text": "🔄 Inny kat", "callback_data": f"cmt:angle:{eng_id}"},
+        {"text": "❌ Odrzuc", "callback_data": f"cmt:no:{eng_id}"},
+    ]]}
+    _tg("sendMessage", {"chat_id": chat_id, "text": "Decyzja dla tych propozycji:", "reply_markup": kb})
+
+
+def handle_cmt(payload, wake_event=None):
+    """Obsluga guzikow cmt:<ok|angle|no>:<engagement_id> (n8n = transport). Decyzja laduje w engagement_log,
+    zatwierdzone komentarze dodatkowo w task_queue (task_type='comment', kolejka wykonania)."""
+    raw = str(payload.get("raw") or "")
+    chat_id = payload.get("chat_id")
+    message_id = payload.get("message_id")
+    parts = raw.split(":", 2)
+    action = parts[1] if len(parts) > 1 else ""
+    eng_id = parts[2] if len(parts) > 2 else ""
+    row = db.fetchone("SELECT id, agent, channel, content, response FROM engagement_log WHERE id=%s::uuid",
+                      (eng_id,)) if eng_id else None
+
+    def edit(text):
+        r = _tg("editMessageText", {"chat_id": chat_id, "message_id": message_id, "text": text[:4000]})
+        if not (r and r.get("ok")):
+            _tg("sendMessage", {"chat_id": chat_id, "text": text[:4000]})
+
+    if not row:
+        edit("Nie znam tej propozycji (brak wpisu w engagement_log).")
+        return
+    stamp = datetime.datetime.now(WARSAW).strftime("%d/%m %H:%M")
+    agent = row.get("agent") or "AGS:x"
+    brand, _, channel = agent.partition(":")
+    if action == "ok":
+        db.execute("UPDATE engagement_log SET notes = COALESCE(notes,'') || %s WHERE id=%s::uuid",
+                   (f" | DECYZJA {stamp}: ZATWIERDZONE", eng_id))
+        try:
+            db.execute(
+                """INSERT INTO task_queue (agent_id, task_type, platform, payload, priority, status)
+                   VALUES (%s,'comment',%s,%s,1,'pending')""",
+                (agent, channel.split("_")[0] or "x",
+                 Jsonb({"engagement_id": eng_id, "proposals": (row.get("response") or "")[:3000],
+                        "source_post": (row.get("content") or "")[:800]})))
+            note = "✅ Zatwierdzone - decyzja zapisana, komentarze czekaja w kolejce zadan (task_queue/comment)."
+        except Exception:
+            traceback.print_exc()
+            note = "✅ Zatwierdzone - decyzja zapisana (kolejka zadan niedostepna, zgloszenie w logu)."
+        edit(note)
+        if wake_event:
+            wake_event.set()
+        return
+    if action == "no":
+        db.execute("UPDATE engagement_log SET notes = COALESCE(notes,'') || %s WHERE id=%s::uuid",
+                   (f" | DECYZJA {stamp}: ODRZUCONE", eng_id))
+        edit("❌ Odrzucone - decyzja zapisana w pamieci konta.")
+        return
+    if action == "angle":
+        db.execute("UPDATE engagement_log SET notes = COALESCE(notes,'') || %s WHERE id=%s::uuid",
+                   (f" | DECYZJA {stamp}: INNY KAT (regeneracja)", eng_id))
+        edit("🔄 Robie inne katy...")
+        try:
+            if channel and db.fetchone(
+                    "SELECT 1 AS x FROM inspirations WHERE metadata->'media'->>'file_id' IS NOT NULL LIMIT 1"):
+                out = _sub_comment_vision(brand or "AGS", channel or "x")
+            else:
+                out = _sub_comment({"post_text": row.get("content") or ""}, brand or "AGS", channel or "x")
+            _reply(chat_id, out)
+            _send_comment_controls(chat_id)
+        except Exception:
+            traceback.print_exc()
+            _tg("sendMessage", {"chat_id": chat_id, "text": "Nie wyszla regeneracja - sprobuj jeszcze raz."})
+        return
 
 
 def _sub_comment_vision(brand, channel):
@@ -1363,6 +1448,7 @@ def _subagent_handle(chat_id, text, active):
     if (re.search(r"\b(skomentuj|odpowiedz|komentarz)\b", low)
             and re.search(r"\b(zrzut|screen|obraz|obrazek|ekran|ostatni)\b", low)):
         _reply(chat_id, _sub_comment_vision(brand, channel))
+        _send_comment_controls(chat_id)  # decyzja Tomasza zapisuje sie w bazie (08/07)
         return
     # DETERMINISTYCZNY start edycji (fix 07/08): 'edytuj #21' / 'popraw #21' bez tresci -> ustaw pending
     # (nie polegaj na tym, ze LLM zawola narzedzie). 'edytuj #21 na: ...' z trescia zostawiamy LLM.
@@ -1461,6 +1547,7 @@ def _subagent_handle(chat_id, text, active):
     reply = "\n\n".join(parts).strip() or "Przyjete."
     _save_history(chat_id, history + [{"role": "assistant", "content": reply}], agent=active)
     _reply(chat_id, reply, placeholder_id=ph_id)
+    _send_comment_controls(chat_id)  # guziki decyzji, gdy w tej turze padly propozycje komentarzy (cmt:)
 
 
 # ---------------- entry point ----------------
