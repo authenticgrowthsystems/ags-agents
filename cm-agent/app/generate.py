@@ -1,5 +1,7 @@
 """Generation: Sonnet for the canonical tekst-matka, Haiku for per-channel variants. Brand voice comes from
 the cached system block (brand.system_blocks), so the voice prefix is reused cheaply across calls."""
+import re
+
 import anthropic
 
 from . import config, tasks
@@ -156,25 +158,62 @@ def _image_quality():
     return v if v in ("low", "medium", "high") else "high"
 
 
+# Destylat sekcji 3 brand-canon/ags.md (fallback, gdy brand_config 'visual_canon' pusty).
+# Kontener nie ma dostepu do repo - SSOT docelowo w brand_config (INSERT po stronie Tomasza).
+_VISUAL_CANON_AGS = (
+    "AGS visual canon: palette STRICTLY Soft Sandstone #F5F5F5 (light surfaces), Cosmic Navy #1A1A2E "
+    "(dominant dark surfaces), Electric Cyan #00E0FF (max 1-2 small accents, never a fill), Muted Gold "
+    "#D4AF37 (premium accent line or emphasis word), Subtle Red #C73E3A (only for 'wrong way' marks). "
+    "Cosmic Navy + Soft Sandstone must cover ~80% of the composition. NO gradients, NO colors outside "
+    "this palette. Typography: elegant serif display headline (Playfair Display style) OR bold modern "
+    "grotesque; body/labels in clean sans (DM Sans/Inter style); technical labels in monospace "
+    "(JetBrains Mono style). Signature motif: thin circuit-board trace lines with a small gold terminal "
+    "pin, as subtle background texture at 5-10% opacity, occupying its own band, never overlapping "
+    "text. Generous negative space, engineering precision, editorial minimal, geometric abstract. "
+    "FORBIDDEN: stock-photo look, AI-generated faces or hands, gradient backgrounds, cyber "
+    "blue-purple-pink palette, whimsical hand-drawn style, emoji clutter.")
+
+
+def _visual_canon(brand_id="AGS"):
+    """Kanon wizualny marki do promptow graficznych (feedback Tomasza 10/07 'caly brand - kolory, "
+    "fonty'). SSOT: brand_config 'visual_canon'; fallback: destylat z brand-canon/ags.md."""
+    row = _db.fetchone(
+        "SELECT config_value FROM brand_config WHERE brand_id=%s AND config_key='visual_canon' ORDER BY version DESC LIMIT 1",
+        (brand_id,))
+    v = str(((row or {}).get("config_value")) or "").strip()
+    return v if len(v) > 40 else _VISUAL_CANON_AGS
+
+
+def hint_wants_generated_graphic(hint):
+    """Czy sugestia wizualu to GRAFIKA do wygenerowania (nie zdjecie/screenshot/wideo, ktore robi
+    czlowiek). Uzywane przez auto-grafike przed karta zatwierdzenia (feedback Tomasza 10/07)."""
+    h = (hint or "").lower()
+    if not h:
+        return False
+    if re.search(r"zdjec|zdjęc|foto|wideo|video|screencast|nagran|screenshot|zrzut", h):
+        return False
+    return bool(re.search(r"grafik|ilustracj|diagram|typograf|infografik|schemat|wykres|flowchart", h))
+
+
 def generate_image_prompt(brand, master_theme, canonical_body, hint, guidance=None, content_item_id=None):
-    """Feedback Tomasza 10/07: prompt graficzny ma byc BARDZO SZCZEGOLOWY, efekt premium.
-    Sonnet pisze pelny prompt po angielsku (kompozycja, paleta, typografia, dokladny tekst na
-    grafice) z sugestii wizualu + tresci posta + ewentualnych wskazowek Tomasza (guidance)."""
+    """Feedback Tomasza 10/07: prompt graficzny ma byc BARDZO SZCZEGOLOWY, efekt premium, W BRANDZIE
+    (kolory, fonty, motywy z kanonu wizualnego). Sonnet pisze pelny prompt po angielsku."""
     model, tier, source = tasks.model_for("image_prompt")
     guide = f"\n\nWSKAZOWKI WLASCICIELA (priorytet, zastosuj wprost): {guidance[:400]}" if guidance else ""
+    brand_id = (brand or {}).get("brand_id") or "AGS"
     resp = client().messages.create(
-        model=model, max_tokens=600, thinking={"type": "disabled"},
+        model=model, max_tokens=700, thinking={"type": "disabled"},
         messages=[{"role": "user", "content":
                    "Napisz JEDEN szczegolowy prompt (po angielsku, 150-250 slow) dla generatora obrazow "
-                   "gpt-image do grafiki social media klasy PREMIUM. Prompt MUSI opisywac: dokladna "
-                   "kompozycje i uklad (co w centrum, co po bokach, ile wolnej przestrzeni), konkretna "
-                   "palete kolorow (nazwy/odcienie, max 3-4 kolory, wysoki kontrast), typografie "
-                   "(nowoczesny grotesk, hierarchia), DOKLADNY krotki tekst na grafice (naglowek max "
-                   "6 slow - podaj go doslownie w cudzyslowie, generator ma go odwzorowac litera w "
-                   "litere), styl (editorial, minimal, tech, subtelne swiatlo/gradient/faktura), format "
-                   "poziomy 3:2. ZAKAZY wpisz do promptu: no watermarks, no stock-photo look, no fake "
-                   "photos of real events, no real people's faces, no logos, no lorem ipsum, no extra "
-                   "text beyond the specified headline. Zwroc WYLACZNIE prompt.\n\n"
+                   "gpt-image do grafiki social media klasy PREMIUM, SCISLE w kanonie wizualnym marki "
+                   "podanym nizej (dokladne hexy kolorow i proporcje z kanonu wpisz do promptu). Prompt "
+                   "MUSI opisywac: dokladna kompozycje i uklad (co w centrum, co po bokach, ile wolnej "
+                   "przestrzeni), palete WYLACZNIE z kanonu (z hexami), typografie zgodna z kanonem, "
+                   "DOKLADNY krotki tekst na grafice (naglowek max 6 slow - podaj go doslownie w "
+                   "cudzyslowie, generator ma go odwzorowac litera w litere), styl i motyw przewodni "
+                   "z kanonu, format poziomy 3:2. ZAKAZY z kanonu wpisz do promptu, plus: no watermarks, "
+                   "no lorem ipsum, no extra text beyond the specified headline. Zwroc WYLACZNIE prompt.\n\n"
+                   f"KANON WIZUALNY MARKI:\n{_visual_canon(brand_id)}\n\n"
                    f"SUGESTIA WIZUALU: {(hint or 'clean conceptual illustration of the post theme')[:400]}\n"
                    f"TEMAT POSTA: {(master_theme or '')[:300]}\n"
                    f"TRESC POSTA (kontekst): {(canonical_body or '')[:1200]}{guide}"}])
