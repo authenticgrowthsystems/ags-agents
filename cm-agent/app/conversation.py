@@ -635,6 +635,71 @@ TOOL_RESCHEDULE = {
 }
 
 
+TOOL_EXTERNAL_PUB = {
+    "name": "log_external_publication",
+    "description": ("Zapisz PUBLIKACJE ZEWNETRZNA (Tomasz opublikowal cos RECZNIE, poza systemem) do "
+                    "pamieci: 'opublikowalem to na LinkedIn', 'wrzucilem na X', 'poszlo na stronie TNM'. "
+                    "Jesli Tomasz wyslal wczesniej ZRZUT posta - system go opisze wizja i dopnie. "
+                    "Publikacja laduje w archiwum (content_items published) + pamieci konta "
+                    "(engagement_log), zeby dedup i plany ja widzialy. NIE uzywaj do publikacji "
+                    "zrobionych przez system."),
+    "input_schema": {"type": "object", "properties": {
+        "channel": {"type": "string",
+                    "description": "Kanal publikacji, np. x, linkedin, linkedin_tnm, instagram, facebook."},
+        "brand_id": {"type": ["string", "null"], "description": "Marka (AGS/TNM/RDC...), default AGS."},
+        "description": {"type": ["string", "null"],
+                        "description": "Opis/temat posta od Tomasza (wymagany, gdy nie bylo zrzutu)."}},
+        "required": ["channel"]},
+}
+
+
+def _log_external_publication(inp):
+    """Wymog Tomasza 10/07: po recznej publikacji wysyla screena do CM -> CM loguje. Zero DDL:
+    content_items status='published' (widoczne w OSTATNICH PUBLIKACJACH i dedupie) + engagement_log
+    (pamiec konta). Zrzut = ostatnie zdjecie ze schowka (jesli jest), opis robi wizja."""
+    from .generate import describe_published_screenshot
+    channel = (inp.get("channel") or "").strip().lower()
+    brand = (inp.get("brand_id") or "AGS").strip() or "AGS"
+    if not channel:
+        return "Podaj kanal publikacji (x/linkedin/...)."
+    desc = (inp.get("description") or "").strip()
+    media = []
+    photo = db.fetchone(
+        """SELECT id, metadata FROM inspirations
+           WHERE metadata->'media'->>'file_id' IS NOT NULL ORDER BY created_at DESC LIMIT 1""")
+    if photo:
+        fid = photo["metadata"]["media"]["file_id"]
+        img, mt = _fetch_telegram_image(fid)
+        if img:
+            try:
+                vis = describe_published_screenshot(img, mt)
+                desc = (desc + " | " + vis).strip(" |") if desc else vis
+            except Exception:
+                traceback.print_exc()
+            media = [{"source": "telegram", "file_id": fid, "kind": "photo", "external_pub": True,
+                      "inspiration_id": photo["id"]}]
+    if len(desc) < 4:
+        return ("Nie mam ani zrzutu w schowku, ani opisu - napisz w 1 zdaniu co opublikowales "
+                "(albo wyslij najpierw zrzut posta).")
+    row = db.fetchone(
+        """INSERT INTO content_items (brand_id, master_theme, target_channels, status, media)
+           VALUES (%s,%s,%s,'published',%s::jsonb) RETURNING id""",
+        (brand, ("[ZEWN] " + desc)[:300], [channel], json.dumps(media)))
+    fam = channel.split("_")[0]
+    try:
+        db.execute(
+            """INSERT INTO engagement_log (action_type, channel, agent, content, notes)
+               VALUES (%s,%s,%s,%s,%s)""",
+            (f"{fam}_post" if fam in ("x", "linkedin") else "other",
+             _ENG_CHANNEL.get(fam, "Other"), f"{brand}:{channel}", desc[:1000],
+             "PUBLIKACJA ZEWNETRZNA (reczna, zgloszona przez Tomasza)"))
+    except Exception:
+        traceback.print_exc()
+    return (f"📌 Zapisane jako publikacja zewnetrzna na {brand}/{channel}: \"{desc[:160]}\""
+            + (" (ze zrzutem)" if media else "")
+            + ". Widze ja w archiwum - dedup i plany beda jej pilnowac.")
+
+
 TOOL_GEN_IMAGE = {
     "name": "generate_material_image",
     "description": ("Wygeneruj/POPRAW grafike materialu (gpt-image, jakosc premium, szczegolowy prompt). "
@@ -734,7 +799,10 @@ def _system_blocks(brand):
         "wprost ('dawaj', 'zapisz') - zapisuj od razu, bez zbednego pytania. "
         "Model pracy: jedno zatwierdzenie. Po zapisaniu materialu pipeline generuje tekst, Tomasz klika raz "
         "Zatwierdz, a publikacja idzie automatycznie w slocie. Pomysl 'na pozniej' zapisujesz narzedziem "
-        "save_to_schowek (bez produkcji). PLANOWANIE: 'zaplanuj tydzien' -> plan_build; 'zatwierdz plan' -> "
+        "save_to_schowek (bez produkcji). PUBLIKACJA ZEWNETRZNA: gdy Tomasz mowi 'opublikowalem / "
+        "wrzucilem / poszlo recznie' (czesto ze zrzutem wyslanym chwile wczesniej) - wywolaj "
+        "log_external_publication (kanal z wypowiedzi; brak kanalu = dopytaj jednym slowem). "
+        "PLANOWANIE: 'zaplanuj tydzien' -> plan_build; 'zatwierdz plan' -> "
         "plan_approve (wyjatki numerami); edycje pozycji -> plan_edit. Cele: target_create / target_update. "
         "Brak reakcji Tomasza 24h po prosbie o approve = publikacja awaryjna w slocie (poinformuj, gdy pyta). "
         "Domyslne zalozenia gdy nie podano: kanaly x + linkedin, slot null - nie pytaj o to. Gdy dedup "
@@ -910,7 +978,7 @@ def _cm_tools():
         _CM_TOOLS = [TOOL_PROPOSE, TOOL_SCHOWEK, TOOL_ARCHIVE, TOOL_SIMILAR, TOOL_ADAPT,
                      TOOL_PLAN_BUILD, TOOL_PLAN_APPROVE, TOOL_PLAN_EDIT, TOOL_TARGET_CREATE, TOOL_TARGET_UPDATE,
                      TOOL_REVIEW_CARDS, TOOL_ATTACH_PHOTO, TOOL_STYLE_RULE, TOOL_RESCHEDULE, TOOL_REPLACE,
-                     TOOL_GEN_IMAGE]
+                     TOOL_GEN_IMAGE, TOOL_EXTERNAL_PUB]
     return _CM_TOOLS
 
 
@@ -954,6 +1022,8 @@ def _dispatch_tool(name, inp, chat_id):
         return _replace_material(inp)
     if name == "generate_material_image":
         return _generate_material_image(inp, chat_id)
+    if name == "log_external_publication":
+        return _log_external_publication(inp)
     return "ok"
 
 

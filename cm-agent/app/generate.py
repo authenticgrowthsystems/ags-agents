@@ -264,6 +264,25 @@ def translate_text(text, target_lang, content_item_id=None):
     return _text(resp)
 
 
+def describe_published_screenshot(image_bytes, media_type, content_item_id=None):
+    """Intake publikacji zewnetrznej (wymog Tomasza 10/07: 'opublikowalem to i tam' + zrzut):
+    Claude vision opisuje zrzut WLASNEGO opublikowanego posta - temat + platforma jesli widoczna.
+    Zwraca 1-2 zdania PL (do master_theme i pamieci)."""
+    import base64
+    model, tier, source = tasks.model_for("canonical")
+    b64 = base64.b64encode(image_bytes).decode()
+    resp = client().messages.create(
+        model=model, max_tokens=250, thinking={"type": "disabled"},
+        messages=[{"role": "user", "content": [
+            {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": b64}},
+            {"type": "text", "text":
+             "To zrzut WLASNEGO opublikowanego posta wlasciciela. Opisz w 1-2 zdaniach po polsku: "
+             "temat/teza posta (+ platforma, jesli widoczna na zrzucie). Czysta polszczyzna, zero "
+             "em dash. WYLACZNIE to, co realnie widac. Zwroc sam opis."}]}])
+    tasks.log_task("external_pub_vision", tier, model, source, getattr(resp, "usage", None), content_item_id)
+    return _text(resp)[:400]
+
+
 def comment_from_image(image_bytes, media_type, brand, channel, lang="en"):
     """T9 (07/08): Claude VISION analizuje zrzut z 1+ postami/komentarzami i proponuje odpowiedz
     comment-first PER element (autor osobno). Jezyk celu. Glos marki. Zero pitchu."""
