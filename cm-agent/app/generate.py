@@ -283,6 +283,24 @@ def describe_published_screenshot(image_bytes, media_type, content_item_id=None)
     return _text(resp)[:400]
 
 
+def inspect_image(image_bytes, media_type, question=None, content_item_id=None):
+    """Luka 10/07 ('czemu refleksja i reflection?'): agent OGLADA zalacznik materialu i odpowiada
+    na pytanie Tomasza o grafike (albo ja opisuje). Zwraca odpowiedz PL."""
+    import base64
+    model, tier, source = tasks.model_for("canonical")
+    b64 = base64.b64encode(image_bytes).decode()
+    ask = (question or "").strip() or "Opisz dokladnie co jest na tej grafice (uklad, teksty, kolory)."
+    resp = client().messages.create(
+        model=model, max_tokens=400, thinking={"type": "disabled"},
+        messages=[{"role": "user", "content": [
+            {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": b64}},
+            {"type": "text", "text":
+             f"To grafika dopieta do materialu contentowego wlasciciela. {ask}\n"
+             f"Odpowiedz po polsku, czysta polszczyzna, zero em dash, WYLACZNIE o tym co widac."}]}])
+    tasks.log_task("inspect_image", tier, model, source, getattr(resp, "usage", None), content_item_id)
+    return _text(resp)[:1200]
+
+
 def comment_from_image(image_bytes, media_type, brand, channel, lang="en"):
     """T9 (07/08): Claude VISION analizuje zrzut z 1+ postami/komentarzami i proponuje odpowiedz
     comment-first PER element (autor osobno). Jezyk celu. Glos marki. Zero pitchu."""

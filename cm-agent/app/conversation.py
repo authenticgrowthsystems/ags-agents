@@ -635,6 +635,49 @@ TOOL_RESCHEDULE = {
 }
 
 
+TOOL_INSPECT_IMAGE = {
+    "name": "describe_material_image",
+    "description": ("OBEJRZYJ grafike/zdjecie dopiete do materialu i odpowiedz na pytanie Tomasza o nia "
+                    "('czemu na grafice jest X', 'co jest na tym obrazku', 'jak wyglada grafika do...'). "
+                    "Wywoluj ZAWSZE gdy Tomasz pyta o TRESC lub WYGLAD grafiki materialu - masz przez to "
+                    "narzedzie wzrok, NIE mow ze nie widzisz obrazow. theme_fragment pusty = ostatni "
+                    "material z zalacznikiem."),
+    "input_schema": {"type": "object", "properties": {
+        "theme_fragment": {"type": ["string", "null"], "description": "Fragment tematu materialu (albo null)."},
+        "question": {"type": ["string", "null"],
+                     "description": "Pytanie Tomasza o grafike, doslownie (null = ogolny opis)."}},
+        "required": []},
+}
+
+
+def _describe_material_image(inp):
+    """Luka 10/07: agent nie widzial wlasnej grafiki. Bierze zalacznik materialu (frag albo ostatni),
+    sciaga z Telegrama, Claude vision odpowiada na pytanie."""
+    from .generate import inspect_image
+    frag = (inp.get("theme_fragment") or "").strip()
+    base_q = """SELECT id, master_theme, media FROM content_items
+                WHERE brand_id='AGS' AND media IS NOT NULL"""
+    if frag:
+        row = db.fetchone(base_q + " AND master_theme ILIKE %s ORDER BY updated_at DESC LIMIT 1",
+                          (f"%{frag}%",))
+    else:
+        row = db.fetchone(base_q + """ AND EXISTS (SELECT 1 FROM jsonb_array_elements(media) m
+                                                   WHERE m->>'file_id' IS NOT NULL)
+                          ORDER BY updated_at DESC LIMIT 1""")
+    fid = next((m.get("file_id") for m in ((row or {}).get("media") or []) if (m or {}).get("file_id")), None)
+    if not fid:
+        return "Ten material nie ma zalacznika graficznego (albo nie znajduje materialu - podaj fragment tematu)."
+    img, mt = _fetch_telegram_image(fid)
+    if not img:
+        return "Nie moge pobrac grafiki z Telegrama - sprobuj za chwile."
+    try:
+        out = inspect_image(img, mt, question=inp.get("question"), content_item_id=row["id"])
+    except Exception as e:
+        traceback.print_exc()
+        return f"Nie udalo sie obejrzec grafiki: {str(e)[:150]}"
+    return f"🖼 Grafika materialu \"{row['master_theme'][:80]}\":\n{out}"
+
+
 TOOL_EXTERNAL_PUB = {
     "name": "log_external_publication",
     "description": ("Zapisz PUBLIKACJE ZEWNETRZNA (Tomasz opublikowal cos RECZNIE, poza systemem) do "
@@ -978,7 +1021,7 @@ def _cm_tools():
         _CM_TOOLS = [TOOL_PROPOSE, TOOL_SCHOWEK, TOOL_ARCHIVE, TOOL_SIMILAR, TOOL_ADAPT,
                      TOOL_PLAN_BUILD, TOOL_PLAN_APPROVE, TOOL_PLAN_EDIT, TOOL_TARGET_CREATE, TOOL_TARGET_UPDATE,
                      TOOL_REVIEW_CARDS, TOOL_ATTACH_PHOTO, TOOL_STYLE_RULE, TOOL_RESCHEDULE, TOOL_REPLACE,
-                     TOOL_GEN_IMAGE, TOOL_EXTERNAL_PUB]
+                     TOOL_GEN_IMAGE, TOOL_EXTERNAL_PUB, TOOL_INSPECT_IMAGE]
     return _CM_TOOLS
 
 
@@ -1024,6 +1067,8 @@ def _dispatch_tool(name, inp, chat_id):
         return _generate_material_image(inp, chat_id)
     if name == "log_external_publication":
         return _log_external_publication(inp)
+    if name == "describe_material_image":
+        return _describe_material_image(inp)
     return "ok"
 
 
@@ -1680,10 +1725,11 @@ def _sub_system(brand_row, brand, channel):
     return [{"type": "text", "text": role}]
 
 
-_SUB_VERBATIM = {"subagent_show_post", "suggest_comment", "suggest_comment_from_image"}
+_SUB_VERBATIM = {"subagent_show_post", "suggest_comment", "suggest_comment_from_image",
+                 "describe_material_image"}
 _SUB_TOOLS = [TOOL_SUB_REMOVE, TOOL_SUB_RESCHEDULE, TOOL_SUB_SHOW, TOOL_SUB_EDIT, TOOL_SUB_METRICS,
               TOOL_PROPOSE, TOOL_SUB_ESCALATE, TOOL_SUB_COMMENT, TOOL_SUB_COMMENT_VISION, TOOL_SUB_RULE,
-              TOOL_GEN_IMAGE]
+              TOOL_GEN_IMAGE, TOOL_INSPECT_IMAGE]
 
 
 def _sub_dispatch_tool(name, inp, brand, channel, chat_id=None):
@@ -1737,6 +1783,8 @@ def _sub_dispatch_tool(name, inp, brand, channel, chat_id=None):
         _log_autonomous(brand, channel, f"Grafika materialu z rozmowy: {(inp.get('guidance') or 'bez wskazowek')[:80]}",
                         {"tool": "generate_material_image", "input": inp})
         return _generate_material_image(inp, chat_id)
+    if name == "describe_material_image":
+        return _describe_material_image(inp)
     return "ok"
 
 
