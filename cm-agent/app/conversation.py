@@ -1513,6 +1513,61 @@ def _sub_system(brand_row, brand, channel):
     return [{"type": "text", "text": role}]
 
 
+_SUB_VERBATIM = {"subagent_show_post", "suggest_comment", "suggest_comment_from_image"}
+_SUB_TOOLS = [TOOL_SUB_REMOVE, TOOL_SUB_RESCHEDULE, TOOL_SUB_SHOW, TOOL_SUB_EDIT, TOOL_SUB_METRICS,
+              TOOL_PROPOSE, TOOL_SUB_ESCALATE, TOOL_SUB_COMMENT, TOOL_SUB_COMMENT_VISION, TOOL_SUB_RULE]
+
+
+def _sub_dispatch_tool(name, inp, brand, channel):
+    """Wykonaj narzedzie subagenta i zwroc wynik jako tekst (wraca do modelu w petli agentowej -
+    10/07: subagent mysli wielokrokowo jak CM, nie single-pass)."""
+    inp = dict(inp or {})
+    if name == "subagent_remove_post":
+        out = _sub_remove(inp, brand, channel)
+        if out.startswith("🗑"):
+            _log_autonomous(brand, channel, f"Usuniecie pozycji #{inp.get('post_queue_id')} na polecenie Tomasza w rozmowie",
+                            {"tool": "remove", "input": inp})
+        return out
+    if name == "subagent_reschedule_post":
+        out = _sub_reschedule(inp, brand, channel)
+        if out.startswith("🕐"):
+            _log_autonomous(brand, channel, f"Przesuniecie slotu pozycji #{inp.get('post_queue_id')} na {inp.get('new_time')}",
+                            {"tool": "reschedule", "input": inp})
+        return out
+    if name == "subagent_show_post":
+        return _sub_show(inp, brand, channel)
+    if name == "subagent_edit_post":
+        out = _sub_edit(inp, brand, channel)
+        if out.startswith("✏️"):
+            _log_autonomous(brand, channel, f"Reczna edycja tresci #{inp.get('post_queue_id')} w rozmowie",
+                            {"tool": "edit", "post_queue_id": inp.get("post_queue_id")})
+        return out
+    if name == "subagent_set_metrics":
+        m = reports.set_manual_metrics(int(inp.get("published_id") or 0), inp, brand, channel)
+        return (f"📈 Metryki zapisane dla #{inp.get('published_id')}." if m
+                else f"Nie znalazlem publikacji #{inp.get('published_id')} w {channel}.")
+    if name == "escalate_to_cm":
+        _log_autonomous(brand, channel, f"Eskalacja do CM ({inp.get('topic')}): {inp.get('proposal', '')[:80]}",
+                        {"tool": "escalate_to_cm", "input": inp})
+        return _sub_escalate(inp, brand, channel)
+    if name == "suggest_comment":
+        return _sub_comment(inp, brand, channel)
+    if name == "suggest_comment_from_image":
+        return _sub_comment_vision(brand, channel)
+    if name == "subagent_remember_rule":
+        out = _sub_remember_rule(inp, brand, channel)
+        if out.startswith("✅"):
+            _log_autonomous(brand, channel, f"Zasada konta zapisana: {inp.get('rule', '')[:80]}",
+                            {"tool": "remember_rule"})
+        return out
+    if name == "propose_material":
+        inp["target_channels"] = [channel]  # subagent nie wychodzi poza swoj kanal
+        _log_autonomous(brand, channel, f"Material ad-hoc poza planem CM: {inp.get('master_theme', '')[:80]}",
+                        {"tool": "propose_material", "input": inp})
+        return _create_material(inp)
+    return "ok"
+
+
 def _subagent_handle(chat_id, text, active):
     """Rozmowa z subagentem per KONTO/CEL. active = 'subagent:<brand>:<channel>'."""
     try:
@@ -1574,63 +1629,31 @@ def _subagent_handle(chat_id, text, active):
     ph_id = ((ph or {}).get("result") or {}).get("message_id")
     history = _load_history(chat_id, agent=active) + [{"role": "user", "content": text}]
     model, tier, source = tasks.model_for("subagent_chat")  # R4: default sonnet, override cm_tier_subagent_chat
-    resp = client().messages.create(
-        model=model, max_tokens=900,
-        thinking={"type": "disabled"},
-        system=_sub_system(brand_row, brand, channel),
-        tools=[TOOL_SUB_REMOVE, TOOL_SUB_RESCHEDULE, TOOL_SUB_SHOW, TOOL_SUB_EDIT, TOOL_SUB_METRICS,
-               TOOL_PROPOSE, TOOL_SUB_ESCALATE, TOOL_SUB_COMMENT, TOOL_SUB_COMMENT_VISION, TOOL_SUB_RULE],
-        messages=history,
-    )
-    tasks.log_task("subagent_chat", tier, model, source, getattr(resp, "usage", None))
-    parts = [b.text for b in resp.content if getattr(b, "type", "") == "text" and b.text.strip()]
-    for b in resp.content:
-        if getattr(b, "type", "") != "tool_use":
-            continue
-        if b.name == "subagent_remove_post":
-            out = _sub_remove(b.input, brand, channel)
-            if out.startswith("🗑"):
-                _log_autonomous(brand, channel, f"Usuniecie pozycji #{b.input.get('post_queue_id')} na polecenie Tomasza w rozmowie",
-                                {"tool": "remove", "input": dict(b.input)})
-            parts.append(out)
-        elif b.name == "subagent_reschedule_post":
-            out = _sub_reschedule(b.input, brand, channel)
-            if out.startswith("🕐"):
-                _log_autonomous(brand, channel, f"Przesuniecie slotu pozycji #{b.input.get('post_queue_id')} na {b.input.get('new_time')}",
-                                {"tool": "reschedule", "input": dict(b.input)})
-            parts.append(out)
-        elif b.name == "subagent_show_post":
-            parts.append(_sub_show(b.input, brand, channel))
-        elif b.name == "subagent_edit_post":
-            out = _sub_edit(b.input, brand, channel)
-            if out.startswith("✏️"):
-                _log_autonomous(brand, channel, f"Reczna edycja tresci #{b.input.get('post_queue_id')} w rozmowie",
-                                {"tool": "edit", "post_queue_id": b.input.get("post_queue_id")})
-            parts.append(out)
-        elif b.name == "subagent_set_metrics":
-            m = reports.set_manual_metrics(int(b.input.get("published_id") or 0), dict(b.input), brand, channel)
-            parts.append(f"📈 Metryki zapisane dla #{b.input.get('published_id')}." if m
-                         else f"Nie znalazlem publikacji #{b.input.get('published_id')} w {channel}.")
-        elif b.name == "escalate_to_cm":
-            _log_autonomous(brand, channel, f"Eskalacja do CM ({b.input.get('topic')}): {b.input.get('proposal', '')[:80]}",
-                            {"tool": "escalate_to_cm", "input": dict(b.input)})
-            parts.append(_sub_escalate(b.input, brand, channel))
-        elif b.name == "suggest_comment":
-            parts.append(_sub_comment(b.input, brand, channel))
-        elif b.name == "suggest_comment_from_image":
-            parts.append(_sub_comment_vision(brand, channel))
-        elif b.name == "subagent_remember_rule":
-            out = _sub_remember_rule(b.input, brand, channel)
-            if out.startswith("✅"):
-                _log_autonomous(brand, channel, f"Zasada konta zapisana: {(b.input or {}).get('rule', '')[:80]}",
-                                {"tool": "remember_rule"})
-            parts.append(out)
-        elif b.name == "propose_material":
-            inp = dict(b.input)
-            inp["target_channels"] = [channel]  # subagent nie wychodzi poza swoj kanal
-            _log_autonomous(brand, channel, f"Material ad-hoc poza planem CM: {inp.get('master_theme', '')[:80]}",
-                            {"tool": "propose_material", "input": inp})
-            parts.append(_create_material(inp))
+    sysblocks = _sub_system(brand_row, brand, channel)
+    # PETLA AGENTOWA (10/07, na wzor _discuss CM): wynik narzedzia WRACA do modelu, subagent moze
+    # dzialac wielokrokowo (np. show_post -> ocena -> propozycja edycji), nie utyka po 1. kroku.
+    msgs = list(history)
+    parts = []
+    for _step in range(_MAX_TOOL_STEPS):
+        resp = client().messages.create(
+            model=model, max_tokens=900, thinking={"type": "disabled"},
+            system=sysblocks, tools=_SUB_TOOLS, messages=msgs)
+        tasks.log_task("subagent_chat", tier, model, source, getattr(resp, "usage", None))
+        parts += [b.text for b in resp.content if getattr(b, "type", "") == "text" and b.text.strip()]
+        tool_uses = [b for b in resp.content if getattr(b, "type", "") == "tool_use"]
+        if not tool_uses:
+            break
+        msgs.append({"role": "assistant", "content": resp.content})
+        results = []
+        for tu in tool_uses:
+            out = _sub_dispatch_tool(tu.name, tu.input, brand, channel) or "ok"
+            if tu.name in _SUB_VERBATIM:
+                # tresci doslowne (pelny post, propozycje komentarzy) ida do Tomasza BEZ parafrazy
+                parts.append(out)
+                out = ("POKAZANE TOMASZOWI DOSLOWNIE (nie powtarzaj tej tresci, mozesz sie krotko "
+                       "odniesc):\n" + out[:1500])
+            results.append({"type": "tool_result", "tool_use_id": tu.id, "content": str(out)[:3000]})
+        msgs.append({"role": "user", "content": results})
     reply = "\n\n".join(parts).strip() or "Przyjete."
     _save_history(chat_id, history + [{"role": "assistant", "content": reply}], agent=active)
     _reply(chat_id, reply, placeholder_id=ph_id)
