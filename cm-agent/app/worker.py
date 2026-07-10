@@ -12,7 +12,7 @@ from . import config, db
 from .brand import load_brand
 from psycopg.types.json import Jsonb
 
-from . import generate, compliance, channels, research, hitl, conversation, logbot, content_memory, reports, planner, matreview, slots, proactive
+from . import generate, compliance, channels, research, hitl, conversation, logbot, content_memory, reports, planner, matreview, slots, proactive, engagement
 
 api = FastAPI(title="AGS Content Manager")
 wake = threading.Event()
@@ -364,6 +364,7 @@ def loop():
             matreview.media_attach_watch()        # v7: ➕ Media - swieze zdjecie -> przypiecie do materialu
             proactive.tick()                      # 06/07: luka kadencji -> subagent wola CM; odprawa semi
             conversation.memory_tick()            # 10/07: wygasajacy watek rozmowy -> skrot do pamieci trwalej
+            engagement.consumer_tick()            # 10/07: zatwierdzone komentarze -> gotowiec do wklejenia + guziki
             item = db.claim_content_item()
             if item:
                 worked = True

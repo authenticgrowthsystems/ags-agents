@@ -1106,18 +1106,35 @@ def handle_cmt(payload, wake_event=None):
     parts = raw.split(":", 2)
     action = parts[1] if len(parts) > 1 else ""
     eng_id = parts[2] if len(parts) > 2 else ""
-    row = db.fetchone("SELECT id, agent, channel, content, response FROM engagement_log WHERE id=%s::uuid",
-                      (eng_id,)) if eng_id else None
 
     def edit(text):
         r = _tg("editMessageText", {"chat_id": chat_id, "message_id": message_id, "text": text[:4000]})
         if not (r and r.get("ok")):
             _tg("sendMessage", {"chat_id": chat_id, "text": text[:4000]})
 
+    stamp = datetime.datetime.now(WARSAW).strftime("%d/%m %H:%M")
+    if action in ("done", "skip"):
+        # konsument komentarzy (10/07): tu parts[2] = id zadania task_queue, NIE engagement_log
+        task = db.fetchone("SELECT id, payload FROM task_queue WHERE id=%s::uuid AND task_type='comment'",
+                           (eng_id,)) if eng_id else None
+        if not task:
+            edit("Nie znam tego zadania (brak w kolejce komentarzy).")
+            return
+        new_status = "done" if action == "done" else "failed"
+        db.execute("UPDATE task_queue SET status=%s, resolved_at=NOW() WHERE id=%s::uuid",
+                   (new_status, eng_id))
+        src_eng = (task.get("payload") or {}).get("engagement_id")
+        if src_eng:
+            db.execute("UPDATE engagement_log SET notes = COALESCE(notes,'') || %s WHERE id=%s::uuid",
+                       ((f" | WYKONANE {stamp}" if action == "done" else f" | POMINIETE {stamp}"), src_eng))
+        edit("✅ Odhaczone - komentarz wykonany, zapisane w pamieci konta." if action == "done"
+             else "⏭ Pominiete - zadanie zamkniete bez wykonania.")
+        return
+    row = db.fetchone("SELECT id, agent, channel, content, response FROM engagement_log WHERE id=%s::uuid",
+                      (eng_id,)) if eng_id else None
     if not row:
         edit("Nie znam tej propozycji (brak wpisu w engagement_log).")
         return
-    stamp = datetime.datetime.now(WARSAW).strftime("%d/%m %H:%M")
     agent = row.get("agent") or "AGS:x"
     brand, _, channel = agent.partition(":")
     if action == "ok":
