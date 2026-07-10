@@ -111,21 +111,111 @@ Algorytm nagradza dwell time i rozmowe, karze linki zewnetrzne w tresci.
 - Metryki: memberCreatorPostAnalytics po App 2 CMA (kolektor gotowy, stats_mode
   member_api/org_api). Do tego czasu: reczny wpis.
 
-## 4. Stan wdrozenia: zbudowane vs brakuje (mapa na backlog)
+## 4. Inwentaryzacja funkcji: JEST vs BRAKUJE (stan 10/07/2026)
 
-| Obowiazek | Zbudowane | Brakuje |
-|---|---|---|
-| O1 Publikacja | sloty+okna, luki kadencji, slot-blokada, meldunek po callbacku | dowod X-obraz (obserwacja) |
-| O2 Tresci | generacja PL/EN, nauka stylu, TRUTH_GUARD, filtr polszczyzny, multimedia foto/obraz/wideo | subagenty wizualne T6 (research-first) |
-| O3 Comment-first | wizja zrzutu -> propozycje per autor -> guziki decyzji -> task_queue (E2E 09/07) | **konsument task_queue 'comment'** (P2); docelowo katalog obserwacji bez zrzutow |
-| O4 Radar | inspirations + Content Intelligence Radar (ETL #71) | cykliczny radar per platforma w petli subagenta |
-| O5 Metryki | kolektor LI gotowy; cost-ledger | App 2 CMA (LI), reczny wpis X, petla wnioski->strategia |
-| O6 Relacje | contacts+engagement_log zasilane, logowanie komentarzy | konsolidacja kolumn contacts, agent CRM |
-| O7 Zlecenia | - (wzorzec opisany w wizji CC) | brief-generator + kolejka zlecen dla Tomasza |
-| O8 Komunikacja | rozmowy per konto, agent_messages, negocjacja slotow (1x kanon), eskalacja needs_human | **webhook wake agent-agent** (dzis czesciowo poll), swobodny dialog = ciagle iterowac |
+### O1 Publikacja
+JEST (LIVE):
+- Sloty + okna publikacji per cel (publish_windows, Europe/Warsaw; X 13-22, LI 13-18 WAW),
+  kadencja kanoniczna, siatka X 14/16/18/20 (negocjacja agent->CM).
+- Scheduler co minute (post_queue.scheduled_for), guziki Teraz/Zaplanuj/kolejka/Odrzuc,
+  slot-blokada (cron nie generuje gdy slot zajety).
+- Meldunek publikacji PO callbacku (reconcile_publications) + alert 2h zwisu.
+- Wykrywanie luk kadencji dzis/jutro + subagent sam zglasza propozycje.
+- Publikacja X (OAuth1, nitki E2E), LinkedIn profil osobisty (token do ~02/09).
+- Multimedia: foto X+LI (LI z obrazem opublikowany), generowanie obrazow gpt-image,
+  wideo capture+publish, galeria Media, przesuwanie slotow (reschedule_material).
+- Stan awaryjny: milczenie 24h -> auto-publikacja najlepszej opcji (config per cel).
+BRAKUJE:
+- Dowod/fix X obraz w tweecie (nitka poszla bez obrazow; exec saving ON, czeka na
+  najblizsza publikacje X z obrazem).
+- Strony firmowe LinkedIn (AGS/TNM/RDC 'ready', czekaja na tokeny po App 2 CMA) +
+  routing multi-konto (T7).
+- GDrive media dla wideo >19MB (limit Telegram getFile).
 
-Wniosek Managera: fundament (O1-O2) jest kompletny, przewaga konkurencyjna lezy w O3-O5
-(zaangazowanie + metryki + nauka). To tam idzie nastepny sprint.
+### O2 Tworzenie tresci
+JEST (LIVE):
+- Generacja PL+EN (dwujezycznosc: publikacja native EN + review_pl do przegladu).
+- Nauka stylu z edycji (style_learned; edycja = akceptacja), Inny kat v4 (wlasny kat
+  Tomasza wiadomoscia), karty przegladu v9 (kompakt/rozwin/dzien/filtry).
+- TRUTH_GUARD we wszystkich generatorach, filtr czystej polszczyzny, filtr em-dash,
+  Voice Bible v2.1 (Re-Intro WARN), glos per konto (osoba PL vs strona firmowa).
+- Idea Bot pelny rurociag: zdjecie/pomysl -> triage -> Research (5 zrodel cascade) ->
+  synteza z katami/hakami -> seria 5 postow PL+EN -> decyzje per post.
+- Media-sugestia przy KAZDYM materiale (generate_media_hint, tylko wykonalne wizuale).
+BRAKUJE:
+- Subagenty wizualne T6 (dedykowana generacja grafik/wideo, research-first).
+- Zdjecia referencyjne/twarz Tomasza w generowanych obrazach.
+- Generator wideo (deep research; Tomasz zbiera rolki IG jako wzorce).
+- Idea Bot rozpoznawanie intencji (spec gotowy: SPEC_IDEABOT_INTENT_06072026.md;
+  wykonanie = n8n + tap, AP-301).
+
+### O3 Comment-first (zaangazowanie poza profilem)
+JEST (LIVE):
+- Comment radar z wizji: zrzut cudzego posta -> Claude vision -> propozycje komentarzy
+  per autor; routing zdjec per active_agent (subagent aktywny = auto-komentarz,
+  default = triage Idea Bota).
+- Guziki decyzji [Zatwierdz/Inny kat/Odrzuc] -> zapis DECYZJI w engagement_log +
+  zatwierdzone -> task_queue type 'comment' (E2E z dowodem DB 09/07).
+- Pamiec engagementu w kontekscie subagenta ("co juz bylo"), suggest_comment w proaktywnosci.
+BRAKUJE:
+- **KONSUMENT task_queue 'comment'** - zatwierdzone komentarze wisza pending, nikt ich
+  nie wykonuje (priorytet 1 sprintu).
+- Samodzielne ZNAJDOWANIE postow do komentowania (X read API = platny tier; dzis
+  zasilanie zrzutami od Tomasza; docelowo katalog obserwacji 2-5 kont/wpisow dziennie).
+- Monitoring komentarzy pod WLASNYMI postami + propozycje odpowiedzi (wymaga odczytu
+  API: X platny tier / LI po App 2 CMA).
+
+### O4 Radar
+JEST (LIVE):
+- inspirations (dedup) + Content Intelligence Radar (ETL #71, 18 wpisow), katalog
+  obserwacji jako metodyczny workflow (wpis Justin Welsh -> produkcja ruszyla).
+BRAKUJE:
+- Cykliczny radar per platforma W PETLI subagenta (samodzielne zasilanie, nie tylko ETL).
+- Sekcja "co sie zmienilo na platformie" w raporcie tygodniowym.
+
+### O5 Metryki i nauka
+JEST (LIVE):
+- Kolektor LinkedIn GOTOWY w kodzie (stats_mode member_api/org_api) - czeka na scope.
+- Cost-ledger (koszty researchu per job), metryki poniedzialkowe (przypomnienie).
+BRAKUJE:
+- App 2 CMA review -> scope r_member_postAnalytics (odblokowuje realne metryki LI).
+- X read = platny tier -> na razie reczny wpis Tomasza (raz w tygodniu).
+- PETLA NAUKI: analiza format/godzina/temat -> automatyczna korekta strategii i slotow
+  (dzis wnioski tylko w rozmowie).
+
+### O6 Relacje
+JEST (LIVE):
+- contacts (45, klasyfikacja ICP Buyer/Peer/Competitor/Partner) + engagement_log
+  zasilany (komentarze, decyzje, publikacje).
+BRAKUJE:
+- Konsolidacja zdublowanych kolumn contacts (przed agentem CRM).
+- Agent CRM "Opiekun Relacji" (osobny subagent - przyszly obiekt sprzedawalny).
+- Automatyczne rozpoznawanie cieplych leadow + eskalacja z kontekstem.
+
+### O7 Zlecenia do czlowieka
+JEST (LIVE):
+- Eskalacja potrzeb CHANNEL_NEED ("PRZEKAZANE TOMASZOWI"), media-sugestie przy materialach.
+BRAKUJE:
+- Brief-generator: subagent zleca nagranie/zdjecie z wyprzedzeniem >=1 tyg (co, po co,
+  format, przyklad wzorcowy) + kolejka zlecen dla Tomasza z terminami.
+
+### O8 Komunikacja
+JEST (LIVE):
+- Swobodna rozmowa per konto (subagent conversations), CM = partner dialogiczny
+  (wlasne zdanie + pytanie, petla agentowa _discuss do 5 krokow).
+- agent_messages (subagent->CM), negocjacja slotow zatwierdzona przez CM (1x kanon),
+  odprawa poranna 09:00, przypomnienia niedzielne, raporty daily/weekly cron.
+- Eskalacja needs_human, subagent zna swoje powierzchnie/charakterystyki/strategie.
+BRAKUJE:
+- **WEBHOOK WAKE agent-agent** (dzis czesc komunikacji czeka na cron/poll; kanon
+  28/06 = event-driven, DB tylko ledger + backstop; wzorzec = Researcher /request).
+- Rozmowa subagent<->subagent bezposrednio (dzis wszystko przez CM - do decyzji czy
+  potrzebne, CM jako hub moze byc zaleta nadzorcza).
+
+### Podsumowanie stanu
+Kompletne w ~80-90%: O1, O2. Kompletne w ~60%: O3, O8. Szkielet (~30-40%): O4, O5, O6.
+Prawie zero: O7. Wniosek Managera: fundament publikacyjno-tworczy jest, przewaga
+konkurencyjna i "pelny pracownik" lezy w O3-O5 (zaangazowanie + metryki + nauka).
 
 ## 5. Priorytety sprintu (decyzja Managera 10/07, zastepuje ZAPYTANIE 09/07)
 
