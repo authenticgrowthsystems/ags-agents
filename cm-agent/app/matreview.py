@@ -635,11 +635,19 @@ def pending_edit():
 
 def apply_edit(new_text, wake_event=None):
     """Poprawiona wersja od Tomasza: podmien tekst-matke, ZALOGUJ pare przed/po (VOICE_EDIT -
-    korpus nauki stylu), skasuj stare warianty i przegeneruj z JEGO wersji -> needs_approval."""
+    korpus nauki stylu), skasuj stare warianty i przegeneruj z JEGO wersji -> needs_approval.
+    Guard #60 (10/07): polecenie nie moze zostac wziete za tresc; 'TRESC:' wymusza doslownosc."""
     from psycopg.types.json import Jsonb as _Jsonb
     iid = pending_edit()
     if not iid:
         return None
+    from . import compliance as _cmp
+    if (new_text or "").upper().startswith(("TRESC:", "TREŚĆ:")):
+        new_text = new_text.split(":", 1)[1].strip()
+    elif _cmp.looks_like_instruction(new_text):
+        return ("To brzmi jak POLECENIE, nie gotowa tresc - NIE podmieniam (lekcja #60). Jesli to MA byc "
+                "doslowna tresc, wyslij ja jeszcze raz zaczynajac od 'TRESC:'. Jesli to polecenie - "
+                "napisz 'anuluj' i wydaj je normalnie.")
     _state_set("cm_pending_edit", {})
     item = db.fetchone("SELECT * FROM content_items WHERE id=%s", (iid,))
     if not item:

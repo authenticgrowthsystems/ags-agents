@@ -1452,9 +1452,12 @@ def _sub_show(inp, brand, channel):
 
 def _apply_sub_edit(pid, brand, channel, raw):
     """Zastosuj edycje tresci #pid (jedno-strzalowo albo z pending-edit). T8: PL na kanale EN ->
-    tlumacz do publikacji, PL zachowaj do przegladu. Zero em-dash."""
+    tlumacz do publikacji, PL zachowaj do przegladu. Zero em-dash. Guard #60: prefiks 'TRESC:'
+    wymusza doslownosc, polecenie nie moze zostac trescia."""
     from . import compliance, generate
     raw = (raw or "").strip()
+    if raw.upper().startswith(("TRESC:", "TREŚĆ:")):
+        raw = raw.split(":", 1)[1].strip()
     if len(raw) < 4:
         return "Pusta tresc - nic nie zmieniam."
     pub_lang = generate._language_publish(brand, channel)
@@ -1710,6 +1713,13 @@ def _subagent_handle(chat_id, text, active):
         except Exception:
             age = 0
         if age < 60 * 60:
+            from . import compliance as _cmp
+            if _cmp.looks_like_instruction(text) and not text.upper().startswith(("TRESC:", "TREŚĆ:")):
+                # guard #60 (10/07): polecenie NIE jest trescia posta - edycja dalej czeka
+                _reply(chat_id, f"To brzmi jak POLECENIE, nie gotowa tresc posta - NIE podmieniam #{pe['pid']} "
+                                f"(lekcja #60). Jesli to MA byc doslowna tresc, wyslij ja jeszcze raz "
+                                f"zaczynajac od 'TRESC:'. Jesli to polecenie - napisz 'anuluj' i wydaj je normalnie.")
+                return
             _mrv_state_set("sub_pending_edit", {})
             _reply(chat_id, _apply_sub_edit(pe["pid"], brand, channel, text))
             return

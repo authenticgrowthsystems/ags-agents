@@ -11,6 +11,20 @@ from .generate import client
 _DASH = re.compile(r"\s*[—–]\s*")  # em dash + en dash with surrounding space
 _PL_DIACRITICS = re.compile(r"[ąćęłńóśżź]")
 
+# Guard trybu edycji (lekcja #60, 10/07): Tomasz w trybie 'wklej nowa tresc' napisal POLECENIE
+# ("Na podstawie tego co napisalem przygotuj draft...") i pending-edit wzial je za tresc posta.
+_INSTRUCTION_RE = re.compile(
+    r"^(na podstawie|przygotuj|napisz|zrob|zrób|wygeneruj|stworz|stwórz|zaproponuj|popraw|"
+    r"przerob|przerób|dodaj|usun|usuń|zmien|zmień|przetlumacz|przetłumacz|skroc|skróć|"
+    r"rozwin|rozwiń|pokaz|pokaż|sprawdz|sprawdź)\b", re.IGNORECASE)
+
+
+def looks_like_instruction(text):
+    """True gdy wiadomosc wyglada na POLECENIE dla agenta, nie na doslowna tresc posta.
+    Krotki tekst zaczynajacy sie czasownikiem rozkazujacym = niemal na pewno komenda."""
+    t = (text or "").strip()
+    return len(t) < 220 and bool(_INSTRUCTION_RE.match(t))
+
 # Voice Bible v2.1 / Task #75: Re-Introduction Line dla LinkedIn (Zasada 10 Lara Acosta).
 RE_INTRO_LINE_PROMPT = (
     "Sprawdz czy ponizszy tekst LinkedIn zawiera Re-Introduction Line: JEDNO zdanie (ok. 10-25 slow) "
