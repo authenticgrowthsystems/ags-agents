@@ -135,6 +135,88 @@ def _reset_state(chat_id):
                (chat_id,))
 
 
+# ---------------- pamiec dlugoterminowa rozmow (10/07) ----------------
+# Wymog Tomasza: 'swobodnie rozmawiac i beda pamietac'. Watek luznej rozmowy wygasal po TTL 30 min
+# bez sladu. Teraz: wygasajacy watek -> skrot 3-5 zdan (Haiku) -> agent_logs CONVERSATION_SUMMARY
+# (zero DDL - agent_logs bez CHECK na log_type, dowod 10/07) -> ostatnie skroty wracaja do kontekstu.
+_MEMORY_LIMIT = 3  # ile skrotow wstrzykujemy do kontekstu agenta
+
+
+def _memory_text(agent):
+    """Skroty wczesniejszych rozmow danego agenta (najstarszy pierwszy) do kontekstu."""
+    try:
+        rows = db.fetchall(
+            """SELECT rationale, created_at FROM agent_logs
+               WHERE agent_id=%s AND log_type='CONVERSATION_SUMMARY'
+               ORDER BY created_at DESC LIMIT %s""", (agent, _MEMORY_LIMIT))
+    except Exception:
+        return "(brak)"
+    if not rows:
+        return "(brak wczesniejszych rozmow)"
+    return "\n".join(
+        f"- [{r['created_at'].astimezone(WARSAW).strftime('%d/%m %H:%M')}] {r['rationale']}"
+        for r in reversed(rows))
+
+
+def _summarize_history(history):
+    """Haiku streszcza wygasajacy watek: fakty, ustalenia, otwarte watki. Nic spoza rozmowy."""
+    lines = []
+    for h in history[-HISTORY_MAX:]:
+        c = h.get("content")
+        if not isinstance(c, str) or not c.strip():
+            continue
+        who = "TOMASZ" if h.get("role") == "user" else "AGENT"
+        lines.append(f"{who}: {c[:600]}")
+    transcript = "\n".join(lines)[-6000:]
+    if len(transcript) < 40:
+        return None
+    model, tier, source = tasks.model_for("memory_summary")
+    resp = client().messages.create(
+        model=model, max_tokens=300, thinking={"type": "disabled"},
+        messages=[{"role": "user", "content":
+                   "Stresc ponizsza rozmowe Tomasza z agentem w 3-5 zdaniach po polsku, czysta "
+                   "polszczyzna, zero em dash. Ujmij: fakty, ustalenia/decyzje i otwarte watki "
+                   "(co zostalo bez odpowiedzi). WYLACZNIE informacje z rozmowy, nic nie dopowiadaj.\n\n"
+                   + transcript}])
+    tasks.log_task("memory_summary", tier, model, source, getattr(resp, "usage", None))
+    out = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
+    return out or None
+
+
+def memory_tick():
+    """Petla workera: watki starsze niz TTL NIE gina - skrot do agent_logs, potem czyszczenie
+    histories (zeby nie streszczac drugi raz). Krotkie/puste watki tylko czyscimy."""
+    try:
+        rows = db.fetchall(
+            """SELECT chat_id, fsm_data FROM user_agent_state
+               WHERE updated_at < NOW() - make_interval(mins => %s)
+                 AND (fsm_data ? 'histories' OR fsm_data ? 'history')
+                 AND fsm_data <> '{}'::jsonb""",
+            (STATE_TTL_MIN,))
+    except Exception:
+        traceback.print_exc()
+        return
+    for row in rows:
+        data = row.get("fsm_data") or {}
+        hists = dict(data.get("histories") or {})
+        if data.get("history"):
+            hists.setdefault("cm", data["history"])  # legacy pojedyncza historia sprzed histories[]
+        for agent, history in hists.items():
+            if not history:
+                continue
+            try:
+                summary = _summarize_history(history)
+                if summary:
+                    db.execute(
+                        """INSERT INTO agent_logs (agent_id, log_type, rationale, context)
+                           VALUES (%s,'CONVERSATION_SUMMARY',%s,%s)""",
+                        (agent, summary[:2000], Jsonb({"chat_id": row["chat_id"], "turns": len(history)})))
+            except Exception:
+                traceback.print_exc()
+        db.execute("UPDATE user_agent_state SET fsm_data = (fsm_data - 'histories') - 'history' WHERE chat_id=%s",
+                   (row["chat_id"],))
+
+
 # ---------------- queue preview ----------------
 def _fmt_slot(dt):
     return dt.astimezone(WARSAW).strftime("%d/%m %H:%M") if dt else "brak slotu"
@@ -609,6 +691,8 @@ def _system_blocks(brand):
         f"\n\nAKTUALNA KOLEJKA CM:\n{_queue_snapshot()}"
         f"\n\nPROPOZYCJA PLANU (proposed, numeracja dla plan_edit/plan_approve):\n{planner.plan_text()}"
         f"\n\n{_memory_snapshot()}"
+        f"\n\nPAMIEC WCZESNIEJSZYCH ROZMOW (skroty wygaslych watkow; gdy Tomasz nawiazuje do "
+        f"wczesniejszej rozmowy, korzystaj z nich zamiast mowic ze nie pamietasz):\n{_memory_text('cm')}"
     )
     return [
         {"type": "text", "text": role},
@@ -1422,6 +1506,9 @@ def _sub_system(brand_row, brand, channel):
         f"\n\nKOLEJKA ({channel}) - JEDYNE zrodlo prawdy o slotach:\n{_sub_queue_text(brand, channel)}"
         f"\n\nOSTATNIE PUBLIKACJE:\n{_sub_published_text(brand, channel, 5)}"
         f"\n\nUSTALENIA Z CM (agent->agent):\n{_sub_cm_agreements(channel)}"
+        f"\n\nPAMIEC WCZESNIEJSZYCH ROZMOW (skroty wygaslych watkow; gdy Tomasz nawiazuje do "
+        f"wczesniejszej rozmowy, korzystaj z nich zamiast mowic ze nie pamietasz):\n"
+        f"{_memory_text('subagent:' + brand + ':' + channel)}"
     )
     return [{"type": "text", "text": role}]
 

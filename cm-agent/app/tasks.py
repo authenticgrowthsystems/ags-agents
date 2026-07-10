@@ -13,6 +13,7 @@ DEFAULT_TIERS = {
     "variant": "haiku",         # adaptacja per kanal
     "compliance": "haiku",      # redraft po banned vocab
     "daily_report": "haiku",    # zestawienie dzienne
+    "memory_summary": "haiku",  # skrot wygasajacego watku rozmowy (pamiec dlugoterminowa, 10/07)
 }
 
 

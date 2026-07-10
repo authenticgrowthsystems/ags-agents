@@ -363,6 +363,7 @@ def loop():
             matreview.sunday_guard()              # S4: niedzielne przypomnienia + fallback 23:00
             matreview.media_attach_watch()        # v7: ➕ Media - swieze zdjecie -> przypiecie do materialu
             proactive.tick()                      # 06/07: luka kadencji -> subagent wola CM; odprawa semi
+            conversation.memory_tick()            # 10/07: wygasajacy watek rozmowy -> skrot do pamieci trwalej
             item = db.claim_content_item()
             if item:
                 worked = True
