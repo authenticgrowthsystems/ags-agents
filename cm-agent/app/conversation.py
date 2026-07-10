@@ -744,7 +744,8 @@ def _system_blocks(brand):
         "czy zostawic oba / seria czy swieze ujecie?'. Nie zostawiaj Tomasza z sama lista. "
         "Gdy Tomasz pyta o KONKRETNY material: NAJPIERW show_review_cards z theme_fragment "
         "(przeszukuje PELNA baze) - migawka kolejki bywa przycieta; NIE twierdz, ze materialu "
-        "nie ma, dopoki narzedzie tego nie potwierdzi. "
+        "nie ma, dopoki narzedzie tego nie potwierdzi. TWARDA ZASADA WYKONANIA: nigdy nie mow, "
+        "ze cos zapisales/przesunales/podmieniles, jesli nie wywolales narzedzia w TEJ turze. "
         f"\nTeraz jest {now} (Europe/Warsaw)."
         f"\n\nSTAN OPERACYJNY (o mechanizmach mow WYLACZNIE wg tego stanu - zero zgadywania; "
         f"przypinanie zdjec robi automat, nie Ty):\n{_mrv.modes_snapshot()}"
@@ -1578,6 +1579,10 @@ def _sub_system(brand_row, brand, channel):
         "znasz OSTATNIE INTERAKCJE (sekcja nizej), wiec wiesz co juz bylo i nie powtarzasz sie. "
         "Metryki wpisuje Tomasz recznie (subagent_set_metrics) - "
         "raz w tygodniu sam sie o nie upominasz. "
+        "TWARDA ZASADA WYKONANIA (incydent 10/07): kazda zmiana stanu (usuniecie, przesuniecie, edycja, "
+        "zapis zasady, material) dzieje sie WYLACZNIE przez wywolanie narzedzia w TEJ turze. NIGDY nie "
+        "mow 'usunalem/przesunalem/zapisalem', jesli nie masz wyniku narzedzia - zamiast opowiadac, "
+        "WYWOLAJ narzedzie. Wiele pozycji = wiele wywolan (po jednym na pozycje). "
         "PRAWDA O KOLEJCE I SLOTACH (twarda zasada, zero wyjatkow): gdy Tomasz pyta o sloty / kolejke / "
         "kiedy i gdzie publikujesz, podawaj WYLACZNIE pozycje z sekcji KOLEJKA ponizej wraz z ICH slotami. "
         "NIGDY nie wymyslaj godzin ani dni i NIE recytuj kadencji kanonicznej jako harmonogramu. Jesli "
@@ -1749,11 +1754,14 @@ def _subagent_handle(chat_id, text, active):
         results = []
         for tu in tool_uses:
             out = _sub_dispatch_tool(tu.name, tu.input, brand, channel, chat_id) or "ok"
+            # PARAGON WYKONANIA (incydent #30/#31, 10/07: model opowiedzial o usunieciu BEZ wywolania
+            # narzedzia): KAZDY wynik narzedzia idzie do Tomasza doslownie - brak paragonu = nie zrobione.
+            parts.append(out)
             if tu.name in _SUB_VERBATIM:
-                # tresci doslowne (pelny post, propozycje komentarzy) ida do Tomasza BEZ parafrazy
-                parts.append(out)
                 out = ("POKAZANE TOMASZOWI DOSLOWNIE (nie powtarzaj tej tresci, mozesz sie krotko "
                        "odniesc):\n" + out[:1500])
+            else:
+                out = "WYKONANE - potwierdzenie pokazane Tomaszowi (nie powtarzaj go): " + str(out)[:400]
             results.append({"type": "tool_result", "tool_use_id": tu.id, "content": str(out)[:3000]})
         msgs.append({"role": "user", "content": results})
     reply = "\n\n".join(parts).strip() or "Przyjete."
