@@ -113,6 +113,16 @@ def cmt(body: dict, x_researcher_secret: str = Header(default="")):
     return {"accepted": True}
 
 
+@api.post("/wake", status_code=202)
+def wake_up(x_researcher_secret: str = Header(default="")):
+    """Kontrakt event-driven agent->agent (kanon 28/06, domkniecie 10/07): kazdy agent/workflow,
+    ktory zapisal cos dla CM do DB (agent_messages, task_queue, post_queue callback), woła ten
+    endpoint i budzi petle NATYCHMIAST. DB zostaje ledgerem, poll 30s = wolny backstop, nie sciezka."""
+    _guard(x_researcher_secret)
+    wake.set()
+    return {"accepted": True}
+
+
 @api.post("/message", status_code=202)
 def message(body: dict, x_researcher_secret: str = Header(default="")):
     """Conversation entry: n8n HITL forwards a Telegram text {chat_id, text, update_id}. Returns 202

@@ -96,6 +96,8 @@ Agent-klient / Tomasz
 
 **Topologia:** CM = kontener Python (`cm-agent`, port 8089, wzorzec Researchera: FastAPI `/request` `/plan` `/health` + pętla state-machine budzona wake/30s). Subagenci kanałów = workflowy n8n na KONTRAKCIE KONEKTORA (webhook + guard + klucze z `app_secrets` + publish + callback). Zasada produktu: **subagent = obiekt per KONTO/CEL** (nie per platforma), toggle `channels.supervised`.
 
+**Kontrakt WAKE (kanon event-driven 28/06, domknięty 10/07):** `POST /wake` [X-Researcher-Secret] na cm-agent:8089 budzi pętlę natychmiast. Każdy, kto ZAPISUJE coś dla CM do DB (agent_messages request, task_queue, callback publikacji w post_queue), woła po zapisie `/wake`. Wewnątrz procesu: eskalacja subagenta (`escalate_to_cm`), decyzje cmt i zatwierdzenie planu ustawiają `wake_event` bezpośrednio. Poll 30s pętli = wolny BACKSTOP, nie ścieżka podstawowa. TODO n8n: publishery po callbacku wołają `/wake` (dziś meldunek po publikacji czeka do 30 s na poll - do domknięcia przy najbliższej sesji n8n z tapem).
+
 ### E.1 Tabele CM (owner ags_crd_user)
 | Tabela | Co trzyma | Kto pisze / czyta |
 |---|---|---|

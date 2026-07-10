@@ -1100,6 +1100,8 @@ def _sub_escalate(inp, brand, channel):
         (sub_id, cm_id, json.dumps({"kind": "channel_proposal", "topic": inp.get("topic", "inne"),
                                     "proposal": (inp.get("proposal") or "")[:800],
                                     "brand": brand, "channel": channel}, ensure_ascii=False)))
+    if wake_event:
+        wake_event.set()  # kanon event-driven (28/06): eskalacja BUDZI CM natychmiast, nie poll 30s
     return ("📨 Przekazane do Content Managera (kontrakt agent->agent). CM rozpatrzy w ciagu minuty, "
             "przy zgodzie wpisze do configu; wynik zobaczysz w USTALENIACH Z CM i na bocie logowym.")
 
