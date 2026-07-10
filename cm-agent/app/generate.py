@@ -147,10 +147,46 @@ def generate_media_hint(brand, canonical_body, content_item_id=None):
 _openai_key = [None]
 
 
+def _image_quality():
+    """Feedback Tomasza 10/07 ('ma byc premium'): default HIGH; zbicie kosztow bez deployu przez
+    /set cm_image_quality medium."""
+    row = _db.fetchone(
+        "SELECT config_value FROM brand_config WHERE brand_id='AGS' AND config_key='cm_image_quality' ORDER BY version DESC LIMIT 1")
+    v = str(((row or {}).get("config_value")) or "").strip().lower()
+    return v if v in ("low", "medium", "high") else "high"
+
+
+def generate_image_prompt(brand, master_theme, canonical_body, hint, guidance=None, content_item_id=None):
+    """Feedback Tomasza 10/07: prompt graficzny ma byc BARDZO SZCZEGOLOWY, efekt premium.
+    Sonnet pisze pelny prompt po angielsku (kompozycja, paleta, typografia, dokladny tekst na
+    grafice) z sugestii wizualu + tresci posta + ewentualnych wskazowek Tomasza (guidance)."""
+    model, tier, source = tasks.model_for("image_prompt")
+    guide = f"\n\nWSKAZOWKI WLASCICIELA (priorytet, zastosuj wprost): {guidance[:400]}" if guidance else ""
+    resp = client().messages.create(
+        model=model, max_tokens=600, thinking={"type": "disabled"},
+        messages=[{"role": "user", "content":
+                   "Napisz JEDEN szczegolowy prompt (po angielsku, 150-250 slow) dla generatora obrazow "
+                   "gpt-image do grafiki social media klasy PREMIUM. Prompt MUSI opisywac: dokladna "
+                   "kompozycje i uklad (co w centrum, co po bokach, ile wolnej przestrzeni), konkretna "
+                   "palete kolorow (nazwy/odcienie, max 3-4 kolory, wysoki kontrast), typografie "
+                   "(nowoczesny grotesk, hierarchia), DOKLADNY krotki tekst na grafice (naglowek max "
+                   "6 slow - podaj go doslownie w cudzyslowie, generator ma go odwzorowac litera w "
+                   "litere), styl (editorial, minimal, tech, subtelne swiatlo/gradient/faktura), format "
+                   "poziomy 3:2. ZAKAZY wpisz do promptu: no watermarks, no stock-photo look, no fake "
+                   "photos of real events, no real people's faces, no logos, no lorem ipsum, no extra "
+                   "text beyond the specified headline. Zwroc WYLACZNIE prompt.\n\n"
+                   f"SUGESTIA WIZUALU: {(hint or 'clean conceptual illustration of the post theme')[:400]}\n"
+                   f"TEMAT POSTA: {(master_theme or '')[:300]}\n"
+                   f"TRESC POSTA (kontekst): {(canonical_body or '')[:1200]}{guide}"}])
+    tasks.log_task("image_prompt", tier, model, source, getattr(resp, "usage", None), content_item_id)
+    return _text(resp)[:3400]
+
+
 def generate_image(prompt):
     """ETAP 2a (decyzja Tomasza 06/07): obraz z sugestii wizualu przez OpenAI gpt-image
     (klucz 'openai_api_key' juz w sejfie - uzywa go tez content_memory). Zwraca bytes PNG.
-    Regula prawdy dla obrazow: estetyka grafiki/ilustracji, zero udawania zdjec realnych wydarzen."""
+    Regula prawdy dla obrazow: estetyka grafiki/ilustracji, zero udawania zdjec realnych wydarzen.
+    10/07: quality z configu (default high - 'ma byc premium')."""
     import base64
     import httpx as _httpx
     if not _openai_key[0]:
@@ -161,8 +197,8 @@ def generate_image(prompt):
     r = _httpx.post("https://api.openai.com/v1/images/generations",
                     headers={"Authorization": f"Bearer {_openai_key[0]}"},
                     json={"model": "gpt-image-1", "prompt": prompt[:3500],
-                          "size": "1536x1024", "quality": "medium"},
-                    timeout=120)
+                          "size": "1536x1024", "quality": _image_quality()},
+                    timeout=180)
     r.raise_for_status()
     b64 = r.json()["data"][0]["b64_json"]
     return base64.b64decode(b64)

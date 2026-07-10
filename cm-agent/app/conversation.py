@@ -635,6 +635,73 @@ TOOL_RESCHEDULE = {
 }
 
 
+TOOL_GEN_IMAGE = {
+    "name": "generate_material_image",
+    "description": ("Wygeneruj/POPRAW grafike materialu (gpt-image, jakosc premium, szczegolowy prompt). "
+                    "Wywoluj gdy Tomasz prosi o grafike do posta ALBO chce poprawic istniejaca "
+                    "('popraw grafike', 'ma byc ciemniejsza', 'bardziej premium') - jego wskazowki "
+                    "przekaz w guidance. Stara wygenerowana grafika wypada, nowa sie dopina i poleci "
+                    "z publikacja. theme_fragment pusty = ostatni material z wygenerowana grafika."),
+    "input_schema": {"type": "object", "properties": {
+        "theme_fragment": {"type": ["string", "null"],
+                           "description": "Fragment tematu materialu (albo null = ostatni z grafika)."},
+        "guidance": {"type": ["string", "null"],
+                     "description": "Wskazowki Tomasza do stylu/tresci grafiki, doslownie."}},
+        "required": []},
+}
+
+
+def _generate_material_image(inp, chat_id):
+    """10/07 (feedback Tomasza 'popraw grafike - ma byc premium'): regeneracja grafiki materialu
+    Z ROZMOWY (CM i subagent), ze wskazowkami. Szczegolowy prompt pisze Sonnet, gpt-image quality
+    z configu (default high). Stare wygenerowane zalaczniki wypadaja, nowy sie dopina (ci + pq)."""
+    from . import matreview, generate as _gen
+    frag = (inp.get("theme_fragment") or "").strip()
+    guidance = (inp.get("guidance") or "").strip() or None
+    base_q = """SELECT id, master_theme, canonical_body, media, status FROM content_items
+                WHERE brand_id='AGS' AND status IN ('draft','planned','drafting','needs_approval','approved','dispatching')"""
+    if frag:
+        row = db.fetchone(base_q + " AND master_theme ILIKE %s ORDER BY updated_at DESC LIMIT 1",
+                          (f"%{frag}%",))
+    else:
+        row = db.fetchone(base_q + """ AND EXISTS (SELECT 1 FROM jsonb_array_elements(media) m
+                                                   WHERE (m->>'generated')='true')
+                          ORDER BY updated_at DESC LIMIT 1""")
+        if not row:
+            row = db.fetchone(base_q + " ORDER BY updated_at DESC LIMIT 1")
+    if not row:
+        return "Nie znajduje materialu w kolejce do ktorego mam zrobic grafike - podaj fragment tematu."
+    media = list(row.get("media") or [])
+    hint = next((m.get("text") for m in media if (m or {}).get("kind") == "suggestion"), "")
+    try:
+        prompt = _gen.generate_image_prompt(load_brand("AGS"), row["master_theme"],
+                                            row.get("canonical_body"), hint, guidance=guidance,
+                                            content_item_id=row["id"])
+        png = _gen.generate_image(prompt)
+    except Exception as e:
+        traceback.print_exc()
+        return f"Generowanie nie wyszlo: {str(e)[:200]}. Sprobuj jeszcze raz za chwile."
+    fid = matreview._tg_upload_photo(chat_id, png,
+                                     f"🎨 NOWA GRAFIKA - POLECI Z POSTEM: {row['master_theme'][:120]}")
+    if not fid:
+        return "Obraz wygenerowany, ale nie wszedl na Telegram - sprobuj jeszcze raz."
+    desc = {"source": "telegram", "file_id": fid, "kind": "photo", "generated": True}
+    kept = [m for m in media if not (m or {}).get("generated")]
+    db.execute("UPDATE content_items SET media=%s::jsonb, updated_at=NOW() WHERE id=%s",
+               (json.dumps(kept + [desc]), row["id"]))
+    old_fids = {m.get("file_id") for m in media if (m or {}).get("generated") and m.get("file_id")}
+    for pq in db.fetchall(
+            "SELECT id, media FROM post_queue WHERE content_item_id=%s AND status IN ('review','held','scheduled','queued')",
+            (row["id"],)):
+        pq_media = [m for m in (pq.get("media") or []) if (m or {}).get("file_id") not in old_fids]
+        db.execute("UPDATE post_queue SET media=%s::jsonb WHERE id=%s",
+                   (json.dumps(pq_media + [desc]), pq["id"]))
+    what = "poprawiona wg Twoich wskazowek" if guidance else "wygenerowana"
+    return (f"🎨 Grafika {what} (premium, szczegolowy prompt) i dopieta do: "
+            f"\"{row['master_theme'][:100]}\" - podglad wyzej, stara wersja wypadla. "
+            f"Nie pasuje? Powiedz co zmienic, zrobie kolejna.")
+
+
 TOOL_REPLACE = {
     "name": "replace_material",
     "description": ("PODMIEN zaplanowany post na nowa, lepsza wersje ZACHOWUJAC jego slot (feedback 07/07). "
@@ -841,7 +908,8 @@ def _cm_tools():
     if _CM_TOOLS is None:
         _CM_TOOLS = [TOOL_PROPOSE, TOOL_SCHOWEK, TOOL_ARCHIVE, TOOL_SIMILAR, TOOL_ADAPT,
                      TOOL_PLAN_BUILD, TOOL_PLAN_APPROVE, TOOL_PLAN_EDIT, TOOL_TARGET_CREATE, TOOL_TARGET_UPDATE,
-                     TOOL_REVIEW_CARDS, TOOL_ATTACH_PHOTO, TOOL_STYLE_RULE, TOOL_RESCHEDULE, TOOL_REPLACE]
+                     TOOL_REVIEW_CARDS, TOOL_ATTACH_PHOTO, TOOL_STYLE_RULE, TOOL_RESCHEDULE, TOOL_REPLACE,
+                     TOOL_GEN_IMAGE]
     return _CM_TOOLS
 
 
@@ -883,6 +951,8 @@ def _dispatch_tool(name, inp, chat_id):
         return _reschedule_material(inp)
     if name == "replace_material":
         return _replace_material(inp)
+    if name == "generate_material_image":
+        return _generate_material_image(inp, chat_id)
     return "ok"
 
 
@@ -1532,10 +1602,11 @@ def _sub_system(brand_row, brand, channel):
 
 _SUB_VERBATIM = {"subagent_show_post", "suggest_comment", "suggest_comment_from_image"}
 _SUB_TOOLS = [TOOL_SUB_REMOVE, TOOL_SUB_RESCHEDULE, TOOL_SUB_SHOW, TOOL_SUB_EDIT, TOOL_SUB_METRICS,
-              TOOL_PROPOSE, TOOL_SUB_ESCALATE, TOOL_SUB_COMMENT, TOOL_SUB_COMMENT_VISION, TOOL_SUB_RULE]
+              TOOL_PROPOSE, TOOL_SUB_ESCALATE, TOOL_SUB_COMMENT, TOOL_SUB_COMMENT_VISION, TOOL_SUB_RULE,
+              TOOL_GEN_IMAGE]
 
 
-def _sub_dispatch_tool(name, inp, brand, channel):
+def _sub_dispatch_tool(name, inp, brand, channel, chat_id=None):
     """Wykonaj narzedzie subagenta i zwroc wynik jako tekst (wraca do modelu w petli agentowej -
     10/07: subagent mysli wielokrokowo jak CM, nie single-pass)."""
     inp = dict(inp or {})
@@ -1582,6 +1653,10 @@ def _sub_dispatch_tool(name, inp, brand, channel):
         _log_autonomous(brand, channel, f"Material ad-hoc poza planem CM: {inp.get('master_theme', '')[:80]}",
                         {"tool": "propose_material", "input": inp})
         return _create_material(inp)
+    if name == "generate_material_image":
+        _log_autonomous(brand, channel, f"Grafika materialu z rozmowy: {(inp.get('guidance') or 'bez wskazowek')[:80]}",
+                        {"tool": "generate_material_image", "input": inp})
+        return _generate_material_image(inp, chat_id)
     return "ok"
 
 
@@ -1663,7 +1738,7 @@ def _subagent_handle(chat_id, text, active):
         msgs.append({"role": "assistant", "content": resp.content})
         results = []
         for tu in tool_uses:
-            out = _sub_dispatch_tool(tu.name, tu.input, brand, channel) or "ok"
+            out = _sub_dispatch_tool(tu.name, tu.input, brand, channel, chat_id) or "ok"
             if tu.name in _SUB_VERBATIM:
                 # tresci doslowne (pelny post, propozycje komentarzy) ida do Tomasza BEZ parafrazy
                 parts.append(out)

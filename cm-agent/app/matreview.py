@@ -7,6 +7,7 @@ S4: niedziela: przypomnienia co 15 min (21:30-23:00), o 23:00 CM sam zatwierdza 
     poniedzialkowy slot + alert na bocie #2 (rozszerzenie kanonu 11c, 11c bez zmian)."""
 import datetime
 import json
+import traceback
 from zoneinfo import ZoneInfo
 
 from psycopg.types.json import Jsonb
@@ -438,12 +439,20 @@ def handle(payload, wake_event=None):
                      if (m or {}).get("kind") == "suggestion"), "")
         _tg("sendMessage", {"chat_id": chat_id,
                             "text": f"🎨 Generuje obraz (~pol minuty): {(hint or row['master_theme'])[:150]}"})
-        from .generate import generate_image
-        prompt = (f"Social media graphic for a tech build-in-public post. Visual idea: "
-                  f"{hint or 'clean conceptual illustration of the post theme'}. Post theme: "
-                  f"{row['master_theme'][:300]}. Style: clean, professional, modern tech aesthetic, "
-                  f"high contrast, no watermarks, no fake photographs of real events, "
-                  f"no real people's faces; illustration/diagram/typographic style welcome.")
+        from .generate import generate_image, generate_image_prompt
+        from .brand import load_brand as _lb
+        # 10/07 (feedback Tomasza 'ma byc premium, prompt bardzo szczegolowy'): pelny prompt pisze
+        # Sonnet; stary jednolinijkowy szablon zostaje TYLKO jako fallback awaryjny.
+        try:
+            prompt = generate_image_prompt(_lb("AGS"), row["master_theme"], row.get("canonical_body"),
+                                           hint, content_item_id=arg)
+        except Exception:
+            traceback.print_exc()
+            prompt = (f"Social media graphic for a tech build-in-public post. Visual idea: "
+                      f"{hint or 'clean conceptual illustration of the post theme'}. Post theme: "
+                      f"{row['master_theme'][:300]}. Style: clean, professional, modern tech aesthetic, "
+                      f"high contrast, no watermarks, no fake photographs of real events, "
+                      f"no real people's faces; illustration/diagram/typographic style welcome.")
         try:
             png = generate_image(prompt)
         except Exception as e:

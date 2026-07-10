@@ -14,6 +14,7 @@ DEFAULT_TIERS = {
     "compliance": "haiku",      # redraft po banned vocab
     "daily_report": "haiku",    # zestawienie dzienne
     "memory_summary": "haiku",  # skrot wygasajacego watku rozmowy (pamiec dlugoterminowa, 10/07)
+    "image_prompt": "sonnet",   # szczegolowy prompt graficzny premium (feedback Tomasza 10/07)
 }
 
 
