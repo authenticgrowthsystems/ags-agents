@@ -150,11 +150,14 @@ def check_gaps(brand_id="AGS"):
         (brand_id,))
     st = _state_get("cm_gap_alerts")
     changed = False
+    hold = _state_get("cm_hold_today")  # STOP awaryjny (12/07): 'nic dzis nie publikuj' wycisza tez luki
     for r in rows:
         for offset in (0, 1):
             day = (now + datetime.timedelta(days=offset)).date()
             if offset == 0 and now.hour >= 19:
                 continue  # dnia praktycznie nie ma juz jak wypelnic
+            if offset == 0 and hold.get("date") == day.isoformat():
+                continue  # Tomasz zatrzymal dzisiejsze publikacje - nie proponuj wypelniania dzis
             key = f"{r['channel']}:{day.isoformat()}"
             if st.get(key):
                 continue

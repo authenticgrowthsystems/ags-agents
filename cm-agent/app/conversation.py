@@ -725,6 +725,9 @@ TOOL_HOLD_QUEUE = {
 
 
 def _hold_todays_queue():
+    # flaga stopu: wypelniacz luk (proactive.check_gaps) i kolejne propozycje omijaja DZIS
+    _mrv_state_set("cm_hold_today",
+                   {"date": datetime.datetime.now(WARSAW).date().isoformat()})
     rows = db.fetchall(
         """UPDATE post_queue SET status='held'
            WHERE scheduled_for::date = (NOW() AT TIME ZONE 'Europe/Warsaw')::date
