@@ -681,6 +681,62 @@ def _describe_material_image(inp):
     return f"🖼 Grafika materialu \"{row['master_theme'][:80]}\":\n{out}"
 
 
+TOOL_VIEW_SCREENSHOT = {
+    "name": "view_last_screenshot",
+    "description": ("OBEJRZYJ ostatni zrzut/zdjecie wyslane przez Tomasza (schowek). Wywoluj ZAWSZE "
+                    "ZANIM zapytasz co ze zrzutem zrobic - partner najpierw PATRZY, potem rozmawia. "
+                    "Podaj question = na co zwrocic uwage wg kontekstu rozmowy (np. 'co poszlo na "
+                    "profil X i o ktorych godzinach' gdy Tomasz alarmuje o publikacjach)."),
+    "input_schema": {"type": "object", "properties": {
+        "question": {"type": ["string", "null"],
+                     "description": "Pytanie/kontekst do analizy obrazu (null = ogolny opis)."}},
+        "required": []},
+}
+
+
+def _view_last_screenshot(inp):
+    """Fix 12/07 (feedback 'automat z infolinii'): CM ma WZROK na schowek - oglada zrzut Tomasza
+    w kontekscie rozmowy zamiast recytowac menu opcji."""
+    from .generate import inspect_image
+    photo = db.fetchone(
+        """SELECT id, metadata FROM inspirations
+           WHERE metadata->'media'->>'file_id' IS NOT NULL ORDER BY created_at DESC LIMIT 1""")
+    if not photo:
+        return "Schowek pusty - nie widze zadnego zrzutu."
+    img, mt = _fetch_telegram_image(photo["metadata"]["media"]["file_id"])
+    if not img:
+        return "Nie moge pobrac zrzutu z Telegrama - sprobuj za chwile."
+    try:
+        return "🔎 Na zrzucie: " + inspect_image(img, mt, question=inp.get("question"))
+    except Exception as e:
+        traceback.print_exc()
+        return f"Nie udalo sie obejrzec zrzutu: {str(e)[:150]}"
+
+
+TOOL_HOLD_QUEUE = {
+    "name": "hold_todays_queue",
+    "description": ("STOP AWARYJNY: wstrzymaj WSZYSTKIE dzisiejsze publikacje (post_queue -> held; "
+                    "Scheduler je pominie, nic nie ginie, sloty do ponownego ulozenia). Wywolaj "
+                    "NATYCHMIAST gdy Tomasz mowi 'nic dzis nie publikuj', 'stop', 'wstrzymaj', "
+                    "'zatrzymaj kolejke' - NAJPIERW stop, POTEM doprecyzowanie co dalej (dzis "
+                    "12/07 slot 18:00 wyszedl, bo CM czekal na potwierdzenie zamiast zatrzymac)."),
+    "input_schema": {"type": "object", "properties": {}},
+}
+
+
+def _hold_todays_queue():
+    rows = db.fetchall(
+        """UPDATE post_queue SET status='held'
+           WHERE scheduled_for::date = (NOW() AT TIME ZONE 'Europe/Warsaw')::date
+             AND status IN ('review','scheduled','queued')
+           RETURNING id, platform, scheduled_for""")
+    if not rows:
+        return "🛑 Kolejka na dzis juz czysta - nic nie bylo uzbrojone."
+    lst = ", ".join(f"#{r['id']} ({r['platform']} {_fmt_slot(r.get('scheduled_for'))})" for r in rows)
+    return (f"🛑 WSTRZYMANE dzisiejsze publikacje ({len(rows)}): {lst}. Scheduler ich nie ruszy. "
+            f"Powiedz jak je rozlozyc (np. 'na wolne sloty pon-pt'), poprzesuwam.")
+
+
 TOOL_EXTERNAL_PUB = {
     "name": "log_external_publication",
     "description": ("Zapisz PUBLIKACJE ZEWNETRZNA (Tomasz opublikowal cos RECZNIE, poza systemem) do "
@@ -848,9 +904,15 @@ def _system_blocks(brand):
         "save_to_schowek (bez produkcji). PUBLIKACJA ZEWNETRZNA: gdy Tomasz mowi 'opublikowalem / "
         "wrzucilem / poszlo recznie' (czesto ze zrzutem wyslanym chwile wczesniej) - wywolaj "
         "log_external_publication (kanal z wypowiedzi; brak kanalu = dopytaj jednym slowem). "
-        "ZRZUT EKRANU: wiadomosc 'przeslalem ci zrzut ekranu (masz go w schowku)' = Tomasz wyslal "
-        "obraz do CIEBIE; zapytaj JEDNYM zdaniem co z nim zrobic (dopiac do materialu / publikacja "
-        "zewnetrzna / inne), chyba ze kontekst juz padl - wtedy dzialaj. "
+        "ZRZUT EKRANU (feedback 12/07 'partner, nie automat z infolinii'): gdy przychodzi zrzut "
+        "('przeslalem ci zrzut ekranu...'), NAJPIERW go OBEJRZYJ (view_last_screenshot z pytaniem "
+        "dopasowanym do kontekstu rozmowy), POTEM zareaguj na to co widzisz W POLACZENIU z rozmowa: "
+        "alarm ('zobacz co sie porobilo') = zdiagnozuj i dzialaj; kontekst jasny = wykonaj; "
+        "dopiero gdy intencja NAPRAWDE niejasna - jedno krotkie pytanie. NIGDY nie recytuj menu "
+        "opcji zamiast spojrzec. "
+        "STOP AWARYJNY: 'nic dzis nie publikuj' / 'wstrzymaj' / 'stop' = NATYCHMIAST "
+        "hold_todays_queue (sloty NIE czekaja na twoja runde potwierdzenia - 12/07 przez to "
+        "wyszly posty po decyzji Tomasza), a DOPIERO POTEM doprecyzuj co dalej. "
         "PLANOWANIE: 'zaplanuj tydzien' -> plan_build; 'zatwierdz plan' -> "
         "plan_approve (wyjatki numerami); edycje pozycji -> plan_edit. Cele: target_create / target_update. "
         "Brak reakcji Tomasza 24h po prosbie o approve = publikacja awaryjna w slocie (poinformuj, gdy pyta). "
@@ -1027,7 +1089,8 @@ def _cm_tools():
         _CM_TOOLS = [TOOL_PROPOSE, TOOL_SCHOWEK, TOOL_ARCHIVE, TOOL_SIMILAR, TOOL_ADAPT,
                      TOOL_PLAN_BUILD, TOOL_PLAN_APPROVE, TOOL_PLAN_EDIT, TOOL_TARGET_CREATE, TOOL_TARGET_UPDATE,
                      TOOL_REVIEW_CARDS, TOOL_ATTACH_PHOTO, TOOL_STYLE_RULE, TOOL_RESCHEDULE, TOOL_REPLACE,
-                     TOOL_GEN_IMAGE, TOOL_EXTERNAL_PUB, TOOL_INSPECT_IMAGE]
+                     TOOL_GEN_IMAGE, TOOL_EXTERNAL_PUB, TOOL_INSPECT_IMAGE,
+                     TOOL_VIEW_SCREENSHOT, TOOL_HOLD_QUEUE]
     return _CM_TOOLS
 
 
@@ -1075,6 +1138,10 @@ def _dispatch_tool(name, inp, chat_id):
         return _log_external_publication(inp)
     if name == "describe_material_image":
         return _describe_material_image(inp)
+    if name == "view_last_screenshot":
+        return _view_last_screenshot(inp)
+    if name == "hold_todays_queue":
+        return _hold_todays_queue()
     return "ok"
 
 
