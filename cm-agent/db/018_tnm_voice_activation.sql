@@ -649,13 +649,21 @@ Proces budowania marki JEST contentem: kazda decyzja, blad i insight = potencjal
 *Ty Nie Musisz. Ty Możesz!*
 
 $TNMVB$, 2, 'be_task83_adopt', NOW()
-WHERE NOT EXISTS (SELECT 1 FROM brand_config WHERE brand_id='TNM' AND config_key='voice_bible');
+WHERE NOT EXISTS (SELECT 1 FROM brand_config WHERE brand_id='TNM' AND config_key='voice_bible' AND version >= 2);
 
 INSERT INTO brand_config (brand_id, config_key, config_value, version, updated_by, updated_at)
-SELECT 'TNM', 'banned_vocab', '["leady","revenue","pipeline","timeline","eksplorowac","zwalidowane","target audience","stakeholder","aplikuj","ad-hoc","ICP","pivotujemy","leveraging","synergia","monetyzujemy","ekosystem","disrupt","ROI","CAC","LTV","MRR","ARR","builder","klikbait"]', 1, 'be_task83_adopt', NOW()
-WHERE NOT EXISTS (SELECT 1 FROM brand_config WHERE brand_id='TNM' AND config_key='banned_vocab');
+SELECT 'TNM', 'banned_vocab', '["leady","revenue","pipeline","timeline","eksplorowac","zwalidowane","target audience","stakeholder","aplikuj","ad-hoc","ICP","pivotujemy","leveraging","synergia","monetyzujemy","ekosystem","disrupt","ROI","CAC","LTV","MRR","ARR","builder","klikbait"]', 2, 'be_task83_adopt', NOW()
+WHERE NOT EXISTS (SELECT 1 FROM brand_config WHERE brand_id='TNM' AND config_key='banned_vocab' AND version >= 2);
 
--- Kontrola koncowa (oczekiwane: voice | 1 oraz cel | ready/linkedin_tnm - strona CZEKA na App 2)
-SELECT 'voice' AS co, COUNT(*)::text AS wynik FROM brand_config WHERE brand_id='TNM' AND config_key='voice_bible'
+
+-- KOREKTA (12/07 wieczor): stary run 018 aktywowal TNM/linkedin przez token personal.
+-- Decyzja Tomasza: TNM na LinkedIn = TYLKO strona firmowa -> wracamy do ready/linkedin_tnm.
+UPDATE channels
+SET status = 'ready',
+    config = config || '{"secret_prefix": "linkedin_tnm"}'::jsonb
+WHERE brand_id = 'TNM' AND channel = 'linkedin';
+
+-- Kontrola koncowa (oczekiwane: voice | 2 [v2 weszla] oraz cel | ready/linkedin_tnm)
+SELECT 'voice' AS co, MAX(version)::text AS wynik FROM brand_config WHERE brand_id='TNM' AND config_key='voice_bible'
 UNION ALL
 SELECT 'cel', status || '/' || (config->>'secret_prefix') FROM channels WHERE brand_id='TNM' AND channel='linkedin';
