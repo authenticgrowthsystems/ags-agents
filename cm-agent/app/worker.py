@@ -134,6 +134,12 @@ def message(body: dict, x_researcher_secret: str = Header(default="")):
     return {"accepted": True}
 
 
+def _brand_tokens_tick():
+    """#84: lazy import (modul sync/ ma zaleznosci ladowane przy starcie notion_workera)."""
+    from .sync import brand_tokens_pull
+    brand_tokens_pull.tick()
+
+
 # ---------------- state machine ----------------
 def _auto_image_enabled():
     """Feedback Tomasza 10/07 ('post do zatwierdzenia ma przychodzic OD RAZU z grafika'):
@@ -409,6 +415,7 @@ def loop():
             proactive.tick()                      # 06/07: luka kadencji -> subagent wola CM; odprawa semi
             conversation.memory_tick()            # 10/07: wygasajacy watek rozmowy -> skrot do pamieci trwalej
             engagement.consumer_tick()            # 10/07: zatwierdzone komentarze -> gotowiec do wklejenia + guziki
+            _brand_tokens_tick()                  # 12/07 #84: Notion Brand Config -> brand_tokens (poll 10 min)
             item = db.claim_content_item()
             if item:
                 worked = True

@@ -1,5 +1,6 @@
 """Generation: Sonnet for the canonical tekst-matka, Haiku for per-channel variants. Brand voice comes from
 the cached system block (brand.system_blocks), so the voice prefix is reused cheaply across calls."""
+import json
 import re
 
 import anthropic
@@ -174,14 +175,31 @@ _VISUAL_CANON_AGS = (
     "blue-purple-pink palette, whimsical hand-drawn style, emoji clutter.")
 
 
+_VISUAL_CANON_TNM = (
+    "TNM visual canon (fallback do czasu brand_tokens): palette warm green + terracotta + cream "
+    "(SOP dual-brand 12/07), clean editorial minimal, Polish market warmth, NO cyber-tech look, "
+    "no gradients between palette colors, no stock-photo look, no AI faces.")
+
+
 def _visual_canon(brand_id="AGS"):
-    """Kanon wizualny marki do promptow graficznych (feedback Tomasza 10/07 'caly brand - kolory, "
-    "fonty'). SSOT: brand_config 'visual_canon'; fallback: destylat z brand-canon/ags.md."""
+    """Kanon wizualny marki do promptow graficznych (feedback Tomasza 10/07 'caly brand - kolory,
+    fonty'). KOLEJNOSC ZRODEL (#84, 12/07): 1) brand_tokens (Notion SSOT, W3C DTCG JSON) ->
+    2) brand_config 'visual_canon' -> 3) fallback w kodzie (AGS destylat / TNM barwy SOP)."""
+    try:
+        row = _db.fetchone("SELECT tokens FROM brand_tokens WHERE brand_id=%s", (brand_id,))
+        toks = (row or {}).get("tokens")
+        if toks:
+            return ("BRAND TOKENS (source of truth - uzyj DOKLADNIE tych wartosci, hexy litera "
+                    "w litere): " + json.dumps(toks, ensure_ascii=False)[:2600])
+    except Exception:
+        pass  # tabela przed DDL 019 albo chwilowy blad - lecimy fallbackami
     row = _db.fetchone(
         "SELECT config_value FROM brand_config WHERE brand_id=%s AND config_key='visual_canon' ORDER BY version DESC LIMIT 1",
         (brand_id,))
     v = str(((row or {}).get("config_value")) or "").strip()
-    return v if len(v) > 40 else _VISUAL_CANON_AGS
+    if len(v) > 40:
+        return v
+    return _VISUAL_CANON_TNM if brand_id == "TNM" else _VISUAL_CANON_AGS
 
 
 def hint_wants_generated_graphic(hint):
