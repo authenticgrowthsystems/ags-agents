@@ -2020,6 +2020,14 @@ def handle(update):
         if not active:
             row = db.fetchone("SELECT active_agent FROM user_agent_state WHERE chat_id=%s", (chat_id,))
             active = (row or {}).get("active_agent") or "cm"
+        # #86 (12/07): komendy /brands i /brand_* = deterministyczne, przed jakimkolwiek LLM
+        from . import brands_ui
+        _br = brands_ui.try_handle(chat_id, text)
+        if _br is True:
+            return  # obsluzone plikiem (eksport .json)
+        if isinstance(_br, str):
+            _reply(chat_id, _br)
+            return
         _km = _KARTY_RE.match(text)
         if _km:
             # feedback 06/07: karty przywolywalne Z KAZDEGO kontekstu rozmowy, swieze na dole czatu

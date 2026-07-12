@@ -89,6 +89,11 @@ VARCHAR(30) NOT NULL DEFAULT 'supervised', CHECK: supervised / semi_autonomous /
 Tryb egzekucji per cel (canonical 12/07 Q2); dzis wszyscy 'supervised' - egzekwowanie trybow
 semi/auto = task #86 (menu marek) i dalsze. Przejscia trybow = jawna decyzja Tomasza.
 
+## brands - status (DDL w cm-agent/db/021, task #86 12/07/2026)
+CHECK rozszerzony: active / paused / **archived** (soft-delete z /brand_remove - dane
+historyczne marki zostaja; /brand_on przywraca). Zarzadzanie: komendy Telegram /brands,
+/brand_on|off|add|remove|config|export (cm-agent/app/brands_ui.py, deterministyczne bez LLM).
+
 ## TODO (rozszerzenie dokumentacji schematu)
 Pełny `pg_dump --schema-only` do zrzucenia i dopisania tu dla POZOSTAŁYCH tabel bazowych
 (post_queue, task_queue, published_posts, contacts, engagement_log, inspirations, channels,
