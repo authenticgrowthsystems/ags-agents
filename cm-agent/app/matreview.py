@@ -598,9 +598,17 @@ def handle(payload, wake_event=None):
         db.set_item_status(arg, "approved" if action == "ok" else "rejected")
         if action == "ok" and wake_event:
             wake_event.set()
-        head = "✅ Zatwierdzony -> publikacja w slocie.\n\n" if action == "ok" else "❌ Odrzucony.\n\n"
-        text, kb = _card()
-        edit(head + text, kb)
+        # BUG-FIX 12/07 ('kliknalem odrzuc i nic sie nie stalo'): _card() zwraca 3 wartosci od v7 -
+        # rozpakowanie do 2 wybuchalo PO zapisie statusu, wyjatek ginal w watku, zero feedbacku.
+        row = db.fetchone("SELECT master_theme FROM content_items WHERE id=%s", (arg,))
+        theme = ((row or {}).get("master_theme") or "")[:120]
+        # PARAGON DECYZJI (wymog Tomasza 12/07): potwierdzenie ZAWSZE nowa wiadomoscia na dole -
+        # edycja karty bywa zawodna i NIE jest kanalem potwierdzenia.
+        _tg("sendMessage", {"chat_id": chat_id,
+                            "text": (f"✅ Zatwierdzone: \"{theme}\" - publikacja w slocie."
+                                     if action == "ok" else f"❌ Odrzucone: \"{theme}\" - decyzja zapisana.")})
+        text, kb, _it = _card()
+        edit(("✅ " if action == "ok" else "❌ ") + text, kb)
         return
     if action == "okq":
         # feedback Tomasza 05/07 v2: 'zatwierdz, ale przerzuc na koniec kolejki' (minione sloty!)
@@ -610,8 +618,12 @@ def handle(payload, wake_event=None):
         if wake_event:
             wake_event.set()
         when = f"{slot.strftime('%d/%m %H:%M')}"
-        text, kb = _card()
-        edit(f"✅⏭ Zatwierdzony na koniec kolejki -> publikacja {when}.\n\n" + text, kb)
+        row = db.fetchone("SELECT master_theme FROM content_items WHERE id=%s", (arg,))
+        _tg("sendMessage", {"chat_id": chat_id,
+                            "text": f"✅⏭ Zatwierdzone na koniec kolejki: "
+                                    f"\"{((row or {}).get('master_theme') or '')[:120]}\" - publikacja {when}."})
+        text, kb, _it = _card()
+        edit("✅⏭ " + text, kb)
         return
     if action == "angle":
         # v3 (feedback 06/07): Tomasz SAM mowi jaki kat - CM czeka na wiadomosc. v4: prosba o
