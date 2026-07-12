@@ -103,11 +103,13 @@ def send_intake_buttons(item_id, theme):
 
 
 # ---------------- S3: paczka + karty (matnav:) ----------------
-def pending_items(brand_id="AGS"):
+def pending_items(brand_id=None):
+    # task #83 (12/07): przeglad obejmuje WSZYSTKIE marki (default), filtr per marka opcjonalny
     return db.fetchall(
-        """SELECT id, master_theme, target_channels, scheduled_for, canonical_body, media FROM content_items
-           WHERE brand_id=%s AND status='needs_approval'
-           ORDER BY scheduled_for NULLS LAST, created_at""", (brand_id,))
+        """SELECT id, brand_id, master_theme, target_channels, scheduled_for, canonical_body, media
+           FROM content_items
+           WHERE (%s::text IS NULL OR brand_id=%s) AND status='needs_approval'
+           ORDER BY scheduled_for NULLS LAST, created_at""", (brand_id, brand_id))
 
 
 def _find_done_item(theme_fragment, brand_id="AGS"):
@@ -235,10 +237,11 @@ def add_style_rule(rule):
     return len(arr)
 
 
-def _card(item_id=None, brand_id="AGS", full=False):
+def _card(item_id=None, brand_id=None, full=False):
     """(text, kb, item) karty materialu; item_id=None -> pierwszy czekajacy.
     v7 (feedback 06/07 11:35): Rozwin/Zwin = pierwszy SZEROKI guzik; ➕/🗑 Media na karcie;
-    zdjecia pokazywane AUTOMATYCZNIE pod karta (handle -> _send_media_preview)."""
+    zdjecia pokazywane AUTOMATYCZNIE pod karta (handle -> _send_media_preview).
+    #83: karty wszystkich marek, etykieta marki przy nie-AGS."""
     from .planner import _DAYS_PL, _target_label
     items = pending_items(brand_id)
     if not items:
@@ -267,7 +270,8 @@ def _card(item_id=None, brand_id="AGS", full=False):
         day_hdr = "📅 bez terminu"
     stale = "\n⚠️ SLOT MINAL - po 'Zatwierdz' CM sam przydzieli najblizszy wolny slot (okna+kadencja)." \
         if dt and dt < now else ""
-    ch = " + ".join(_target_label(brand_id, c) for c in (it.get("target_channels") or []))
+    it_brand = it.get("brand_id") or "AGS"
+    ch = " + ".join(_target_label(it_brand, c) for c in (it.get("target_channels") or []))
     body = (it.get("canonical_body") or "(tekst w produkcji)").strip()
     cap = 3300 if full else 500  # v6: Calosc = w TYM SAMYM okienku (limit Telegrama), Zwin wraca
     truncated = len(body) > cap
@@ -281,7 +285,8 @@ def _card(item_id=None, brand_id="AGS", full=False):
         med += f"\n🎨 propozycja wizualu: {hint[:220]}"
     if not n_media:
         med += "\n➕ dodasz: wyslij zdjecie botowi i napisz 'dolacz ostatnie zdjecie'"
-    text = (f"{day_hdr}   ·   📦 Material {idx + 1} z {len(items)}\n\n🕐 {when}{stale}\n📣 {ch}{med}\n"
+    brand_hdr = f"   ·   🏷 {it_brand}" if it_brand != "AGS" else ""
+    text = (f"{day_hdr}   ·   📦 Material {idx + 1} z {len(items)}{brand_hdr}\n\n🕐 {when}{stale}\n📣 {ch}{med}\n"
             f"📌 {it['master_theme'][:200]}\n\n{body}")
     iid = str(it["id"])
     # zawijanie (fix 06/07): ⬅️ z pierwszej karty = ostatnia, ➡️ z ostatniej = pierwsza

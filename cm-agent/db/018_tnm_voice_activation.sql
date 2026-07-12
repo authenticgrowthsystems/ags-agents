@@ -1,12 +1,11 @@
--- 018 (12/07/2026, task #83 + adopcja Voice Bible): TNM Voice Bible PL v2.0 ADOPTOWANA.
--- Zrodlo: C:\Claude-CoWork\TyNieMusisz\TNM_Voice_Bible_PL_v2.0.md (Manager TNM, konsolidacja 31/05)
--- + poprawki adopcyjne Tomasza 12/07: Hard Rule 4.11 Regula Prawdy, Aneks A (5 filarow), checklist.
--- DECYZJA KANALOW 12/07: TNM na LinkedIn = TYLKO strona firmowa (ready do App 2 CMA) - ZERO
--- aktywacji przez token personal (konto osobiste Tomasza = wylacznie EN). Publikacje TNM do
--- czasu App 2 = reczne + log [ZEWN]. Idempotentny (WHERE NOT EXISTS).
+-- 018 v3 (12/07/2026, task #83): TNM Voice Bible PL v2.0 ADOPTOWANA - wzorzec BUMPA.
+-- LEKCJA AP-304 (recydywa, dowod z produkcji): brand_config ma UNIQUE (brand_id, config_key) -
+-- wersje NIE moga byc osobnymi wierszami; poprzednie INSERTy rzucily duplicate key. Poprawnie =
+-- UPDATE istniejacego wiersza + wpis do brand_config_history (jak bump AGS v2->v3, db/017).
+-- Idempotentny (version < 2). Cel TNM: ready/linkedin_tnm (strona, czeka App 2) - juz poprawiony,
+-- UPDATE ponizej utrwala stan docelowy.
 
-INSERT INTO brand_config (brand_id, config_key, config_value, version, updated_by, updated_at)
-SELECT 'TNM', 'voice_bible', $TNMVB$
+WITH nowa AS (SELECT $TNMVB$
 # TNM Voice Bible PL v2.0
 
 **Marka**: Ty Nie Musisz (TNM)
@@ -160,6 +159,26 @@ Przykład:
 - AGS EN: "Premium pricing changes who shows up to your calendar."
 - TNM PL BAD: "Cena premium zmienia kto przychodzi na Twój kalendarz."
 - TNM PL GOOD: "Cena podwojona. Klienci ci sami. Nikt się nie obraził. Tylko ja przez rok nie wierzyłem, że to można."
+
+### 4.11. Reguła Prawdy (Truth Rule)
+
+**Zero zmyślonych anegdot, osób, klientów, rachunków, liczb, dat, wydarzeń.**
+
+**Pierwsza osoba** ("Miałem", "Widziałem", "Klient mi powiedział", "W zeszłym roku", "Kiedyś") = TYLKO dla faktów z życia Tomasza lub potwierdzonych źródeł (memory, CRM, wcześniejsze publikacje).
+
+**Hipotetyczne, ilustracyjne, przykładowe** = **JAWNIE oznaczone** w tekście:
+- "Wyobraź sobie właściciela salonu który..."
+- "Hipotetyczny przykład: firma X..."
+- "Przypadek fikcyjny dla ilustracji..."
+- "Załóżmy że prowadzisz..."
+
+**Liczby** (godziny zaoszczędzone, przychody, procenty, ilość klientów, wzrosty) = tylko faktyczne. NIE fabrykuj. Jeśli nie masz konkretnej liczby, użyj jakościowego opisu ("kilka godzin tygodniowo", "znacząco mniej", "cała popołudniowa smuga") zamiast wymyślonej precyzji ("12 godzin", "48%", "300%").
+
+**Powód**: przegląd kolejki centralnej 12/07 wykrył 9 treści ze zmyślonymi anegdotami wymagającymi wycięcia. Autentyczność = kluczowy asset marki TNM. Fake anegdota = utrata zaufania nieodwracalna.
+
+**Detection**: publisher regex/filter szuka pattern "Klient mi X", "Mój znajomy Y", "W zeszłym roku Z", konkretne liczby procentowe/kwotowe bez odpowiadającego record w bazie. Human review na anchor content = drugi filtr.
+
+**Zamiennik**: gdy potrzebujesz przykładu ale nie masz faktu, użyj hipotetycznego oznaczonego. "Wyobraź sobie właściciela salonu który..." zamiast "Klientka Anna prowadziła salon i...".
 
 
 ### 4.11. Regula Prawdy (dodane 12/07/2026, poprawka adopcyjna Tomasza)
@@ -586,6 +605,8 @@ Każdy TNM agent MUSI przejść przed publikacją:
 - [ ] Regula prawdy (4.11): fakty prawdziwe, hipotetyczne jawnie oznaczone
 - [ ] Corporate drift check (Wzorzec 8) jeśli używany external AI copywriter
 - [ ] Commodity caution (Wzorzec 4) - NIE lista narzędzi pre-revenue
+- [ ] **Reguła Prawdy (4.11)**: zero zmyślonych anegdot/osób/klientów/liczb; pierwsza osoba tylko dla faktów; hipotetyczne jawnie oznaczone
+- [ ] Temat mapuje do co najmniej 1 z 5 filarów build-in-public (Aneks A)
 - [ ] Human gate: anchor content = Tomasz approval przed publikacją
 
 Regex/filter automatyczny w publisherze = pierwszy check. Human review = drugi check dla anchor content.
@@ -631,6 +652,12 @@ Proces budowania marki JEST contentem: kazda decyzja, blad i insight = potencjal
 - Voice canon v1.0 wysłany do Manager AGS 2026-05-31
 - Post #1 anchor LIVE 30/05 (voice w akcji)
 
+**v2.0 wersja 2** (Tomasz adopt 2026-07-12, poprawki po przeglądzie kolejki centralnej 12/07):
+- **Dodane**: Hard Rule 4.11 Reguła Prawdy (zero zmyślonych anegdot/osób/klientów/rachunków; pierwsza osoba tylko dla faktów; hipotetyczne jawnie oznaczone). Wniosek z wycięcia 9 treści ze zmyślonymi anegdotami z kolejki centralnej.
+- **Dodane**: Aneks A - 5 filarów build-in-public z Brand Canonical jako obowiązująca tematyka (biblia = JAK, filary = O CZYM).
+- **Dodane**: 2 checkboxes w Pre-publish Checklist (Reguła Prawdy + mapowanie do filarów).
+- Baza centralna `voice_canon.tnm` dostała v2.0 z tymi poprawkami.
+
 **Deprecated w v2.0**:
 - "polski mentor + builder" → "polski mentor i architekt" (per Tomasz decision 29/05)
 - "tancerz × systems thinker" → "tancerz i specjalista od systemów"
@@ -646,24 +673,71 @@ Proces budowania marki JEST contentem: kazda decyzja, blad i insight = potencjal
 
 ---
 
+## Aneks A: 5 Filarów Build in Public (tematyka)
+
+**Zasada**: Voice Bible = **JAK piszemy**. Aneks A = **O CZYM piszemy**.
+
+**Source of truth**: Notion TNM Brand Canonical (18/04) + TNM Build In Public Strategy v1.0 (18/04). Notion IDs w memory `reference_notion_key_docs.md`.
+
+**Application rule**: każdy content TNM musi mapować do co najmniej **1 z 5 filarów**. Content nie mapujący do żadnego filaru = eskalacja do MANAGER TNM: "Ten temat wykracza poza 5 filarów, dodać jako 6-ty czy odrzucić?"
+
+**5 filarów** (skrót - full detail w Notion Brand Canonical):
+
+1. **Proces budowania firmy działającej bez założyciela** - mechanizm, framework, kolejność kroków, jak wygląda przejście od "wszystko na mnie" do "firma działa bez mnie"
+
+2. **Konkretne decyzje architektoniczne** - przykłady z Royal Dance Center, AGS, faktyczni klienci TNM (per Rule 4.11 - PRAWDZIWE only)
+
+3. **Wybór narzędzi z uzasadnieniem** - dlaczego X, kiedy Y, jak dopasować do etapu. Uwaga: pre-Wave 1 stosuj Wzorzec 4 commodity caution (bez konkretnych nazw). Po Wave 1 (lead magnet + affiliate ready) = full disclosure z linkami.
+
+4. **Błędy i lekcje z 15-letniego stażu przedsiębiorczego** - crisis-tested credibility, pandemia, skraj bankructwa, decyzje które chciałbym cofnąć, decyzje które zmieniły trajektorię
+
+5. **Case studies klientów i własne** - liczby, wyniki, transformacje (per Rule 4.11 - PRAWDZIWE only, żadnych fabrykacji)
+
+**Weryfikacja**: **do potwierdzenia przez Tomasza** vs finalna lista 5 filarów w Notion Brand Canonical. Powyższa lista = my educated reconstruction, wymaga sync z Brand Canonical dla precise wording. Jeśli Notion Brand Canonical ma inne 5 filarów lub inną kolejność - Notion wygrywa, ten Aneks aktualizowany do v2.1.
+
+**How to apply per agent**:
+- CONTENT CREATOR TNM: każdy draft posta = tag który filar (1/2/3/4/5)
+- AA TNM cold outreach: default filar 1 (proces) + filar 4 (błędy jako credibility)
+- SALES COPY TNM: proposals = filar 5 (case studies) + filar 2 (decyzje)
+- BLUEPRINT ANALYST TNM: session notes = filar 1 (proces) + filar 5 (własne case)
+- Publisher X centralnej bazy: tag filaru w metadanych każdego posta dla batch analytics
+
+---
+
 *Ty Nie Musisz. Ty Możesz!*
 
-$TNMVB$, 2, 'be_task83_adopt', NOW()
-WHERE NOT EXISTS (SELECT 1 FROM brand_config WHERE brand_id='TNM' AND config_key='voice_bible' AND version >= 2);
+$TNMVB$::text AS v),
+hist AS (
+  INSERT INTO brand_config_history (brand_id, field, old_value, new_value, version_from, version_to, updated_by)
+  SELECT 'TNM', 'voice_bible', bc.config_value, nowa.v, bc.version, 2, 'be_task83_adopt'
+  FROM brand_config bc, nowa
+  WHERE bc.brand_id='TNM' AND bc.config_key='voice_bible' AND bc.version < 2
+  RETURNING 1)
+UPDATE brand_config SET config_value=(SELECT v FROM nowa), version=2,
+  updated_by='be_task83_adopt', updated_at=NOW()
+WHERE brand_id='TNM' AND config_key='voice_bible' AND version < 2;
 
-INSERT INTO brand_config (brand_id, config_key, config_value, version, updated_by, updated_at)
-SELECT 'TNM', 'banned_vocab', '["leady","revenue","pipeline","timeline","eksplorowac","zwalidowane","target audience","stakeholder","aplikuj","ad-hoc","ICP","pivotujemy","leveraging","synergia","monetyzujemy","ekosystem","disrupt","ROI","CAC","LTV","MRR","ARR","builder","klikbait"]', 2, 'be_task83_adopt', NOW()
-WHERE NOT EXISTS (SELECT 1 FROM brand_config WHERE brand_id='TNM' AND config_key='banned_vocab' AND version >= 2);
+WITH nowa AS (SELECT '["leady","revenue","pipeline","timeline","eksplorowac","zwalidowane","target audience","stakeholder","aplikuj","ad-hoc","ICP","pivotujemy","leveraging","synergia","monetyzujemy","ekosystem","disrupt","ROI","CAC","LTV","MRR","ARR","builder","klikbait","SOP"]'::text AS v),
+hist AS (
+  INSERT INTO brand_config_history (brand_id, field, old_value, new_value, version_from, version_to, updated_by)
+  SELECT 'TNM', 'banned_vocab', bc.config_value, nowa.v, bc.version, 2, 'be_task83_adopt'
+  FROM brand_config bc, nowa
+  WHERE bc.brand_id='TNM' AND bc.config_key='banned_vocab' AND bc.version < 2
+  RETURNING 1)
+UPDATE brand_config SET config_value=(SELECT v FROM nowa), version=2,
+  updated_by='be_task83_adopt', updated_at=NOW()
+WHERE brand_id='TNM' AND config_key='banned_vocab' AND version < 2;
 
-
--- KOREKTA (12/07 wieczor): stary run 018 aktywowal TNM/linkedin przez token personal.
--- Decyzja Tomasza: TNM na LinkedIn = TYLKO strona firmowa -> wracamy do ready/linkedin_tnm.
 UPDATE channels
 SET status = 'ready',
     config = config || '{"secret_prefix": "linkedin_tnm"}'::jsonb
 WHERE brand_id = 'TNM' AND channel = 'linkedin';
 
--- Kontrola koncowa (oczekiwane: voice | 2 [v2 weszla] oraz cel | ready/linkedin_tnm)
-SELECT 'voice' AS co, MAX(version)::text AS wynik FROM brand_config WHERE brand_id='TNM' AND config_key='voice_bible'
+-- Kontrola koncowa (oczekiwane: voice | 2 [naglowek v2.0], cel | ready/linkedin_tnm, historia | 2)
+SELECT 'voice' AS co, version::text || ' / ' || LEFT(REPLACE(config_value, E'
+', ' '), 40) AS wynik
+  FROM brand_config WHERE brand_id='TNM' AND config_key='voice_bible'
 UNION ALL
-SELECT 'cel', status || '/' || (config->>'secret_prefix') FROM channels WHERE brand_id='TNM' AND channel='linkedin';
+SELECT 'cel', status || '/' || (config->>'secret_prefix') FROM channels WHERE brand_id='TNM' AND channel='linkedin'
+UNION ALL
+SELECT 'historia', COUNT(*)::text FROM brand_config_history WHERE brand_id='TNM' AND version_to=2;

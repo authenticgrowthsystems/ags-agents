@@ -222,20 +222,23 @@ def _fmt_slot(dt):
     return dt.astimezone(WARSAW).strftime("%d/%m %H:%M") if dt else "brak slotu"
 
 
-def _queue_snapshot(brand_id="AGS"):
+def _queue_snapshot(brand_id=None):
+    # task #83 (12/07): kolejka pokazuje WSZYSTKIE marki (etykieta [TNM] przy nie-AGS)
     items = db.fetchall(
-        """SELECT id, master_theme, status, target_channels, scheduled_for, media
+        """SELECT id, brand_id, master_theme, status, target_channels, scheduled_for, media
            FROM content_items
-           WHERE brand_id=%s AND status NOT IN ('published','rejected','failed','proposed')
+           WHERE (%s::text IS NULL OR brand_id=%s)
+             AND status NOT IN ('published','rejected','failed','proposed')
            ORDER BY COALESCE(scheduled_for, created_at) LIMIT 60""",
-        (brand_id,),
+        (brand_id, brand_id),
     )  # 'proposed' celowo poza kolejka - propozycje planu maja wlasny widok (planner.plan_text)
     lines = []
     for it in items:
         ch = ",".join(it.get("target_channels") or [])
         n_media = sum(1 for m in (it.get("media") or []) if (m or {}).get("file_id"))
         med = f" 🖼x{n_media}" if n_media else ""  # 06/07: CM MUSI widziec zalaczniki w kolejce
-        lines.append(f"- [{it['status']}]{med} {it['master_theme'][:80]} | {ch} | slot: {_fmt_slot(it.get('scheduled_for'))}")
+        btag = f" [{it['brand_id']}]" if it.get("brand_id") and it["brand_id"] != "AGS" else ""
+        lines.append(f"- [{it['status']}]{med}{btag} {it['master_theme'][:80]} | {ch} | slot: {_fmt_slot(it.get('scheduled_for'))}")
     if len(items) == 60:
         lines.append("(...kolejka dluzsza - to pierwsze 60; ZANIM powiesz ze materialu nie ma, "
                      "sprawdz show_review_cards z theme_fragment)")
@@ -541,6 +544,10 @@ TOOL_PROPOSE = {
                              "description": "Temat-matka materialu, konkretny, z uzgodnionym katem narracji."},
             "target_channels": {"type": "array", "items": {"type": "string", "enum": ["x", "linkedin"]},
                                 "description": "Kanaly publikacji. Domyslnie oba: x i linkedin."},
+            "brand_id": {"type": ["string", "null"],
+                         "description": ("Marka materialu (AGS/TNM/RDC...), default AGS. TNM = tresc PO POLSKU "
+                                         "w glosie TNM; kanal TNM bez aktywnego celu = material do RECZNEJ "
+                                         "publikacji (pelna tresc guzikiem, log przez [ZEWN]).")},
             "scheduled_for": {"type": ["string", "null"],
                               "description": ("Slot publikacji jako ISO 8601 z offsetem, np. 2026-07-03T15:00:00+02:00. "
                                               "null = publikacja od razu po zatwierdzeniu.")},
@@ -969,6 +976,12 @@ def _create_material(inp):
     if len(theme) < 4:
         return ("⚠️ Nie zapisuje - brak konkretnego tematu-matki (dostalem pusty). Jesli to mial byc "
                 "drugi/wspierajacy material, najpierw ulóz jego temat, potem zapisz.")
+    # task #83 multi-brand (12/07): material moze nalezec do innej marki (glos ladowany per brand_id
+    # w workerze - TNM dostaje Voice Bible PL v2.0 z bazy, nie glos AGS z rozmowy)
+    brand = (inp.get("brand_id") or "AGS").strip().upper() or "AGS"
+    if not db.fetchone("SELECT 1 AS x FROM brands WHERE brand_id=%s", (brand,)):
+        return f"⚠️ Nie znam marki '{brand}' - zarejestrowane: " + ", ".join(
+            r["brand_id"] for r in db.fetchall("SELECT brand_id FROM brands ORDER BY brand_id"))
     channels = [c for c in (inp.get("target_channels") or ["x", "linkedin"]) if c]
     sched_dt = None
     raw = inp.get("scheduled_for")
@@ -983,13 +996,14 @@ def _create_material(inp):
     # (status poza ACTIONABLE) i Tomasz decyduje guzikami: Do kolejki / Dzis / Odrzuc (matdec:).
     row = db.fetchone(
         """INSERT INTO content_items (brand_id, master_theme, target_channels, status, scheduled_for)
-           VALUES ('AGS',%s,%s,'draft',%s) RETURNING id""",
-        (theme, list(channels), sched_dt),
+           VALUES (%s,%s,%s,'draft',%s) RETURNING id""",
+        (brand, theme, list(channels), sched_dt),
     )
     from . import matreview
     matreview.send_intake_buttons(row["id"], theme)
     when = _fmt_slot(sched_dt) if sched_dt else "zaraz po zatwierdzeniu tekstu"
-    return (f"📝 Zapisany: \"{theme}\" | kanaly: {', '.join(channels)} | slot: {when}\n"
+    tag = f" | marka: {brand}" if brand != "AGS" else ""
+    return (f"📝 Zapisany: \"{theme}\"{tag} | kanaly: {', '.join(channels)} | slot: {when}\n"
             f"Zdecyduj guzikami (wiadomosc ponizej): Do kolejki / Dzis / Odrzuc.")
 
 
