@@ -367,19 +367,32 @@ def comment_from_image(image_bytes, media_type, brand, channel, lang="en"):
     return _text(resp)
 
 
-_X_ARTICLE_GUIDE = (
+_X_SERIES_GUIDE = (
     "X/Twitter: short punchy posts. If the canonical is SHORT, write ONE post of at most ~550 "
-    "characters with a strong hook. If the canonical is LONG or article-like, write ONE cohesive "
-    "X ARTICLE (native long-form): first line = a strong TITLE (max 8 words), then the full piece "
-    "with natural paragraph breaks. NO thread, NO ===TWEET=== separators (canonical 12/07: no "
-    "multi-tweet threads below 1000 followers on this account). At most one hashtag total.")
+    "characters with a strong hook. If the canonical is LONG: decompose it into 3-5 SELF-CONTAINED "
+    "posts separated by lines containing exactly ===POST=== . Each post MUST stand completely alone "
+    "(own hook, one idea, own punchline, 300-550 characters) - a reader who sees ONLY that one post "
+    "gets full value. NO numbering, NO 'thread' continuity words (no 'as I said', no 1/5), NO "
+    "===TWEET=== threads (canonical 12/07: below 1000 followers content spreads across the day's "
+    "slots as independent posts, not threads, not one long block). At most one hashtag across the "
+    "whole series.")
+
+_X_ARTICLE_GUIDE = (
+    "X/Twitter NATIVE ARTICLE (long-form): write ONE cohesive article - first line = a strong "
+    "TITLE (max 8 words), then the full piece with natural paragraph breaks. NO thread, NO "
+    "===TWEET=== / ===POST=== separators. At most one hashtag.")
 
 
-def _x_guide(brand_id):
-    """Task #90 (canonical 12/07): X dluga tresc = ARTYKUL, nie nitka, dopoki follower_count < 1000
-    (albo thread_enabled=true w configu celu). Licznik: channels.config.follower_count
-    (reczna aktualizacja przez target_update / subagenta)."""
+def _x_guide(brand_id, content_item_id=None):
+    """Task #90 + korekta Tomasza 12/07 23:55 ('rozbic na caly dzien na kilka, nie jeden kloc'):
+    X przy follower_count < 1000: dluga tresc = SERIA samodzielnych postow po slotach dnia
+    (===POST===, staging rozdziela na osobne wiersze kolejki); temat [ARTYKUL] = prawdziwy
+    artykul natywny (kloc, tryb reczny). >= 1000 albo thread_enabled = stare nitki."""
     try:
+        if content_item_id:
+            t = _db.fetchone("SELECT master_theme FROM content_items WHERE id=%s", (content_item_id,))
+            if str(((t or {}).get("master_theme")) or "").startswith("[ARTYKUL]"):
+                return _X_ARTICLE_GUIDE
         r = _db.fetchone("SELECT config FROM channels WHERE brand_id=%s AND channel='x'", (brand_id,))
         cfg = (r or {}).get("config") or {}
         followers = int(cfg.get("follower_count") or 0)
@@ -387,14 +400,14 @@ def _x_guide(brand_id):
             return CHANNEL_GUIDE["x"]
     except Exception:
         pass
-    return _X_ARTICLE_GUIDE
+    return _X_SERIES_GUIDE
 
 
 def generate_variant(brand, canonical_body, channel, content_item_id=None):
     """Adaptacja per kanal; model per task z routera R4 (default haiku); jezyk per cel (R6)."""
     model, tier, source = tasks.model_for("variant")
     if channel == "x":
-        guide = _x_guide(brand.get("brand_id", "AGS"))  # #90: artykul vs nitka per follower_count
+        guide = _x_guide(brand.get("brand_id", "AGS"), content_item_id)  # #90: seria/artykul/nitka
     else:
         guide = CHANNEL_GUIDE.get(channel, f"{channel}: adapt naturally for this platform.")
     note = _channel_voice_note(brand.get("brand_id", "AGS"), channel)  # C: per-konto override

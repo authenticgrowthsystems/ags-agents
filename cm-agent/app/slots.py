@@ -72,7 +72,16 @@ def _busy(brand_id, channel, day_start, day_end):
            WHERE brand_id=%s AND %s = ANY(target_channels) AND status = ANY(%s)
              AND scheduled_for >= %s AND scheduled_for < %s""",
         (brand_id, channel, list(BUSY_STATUSES), day_start, day_end))
-    return sorted(r["scheduled_for"].astimezone(WARSAW) for r in rows if r.get("scheduled_for"))
+    # #90 korekta 12/07 (seria X po slotach dnia): wiersze KOLEJKI tez zajmuja sloty -
+    # jeden material moze miec wiele wierszy pq z roznymi slotami (bez tego kazdy element
+    # serii dostawalby ten sam 'wolny' slot)
+    rows2 = db.fetchall(
+        """SELECT scheduled_for FROM post_queue
+           WHERE brand=%s AND platform=%s AND status IN ('review','scheduled','queued','dispatching')
+             AND scheduled_for >= %s AND scheduled_for < %s""",
+        (brand_id, channel, day_start, day_end))
+    return sorted({r["scheduled_for"].astimezone(WARSAW)
+                   for r in (rows + rows2) if r.get("scheduled_for")})
 
 
 def _li_ok(day, is_article):

@@ -21,8 +21,30 @@ def active_targets(brand_id, target_channels):
 
 def stage_variant(item, channel_row, variant_text):
     """Eager staging: write the variant as a post_queue row in 'review' (shown at the HITL gate).
-    Media (etap 1, 06/07): zalaczniki materialu jada do wiersza kolejki - publisher wgrywa je przy publikacji."""
+    Media (etap 1, 06/07): zalaczniki materialu jada do wiersza kolejki - publisher wgrywa je przy publikacji.
+    #90 korekta 12/07 ('rozbic na caly dzien'): SERIA X (===POST===) = OSOBNE wiersze kolejki,
+    kazdy z KOLEJNYM wolnym slotem siatki dnia - samodzielne posty, nie nitka, nie kloc."""
     import json
+    if channel_row["channel"] == "x" and "===POST===" in (variant_text or ""):
+        from . import slots as _slots
+        parts = [p.strip() for p in variant_text.split("===POST===") if p.strip()]
+        ids = []
+        for i, part in enumerate(parts):
+            slot = item.get("scheduled_for") if (i == 0 and item.get("scheduled_for")) else None
+            if slot is None:
+                try:
+                    slot = _slots.next_slot(item["brand_id"], ["x"], prefer_today=True)
+                except Exception:
+                    slot = None
+            row = db.fetchone(
+                """INSERT INTO post_queue (content, brand, platform, topic, status, content_item_id, scheduled_for, media)
+                   VALUES (%s,%s,%s,%s,'review',%s,%s,%s::jsonb) RETURNING id""",
+                (part, item["brand_id"], "x", item.get("master_theme"), item["id"], slot,
+                 json.dumps(item.get("media") or [] if i == 0 else [])),
+            )
+            if row:
+                ids.append(row["id"])
+        return ids[0] if ids else None
     row = db.fetchone(
         """INSERT INTO post_queue (content, brand, platform, topic, status, content_item_id, scheduled_for, media)
            VALUES (%s,%s,%s,%s,'review',%s,%s,%s::jsonb) RETURNING id""",
