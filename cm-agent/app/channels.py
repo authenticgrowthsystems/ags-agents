@@ -63,6 +63,12 @@ def dispatch_item(item):
     handoff = []
     for r in rows:
         mode = (r.get("config") or {}).get("publish_mode", config.PUBLISH_DRAFT)
+        # Task #90 (12/07): ARTYKUL X (dluga tresc bez ===TWEET===) NIE idzie do publishera tweetow
+        # (limit znakow by go rozjechal) - tryb reczny do czasu adaptera POST /2/articles/draft+publish
+        # (endpointy zweryfikowane docs-first 12/07; sonda tieru przy budowie adaptera).
+        content = r.get("content") or ""
+        if (r["platform"] == "x" and len(content) > 600 and "===TWEET===" not in content):
+            mode = config.PUBLISH_DRAFT
         if mode == config.PUBLISH_WEBHOOK and r.get("adapter_path"):
             _delegate(item, r)
         elif mode == config.PUBLISH_POST_QUEUE:
