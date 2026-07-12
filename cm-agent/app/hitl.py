@@ -48,6 +48,12 @@ def send_approval(item, variants):
              "", "Ponizej FINALNE teksty do publikacji (jezyk wg celu; AGS = EN):", ""]
     for ch, txt in variants:
         lines.append(f"--- {ch} ---\n{txt}\n")
+    if not variants:
+        # task #83 (12/07): cel bez AKTYWNEGO kanalu (np. TNM strona przed App 2) = tryb reczny -
+        # pokaz tekst-matke zamiast pustego 'FINALNE teksty' (incydent: karta TNM bez tresci)
+        canon = (item.get("canonical_body") or "").strip()
+        lines.append("--- TRESC (cel bez aktywnego kanalu - publikacja RECZNA; pelna tresc: karty -> 📄) ---\n"
+                     + (canon[:2800] if canon else "(tekst w produkcji)") + "\n")
     lines.append(f"Model tekstu-matki: {can_tier} (zmiana guzikiem 🎚 dziala od nastepnego materialu)")
     text = "\n".join(lines)[:3800]
     kb = {"inline_keyboard": [
@@ -65,8 +71,11 @@ def send_approval(item, variants):
                    timeout=15)
         # Task #89 (12/07): long-form nie miesci sie w wiadomosci (uciete artykuly 12/07) -
         # kazdy dlugi wariant dodatkowo jako plik .md (pelna tresc, latwe kopiowanie)
-        for ch, txt in variants:
-            if len(txt or "") > 3500:
+        _longs = list(variants)
+        if not variants and len((item.get("canonical_body") or "")) > 2800:
+            _longs = [("reczna", item.get("canonical_body") or "")]
+        for ch, txt in _longs:
+            if len(txt or "") > 2800:
                 from . import matreview
                 matreview._tg_send_document(chat, f"material_{item['id']}_{ch}.md", txt,
                                             caption=f"📎 PELNA tresc {ch} (wiadomosc wyzej jest ucieta): "
