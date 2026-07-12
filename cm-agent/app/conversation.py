@@ -263,14 +263,24 @@ def _schowek_view():
     return "\n".join(lines)
 
 
-def _channels_snapshot(brand_id="AGS"):
-    """Konfiguracja CELOW dla rozmowy (fix 06/07: CM nie znal okien publikacji/kadencji)."""
-    rows = db.fetchall(
-        "SELECT channel, status, supervised, config FROM channels WHERE brand_id=%s ORDER BY channel",
-        (brand_id,))
+def _channels_snapshot(brand_id=None):
+    """Konfiguracja CELOW dla rozmowy (fix 06/07: CM nie znal okien publikacji/kadencji).
+    Task #83 (12/07): CM widzi WSZYSTKIE marki (bug: hardcode AGS ukrywal cele TNM/RDC -
+    12/07 10:52 CM twierdzil, ze celow TNM nie ma, a byly jako 'ready' od 04/07)."""
+    if brand_id:
+        rows = db.fetchall(
+            "SELECT brand_id, channel, status, supervised, config FROM channels WHERE brand_id=%s ORDER BY channel",
+            (brand_id,))
+    else:
+        rows = db.fetchall(
+            "SELECT brand_id, channel, status, supervised, config FROM channels ORDER BY brand_id, channel")
     lines = []
+    last_brand = None
     for r in rows:
         cfg = r.get("config") or {}
+        if r["brand_id"] != last_brand:
+            lines.append(f"MARKA {r['brand_id']}:")
+            last_brand = r["brand_id"]
         bits = [f"status={r['status']}" + ("/supervised" if r.get("supervised") else "/standalone")]
         if cfg.get("publish_windows"):
             bits.append(f"okno={cfg['publish_windows']}")
