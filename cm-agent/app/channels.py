@@ -30,12 +30,12 @@ def stage_variant(item, channel_row, variant_text):
         parts = [p.strip() for p in variant_text.split("===POST===") if p.strip()]
         ids = []
         for i, part in enumerate(parts):
-            slot = item.get("scheduled_for") if (i == 0 and item.get("scheduled_for")) else None
-            if slot is None:
-                try:
-                    slot = _slots.next_slot(item["brand_id"], ["x"], prefer_today=True)
-                except Exception:
-                    slot = None
+            # kazda czesc = KOLEJNY wolny slot (bez dziedziczenia slotu materialu - czesc 1
+            # ladowala po czesciach 2-4, gdy material mial stary slot w przyszlosci)
+            try:
+                slot = _slots.next_slot(item["brand_id"], ["x"], prefer_today=True)
+            except Exception:
+                slot = None
             row = db.fetchone(
                 """INSERT INTO post_queue (content, brand, platform, topic, status, content_item_id, scheduled_for, media)
                    VALUES (%s,%s,%s,%s,'review',%s,%s,%s::jsonb) RETURNING id""",
