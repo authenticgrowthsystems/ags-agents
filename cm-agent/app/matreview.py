@@ -61,6 +61,21 @@ def _tg_send_document(chat_id, filename, text, caption=""):
         return False
 
 
+def log_learning(subagent_id, brand_id, content_item_id, proposed, final, correction_type, notes=None):
+    """Task #87 (12/07): petla nauki - KAZDA decyzja Tomasza o tresci laduje w agent_learning_log
+    (accepted/edited/rejected/replaced). Czyta ja generacja (generate._learning_digest). Nigdy nie
+    wywraca produkcji (tabela przed DDL 020 = cichy pass)."""
+    try:
+        db.execute(
+            """INSERT INTO agent_learning_log
+               (subagent_id, brand_id, content_item_id, proposed_content, final_content, diff, correction_type, notes)
+               VALUES (%s,%s,%s,%s,%s,NULL,%s,%s)""",
+            (str(subagent_id)[:100], str(brand_id)[:50], content_item_id,
+             (proposed or "")[:6000], (final or None), correction_type, (notes or None)))
+    except Exception:
+        pass
+
+
 def _admin_chat():
     from . import hitl
     return hitl._admin_chat_id()
@@ -590,6 +605,9 @@ def handle(payload, wake_event=None):
         items = pending_items()
         for it in items:
             db.set_item_status(it["id"], "approved")
+            log_learning(f"cm:{it.get('brand_id', 'AGS')}", it.get("brand_id", "AGS"), it["id"],
+                         it.get("canonical_body") or "", it.get("canonical_body") or "",
+                         "accepted", notes="karta matnav (zatwierdz wszystkie)")  # #87
         if wake_event:
             wake_event.set()
         edit(f"✅ Zatwierdzone wszystkie: {len(items)} materialow idzie do publikacji w slotach.")
@@ -600,7 +618,11 @@ def handle(payload, wake_event=None):
             wake_event.set()
         # BUG-FIX 12/07 ('kliknalem odrzuc i nic sie nie stalo'): _card() zwraca 3 wartosci od v7 -
         # rozpakowanie do 2 wybuchalo PO zapisie statusu, wyjatek ginal w watku, zero feedbacku.
-        row = db.fetchone("SELECT master_theme FROM content_items WHERE id=%s", (arg,))
+        row = db.fetchone("SELECT master_theme, brand_id, canonical_body FROM content_items WHERE id=%s", (arg,))
+        log_learning(f"cm:{(row or {}).get('brand_id', 'AGS')}", (row or {}).get("brand_id", "AGS"), arg,
+                     (row or {}).get("canonical_body") or "",
+                     ((row or {}).get("canonical_body") if action == "ok" else None),
+                     "accepted" if action == "ok" else "rejected", notes="karta matnav")
         theme = ((row or {}).get("master_theme") or "")[:120]
         # PARAGON DECYZJI (wymog Tomasza 12/07): potwierdzenie ZAWSZE nowa wiadomoscia na dole -
         # edycja karty bywa zawodna i NIE jest kanalem potwierdzenia.
@@ -754,6 +776,8 @@ def apply_edit(new_text, wake_event=None):
     brand = load_brand(item["brand_id"])
     old = (item.get("canonical_body") or "").strip()
     new = compliance.fix_dashes(new_text.strip())
+    log_learning(f"cm:{item.get('brand_id', 'AGS')}", item.get("brand_id", "AGS"), iid,
+                 old, new, "edited", notes="edycja tekstu-matki (VOICE_EDIT)")  # #87 petla nauki
     rules = _distill_style_rules(brand, old, new, iid)
     try:
         db.execute(

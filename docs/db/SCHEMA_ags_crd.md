@@ -65,6 +65,30 @@ visual_canon i fallbackiem w kodzie).
 | updated_at | TIMESTAMPTZ default NOW() |
 | source | VARCHAR(50) default 'notion_sync' |
 
+## agent_learning_log (petla nauki; DDL w cm-agent/db/020, task #87 12/07/2026)
+Kazda decyzja Tomasza o tresci (karta/edycja/podmiana) -> wiersz; generacja czyta ostatnie 20
+(generate._learning_digest) przed pisaniem. KOREKTA do briefu: content_item_id = UUID (nie BIGINT).
+
+| kolumna | uwagi |
+|---|---|
+| id | BIGSERIAL PK |
+| subagent_id | VARCHAR(100), 'cm:<brand>' (karty) albo '<brand>:<channel>' (edycje wariantow) |
+| brand_id | VARCHAR(50) |
+| content_item_id | UUID FK -> content_items(id), nullable |
+| proposed_content | TEXT NOT NULL (wersja agenta) |
+| final_content | TEXT (wersja po decyzji; NULL przy rejected) |
+| diff | TEXT (rezerwa, dzis NULL) |
+| correction_type | CHECK: accepted / edited / rejected / replaced |
+| notes | TEXT (zrodlo decyzji) |
+| created_at | TIMESTAMPTZ default NOW() |
+
+Indeks: idx_learning_log_subagent (subagent_id, created_at DESC).
+
+## channels - kolumna execution_mode (DDL w cm-agent/db/020, task #87)
+VARCHAR(30) NOT NULL DEFAULT 'supervised', CHECK: supervised / semi_autonomous / autonomous.
+Tryb egzekucji per cel (canonical 12/07 Q2); dzis wszyscy 'supervised' - egzekwowanie trybow
+semi/auto = task #86 (menu marek) i dalsze. Przejscia trybow = jawna decyzja Tomasza.
+
 ## TODO (rozszerzenie dokumentacji schematu)
 Pełny `pg_dump --schema-only` do zrzucenia i dopisania tu dla POZOSTAŁYCH tabel bazowych
 (post_queue, task_queue, published_posts, contacts, engagement_log, inspirations, channels,

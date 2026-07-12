@@ -1093,6 +1093,9 @@ def _replace_material(inp):
     old_theme = row["master_theme"]
     db.execute("UPDATE content_items SET master_theme=%s, status='planned', updated_at=NOW() WHERE id=%s",
                (new_theme, row["id"]))
+    from . import matreview as _mrv87
+    _mrv87.log_learning("cm:AGS", "AGS", row["id"], old_theme, new_theme, "replaced",
+                        notes="replace_material (podmiana tematu, slot zostal)")  # #87 petla nauki
     db.execute("DELETE FROM post_queue WHERE content_item_id=%s AND status IN ('review','held','scheduled','queued')",
                (row["id"],))
     when = _fmt_slot(row.get("scheduled_for"))
@@ -1694,12 +1697,18 @@ def _apply_sub_edit(pid, brand, channel, raw):
         review_pl = raw
         note = f" (Twoja wersja PL przetlumaczona do publikacji {pub_lang.upper()}; PL zachowany do przegladu)"
     publish_text = compliance.fix_dashes(publish_text)
+    _old = db.fetchone("SELECT content FROM post_queue WHERE id=%s AND brand=%s AND platform=%s",
+                       (int(pid), brand, channel))
     row = db.fetchone(
         "UPDATE post_queue SET content=%s WHERE id=%s AND brand=%s AND platform=%s "
         "AND status IN ('review','held','scheduled','queued') RETURNING id, content_item_id",
         (publish_text, int(pid), brand, channel))
     if not row:
         return f"Nie znajduje edytowalnej pozycji #{pid} w kolejce {channel} (moze juz opublikowana?)."
+    from . import matreview as _mrv87
+    _mrv87.log_learning(f"{brand}:{channel}", brand, row.get("content_item_id"),
+                        ((_old or {}).get("content") or ""), publish_text, "edited",
+                        notes=f"edycja wariantu #{pid} w rozmowie subagenta")  # #87 petla nauki
     if review_pl and row.get("content_item_id"):
         _update_review_copy(row["content_item_id"], "pl", review_pl)
     return f"✏️ Tresc #{pid} podmieniona (Twoja edycja = akceptacja).{note} Ta wersja poleci w slocie."

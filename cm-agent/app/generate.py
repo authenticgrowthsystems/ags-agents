@@ -50,13 +50,39 @@ def _learned_style(brand_id="AGS"):
             + "\n".join(f"- {r}" for r in rules[-15:]))
 
 
+def _learning_digest(brand_id="AGS"):
+    """Task #87 (12/07): petla nauki poziom 3 - PRZED generacja czytamy ostatnie decyzje Tomasza
+    z agent_learning_log (N=20): co odrzucal, co edytowal (jego finalne wersje = wzorzec).
+    Tabela przed DDL 020 = cichy pusty string."""
+    try:
+        rows = _db.fetchall(
+            """SELECT correction_type, LEFT(COALESCE(final_content, proposed_content), 110) AS frag, notes
+               FROM agent_learning_log WHERE brand_id=%s ORDER BY created_at DESC LIMIT 20""",
+            (brand_id,))
+    except Exception:
+        return ""
+    if not rows:
+        return ""
+    counts = {}
+    for r in rows:
+        counts[r["correction_type"]] = counts.get(r["correction_type"], 0) + 1
+    lines = [f"\nOWNER DECISION HISTORY (last {len(rows)}: " +
+             ", ".join(f"{k}={v}" for k, v in sorted(counts.items())) + "). Learn from it:"]
+    for r in rows[:5]:
+        if r["correction_type"] == "edited":
+            lines.append(f"- OWNER'S OWN VERSION (imitate this style): {r['frag']}")
+        elif r["correction_type"] == "rejected":
+            lines.append(f"- REJECTED (avoid this direction): {r['frag']}")
+    return "\n".join(lines) if len(lines) > 1 else ""
+
+
 def generate_canonical(brand, master_theme, research_context="", content_item_id=None):
     """Tekst-matka; model per task z routera R4 (default sonnet, override brand_config cm_tier_canonical)."""
     model, tier, source = tasks.model_for("canonical")
     msg = f"Write a canonical post for the theme: {master_theme}."
     if research_context:
         msg += f"\n\nGround it in this evidence (use what is relevant, do not list sources):\n{research_context[:6000]}"
-    msg += f"\n\n{TRUTH_GUARD}{_learned_style(brand.get('brand_id', 'AGS'))}\n\nReturn ONLY the post body. Brand voice. Zero em dashes."
+    msg += f"\n\n{TRUTH_GUARD}{_learned_style(brand.get('brand_id', 'AGS'))}{_learning_digest(brand.get('brand_id', 'AGS'))}\n\nReturn ONLY the post body. Brand voice. Zero em dashes."
     resp = client().messages.create(
         model=model, max_tokens=1500,
         thinking={"type": "disabled"},  # Sonnet 5 defaults thinking ON when omitted; keep it off (preserves budget)
@@ -380,7 +406,7 @@ def generate_variant(brand, canonical_body, channel, content_item_id=None):
     lang = _language_publish(brand.get("brand_id", "AGS"), channel)
     lang_guide = LANGUAGE_GUIDE.get(lang, f"Write the adaptation in language code '{lang}'.")
     msg = (f"Adapt the canonical post below for {channel}. {guide}\n{lang_guide}\n{TRUTH_GUARD}"
-           f"{_learned_style(brand.get('brand_id', 'AGS'))}\n"
+           f"{_learned_style(brand.get('brand_id', 'AGS'))}{_learning_digest(brand.get('brand_id', 'AGS'))}\n"
            f"Keep the brand voice. Zero em dashes. Return ONLY the adapted text.\n\nCANONICAL:\n{canonical_body}")
     resp = client().messages.create(
         model=model, max_tokens=2000,
