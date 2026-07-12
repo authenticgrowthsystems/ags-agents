@@ -28,6 +28,7 @@ TG_LIMIT = 4096
 _PREVIEW_RE = re.compile(r"^\s*(/plan|/kolejka|plan|kolejka|status|poka[zż]\s+(plan|kolejk\w*))\s*\??\s*$", re.IGNORECASE)
 _SCHOWEK_RE = re.compile(r"^\s*(/schowek|schowek|baza\s+pomys\w*|poka[zż]\s+(schowek|baz\w*))\s*\??\s*$", re.IGNORECASE)
 _KARTY_RE = re.compile(r"^\s*(?:/karty|karty|przegl[aą]daj|poka[zż]\s+(?:karty|materia\w*)|materia[lł]y\s+do\s+przegl[aą]du)"
+                       r"(?:\s+do\s+przegl[aą]du)?"  # fix 12/07: 'karty do przegladu' szlo do LLM, ktory kwitowal 'Przyjete.'
                        r"(?:\s+(dzi[sś]|dzisiaj|jutro|jutrzejsze))?\s*\??\s*$", re.IGNORECASE)
 _DECYZJE_RE = re.compile(r"^\s*(/decyzje|decyzje|poka[zż]\s+decyzje|czekaj[aą]ce\s+decyzje)\s*\??\s*$", re.IGNORECASE)
 _CANCEL_RE = re.compile(r"^\s*(/cancel|anuluj)\s*$", re.IGNORECASE)
@@ -943,7 +944,10 @@ def _system_blocks(brand):
         "czy zostawic oba / seria czy swieze ujecie?'. Nie zostawiaj Tomasza z sama lista. "
         "Gdy Tomasz pyta o KONKRETNY material: NAJPIERW show_review_cards z theme_fragment "
         "(przeszukuje PELNA baze) - migawka kolejki bywa przycieta; NIE twierdz, ze materialu "
-        "nie ma, dopoki narzedzie tego nie potwierdzi. TWARDA ZASADA WYKONANIA: nigdy nie mow, "
+        "nie ma, dopoki narzedzie tego nie potwierdzi. Kazda wzmianka o kartach/przegladzie "
+        "('karty', 'karty do przegladu', 'pokaz do zatwierdzenia') = NATYCHMIAST show_review_cards "
+        "- NIGDY nie kwituj takich prosb slowem bez narzedzia (incydent 12/07: 'Przyjete.' "
+        "zamiast kart). TWARDA ZASADA WYKONANIA: nigdy nie mow, "
         "ze cos zapisales/przesunales/podmieniles, jesli nie wywolales narzedzia w TEJ turze. "
         f"\nTeraz jest {now} (Europe/Warsaw)."
         f"\n\nSTAN OPERACYJNY (o mechanizmach mow WYLACZNIE wg tego stanu - zero zgadywania; "
