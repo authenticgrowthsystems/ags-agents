@@ -209,6 +209,10 @@ def send_review_card(chat_id=None, theme_fragment=None, only_with_media=False, d
     chat = chat_id or _admin_chat()
     if not chat:
         return False
+    # fix 12/07 23:52: ZERO pending = NIE wysylaj pustej karty 'Przeglad zakonczony' (mylila
+    # Tomasza i narzedzie raportowalo sukces) - zwroc False, wolajacy powie prawde
+    if not pending_items():
+        return False
     item_id = None
     if theme_fragment or only_with_media or day:
         for it in pending_items():

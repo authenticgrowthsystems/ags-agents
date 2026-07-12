@@ -945,6 +945,10 @@ def _system_blocks(brand):
         "Twoj nowy kat jest MOCNIEJSZY, ZAPROPONUJ PODMIANE tamtego zaplanowanego postu na nowa wersje "
         "(replace_material - slot zostaje, kolejka sie nie dubluje), albo spytaj wprost 'podmienic tamten "
         "czy zostawic oba / seria czy swieze ujecie?'. Nie zostawiaj Tomasza z sama lista. "
+        "DWA ROZNE PRZEGLADY (nie mieszaj): PROPOZYCJA PLANU (proposed) przeglada sie guzikami "
+        "sterowania planem ('Przegladaj po kolei' - plannav), a KARTY (matnav) pokazuja TYLKO "
+        "wygenerowane materialy needs_approval. 'Chce przejrzec posty' zaraz po zbudowaniu planu "
+        "= prawie zawsze chodzi o PLAN. "
         "Gdy Tomasz pyta o KONKRETNY material: NAJPIERW show_review_cards z theme_fragment "
         "(przeszukuje PELNA baze) - migawka kolejki bywa przycieta; NIE twierdz, ze materialu "
         "nie ma, dopoki narzedzie tego nie potwierdzi. Kazda wzmianka o kartach/przegladzie "
@@ -1159,7 +1163,16 @@ def _dispatch_tool(name, inp, chat_id):
     if name == "show_review_cards":
         ok = matreview.send_review_card(chat_id, theme_fragment=inp.get("theme_fragment"),
                                         only_with_media=bool(inp.get("only_with_media")))
-        return "Karta wyslana ponizej (widoczna dla Tomasza)." if ok else "Nie znajduje takiego materialu w przegladzie."
+        if ok:
+            return "Karta wyslana ponizej (widoczna dla Tomasza)."
+        # fix 12/07 23:52: 'chce przejrzec posty' po zbudowaniu planu = Tomaszowi chodzi o PLAN
+        # (proposed), nie o karty needs_approval - podaj mu wlasciwe sterowanie zamiast pustki
+        if planner.plan_text() != "(brak propozycji planu)":
+            planner.send_plan_controls(chat_id)
+            return ("ZERO materialow w przegladzie kartami (needs_approval). JEST za to PROPOZYCJA "
+                    "PLANU - wyslalem Tomaszowi sterowanie planem ponizej (Przegladaj po kolei / "
+                    "Zatwierdz wszystkie). Powiedz mu, ze przeglad propozycji robi sie TYMI guzikami.")
+        return "Zero materialow do przegladu (needs_approval) i brak propozycji planu."
     if name == "attach_last_photo":
         return _attach_last_photo(inp)
     if name == "add_style_rule":
