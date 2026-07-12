@@ -458,7 +458,10 @@ TOOL_TARGET_CREATE = {
 
 TOOL_TARGET_UPDATE = {
     "name": "target_update",
-    "description": "Zmien JEDNO pole konfiguracji istniejacego celu (channels.config), np. language_publish, posts_per_day, work_mode, emergency_publish, stats_mode, org_urn.",
+    "description": ("Zmien JEDNO pole konfiguracji istniejacego celu (channels.config), np. "
+                    "language_publish, posts_per_day, work_mode, emergency_publish, stats_mode, org_urn, "
+                    "follower_count (licznik obserwujacych wpisywany RECZNIE przez Tomasza - kanon #90: "
+                    "X < 1000 followers = artykul zamiast nitki), thread_enabled (override progu nitek)."),
     "input_schema": {"type": "object",
                      "properties": {"brand_id": {"type": "string"}, "channel": {"type": "string"},
                                     "key": {"type": "string"}, "value": {"type": "string"}},
