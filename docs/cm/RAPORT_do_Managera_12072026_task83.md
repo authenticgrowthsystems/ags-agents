@@ -16,25 +16,34 @@ Drugi brak: **TNM/RDC nie maja voice_bible w brand_config** (tylko AGS v3).
 1. **80f4dfc**: CM widzi cele WSZYSTKICH marek (grupowanie po marce w kontekscie rozmowy).
 2. **SQL placeholdery** (SSH one-liner podany Tomaszowi): brands LYSY/PT/SDI (paused) +
    channels linkedin ready z prefixami linkedin_lysy/pt/sdi (idempotentne ON CONFLICT).
-3. **db/018_tnm_voice_activation.sql**: TNM Voice Bible v1.0 (destylat CANONICAL LOCKED
-   TNM_Brand_And_Strategy.md - Symbioza, ICP PL, 8 twardych zasad jezyka, 5 filarow,
-   dollar-quote AP-303, idempotentny) + banned_vocab TNM + AKTYWACJA celu TNM/linkedin
-   (status active, secret_prefix -> 'linkedin' = istniejacy token personal).
+3. **db/018_tnm_voice_activation.sql (WERSJA FINALNA po adopcji)**: TNM Voice Bible PL v2.0
+   od Managera TNM (konsolidacja 31/05) ADOPTOWANA przez Tomasza z 3 poprawkami BE:
+   Hard Rule 4.11 Regula Prawdy (wniosek z truth-sweep 12/07), Aneks A = 5 filarow
+   build-in-public z Brand Canonical (decyzja: obowiazuja jako tematyka), pozycja
+   checklisty. Dollar-quote AP-303, idempotentny, wersja 2. + banned_vocab TNM
+   (anglicyzmy z sekcji 5.1/5.2). Moj wczesniejszy destylat v1.0 = zastapiony
+   (byl z kanonu kwietniowego, v2.0 nowsza i pelniejsza).
 
-## Decyzje Tomasza (guziki 12/07)
+## Decyzje Tomasza (guziki + doprecyzowanie 12/07)
 
-- "Glos TNM najpierw" - aktywacja dopiero z voice bible (wykonane w 018 jednym plikiem).
-- **Swiadome odstapienie od kanonu RLS** dla wlasnych marek (TNM/RDC to marki Tomasza na
-  wspolnej bazie, nie klienci); kanon RLS WRACA przed pierwszym klientem multi-tenant.
+- ADOPT v2.0 z poprawkami (4.11 + Aneks A) - werdykt do przekazania Managerowi TNM,
+  zeby zsyncowal canonical i Notion.
+- **KANALY TNM (doprecyzowanie Tomasza): TNM na LinkedIn = TYLKO strona firmowa** (konto
+  osobiste Tomasza = wylacznie EN; TNM tam drugorzednie). ZERO aktywacji przez token
+  personal - cel TNM/linkedin zostaje 'ready' do App 2 CMA. Wkrotce osobny profil X TNM,
+  pozniej IG/FB (nowe cele gdy powstana). LinkedIn = glowne zrodlo artykulow.
+- Publikacje TNM do czasu App 2 = reczne + log przez intake [ZEWN].
+- Kanon RLS: bez zmian (aktywacji operacyjnej 2. marki na razie nie ma).
 
 ## Zostaje w #83
 
-- RDC voice_bible (analogiczny destylat - brak zrodla kanonicznego RDC w repo; do wskazania
-  przez Tomasza) - RDC zostaje 'ready'.
-- AGS linkedin_page: config kompletny, aktywacja po App 2 CMA review (blocker zewnetrzny).
+- RDC voice_bible: wg kanonu glosu-DNA (Tomasz: "glos RDC to to samo") = rdzen wspolny +
+  nakladka RDC; zrobie po ustaleniu wzorca na TNM w praktyce. RDC zostaje 'ready'.
+- AGS linkedin_page + TNM strona: aktywacja po App 2 CMA review (blocker zewnetrzny).
 - Zero DDL = SCHEMA_ags_crd.md bez zmian (regula 08/07 dotyczy DDL).
 
 ## Tap-test (po SSH 018 + rebuild)
 
-Do CM: "jakie mamy cele publikacji?" -> lista z sekcjami MARKA AGS / TNM (active) / RDC /
-LYSY / PT / SDI. Potem: "zaproponuj pierwszy post TNM" -> generacja w glosie TNM po polsku.
+Do CM: "jakie mamy cele publikacji?" -> lista z sekcjami MARKA AGS / TNM (ready) / RDC /
+LYSY / PT / SDI. Potem: "napisz probny post TNM o decyzjach przed narzedziami" -> generacja
+PO POLSKU w glosie v2.0 (mama-test, zero anglicyzmow, value-first).
