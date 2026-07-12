@@ -63,6 +63,14 @@ def send_approval(item, variants):
         httpx.post(f"https://api.telegram.org/bot{tok}/sendMessage",
                    json={"chat_id": chat, "text": text, "disable_web_page_preview": True, "reply_markup": kb},
                    timeout=15)
+        # Task #89 (12/07): long-form nie miesci sie w wiadomosci (uciete artykuly 12/07) -
+        # kazdy dlugi wariant dodatkowo jako plik .md (pelna tresc, latwe kopiowanie)
+        for ch, txt in variants:
+            if len(txt or "") > 3500:
+                from . import matreview
+                matreview._tg_send_document(chat, f"material_{item['id']}_{ch}.md", txt,
+                                            caption=f"📎 PELNA tresc {ch} (wiadomosc wyzej jest ucieta): "
+                                                    f"{item.get('master_theme', '')[:100]}")
         # znacznik dla STANU AWARYJNEGO (kanon 11c): od tej chwili liczy sie 24h ciszy
         db.execute("UPDATE content_items SET approval_requested_at=NOW() WHERE id=%s", (item["id"],))
         matreview._state_set("cm_last_single_approval",

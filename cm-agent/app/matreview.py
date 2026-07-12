@@ -44,6 +44,23 @@ def _tg_upload_photo(chat_id, png_bytes, caption):
         return None
 
 
+def _tg_send_document(chat_id, filename, text, caption=""):
+    """Task #89 (12/07): long-form NIE miesci sie w wiadomosci Telegrama (limit 4096) - artykul
+    jedzie jako zalacznik .md (multipart, wzorzec _tg_upload_photo). Zwraca True/False."""
+    import httpx
+    from . import config
+    tok = config.TELEGRAM_BOT_TOKEN
+    if not tok:
+        return False
+    try:
+        r = httpx.post(f"https://api.telegram.org/bot{tok}/sendDocument",
+                       data={"chat_id": str(chat_id), "caption": caption[:1000]},
+                       files={"document": (filename, text.encode("utf-8"), "text/markdown")}, timeout=60)
+        return bool(r.json().get("ok"))
+    except Exception:
+        return False
+
+
 def _admin_chat():
     from . import hitl
     return hitl._admin_chat_id()
@@ -91,6 +108,41 @@ def pending_items(brand_id="AGS"):
         """SELECT id, master_theme, target_channels, scheduled_for, canonical_body, media FROM content_items
            WHERE brand_id=%s AND status='needs_approval'
            ORDER BY scheduled_for NULLS LAST, created_at""", (brand_id,))
+
+
+def _find_done_item(theme_fragment, brand_id="AGS"):
+    """Task #89 symptom 4 (12/07): karta NIE otwierala sie dla approved. Szukaj materialu poza
+    przegladem (approved/dispatching/published) po fragmencie tematu - widok bez decyzji."""
+    if not theme_fragment:
+        return None
+    return db.fetchone(
+        """SELECT id, master_theme, status, target_channels, scheduled_for, canonical_body, media
+           FROM content_items
+           WHERE brand_id=%s AND status IN ('approved','dispatching','published')
+             AND master_theme ILIKE %s
+           ORDER BY updated_at DESC LIMIT 1""", (brand_id, f"%{theme_fragment}%"))
+
+
+_VIEW_STATUS_PL = {"approved": "ZATWIERDZONY (czeka na publikacje)",
+                   "dispatching": "W PUBLIKACJI", "published": "OPUBLIKOWANY"}
+
+
+def _view_card(it, brand_id="AGS"):
+    """Karta PODGLADU materialu po decyzji (view-only): bez guzikow decyzji, z pelna trescia
+    na zadanie (guzik 📄 -> matnav:fulltext)."""
+    from .planner import _DAYS_PL, _target_label
+    dt = it["scheduled_for"].astimezone(WARSAW) if it.get("scheduled_for") else None
+    when = f"{_DAYS_PL[dt.weekday()]} {dt.strftime('%d/%m %H:%M')}" if dt else "-"
+    ch = " + ".join(_target_label(brand_id, c) for c in (it.get("target_channels") or []))
+    body = (it.get("canonical_body") or "(brak tresci)").strip()
+    n_media = sum(1 for m in (it.get("media") or []) if (m or {}).get("file_id"))
+    text = (f"🔒 {_VIEW_STATUS_PL.get(it['status'], it['status'].upper())} - podglad, bez decyzji\n\n"
+            f"🕐 {when}\n📣 {ch}" + (f"\n🖼 zalaczniki: {n_media}" if n_media else "") + "\n"
+            f"📌 {it['master_theme'][:200]}\n\n{body[:500]}"
+            + ("..." if len(body) > 500 else ""))
+    kb = {"inline_keyboard": [[{"text": "📄 Pokaz pelna tresc (do skopiowania)",
+                                "callback_data": f"matnav:fulltext:{it['id']}"}]]}
+    return text, kb
 
 
 def batch_note():
@@ -152,7 +204,14 @@ def send_review_card(chat_id=None, theme_fragment=None, only_with_media=False, d
             item_id = str(it["id"])
             break
         if item_id is None:
-            return False
+            # Task #89: nie ma w przegladzie -> szukaj w approved/dispatching/published (view-only)
+            done = _find_done_item(theme_fragment)
+            if not done:
+                return False
+            vtext, vkb = _view_card(done)
+            r = _tg("sendMessage", {"chat_id": chat, "text": vtext[:4000], "reply_markup": vkb})
+            _send_media_preview(chat, done)
+            return bool(r and r.get("ok"))
     text, kb, it = _card(item_id)
     body = {"chat_id": chat, "text": text[:4000]}
     if kb:
@@ -335,6 +394,27 @@ def handle(payload, wake_event=None):
     action = parts[1] if len(parts) > 1 else ""
     arg = parts[2] if len(parts) > 2 else ""
     if action == "pos":
+        return
+    if action == "fulltext":
+        # Task #89 (12/07): PELNA tresc materialu (dowolny status) do skopiowania - kawalkami
+        # (limit Telegrama 4096), a dlugie/[ARTYKUL] dodatkowo jako plik .md (long-form delivery).
+        row = db.fetchone("SELECT id, master_theme, status, canonical_body FROM content_items WHERE id=%s", (arg,))
+        if not row:
+            edit("Nie znajduje tego materialu.")
+            return
+        body = (row.get("canonical_body") or "(brak tresci)").strip()
+        _tg("sendMessage", {"chat_id": chat_id,
+                            "text": f"📄 PELNA TRESC [{row['status']}]: {row['master_theme'][:150]}"})
+        rest = body
+        while rest:
+            cut = rest.rfind("\n\n", 0, 3900)
+            if cut < 1900:
+                cut = min(3900, len(rest))
+            _tg("sendMessage", {"chat_id": chat_id, "text": rest[:cut]})
+            rest = rest[cut:].lstrip()
+        if len(body) > 3900 or str(row.get("master_theme") or "").startswith("[ARTYKUL]"):
+            _tg_send_document(chat_id, f"material_{row['id']}.md", body,
+                              caption=f"📎 Ta sama tresc jako plik (latwiejsze kopiowanie): {row['master_theme'][:120]}")
         return
     if action in ("first", "show"):
         text, kb, it = _card(arg if action == "show" else None)

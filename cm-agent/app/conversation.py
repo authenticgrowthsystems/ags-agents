@@ -599,7 +599,10 @@ TOOL_REVIEW_CARDS = {
     "description": ("Wyslij Tomaszowi SWIEZA karte przegladu materialow (needs_approval) z guzikami "
                     "decyzji i strzalkami, na dole czatu. Gdy Tomasz pyta o KONKRETNY material "
                     "(np. 'pokaz post ze zdjeciem', 'ta o tolerancji') - podaj theme_fragment i/lub "
-                    "only_with_media, zeby karta otworzyla sie NA TYM materiale."),
+                    "only_with_media, zeby karta otworzyla sie NA TYM materiale. Z theme_fragment "
+                    "znajduje TAKZE materialy juz zatwierdzone/opublikowane (karta podgladu z guzikiem "
+                    "pelnej tresci do skopiowania) - uzywaj gdy Tomasz chce tresc zatwierdzonego "
+                    "artykulu/posta."),
     "input_schema": {"type": "object", "properties": {
         "theme_fragment": {"type": ["string", "null"], "description": "Fragment tematu szukanego materialu."},
         "only_with_media": {"type": ["boolean", "null"], "description": "true = pierwszy material z zalacznikiem."}}},
@@ -845,6 +848,9 @@ def _system_blocks(brand):
         "save_to_schowek (bez produkcji). PUBLIKACJA ZEWNETRZNA: gdy Tomasz mowi 'opublikowalem / "
         "wrzucilem / poszlo recznie' (czesto ze zrzutem wyslanym chwile wczesniej) - wywolaj "
         "log_external_publication (kanal z wypowiedzi; brak kanalu = dopytaj jednym slowem). "
+        "ZRZUT EKRANU: wiadomosc 'przeslalem ci zrzut ekranu (masz go w schowku)' = Tomasz wyslal "
+        "obraz do CIEBIE; zapytaj JEDNYM zdaniem co z nim zrobic (dopiac do materialu / publikacja "
+        "zewnetrzna / inne), chyba ze kontekst juz padl - wtedy dzialaj. "
         "PLANOWANIE: 'zaplanuj tydzien' -> plan_build; 'zatwierdz plan' -> "
         "plan_approve (wyjatki numerami); edycje pozycji -> plan_edit. Cele: target_create / target_update. "
         "Brak reakcji Tomasza 24h po prosbie o approve = publikacja awaryjna w slocie (poinformuj, gdy pyta). "
@@ -1083,8 +1089,9 @@ def _discuss(chat_id, text):
     msgs = list(history)
     reply_texts = []
     for _step in range(_MAX_TOOL_STEPS):
+        # Task #89 (12/07): 1200 ucinalo artykuly w pol zdania ('mowi to...') - long-form musi wyjsc calo
         resp = client().messages.create(
-            model=model, max_tokens=1200, thinking={"type": "disabled"},
+            model=model, max_tokens=4000, thinking={"type": "disabled"},
             system=sysblocks, tools=_cm_tools(), messages=msgs)
         tasks.log_task("conversation", tier, model, source, getattr(resp, "usage", None))
         reply_texts += [b.text for b in resp.content
@@ -1863,7 +1870,7 @@ def _subagent_handle(chat_id, text, active):
     parts = []
     for _step in range(_MAX_TOOL_STEPS):
         resp = client().messages.create(
-            model=model, max_tokens=900, thinking={"type": "disabled"},
+            model=model, max_tokens=2000, thinking={"type": "disabled"},  # #89: 900 ucinalo dluzsze tresci
             system=sysblocks, tools=_SUB_TOOLS, messages=msgs)
         tasks.log_task("subagent_chat", tier, model, source, getattr(resp, "usage", None))
         parts += [b.text for b in resp.content if getattr(b, "type", "") == "text" and b.text.strip()]
