@@ -11,7 +11,7 @@ from fastapi import FastAPI, Header, HTTPException
 from . import config, db
 from .brand import load_brand
 
-from . import generate, compliance, channels, research, hitl, conversation, logbot, content_memory, reports, planner, matreview, slots, proactive, engagement, metrics_import, decisions
+from . import generate, compliance, channels, research, hitl, conversation, logbot, content_memory, reports, planner, matreview, slots, proactive, engagement, metrics_import, decisions, sunday_brief
 
 api = FastAPI(title="AGS Content Manager")
 wake = threading.Event()
@@ -446,6 +446,7 @@ def loop():
             matreview.sunday_guard()              # S4: niedzielne przypomnienia + fallback 23:00
             matreview.media_attach_watch()        # v7: ➕ Media - swieze zdjecie -> przypiecie do materialu
             proactive.tick()                      # 06/07: luka kadencji -> subagent wola CM; odprawa semi
+            sunday_brief.tick()                   # 19/07 BE-SWIAT: sob. podklad pod niedzielny artykul (research swiata)
             conversation.memory_tick()            # 10/07: wygasajacy watek rozmowy -> skrot do pamieci trwalej
             engagement.consumer_tick()            # 10/07: zatwierdzone komentarze -> gotowiec do wklejenia + guziki
             _brand_tokens_tick()                  # 12/07 #84: Notion Brand Config -> brand_tokens (poll 10 min)

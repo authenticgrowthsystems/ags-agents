@@ -790,6 +790,17 @@ def _hold_todays_queue():
             f"Powiedz jak je rozlozyc (np. 'na wolne sloty pon-pt'), poprzesuwam.")
 
 
+TOOL_SUNDAY_BRIEF = {
+    "name": "sunday_world_brief",
+    "description": ("PODKLAD POD NIEDZIELNY ARTYKUL: zlec badanie swiata AI z ostatnich 7 dni i przyslij "
+                    "3 kandydackie tezy z faktami i linkami zrodel (draft do recznej obrobki - NIC nie "
+                    "wchodzi do planu ani kolejki). Wywolaj gdy Tomasz mowi 'podklad na niedziele', "
+                    "'co sie dzialo w AI', 'przygotuj niedzielny artykul', 'czytaj swiat', 'insight "
+                    "tygodnia'. Produkcyjnie robi to sam w sobote rano; to jest wywolanie RECZNE/tap-test."),
+    "input_schema": {"type": "object", "properties": {}},
+}
+
+
 TOOL_EXTERNAL_PUB = {
     "name": "log_external_publication",
     "description": ("Zapisz PUBLIKACJE ZEWNETRZNA (Tomasz opublikowal cos RECZNIE, poza systemem) do "
@@ -1164,7 +1175,7 @@ def _cm_tools():
                      TOOL_PLAN_BUILD, TOOL_PLAN_APPROVE, TOOL_PLAN_EDIT, TOOL_TARGET_CREATE, TOOL_TARGET_UPDATE,
                      TOOL_REVIEW_CARDS, TOOL_ATTACH_PHOTO, TOOL_STYLE_RULE, TOOL_RESCHEDULE, TOOL_REPLACE,
                      TOOL_GEN_IMAGE, TOOL_EXTERNAL_PUB, TOOL_INSPECT_IMAGE,
-                     TOOL_VIEW_SCREENSHOT, TOOL_HOLD_QUEUE, TOOL_ESCALATE]
+                     TOOL_VIEW_SCREENSHOT, TOOL_HOLD_QUEUE, TOOL_ESCALATE, TOOL_SUNDAY_BRIEF]
     return _CM_TOOLS
 
 
@@ -1225,6 +1236,9 @@ def _dispatch_tool(name, inp, chat_id):
         return _view_last_screenshot(inp)
     if name == "hold_todays_queue":
         return _hold_todays_queue()
+    if name == "sunday_world_brief":
+        from . import sunday_brief
+        return sunday_brief.trigger_manual(chat_id)
     if name == "escalate_decision":
         from . import decisions
         return decisions.ask("CM", inp.get("brand_id") or "AGS", inp.get("decision_type") or "inne",

@@ -67,4 +67,22 @@ Push + rebuild + tap-test podkladu; w sobote: obrobka podkladu w artykul (jego c
 
 Raport docs/cm/RAPORT_do_Managera_<data>_czyta_swiat.md + masterprompt + pamiec + STATUS tu.
 
-STATUS = READY (brief 19/07, tryb awaryjny - handoff na Opus 4.8)
+STATUS = KOD GOTOWY (build/czyta-swiat, 19/07 Fable5->Opus4.8). Zbudowane:
+- app/sunday_brief.py (nowy organ): sobotnia maszyna stanu (brand_config cm_sunday_brief) - zlecenie
+  Researcherowi (kontrakt /request, correlation=uuid5 tygodnia, tier auto <=medium) -> polling
+  research_jobs.status -> synteza Sonnet (task 'sunday_synth') 3 tez z faktami+LINKAMI ZRODEL ->
+  sendMessage do Tomasza; ZERO wpisu do content_items/post_queue; auto_done rozdziela reczny
+  tap-test od sobotniego automatu (test nie kasuje soboty); fallback prawdy (research niegotowy o
+  13:00 / dead / manual 20 min -> podklad ze schowka+publikacji z jawnym oznaczeniem).
+- app/research.py: job_status(), claims_with_sources()/grounding_with_sources() (join claims->
+  evidence_items po source_url; UWAGA supporting_evidence=text[] NIE uuid[] jak spec 23/06 -
+  join po evidence_id::text; _clean_url tnie artefakt 'arxiv.org/abs/web:').
+- app/worker.py: sunday_brief.tick() w petli (obok proactive.tick()).
+- app/conversation.py: narzedzie sunday_world_brief (tap-test "podklad na niedziele").
+WERYFIKACJA read-only (temp webhook, skasowany): 5 tabel Researchera zyje w ags_crd; evidence 699/699
+z source_url (100%); job status 'completed'=terminal-OK; join claims->URL zwraca zrodla; inspirations
+22 wpisy/7 dni (telegram/notion/cm_conversation). py_compile OK; _clean_url+uuid5 przetestowane lokalnie.
+DO INTEGRATORA: rebuild cm-agent (bez DDL, bez n8n); TAP-TEST: napisz do CM "podklad na niedziele" ->
+ma przyjsc zapowiedz, po kilku min 3 tezy z linkami; sprawdz ze content_items/post_queue bez nowych
+wierszy. Raport: docs/cm/RAPORT_do_Managera_19072026_czyta_swiat.md. NIE dotykalem masterpromptu (kanon
+trybu rownoleglego - robi to INTEGRATOR).
