@@ -118,6 +118,29 @@ followers_total INT, demographics JSONB (lista {category, value, pct}), source. 
 NIE tu - zostaja w published_posts.engagement_metrics (merge ||, source 'linkedin_xlsx',
 match po URN ugcPost-/share-<digits> w post_id).
 
+## agent_decisions (DDL 024, plan dnia 19/07 krok [2] - eskalacja guzikami + nauka)
+Ledger ustrukturyzowanych decyzji CM/subagent -> Tomasz (kanon 19/07: eskalacja GUZIKAMI,
+kazda odpowiedz uczy). Obsluga: app/decisions.py (ask/handle), callback 'dec:<id>:<key>'
+przez n8n galaz dec: -> POST /decnav.
+
+| kolumna | typ |
+|---|---|
+| id | BIGSERIAL PK |
+| subagent_id | VARCHAR(100) ('CM' albo 'AGS:x') |
+| brand_id | VARCHAR(50) nullable |
+| decision_type | VARCHAR(60) - staly typ (np. 'topic_swap', 'mode_transition') - po nim liczy sie nauka |
+| question / options / recommendation / context | TEXT / JSONB [{key,label}] / VARCHAR(40) / JSONB |
+| status | CHECK: pending / answered / auto / expired |
+| answer / answered_at / tg_message_id | VARCHAR(40) / TIMESTAMPTZ / BIGINT |
+
+Kazda odpowiedz -> agent_learning_log (accepted gdy zgodna z rekomendacja, inaczej replaced).
+
+## decision_modes (DDL 024)
+Tryb per (subagent_id, decision_type) PK: supervised / semi_autonomous. Przejscie proponuje
+system po >=10 odpowiedziach i >=80% zgodnosci w ostatnich 20 (propozycja = decyzja
+mode_transition, ten sam mechanizm guzikow); zmiana trybu = zawsze tapniecie Tomasza.
+Semi-auto NIE obejmuje zatwierdzania tresci do publikacji (kanon: niezatwierdzone nigdy samo).
+
 ## TODO (rozszerzenie dokumentacji schematu)
 Pełny `pg_dump --schema-only` do zrzucenia i dopisania tu dla POZOSTAŁYCH tabel bazowych
 (post_queue, task_queue, published_posts, contacts, engagement_log, inspirations, channels,

@@ -12,7 +12,7 @@ from . import config, db
 from .brand import load_brand
 from psycopg.types.json import Jsonb
 
-from . import generate, compliance, channels, research, hitl, conversation, logbot, content_memory, reports, planner, matreview, slots, proactive, engagement, metrics_import
+from . import generate, compliance, channels, research, hitl, conversation, logbot, content_memory, reports, planner, matreview, slots, proactive, engagement, metrics_import, decisions
 
 api = FastAPI(title="AGS Content Manager")
 wake = threading.Event()
@@ -110,6 +110,15 @@ def cmt(body: dict, x_researcher_secret: str = Header(default="")):
     zatwierdzone dodatkowo do task_queue 'comment'. Wymog Tomasza 08/07."""
     _guard(x_researcher_secret)
     threading.Thread(target=conversation.handle_cmt, args=(body, wake), daemon=True).start()
+    return {"accepted": True}
+
+
+@api.post("/decnav", status_code=202)
+def decnav(body: dict, x_researcher_secret: str = Header(default="")):
+    """Guziki decyzji ustrukturyzowanych (kanon 19/07: eskalacja GUZIKAMI + nauka do
+    agent_learning_log + progi semi_autonomous). n8n galaz dec: -> {raw, chat_id, message_id}."""
+    _guard(x_researcher_secret)
+    threading.Thread(target=decisions.handle, args=(body, wake), daemon=True).start()
     return {"accepted": True}
 
 

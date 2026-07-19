@@ -561,6 +561,33 @@ TOOL_PROPOSE = {
 }
 
 
+TOOL_ESCALATE = {
+    "name": "escalate_decision",
+    "description": ("Eskalacja decyzji do Tomasza GUZIKAMI (kanon 19/07: zero pytan proza, kazda "
+                    "odpowiedz uczy system - przy zgodnosci z rekomendacja typ przechodzi z czasem "
+                    "na semi_autonomous). Uzywaj gdy potrzebujesz JEGO decyzji operacyjnej "
+                    "(podmiana tematu, konflikt slotow, priorytet, wybor wariantu strategii). "
+                    "NIE dotyczy zatwierdzania tresci do publikacji - to ma wlasne karty. "
+                    "decision_type = krotki staly identyfikator TYPU (np. 'topic_swap'), ten sam "
+                    "dla powtarzalnych decyzji tego rodzaju - po tym liczy sie nauka."),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "decision_type": {"type": "string",
+                              "description": "Staly identyfikator typu decyzji, snake_case, np. 'topic_swap'."},
+            "question": {"type": "string",
+                         "description": "Pytanie z pelnym kontekstem (co, dlaczego teraz, co sie stanie po kazdej opcji)."},
+            "options": {"type": "array", "items": {"type": "object", "properties": {
+                "key": {"type": "string"}, "label": {"type": "string"}}, "required": ["key", "label"]},
+                "description": "2-4 opcje; label krotki (guzik), key stabilny snake_case."},
+            "recommendation": {"type": ["string", "null"],
+                               "description": "Key rekomendowanej opcji (bedzie pierwszym guzikiem z gwiazdka)."},
+        },
+        "required": ["decision_type", "question", "options"],
+    },
+}
+
+
 TOOL_ATTACH_PHOTO = {
     "name": "attach_last_photo",
     "description": ("Dolacz OSTATNIE zdjecie wyslane botu (trafia do schowka z file_id) do materialu. "
@@ -939,7 +966,11 @@ def _system_blocks(brand):
         "wyszly posty po decyzji Tomasza), a DOPIERO POTEM doprecyzuj co dalej. "
         "PLANOWANIE: 'zaplanuj tydzien' -> plan_build; 'zatwierdz plan' -> "
         "plan_approve (wyjatki numerami); edycje pozycji -> plan_edit. Cele: target_create / target_update. "
-        "Brak reakcji Tomasza 24h po prosbie o approve = publikacja awaryjna w slocie (poinformuj, gdy pyta). "
+        "ESKALACJA DECYZJI (kanon 19/07): gdy potrzebujesz od Tomasza decyzji OPERACYJNEJ "
+        "(podmiana tematu, konflikt slotow, priorytet, wybor strategii) - escalate_decision "
+        "z guzikami i rekomendacja, NIE pytanie proza w scianie tekstu. Kazda odpowiedz uczy "
+        "system; typy decyzji z wysoka zgodnoscia przechodza na semi-auto. Zatwierdzanie TRESCI "
+        "ma wlasne karty - to nie escalate_decision. "
         "Domyslne zalozenia gdy nie podano: kanaly x + linkedin, slot null - nie pytaj o to. Gdy dedup "
         "wykryje podobny/blizniaczy temat w kolejce, NIE poprzestawaj na liscie 'podobne publikacje': jesli "
         "Twoj nowy kat jest MOCNIEJSZY, ZAPROPONUJ PODMIANE tamtego zaplanowanego postu na nowa wersje "
@@ -1131,7 +1162,7 @@ def _cm_tools():
                      TOOL_PLAN_BUILD, TOOL_PLAN_APPROVE, TOOL_PLAN_EDIT, TOOL_TARGET_CREATE, TOOL_TARGET_UPDATE,
                      TOOL_REVIEW_CARDS, TOOL_ATTACH_PHOTO, TOOL_STYLE_RULE, TOOL_RESCHEDULE, TOOL_REPLACE,
                      TOOL_GEN_IMAGE, TOOL_EXTERNAL_PUB, TOOL_INSPECT_IMAGE,
-                     TOOL_VIEW_SCREENSHOT, TOOL_HOLD_QUEUE]
+                     TOOL_VIEW_SCREENSHOT, TOOL_HOLD_QUEUE, TOOL_ESCALATE]
     return _CM_TOOLS
 
 
@@ -1192,6 +1223,11 @@ def _dispatch_tool(name, inp, chat_id):
         return _view_last_screenshot(inp)
     if name == "hold_todays_queue":
         return _hold_todays_queue()
+    if name == "escalate_decision":
+        from . import decisions
+        return decisions.ask("CM", inp.get("brand_id") or "AGS", inp.get("decision_type") or "inne",
+                             inp.get("question") or "", inp.get("options") or [],
+                             recommendation=inp.get("recommendation"), chat_id=chat_id)
     return "ok"
 
 
@@ -2053,10 +2089,14 @@ def handle(update):
                        (" na jutro." if day == "tomorrow" else (" na dzis." if day == "today" else ".")))
             return
         if _DECYZJE_RE.match(text):
-            from . import matreview
+            from . import matreview, decisions
             n = matreview.resend_intake()
-            _reply(chat_id, f"Przywolalem {n} czekajacych decyzji (guziki ponizej)." if n
-                   else "Zero czekajacych decyzji intake.")
+            parts = [f"Przywolalem {n} czekajacych decyzji intake (guziki ponizej)." if n
+                     else "Zero czekajacych decyzji intake."]
+            pend = decisions.pending_text()
+            if pend != "(zero czekajacych decyzji ustrukturyzowanych)":
+                parts.append("DECYZJE USTRUKTURYZOWANE (czekaja na guzik):\n" + pend)
+            _reply(chat_id, "\n\n".join(parts))
             return
         from . import matreview as _mr
         if _mr.pending_edit() and not text.startswith("/") and not _CANCEL_RE.match(text):
