@@ -74,10 +74,10 @@ def refresh_metrics(brand_id, channel, days=7):
     if mode == "manual":
         return 0
     if mode == "x_owned_reads":
-        # SZEW pod kolektor X (Owned Reads $0.001/read od 20/04/2026 - do weryfikacji researchem;
-        # prompt: docs/research/RESEARCH_PROMPT_X_METRICS_WYTRYCH_19072026.md). Build po raportach
-        # RESEARCH_X_METRICS_*.md. Do tego czasu cel dziala jak 'manual' (wpisy reczne subagenta).
-        return 0
+        # Kolektor X (app/x_collector.py, DDL 025) zapisuje dzienne snapshoty raz na dobe -
+        # tu TYLKO merge najnowszego snapshotu per post z DB (zero platnych odczytow w raportach).
+        from . import x_collector
+        return x_collector.refresh_published_metrics(brand_id, channel, days)
     prefix = cfg.get("secret_prefix", "linkedin")
     token = db.get_secret(f"{prefix}_access_token")
     if not token:

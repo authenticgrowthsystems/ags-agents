@@ -171,6 +171,13 @@ def _brand_tokens_tick():
     brand_tokens_pull.tick()
 
 
+def _x_collector_tick():
+    """BRIEF_KOLEKTOR_METRYK_X 19/07: dzienne snapshoty metryk wlasnych postow X (Owned Reads
+    $0.001/read). Spi dopoki zaden cel nie ma stats_mode='x_owned_reads' (wlaczenie PO sondzie)."""
+    from . import x_collector
+    x_collector.tick()
+
+
 # ---------------- state machine ----------------
 def _auto_image_enabled():
     """Feedback Tomasza 10/07 ('post do zatwierdzenia ma przychodzic OD RAZU z grafika'):
@@ -449,6 +456,7 @@ def loop():
             conversation.memory_tick()            # 10/07: wygasajacy watek rozmowy -> skrot do pamieci trwalej
             engagement.consumer_tick()            # 10/07: zatwierdzone komentarze -> gotowiec do wklejenia + guziki
             _brand_tokens_tick()                  # 12/07 #84: Notion Brand Config -> brand_tokens (poll 10 min)
+            _x_collector_tick()                   # 19/07 kolektor X: snapshoty Owned Reads raz na dobe UTC
             item = db.claim_content_item()
             if item:
                 worked = True
