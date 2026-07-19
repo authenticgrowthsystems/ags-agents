@@ -127,6 +127,27 @@ docs/cm/RAPORT_do_Managera_19072026_zamkniecie_dnia.md.
 RESEARCH X SKONSUMOWANY: 3 raporty zbiezne -> Owned Reads $0.001, GET /2/users/{id}/tweets,
 OAuth1 user context dziala, ~$4.50/mies; brief buildu: BRIEF_KOLEKTOR_METRYK_X_19072026 (READY).
 
+## 4b. KOLEJKA BUDOWNICZYCH (tryb awaryjny 19/07 ~22:00 - handoff Fable 5 -> Opus 4.8)
+
+Kazdy build = NOWE okno Cowork (Opus 4.8), DWA prompty: (1) linijka wywolania z briefu,
+(2) ewentualne doprecyzowanie/tap. Sesje SEKWENCYJNIE na sb-work (protokol). Kolejnosc:
+
+1. **BE-KOLEKTOR** (najpilniejsze - prywatne metryki X tylko <30 dni wstecz):
+   `@docs/RESUME_MASTERPROMPT_19072026.md @docs/briefs/BRIEF_KOLEKTOR_METRYK_X_19072026.md zbuduj`
+   STATUS=READY-BILLING (saldo $6.96, cap $20, Auto Recharge ON). Start od sondy. DDL 025.
+2. **BE-DEDUP**:
+   `@docs/RESUME_MASTERPROMPT_19072026.md @docs/briefs/BRIEF_BRAMKA_DUPLIKACJI_19072026.md zbuduj`
+3. **BE-PORZADKI**:
+   `@docs/RESUME_MASTERPROMPT_19072026.md @docs/briefs/BRIEF_PORZADKI_DETERMINISTYCZNE_19072026.md zbuduj`
+4. **BE-SWIAT** (przed najblizsza sobota - podklad niedzielnego artykulu):
+   `@docs/RESUME_MASTERPROMPT_19072026.md @docs/briefs/BRIEF_CM_CZYTA_SWIAT_19072026.md zbuduj`
+
+Dalszy backlog (bez briefow, pisze je sesja planujaca gdy przyjdzie kolej): adapter X Articles
+n8n (sonda tieru), guziki /brands + wizard FSM + egzekwowanie execution_mode, SOP Faza 3,
+publishery wolaja /wake, intencja zdjecia w routingu, Voice Bible v2.3 (seria X), RDC voice,
+Agent Wizualny (ZAMROZONY, spec gotowy), App 2 CMA, brand_assets, tryb jezyka canonicala,
+3b automation model_selection. Zamrozone NIE odmrazac bez decyzji Tomasza.
+
 ## 5. STAN LIVE (wszystko z 10-13/07, zweryfikowane tapami przed nieobecnoscia)
 
 - **Sprint briefu #83-#90 + #84 + v2.2 wykonany 12/07 w jeden dzien** (raporty per task
