@@ -389,6 +389,15 @@ def handle(payload, wake_event=None):
                 return
             _tg("sendMessage", {"chat_id": chat_id, "text": text[:4000], **({"reply_markup": kb} if kb else {})})
 
+    def card_bottom(prefix=""):
+        """Feedback Tomasza 19/07 ('musze przewijac na gore do okienka z postami'): po decyzji
+        NASTEPNA karta przychodzi NOWA wiadomoscia NA DOLE czatu (przy polu pisania), a stara
+        karta zostaje wyzej jako martwy znacznik bez guzikow."""
+        text, kb, it = _card()
+        _tg("sendMessage", {"chat_id": chat_id, "text": (prefix + text)[:4000],
+                            **({"reply_markup": kb} if kb else {})})
+        _send_media_preview(chat_id, it)
+
     parts = raw.split(":", 2)
     family = parts[0]
     if family == "matdec" and len(parts) == 3:
@@ -626,6 +635,8 @@ def handle(payload, wake_event=None):
         if wake_event:
             wake_event.set()
         edit(f"✅ Zatwierdzone wszystkie: {len(items)} materialow idzie do publikacji w slotach.")
+        _tg("sendMessage", {"chat_id": chat_id,  # paragon tez na dole (19/07: zero przewijania)
+                            "text": f"✅ Zatwierdzone wszystkie: {len(items)} materialow idzie do publikacji w slotach."})
         return
     if action in ("ok", "no"):
         db.set_item_status(arg, "approved" if action == "ok" else "rejected")
@@ -644,8 +655,9 @@ def handle(payload, wake_event=None):
         _tg("sendMessage", {"chat_id": chat_id,
                             "text": (f"✅ Zatwierdzone: \"{theme}\" - publikacja w slocie."
                                      if action == "ok" else f"❌ Odrzucone: \"{theme}\" - decyzja zapisana.")})
-        text, kb, _it = _card()
-        edit(("✅ " if action == "ok" else "❌ ") + text, kb)
+        # stara karta = martwy znacznik (edit bez reply_markup zdejmuje guziki); nastepna NA DOL (19/07)
+        edit(("✅ " if action == "ok" else "❌ ") + f"\"{theme}\" - rozstrzygniete, karta ponizej.")
+        card_bottom()
         return
     if action == "okq":
         # feedback Tomasza 05/07 v2: 'zatwierdz, ale przerzuc na koniec kolejki' (minione sloty!)
@@ -659,8 +671,8 @@ def handle(payload, wake_event=None):
         _tg("sendMessage", {"chat_id": chat_id,
                             "text": f"✅⏭ Zatwierdzone na koniec kolejki: "
                                     f"\"{((row or {}).get('master_theme') or '')[:120]}\" - publikacja {when}."})
-        text, kb, _it = _card()
-        edit("✅⏭ " + text, kb)
+        edit(f"✅⏭ \"{((row or {}).get('master_theme') or '')[:120]}\" - rozstrzygniete, karta ponizej.")
+        card_bottom()
         return
     if action == "angle":
         # v3 (feedback 06/07): Tomasz SAM mowi jaki kat - CM czeka na wiadomosc. v4: prosba o
@@ -670,8 +682,8 @@ def handle(payload, wake_event=None):
         db.set_item_status(arg, "draft")
         _state_set("cm_pending_angle", {"item_id": str(arg),
                                         "ts": datetime.datetime.now(WARSAW).isoformat()})
-        text, kb, it = _card()
-        edit(text, kb)
+        edit(f"🔄 \"{(row or {}).get('master_theme', '')[:120]}\" - czeka na Twoj kat, karta ponizej.")
+        card_bottom()  # 19/07: nastepna karta na dol; prosba o kat POD nia (najblizej pola pisania)
         _tg("sendMessage", {"chat_id": chat_id,
                             "text": f"🔄 Napisz mi teraz JEDNA wiadomoscia: jaki kat i co ma byc w tresci dla:\n"
                                     f"\"{(row or {}).get('master_theme', '')[:180]}\"\n"
