@@ -279,7 +279,10 @@ def generate_image(prompt):
         raise RuntimeError("brak openai_api_key w app_secrets")
     r = _httpx.post("https://api.openai.com/v1/images/generations",
                     headers={"Authorization": f"Bearer {_openai_key[0]}"},
-                    json={"model": "gpt-image-1", "prompt": prompt[:3500],
+                    # 19/07: gpt-image-1 -> gpt-image-2 (docs-first: developers.openai.com image guide;
+                    # najnowszy model, te same parametry size/quality; dowod luki jakosci: grafika
+                    # 'Demo Works' z image-1 vs ten sam koncept z Image 2 w przegladarce)
+                    json={"model": "gpt-image-2", "prompt": prompt[:3500],
                           "size": "1536x1024", "quality": _image_quality()},
                     timeout=180)
     r.raise_for_status()
