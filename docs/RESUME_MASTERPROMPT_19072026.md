@@ -90,18 +90,29 @@ UNION ALL SELECT 'proposed', COUNT(*)::text FROM content_items WHERE status='pro
 (oczekiwane: emergency_off=11, held>0, proposed=0). 4) Screeny Tomasza w docs/evidence -
 przeanalizuj i uzupelnij diagnoze. 5) PRIORYTETY NAPRAWCZE (sekcja 4) - guziki z Tomaszem.
 
-## 4. PRIORYTETY NAPRAWCZE (wnioski z incydentu - USTAL Z TOMASZEM KOLEJNOSC)
+## 4. KOREKTA KANONU 19/07 (Tomasz; NADPISALA pierwotne priorytety a-e) + PLAN DNIA WYKONANY
 
-(a) **TRYB NIEOBECNOSCI** (`/urlop start|stop` albo /brands-style): zamraza publikacje +
-    emergency + gap-filler + planner; odprawa raz dziennie "spie, kolejka zamrozona".
-    Auto-detekcja: brak JAKIEJKOLWIEK aktywnosci Tomasza >48h = auto-tryb + alert.
-(b) **BRAMKA ROZNORODNOSCI TEMATOW**: gap-filler i planner NIE moga proponowac tematow
-    o samym systemie czesciej niz X/tydzien; dedup tematyczny na poziomie planu (motywy,
-    nie tylko embedding); zrodla tematow: filary + ICP, nie ostatnie publikacje.
-(c) **METRYKI = przestaje byc slepy**: X wpis reczny co poniedzialek (dziala), App 2 CMA
-    review (Tomasz/zewnetrzne), rozwazyc scraping wlasnego profilu przez sonde.
-(d) Stan awaryjny: NIE wlaczac ponownie bez trybu nieobecnosci; prog moze byc per cel.
-(e) Limit planu (np. max 20 proposed; nowe wypychaja najstarsze do archiwum).
+KANON (pamiec: project_publikacja_kanon_19072026): (1) ZATWIERDZONE publikuje sie ZAWSZE,
+obecnosc Tomasza nieistotna; (2) NIEZATWIERDZONE NIGDY samo - _emergency_promote USUNIETY
+Z KODU (nie flaga); luka/cisza = eskalacja z pytaniem; (3) eskalacja subagent->CM->Tomasz
+GUZIKAMI, kazda odpowiedz -> agent_learning_log, przejscia supervised->semi_autonomous per
+TYP decyzji (nigdy dla zatwierdzania tresci). Blad tygodnia = publikowanie NIEZATWIERDZONEGO,
+nie publikowanie w ogole ("tryb nieobecnosci" z (a) NIE powstaje).
+
+PLAN DNIA 19/07 - kod DONE (sesja dnia, commity 30376c3/77b2251/b20a191/576a832):
+[1] METRYKI: DDL 023 + import xlsx AggregateAnalytics przez Telegram (n8n galaz document_xlsx
+    LIVE) + sekcja PROFIL w raportach + szew x_owned_reads. Brief: BRIEF_METRYKI_19072026.
+[2] ESKALACJA+NAUKA: DDL 024 (agent_decisions + decision_modes) + decisions.py + /decnav +
+    n8n galaz dec: LIVE + tool escalate_decision. Brief: BRIEF_ESKALACJA_19072026.
+[3] KANON: _emergency_promote WYCIETY, _stale_approval_watch (guziki) w petli; komunikaty
+    "awaryjna 24h" usuniete. DOWOD held: ZERO approved/dispatching (5 published + 2 rejected
+    + 15 sierot bez itemu) -> odmrozenie=no-op, SQL sprzatajacy w BRIEF_KANON_PUBLIKACJI.
+[4] BRAMKA TEMATOW: zrodla=FILARY+ICP, meta o wlasnym systemie max 1/tydz (prompt+twardy
+    regex, test 6/6 incydentu, 0 FP), limit planu 20 (_enforce_plan_cap), gap-filler na tym
+    samym budzecie. Brief: BRIEF_BRAMKA_TEMATOW_19072026.
+CZEKA NA TOMASZA: psql 023+024, SQL held, push+rebuild, tap-testy, "zaplanuj tydzien" z CM.
+RESEARCH X SKONSUMOWANY: 3 raporty zbiezne -> Owned Reads $0.001, GET /2/users/{id}/tweets,
+OAuth1 user context dziala, ~$4.50/mies; brief buildu: BRIEF_KOLEKTOR_METRYK_X_19072026 (READY).
 
 ## 5. STAN LIVE (wszystko z 10-13/07, zweryfikowane tapami przed nieobecnoscia)
 
@@ -137,6 +148,10 @@ przeanalizuj i uzupelnij diagnoze. 5) PRIORYTETY NAPRAWCZE (sekcja 4) - guziki z
 
 ## 6. BACKLOG (poza priorytetami naprawczymi)
 
+**Kolektor metryk X Owned Reads** = nastepny build (BRIEF_KOLEKTOR_METRYK_X_19072026 READY;
+DDL 025; Tomasz najpierw: Developer Console pay-per-use credits + limit $10). Konsumpcja
+docs/inbox/cm_przegladarka_19072026/ (artykuly/SOP od przegladarkowego CM - na razie samo
+README). Metryki poniedzialkowe: eksport AggregateAnalytics -> Telegram (juz automat).
 Adapter X Articles n8n (endpointy zweryfikowane: POST /2/articles/draft {title, content_state
 DraftJS} -> /publish; OAuth1 OK; sonda tieru na zywo z Tomaszem). Guziki /brands + wizard FSM
 + egzekwowanie execution_mode. Priorytet 4 SOP Faza 3 (2 warianty feedu przy artykule,
@@ -152,7 +167,7 @@ docs/cm/RAPORT_STAN_CM_I_SUBAGENTOW_10072026.md (architektura CM+subagenci, pami
 docs/product/SUBAGENT_DUTIES_v1.md (8 obowiazkow O1-O8), docs/db/SCHEMA_ags_crd.md,
 docs/SYSTEM_DATAFLOW.md, BE_BRIEF_HOT_FIXES_12072026.md (C:\Claude-CoWork\AGS\),
 docs/cm/INSTRUKCJA_dla_Managera_Notion_BrandConfig_12072026.md, DEPLOY_CHECKLIST.md.
-Nastepny wolny DDL: **023**.
+Nastepny wolny DDL: **025** (023 metryki kanalu + 024 decyzje czekaja na psql u Tomasza).
 
 ## 8. SZABLONY KOMEND
 
