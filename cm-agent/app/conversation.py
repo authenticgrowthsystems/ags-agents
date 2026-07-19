@@ -2057,6 +2057,31 @@ def _subagent_handle(chat_id, text, active):
     _send_comment_controls(chat_id)  # guziki decyzji, gdy w tej turze padly propozycje komentarzy (cmt:)
 
 
+def handle_document(body):
+    """Dokument tekstowy z Telegrama (.md/.txt) -> tresc jako wiadomosc do rozmowy aktywnego agenta
+    (task 19/07 od poprzedniej sesji: sync-dokument Tomasza przepadal, bo Detect Update Type
+    wyrzucal dokumenty do 'other'). n8n galaz document_text -> POST /docmsg. REGULA PRAWDY:
+    kazda sciezka bledu konczy sie wiadomoscia."""
+    chat_id = body.get("chat_id")
+    file_name = str(body.get("file_name") or "dokument")
+    caption = str(body.get("caption") or "").strip()
+    try:
+        from . import metrics_import
+        blob = metrics_import._fetch_document(body.get("file_id"))
+        if not blob:
+            _reply(chat_id, f"❌ Nie udalo sie pobrac dokumentu {file_name} z Telegrama. Wyslij ponownie.")
+            return
+        if len(blob) > 120_000:
+            _reply(chat_id, f"⚠️ {file_name} ma {len(blob) // 1024}KB - za duzy na rozmowe (limit ~100KB). "
+                            f"Przytnij albo wyslij kluczowy fragment.")
+            return
+        content = blob.decode("utf-8", errors="replace").strip()
+        text = f"[DOKUMENT: {file_name}]" + (f" {caption}" if caption else "") + f"\n\n{content}"
+        handle({"chat_id": chat_id, "text": text, "update_id": body.get("update_id")})
+    except Exception as e:
+        _reply(chat_id, f"❌ Obsluga dokumentu {file_name} padla: {type(e).__name__}: {str(e)[:180]}")
+
+
 # ---------------- entry point ----------------
 def handle(update):
     """Process one forwarded Telegram text message (runs on a background thread; /message returned 202)."""
