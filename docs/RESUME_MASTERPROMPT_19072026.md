@@ -166,6 +166,12 @@ LLM) - INCYDENT: CM odpowiedzial "Zrobione" o zmianie okna BEZ wywolania target_
 niezmienione, brak paragonu ⚙️; naprawa recznym SQL-em). Test prawdy: zmiana configu bez
 paragonu ⚙️ = niewykonana. (ii) kanon niepelnych godzin WDROZONY (slots.humanize_slot:
 +/-15 min od slotu planu, nigdy kwadrans; pq = czas ludzki, ci = czysty slot planu).
+(iii) KANON MEDIOW MULTI-PLATFORMA (Tomasz 19/07): jedna grafika/zdjecie = reuse na
+wszystkie kanaly materialu (dziala automatem); platforma wymagajaca INNEGO medium (np.
+Instagram = wideo) dostaje JAWNE zadanie w karcie: "wygeneruj albo nagraj" - zero wracania
+do tematu po fakcie. Warianty formatu per platforma (LI 4:5, X 16:9) = Agent Wizualny.
+(iv) Straznik dlugich X WDROZONY (stage_variant: >600 zn. bez ===POST=== = automatyczne
+ciecie po akapitach na serie; grafika tylko czesc 1).
 **Kolektor metryk X Owned Reads** = nastepny build (BRIEF_KOLEKTOR_METRYK_X_19072026 READY;
 DDL 025; Tomasz najpierw: Developer Console pay-per-use credits + limit $10). Konsumpcja
 docs/inbox/cm_przegladarka_19072026/ (artykuly/SOP od przegladarkowego CM - na razie samo
