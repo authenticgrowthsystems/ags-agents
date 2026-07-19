@@ -151,9 +151,29 @@ def handle(body, wake=None):
     if row["decision_type"] == "mode_transition":
         _apply_mode_transition(row, key, chat)
     else:
+        _apply_action(row, key, chat)
         _maybe_propose_transition(row["subagent_id"], row.get("brand_id"), row["decision_type"], chat)
     if wake is not None:
         wake.set()
+
+
+def _apply_action(row, key, chat):
+    """Akcje domenowe po odpowiedzi (rejestr per typ; typy bez akcji = sama nauka).
+    stale_approval (kanon 19/07, zamiast usunietego stanu awaryjnego): show/reject/wait."""
+    if row["decision_type"] != "stale_approval":
+        return
+    item_id = (row.get("context") or {}).get("content_item_id")
+    if not item_id:
+        return
+    if key == "show":
+        from . import matreview
+        it = db.fetchone("SELECT master_theme FROM content_items WHERE id=%s", (item_id,))
+        matreview.send_review_card(chat, theme_fragment=(it or {}).get("master_theme", "")[:60] or None)
+    elif key == "reject":
+        db.execute("UPDATE content_items SET status='rejected', updated_at=NOW() "
+                   "WHERE id=%s AND status='needs_approval'", (item_id,))
+        _tg("sendMessage", {"chat_id": chat, "text": f"🗑 Material odrzucony (decyzja #{row['id']})."})
+    # 'wait' = nic; watcher przypomni po 24h nowa decyzja
 
 
 def _apply_mode_transition(row, key, chat):

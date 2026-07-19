@@ -338,7 +338,7 @@ def handle_nav(payload, wake_event=None):
         if wake_event:
             wake_event.set()
         edit(f"✅ Plan zatwierdzony w calosci: {ok} pozycji poszlo do produkcji. Materialy przyjda po kolei; "
-             "brak reakcji 24h na ktorykolwiek = publikacja awaryjna w slocie.")
+             "NIC nie publikuje sie bez tapniecia (kanon 19/07) - po 24h ciszy przypomnienie guzikami.")
         return
     if action == "first":
         text, kb = _nav_card_payload(brand_id)

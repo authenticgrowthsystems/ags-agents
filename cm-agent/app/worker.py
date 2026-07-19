@@ -10,7 +10,6 @@ from fastapi import FastAPI, Header, HTTPException
 
 from . import config, db
 from .brand import load_brand
-from psycopg.types.json import Jsonb
 
 from . import generate, compliance, channels, research, hitl, conversation, logbot, content_memory, reports, planner, matreview, slots, proactive, engagement, metrics_import, decisions
 
@@ -395,29 +394,30 @@ def _welcome_new_channels():
                    (r["brand_id"], r["channel"]))
 
 
-def _emergency_promote():
-    """STAN AWARYJNY (kanon 11c, D-F2-3b): brak reakcji Tomasza 24h po wyslaniu approve -> automatyczne
-    zatwierdzenie najlepszej opcji (publikacja pojdzie normalnie w slocie). Log + glosne powiadomienie.
-    Wylaczalne per cel: channels.config.emergency_publish=false blokuje item, ktory celuje w ten kanal."""
+def _stale_approval_watch():
+    """KANON 19/07 (zastepuje USUNIETY stan awaryjny 11c/D-F2-3b): niezatwierdzone NIGDY nie
+    wychodzi samo. Material czekajacy na approve >24h = ESKALACJA Z PYTANIEM (decisions.ask,
+    guziki + nauka), nie auto-zatwierdzenie. Throttle w DB: jedna otwarta/swieza decyzja per item.
+    Incydent 13-19/07: autopilot opublikowal serie niezatwierdzonych meta-postow na X i LinkedIn."""
     rows = db.fetchall(
-        """SELECT * FROM content_items
+        """SELECT id, brand_id, master_theme FROM content_items
            WHERE status='needs_approval' AND approval_requested_at IS NOT NULL
              AND approval_requested_at < NOW() - interval '24 hours'""")
     for item in rows:
-        targets = channels.active_targets(item["brand_id"], item.get("target_channels"))
-        if not targets or not all((t.get("config") or {}).get("emergency_publish", True) for t in targets):
+        if db.fetchone(
+                """SELECT 1 AS x FROM agent_decisions
+                   WHERE decision_type='stale_approval' AND context->>'content_item_id'=%s
+                     AND (status='pending' OR answered_at > NOW() - interval '24 hours') LIMIT 1""",
+                (str(item["id"]),)):
             continue
-        db.set_item_status(item["id"], "approved")
-        try:
-            db.execute(
-                "INSERT INTO agent_logs (agent_id, log_type, rationale, context) VALUES ('cm','AUTONOMOUS_DECISION',%s,%s)",
-                (f"Publikacja awaryjna: brak reakcji 24h na approve - {item['master_theme'][:70]}",
-                 Jsonb({"content_item_id": str(item["id"]), "trigger": "silence_24h"})))
-        except Exception:
-            pass
-        logbot.send(f"⚠️ STAN AWARYJNY: brak reakcji 24h. Zatwierdzam automatycznie i publikuje w slocie: "
-                    f"{item['master_theme'][:80]}")
-        print(f"[cm] emergency-approved {item['id']}", flush=True)
+        decisions.ask(
+            "CM", item["brand_id"], "stale_approval",
+            f"Material czeka na Twoja decyzje ponad 24h: \"{item['master_theme'][:150]}\". "
+            f"Nic nie wyjdzie bez Twojego tapniecia - co robimy?",
+            [{"key": "show", "label": "Pokaz karte"},
+             {"key": "reject", "label": "Odrzuc material"},
+             {"key": "wait", "label": "Przypomnij jutro"}],
+            recommendation="show", context={"content_item_id": str(item["id"])})
 
 
 # ---------------- loop ----------------
@@ -429,7 +429,7 @@ def loop():
             research.ingest_research_responses()  # researching -> drafting on Researcher callback
             reconcile_publications()              # backlog b: dispatching -> published PO callbacku (+ zwis alert)
             _welcome_new_channels()               # R5: nowy kanal -> propozycja reuse archiwum
-            _emergency_promote()                  # F2: stan awaryjny po 24h ciszy
+            _stale_approval_watch()               # kanon 19/07: >24h ciszy = pytanie guzikami, NIGDY auto-publikacja
             matreview.sunday_guard()              # S4: niedzielne przypomnienia + fallback 23:00
             matreview.media_attach_watch()        # v7: ➕ Media - swieze zdjecie -> przypiecie do materialu
             proactive.tick()                      # 06/07: luka kadencji -> subagent wola CM; odprawa semi

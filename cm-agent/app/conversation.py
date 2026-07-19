@@ -459,7 +459,7 @@ TOOL_TARGET_CREATE = {
 TOOL_TARGET_UPDATE = {
     "name": "target_update",
     "description": ("Zmien JEDNO pole konfiguracji istniejacego celu (channels.config), np. "
-                    "language_publish, posts_per_day, work_mode, emergency_publish, stats_mode, org_urn, "
+                    "language_publish, posts_per_day, work_mode, stats_mode, org_urn, "
                     "follower_count (licznik obserwujacych wpisywany RECZNIE przez Tomasza - kanon #90: "
                     "X < 1000 followers = artykul zamiast nitki), thread_enabled (override progu nitek)."),
     "input_schema": {"type": "object",
@@ -482,7 +482,8 @@ def _plan_approve(inp):
     if wake_event:
         wake_event.set()
     return (f"✅ Plan zatwierdzony: {ok} pozycji idzie do produkcji OD RAZU (odrzucone: {skipped}). "
-            "Materialy przyjda do zatwierdzenia pojedynczo; brak reakcji 24h = publikacja awaryjna w slocie.")
+            "Materialy przyjda do zatwierdzenia pojedynczo; NIC nie publikuje sie bez Twojego "
+            "tapniecia (kanon 19/07) - po 24h ciszy przypomne guzikami.")
 
 
 def _plan_edit(inp):
