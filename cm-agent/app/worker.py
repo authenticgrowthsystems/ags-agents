@@ -196,7 +196,8 @@ def _auto_generate_image(item, brand, hint, media):
         fid = matreview._tg_upload_photo(chat, png,
                                          f"🎨 AUTO-GRAFIKA (poleci z postem): {item['master_theme'][:120]}") if chat else None
         if fid:
-            media = media + [{"source": "telegram", "file_id": fid, "kind": "photo", "generated": True}]
+            media = media + [{"source": "telegram", "file_id": fid, "kind": "photo", "generated": True,
+                              "image_prompt": prompt[:3400]}]  # 19/07: guzik 📋 Prompt na karcie go wysle
             print(f"[cm] auto-image attached to {item['id']}", flush=True)
     except Exception:
         traceback.print_exc()  # brak obrazu nie blokuje materialu - karta przyjdzie bez grafiki

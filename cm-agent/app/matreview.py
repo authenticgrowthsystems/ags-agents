@@ -323,7 +323,8 @@ def _card(item_id=None, brand_id=None, full=False):
                  {"text": "🔄 Inny kat", "callback_data": f"matnav:angle:{iid}"},
                  {"text": "✏️ Edytuj", "callback_data": f"matnav:edit:{iid}"}])
     media_row = [{"text": "➕ Media", "callback_data": f"matnav:madd:{iid}"},
-                 {"text": "🎨 Generuj", "callback_data": f"matnav:gen:{iid}"}]
+                 {"text": "🎨 Generuj", "callback_data": f"matnav:gen:{iid}"},
+                 {"text": "📋 Prompt", "callback_data": f"matnav:iprompt:{iid}"}]
     if n_media:
         media_row.append({"text": f"🗑 Media ({n_media})", "callback_data": f"matnav:mdel:{iid}"})
     rows.append(media_row)
@@ -587,7 +588,8 @@ def handle(payload, wake_event=None):
         if not fid:
             _tg("sendMessage", {"chat_id": chat_id, "text": "Nie udalo sie wgrac obrazu na Telegram."})
             return
-        desc = {"source": "telegram", "file_id": fid, "kind": "photo", "generated": True}
+        desc = {"source": "telegram", "file_id": fid, "kind": "photo", "generated": True,
+                "image_prompt": prompt[:3400]}  # 19/07: prompt zapamietany - guzik 📋 Prompt go wysle
         db.execute("UPDATE content_items SET media = media || %s::jsonb, updated_at=NOW() WHERE id=%s",
                    (_json.dumps([desc]), arg))
         db.execute("UPDATE post_queue SET media = media || %s::jsonb WHERE content_item_id=%s AND status IN ('review','held','scheduled')",
@@ -596,6 +598,36 @@ def handle(payload, wake_event=None):
         _state_set("cm_last_media_preview", {"item_id": str(arg)})
         text, kb, it = _card(arg)
         edit(text, kb)
+        return
+    if action == "iprompt":
+        # 19/07 (feedback Tomasza 'potrzebuje prompt do wklejenia do dowolnego modelu'): 📋 Prompt
+        # = pelny prompt graficzny (kanon barw/typografii) jako wiadomosc do skopiowania. Bierze
+        # zapamietany z ostatniej generacji; brak = pisze swiezy (Sonnet). Wynik z zewnetrznego
+        # generatora dopinasz przez ➕ Media.
+        row = db.fetchone("SELECT master_theme, canonical_body, media FROM content_items WHERE id=%s", (arg,))
+        if not row:
+            edit("Nie znajduje materialu.")
+            return
+        stored = next((m.get("image_prompt") for m in reversed(row.get("media") or [])
+                       if (m or {}).get("image_prompt")), None)
+        if stored:
+            prompt = stored
+        else:
+            hint = next((m.get("text") for m in (row.get("media") or [])
+                         if (m or {}).get("kind") == "suggestion"), "")
+            _tg("sendMessage", {"chat_id": chat_id, "text": "📋 Pisze prompt graficzny (~15 s)..."})
+            from .generate import generate_image_prompt
+            from .brand import load_brand as _lb
+            try:
+                prompt = generate_image_prompt(_lb("AGS"), row["master_theme"], row.get("canonical_body"),
+                                               hint, content_item_id=arg)
+            except Exception as e:
+                _tg("sendMessage", {"chat_id": chat_id, "text": f"📋 Nie wyszlo: {str(e)[:180]}"})
+                return
+        _tg("sendMessage", {"chat_id": chat_id,
+                            "text": f"📋 PROMPT DO WKLEJENIA (dowolny generator; wynik dopnij przez ➕ Media):"})
+        for i in range(0, len(prompt), 3900):
+            _tg("sendMessage", {"chat_id": chat_id, "text": prompt[i:i + 3900]})
         return
     if action == "mnew":
         _state_set("cm_pending_madd", {"item_id": str(arg),
