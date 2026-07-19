@@ -212,10 +212,23 @@ agentow do PostgreSQL; Notion odbija.
 | Grafika | gpt-image-2 (bump z image-1, docs-first) + prompt Sonneta zapamietywany w media[].image_prompt; guzik karty 📋 Prompt wysyla go do skopiowania (zewnetrzny generator -> ➕ Media) | media jsonb w content_items/post_queue |
 | UX kart | po decyzji nastepna karta NOWA wiadomoscia na dole (card_bottom); ➕ Media bez floodu galeria (mgal na zadanie) | - |
 
-Kolektor X: sciezka WYBRANA (Owned Reads $0.001, GET /2/users/{id}/tweets, OAuth1) -
-docs/briefs/BRIEF_KOLEKTOR_METRYK_X_19072026.md (build = osobna sesja; DDL 025).
 Voice Bible: zderzenie Notion vs brand_config -> docs/cm/ZDERZENIE_VOICE_BIBLE_19072026.md
 (sprzecznosc walutowa; rekomendacja brand_config=SSOT + voice_dna_core + mirror).
+
+---
+
+## H. Integracja 19/07 wieczor - 4 rownolegle buildy zmergowane (BE-INTEGRATOR)
+
+Galezie build/kolektor-x + build/dedup + build/porzadki + build/czyta-swiat -> merge do
+claude/silly-blackwell-dfc32d jedna paczka (raport: docs/cm/RAPORT_do_Managera_19072026_integracja.md).
+
+| Przeplyw | Droga | Zapis |
+|---|---|---|
+| Kolektor metryk X (Owned Reads $0.001) | worker._x_collector_tick (raz na dobe UTC, durable guard po MAX(snapshot_date)) -> x_collector.collect: GET /2/users/{id}/tweets, OAuth1 HMAC-SHA1 ze stdlib, start_time=now-29d, exclude=retweets, paginacja z guardrail (alert >200, twardy stop 500) | `x_post_metric_snapshots` (DDL 025; UNIQUE tweet_id+snapshot_date, 3 namespaces jsonb) + followers -> `channel_metrics_daily` (source x_api, new_followers=diff); reports refresh_metrics 'x_owned_reads' merguje NAJNOWSZY snapshot do `published_posts.engagement_metrics` bez platnych odczytow. Tick SPI dopoki `channels.config.stats_mode` != 'x_owned_reads' (reczny UPDATE po sondzie + potwierdzeniu ceny w konsoli). x_user_id cache w channels.config |
+| Bramka duplikacji tezy | worker._draft (za compliance.enforce) -> content_memory.dup_check: embedding canonicala vs OPUBLIKOWANE ostatnich 30 dni (pgvector cosine), prog 0.85 (override: /set cm_dup_threshold) | descriptor `{kind:'dup_warning'}` w `content_items.media` -> karta matreview pokazuje ⚠️ DUPLIKACJA; INFORMUJE, nie blokuje; regeneracja czysci stary warning; degradacja bez crashy (brak klucza/dopasowania = brak linii) |
+| Route komend configu (porzadki A) | conversation.handle: regex PRZED LLM - _USTAW_OKNO_RE ("ustaw okno dla <brand> <channel> na HH:MM-HH:MM") + _USTAW_KEY_RE (allowlista _CONFIG_KEYS: publish_windows, publish_mode, language_publish, posts_per_day, follower_count, thread_enabled, voice_note, secret_prefix, emergency_publish) | _target_update -> `channels.config` + paragon ⚙️; klucz spoza allowlisty na istniejacym celu = szczera odmowa (koniec "Zrobione" bez wykonania) |
+| Odrzucenie karty sprzata kolejke (porzadki B) | matreview akcja 'no' po set_item_status | `post_queue` wiersze materialu (review/held/scheduled/queued) -> rejected; sieroty historyczne = SQL w raporcie porzadkow (wykonuje Tomasz) |
+| CM czyta swiat (sobotni podklad) | worker sunday_brief.tick (sobota 08:00-12:30) -> Researcher POST /request (tier cap medium) -> polling research_jobs -> synteza Sonnet: claims + LINKI zrodel (join `evidence_id::text = ANY(supporting_evidence)` - zywa baza ma text[], nie uuid[]) + schowek 7 dni + top publikacje | sendMessage: 3 kandydackie tezy z liczbami i linkami (landing ~11:00-13:00); ZERO wpisu do content_items/post_queue; stan anty-dublowy `brand_config.cm_sunday_brief`; tap-test: narzedzie sunday_world_brief ("podklad na niedziele"); fallback z JAWNYM "research nie dojechal" |
 
 ---
 

@@ -153,6 +153,15 @@ trzeba bylo wybierac): jak nizej.
 4. **BE-SWIAT** (przed najblizsza sobota - podklad niedzielnego artykulu):
    `@docs/RESUME_MASTERPROMPT_19072026.md @docs/briefs/BRIEF_CM_CZYTA_SWIAT_19072026.md zbuduj`
 
+**STATUS INTEGRACJI (BE-INTEGRATOR, 19/07 noc): ZMERGOWANE, CZEKA NA DEPLOY TOMASZA.**
+Wszystkie 4 galezie build/* DONE i zmergowane do claude/silly-blackwell-dfc32d (kolejnosc
+kolektor->dedup->porzadki->czyta-swiat, zero konfliktow recznych, szwy worker/matreview/
+conversation zweryfikowane, py_compile 9 modulow OK, testy kolektora 16/16 PASS).
+Raport zbiorczy: docs/cm/RAPORT_do_Managera_19072026_integracja.md (tam: paczka deploy
+push+psql 025+rebuild, tap-testy 4 buildow, sekwencja wlaczenia kolektora sonda->konsola->
+UPDATE stats_mode). Buildowe worktree usuniete, galezie build/* zostaly w historii.
+Po deployu tick kolektora SPI dopoki Tomasz nie ustawi stats_mode (zero kosztow do decyzji).
+
 Dalszy backlog (bez briefow, pisze je sesja planujaca gdy przyjdzie kolej): adapter X Articles
 n8n (sonda tieru), guziki /brands + wizard FSM + egzekwowanie execution_mode, SOP Faza 3,
 publishery wolaja /wake, intencja zdjecia w routingu, Voice Bible v2.3 (seria X), RDC voice,
@@ -228,7 +237,8 @@ docs/cm/RAPORT_STAN_CM_I_SUBAGENTOW_10072026.md (architektura CM+subagenci, pami
 docs/product/SUBAGENT_DUTIES_v1.md (8 obowiazkow O1-O8), docs/db/SCHEMA_ags_crd.md,
 docs/SYSTEM_DATAFLOW.md, BE_BRIEF_HOT_FIXES_12072026.md (C:\Claude-CoWork\AGS\),
 docs/cm/INSTRUKCJA_dla_Managera_Notion_BrandConfig_12072026.md, DEPLOY_CHECKLIST.md.
-Nastepny wolny DDL: **025** (023 metryki kanalu + 024 decyzje czekaja na psql u Tomasza).
+Nastepny wolny DDL: **026** (025 x_post_metric_snapshots zmergowany, czeka na psql w paczce
+deploy integracji; 023 metryki + 024 decyzje juz wykonane u Tomasza 19/07).
 
 ## 8. SZABLONY KOMEND
 

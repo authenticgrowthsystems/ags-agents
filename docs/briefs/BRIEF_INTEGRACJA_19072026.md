@@ -37,3 +37,8 @@ guzikami (ktora wersja), nie tworczosc wlasna.
 Po 4x DONE -> piate okno: ten brief (integracja + jeden deploy + tap-testy).
 
 STATUS = READY (19/07 ~22:50, tryb rownolegly)
+
+STATUS = ZMERGOWANE (19/07 noc, BE-INTEGRATOR): 4 galezie w sb-work bez konfliktow recznych,
+szwy zweryfikowane semantycznie, py_compile 9 modulow OK, testy kolektora 16/16 PASS na
+zmergowanym kodzie. Czeka: push Tomasza + paczka deploy (psql 025 + rebuild) + tap-testy -
+pelna instrukcja w docs/cm/RAPORT_do_Managera_19072026_integracja.md.
