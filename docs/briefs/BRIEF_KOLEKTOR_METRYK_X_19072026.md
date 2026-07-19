@@ -53,12 +53,18 @@ docs/research/x_metrics_19072026/x_cost_scenarios.txt.
 
 ## 5. Udzial Tomasza
 
-1. Developer Console: wlaczyc pay-per-use credits + limit $10 (konto dewelopera = wlasciciel @tomasz_ags).
-2. Tap-test sondy (BE poda komende); potwierdzic w konsoli ceny Owned Read.
+1. [DONE 19/07 21:30] Developer Console skonfigurowana (zrzuty = evidence):
+   - pay-per-use AKTYWNE, saldo $6.96 (kredyty juz zuzywane przez publikacje - wykres kosztow);
+   - cykl rozliczeniowy Jul 19 - Aug 19; konto "Tomasz Nawrocki | AGS" (wlasciciel @tomasz_ags);
+   - Auto Recharge ON ($10 przy saldzie $1) - ZOSTAJE (kanon: zatwierdzone publikuje sie zawsze;
+     puste saldo zatrzymaloby tez publikacje);
+   - Spend Cap $20/cykl (DECYZJA TOMASZA; rekomendacja BE byla $10) - max ekspozycja ograniczona;
+   - zakupu nie bylo (saldo wystarcza) - otwarty punkt "minimalny top-up" bezprzedmiotowy.
+2. Tap-test sondy (sesja buildu poda komende); potwierdzic w konsoli cene Owned Read PRZED cronem.
 3. SSH: psql 025 + rebuild po buildzie.
 
 ## 6. Zamkniecie sesji (OBOWIAZKOWE)
 
 Raport docs/cm/RAPORT_do_Managera_<data>_kolektor_x.md + masterprompt + pamiec + STATUS tu.
 
-STATUS = READY (brief napisany 19/07 po konsumpcji raportow; build = osobna sesja)
+STATUS = READY-BILLING (19/07 21:30): billing skonfigurowany i udowodniony (sekcja 5 pkt 1) - build moze startowac od sondy. Wywolanie: @docs/RESUME_MASTERPROMPT_19072026.md @docs/briefs/BRIEF_KOLEKTOR_METRYK_X_19072026.md zbuduj
