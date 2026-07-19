@@ -166,6 +166,11 @@ LLM) - INCYDENT: CM odpowiedzial "Zrobione" o zmianie okna BEZ wywolania target_
 niezmienione, brak paragonu ⚙️; naprawa recznym SQL-em). Test prawdy: zmiana configu bez
 paragonu ⚙️ = niewykonana. (ii) kanon niepelnych godzin WDROZONY (slots.humanize_slot:
 +/-15 min od slotu planu, nigdy kwadrans; pq = czas ludzki, ci = czysty slot planu).
+(iiib) LUKA: odrzucenie karty (matnav no) NIE kasuje wierszy post_queue materialu - zostaja
+'review' na zawsze (nie publikuja sie, ale smieca; dowod: wiersz 245 artykulu odrzuconego
+19/07). Fix na 1 linie w matnav 'no': UPDATE pq SET status='rejected' WHERE content_item_id.
+Sprzatanie biezacych 5 sierot: UPDATE post_queue pq SET status='rejected' FROM content_items ci
+WHERE ci.id=pq.content_item_id AND pq.status='review' AND ci.status IN ('rejected','archived');
 (iii) KANON MEDIOW MULTI-PLATFORMA (Tomasz 19/07): jedna grafika/zdjecie = reuse na
 wszystkie kanaly materialu (dziala automatem); platforma wymagajaca INNEGO medium (np.
 Instagram = wideo) dostaje JAWNE zadanie w karcie: "wygeneruj albo nagraj" - zero wracania
