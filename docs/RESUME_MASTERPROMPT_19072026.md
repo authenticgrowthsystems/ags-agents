@@ -148,6 +148,11 @@ OAuth1 user context dziala, ~$4.50/mies; brief buildu: BRIEF_KOLEKTOR_METRYK_X_1
 
 ## 6. BACKLOG (poza priorytetami naprawczymi)
 
+NOWE 19/07 wieczor: (i) deterministyczna sciezka komend konfiguracyjnych (regex route przed
+LLM) - INCYDENT: CM odpowiedzial "Zrobione" o zmianie okna BEZ wywolania target_update (DB
+niezmienione, brak paragonu ⚙️; naprawa recznym SQL-em). Test prawdy: zmiana configu bez
+paragonu ⚙️ = niewykonana. (ii) kanon niepelnych godzin WDROZONY (slots.humanize_slot:
++/-15 min od slotu planu, nigdy kwadrans; pq = czas ludzki, ci = czysty slot planu).
 **Kolektor metryk X Owned Reads** = nastepny build (BRIEF_KOLEKTOR_METRYK_X_19072026 READY;
 DDL 025; Tomasz najpierw: Developer Console pay-per-use credits + limit $10). Konsumpcja
 docs/inbox/cm_przegladarka_19072026/ (artykuly/SOP od przegladarkowego CM - na razie samo

@@ -5,6 +5,7 @@ z czatu przez target_update); kadencja: kanon 11d (X posts_per_day w oknie; Link
 ~10:00, sob nic, nd artykul ~11:00). Material 'approved' bez slotu albo ze slotem MINIONYM nie
 publikuje sie juz natychmiast - dostaje najblizszy wolny slot i Tomasz jest informowany (bot #2)."""
 import datetime
+import random
 from zoneinfo import ZoneInfo
 
 from . import db
@@ -139,6 +140,24 @@ def next_slot(brand_id, channels_list, is_article=False, prefer_today=True):
     return None
 
 
+def humanize_slot(dt, spread_min=15):
+    """KANON 19/07 (Tomasz): publikacje wychodza o NIEPELNYCH godzinach (np. 16:02, 15:59, 16:07),
+    maksymalny rozrzut +/-15 min od slotu planu. Losowy offset przy wpisie do post_queue; minuta
+    nigdy rowna kwadransowi (:00/:15/:30/:45 wygladaja maszynowo). content_items trzyma CZYSTY slot
+    planu - roznica ci vs pq do 15 min jest ZAMIERZONA (to nie rozjazd z lekcji 07/07)."""
+    if dt is None:
+        return None
+    cand = dt
+    for _ in range(8):
+        cand = dt + datetime.timedelta(minutes=random.randint(-spread_min, spread_min))
+        if cand.minute % 15 != 0:
+            break
+    now = datetime.datetime.now(WARSAW)
+    if cand <= now:  # jitter nie cofa publikacji w przeszlosc (Scheduler strzela od razu)
+        cand = dt if dt > now else now + datetime.timedelta(minutes=random.randint(2, 7))
+    return cand
+
+
 def assign_if_needed(item):
     """Dla 'approved': slot NULL albo miniony -> przydziel najblizszy wolny i zapisz.
     Zwraca (slot|None, changed:bool). Wolane z petli workera PRZED dispatchem."""
@@ -154,7 +173,8 @@ def assign_if_needed(item):
                (slot, item["id"]))
     # FIX 07/07: trzymaj post_queue w zgodzie z content_item (zrodlo prawdy). Bez tego wiersze
     # post_queue zostawaly na starym slocie (subagent czytal 10:00, choc ci = 13:00) - rozjazd.
+    # Kolejka dostaje czas ULUDZKI (kanon 19/07: +/-15 min, niepelna godzina); ci = czysty slot.
     db.execute("""UPDATE post_queue SET scheduled_for=%s WHERE content_item_id=%s
                   AND status IN ('review','held','scheduled','queued','dispatching')""",
-               (slot, item["id"]))
+               (humanize_slot(slot), item["id"]))
     return slot, True

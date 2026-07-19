@@ -25,8 +25,8 @@ def stage_variant(item, channel_row, variant_text):
     #90 korekta 12/07 ('rozbic na caly dzien'): SERIA X (===POST===) = OSOBNE wiersze kolejki,
     kazdy z KOLEJNYM wolnym slotem siatki dnia - samodzielne posty, nie nitka, nie kloc."""
     import json
+    from . import slots as _slots
     if channel_row["channel"] == "x" and "===POST===" in (variant_text or ""):
-        from . import slots as _slots
         parts = [p.strip() for p in variant_text.split("===POST===") if p.strip()]
         ids = []
         for i, part in enumerate(parts):
@@ -39,7 +39,8 @@ def stage_variant(item, channel_row, variant_text):
             row = db.fetchone(
                 """INSERT INTO post_queue (content, brand, platform, topic, status, content_item_id, scheduled_for, media)
                    VALUES (%s,%s,%s,%s,'review',%s,%s,%s::jsonb) RETURNING id""",
-                (part, item["brand_id"], "x", item.get("master_theme"), item["id"], slot,
+                (part, item["brand_id"], "x", item.get("master_theme"), item["id"],
+                 _slots.humanize_slot(slot),  # kanon 19/07: niepelne godziny +/-15 min
                  json.dumps(item.get("media") or [] if i == 0 else [])),
             )
             if row:
@@ -49,7 +50,8 @@ def stage_variant(item, channel_row, variant_text):
         """INSERT INTO post_queue (content, brand, platform, topic, status, content_item_id, scheduled_for, media)
            VALUES (%s,%s,%s,%s,'review',%s,%s,%s::jsonb) RETURNING id""",
         (variant_text, item["brand_id"], channel_row["channel"], item.get("master_theme"),
-         item["id"], item.get("scheduled_for"), json.dumps(item.get("media") or [])),
+         item["id"], _slots.humanize_slot(item.get("scheduled_for")),  # kanon 19/07: niepelne godziny
+         json.dumps(item.get("media") or [])),
     )
     return row["id"] if row else None
 
