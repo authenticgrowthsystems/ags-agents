@@ -16,6 +16,47 @@ from .generate import client
 
 WARSAW = ZoneInfo("Europe/Warsaw")
 
+# ---------------- BRAMKA TEMATOW (kanon 19/07, wniosek z incydentu 13-19/07) ----------------
+# Petla autoreferencyjna: gap-filler + schowek pelen build-in-public -> posty o wlasnych lukach
+# kadencji w kolko (dowod: meta-posty 2-44 wysw. vs 2331 narracja biznesowa - ANALIZA_DOWODOW).
+# Regula: tematy o NASZYM WLASNYM systemie publikacji max META_MAX_WEEK/tydzien; zrodla tematow
+# = FILARY + ICP (schowek pomocniczo), nie ostatnie publikacje. Limit planu PLAN_CAP proposed.
+import re as _re
+
+META_MAX_WEEK = 1
+PLAN_CAP = 20
+_META_SELF = _re.compile(r"(m[oó]j|moje|nasz|w[lł]asn\w+|swo[ij]\w*|\bmy\b|\bour\b)", _re.IGNORECASE)
+_META_SYS = _re.compile(r"(system|agent\w*|\bbot\b|automat\w*|pipeline|workflow|content manager|\bCM\b|narz[eę]dzi\w+)",
+                        _re.IGNORECASE)
+_META_HARD = _re.compile(r"(kadencj\w+|slot\w*|kolejk\w+|\bluk\b|luk[aiey]\b|harmonogram\w*|cadence|empty slot|"
+                         r"schedule gap|gap in (the )?schedule|queue|autopilot|publikacj\w+ awaryjn\w+|subagent\w*)",
+                         _re.IGNORECASE)
+
+
+def _meta_like(theme):
+    """Meta-temat o naszym wlasnym systemie publikacji (heurystyka; glowna bramka jest w promptach)."""
+    t = theme or ""
+    return bool(_META_HARD.search(t) or (_META_SELF.search(t) and _META_SYS.search(t)))
+
+
+def _meta_week_count(brand_id):
+    rows = db.fetchall(
+        """SELECT master_theme FROM content_items
+           WHERE brand_id=%s AND status NOT IN ('rejected','archived') AND created_at > NOW() - interval '7 days'""",
+        (brand_id,))
+    return sum(1 for r in rows if _meta_like(r["master_theme"]))
+
+
+def _enforce_plan_cap(brand_id, cap=PLAN_CAP):
+    """Limit planu: max `cap` proposed; nadwyzka = NAJSTARSZE wypychane do archiwum (kanon e)."""
+    rows = db.fetchall(
+        """SELECT id FROM content_items WHERE brand_id=%s AND status='proposed'
+           ORDER BY created_at DESC OFFSET %s""", (brand_id, cap))
+    for r in rows:
+        db.execute("UPDATE content_items SET status='archived', updated_at=NOW() WHERE id=%s", (r["id"],))
+    return len(rows)
+
+
 PLAN_TOOL = {
     "name": "emit_plan",
     "description": "Zwroc plan tygodnia jako strukture. KAZDA pozycja: temat z katem, cele, slot ISO, format.",
@@ -165,14 +206,23 @@ def build_plan(brand_id="AGS", days=7):
     recent = content_memory.get_published(brand_id, days_ago=14, limit=25)
     recent_txt = "\n".join(f"- {(p['content'] or '')[:80]}" for p in recent) or "(brak)"
     strat = brand.get("strategy") or {}
+    meta_used = _meta_week_count(brand_id)
+    meta_left = max(0, META_MAX_WEEK - meta_used)
     msg = (
         f"Zaplanuj publikacje od {start.strftime('%A %d/%m')} do {(end - datetime.timedelta(days=1)).strftime('%A %d/%m')} "
         f"(strefa Europe/Warsaw; dzis jest {now.strftime('%A %d/%m/%Y %H:%M')}).\n\n"
         f"KADENCJA (trzymaj sie jej DOKLADNIE):\n{_cadence_text(brand_id)}\n\n"
-        f"FILARY/AUDIENCE: {json.dumps({'audience': strat.get('target_audience'), 'pillars': strat.get('content_pillars'), 'topics': strat.get('core_topics')}, ensure_ascii=False)[:600]}\n\n"
+        f"ZRODLA TEMATOW - KOLEJNOSC OBOWIAZKOWA (bramka 19/07): 1) FILARY MARKI, 2) PROBLEMY ICP "
+        f"(co boli odbiorce, czego szuka), 3) schowek POMOCNICZO. Ostatnie publikacje sluza TYLKO "
+        f"jako antydubel, NIE jako zrodlo inspiracji - nie buduj tematow z tego, co juz wyszlo.\n"
+        f"FILARY/ICP: {json.dumps({'audience': strat.get('target_audience'), 'pillars': strat.get('content_pillars'), 'topics': strat.get('core_topics')}, ensure_ascii=False)[:600]}\n\n"
+        f"BRAMKA META (twarda): tematy o NASZYM WLASNYM systemie publikacji (kadencja, sloty, kolejka, "
+        f"luki, wlasne narzedzia CM, 'moj agent powiedzial...') - limit {META_MAX_WEEK}/tydzien, "
+        f"w tym tygodniu zostalo: {meta_left}. DOWOD z metryk: meta-posty robia 2-44 wyswietlen, "
+        f"narracja biznesowa dla ICP 2331 - planuj dla ODBIORCY, nie o nas samych.\n\n"
         f"ZARYS MIESIACA (dotychczasowy): {_month_outline(brand_id)[:500] or '(brak - zaproponuj)'}\n\n"
-        f"SCHOWEK (pomysly czekajace - wykorzystaj najlepsze):\n{_schowek_text(brand_id)}\n\n"
-        f"OSTATNIE PUBLIKACJE (NIE dubluj tematow):\n{recent_txt}\n\n"
+        f"SCHOWEK (pomysly czekajace - bierz najlepsze POD FILARY, pomijaj meta o systemie ponad limit):\n{_schowek_text(brand_id)}\n\n"
+        f"OSTATNIE PUBLIKACJE (WYLACZNIE antydubel - NIE dubluj tematow):\n{recent_txt}\n\n"
         f"JUZ ZAPLANOWANE (nie koliduj slotami):\n{_current_plan_text(brand_id)}\n\n"
         "Kazdy temat: konkretny kat, brand voice, build-in-public gdzie pasuje. Sloty rozlozone naturalnie. "
         "Niedzielny LinkedIn = format article. REGULA PRAWDY: tematy WYLACZNIE na faktach ze schowka/"
@@ -200,11 +250,18 @@ def build_plan(brand_id="AGS", days=7):
     valid_channels = {r["channel"] for r in db.fetchall(
         "SELECT channel FROM channels WHERE brand_id=%s AND supervised=true AND status IN ('active','draft')", (brand_id,))}
     n = 0
+    meta_budget = max(0, META_MAX_WEEK - _meta_week_count(brand_id))
+    meta_dropped = 0
     for it in items:
         theme = str(it.get("theme") or "").strip()
         targets = [t for t in (it.get("targets") or []) if t in valid_channels]
         if not theme or not targets:
             continue
+        if _meta_like(theme):  # twarda bramka za promptem (LLM bywa glucha na limity)
+            if meta_budget <= 0:
+                meta_dropped += 1
+                continue
+            meta_budget -= 1
         try:
             slot = datetime.datetime.fromisoformat(str(it.get("slot")))
             if slot.tzinfo is None:
@@ -219,10 +276,15 @@ def build_plan(brand_id="AGS", days=7):
             (brand_id, theme, targets, slot))
         n += 1
     _save_month_outline(brand_id, str(data.get("month_outline") or ""))
+    capped = _enforce_plan_cap(brand_id)
     chat = _admin_chat()
     if chat and n:
         outline = str(data.get("month_outline") or "").strip()
         head = f"📋 Propozycja planu ({n} pozycji):\n"
+        if meta_dropped:
+            head = f"🚧 Bramka tematow: odrzucilem {meta_dropped} meta-tematow o naszym systemie (limit {META_MAX_WEEK}/tydz).\n" + head
+        if capped:
+            head = f"🚧 Limit planu {PLAN_CAP}: {capped} najstarszych propozycji poszlo do archiwum.\n" + head
         if outline:
             head = f"🗓 Zarys miesiaca: {outline[:400]}\n\n" + head
         _tg_send(chat, head + plan_text(brand_id) +

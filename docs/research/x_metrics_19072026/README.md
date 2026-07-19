@@ -1,0 +1,1 @@
+Raporty deep research: wytrych metryk X (prompt: ../RESEARCH_PROMPT_X_METRICS_WYTRYCH_19072026.md). Zrodla: ChatGPT DR / Gemini DR / Manus. Konsumpcja: aktywna sesja BE -> selekcja sciezki -> BRIEF_KOLEKTOR_METRYK_X.

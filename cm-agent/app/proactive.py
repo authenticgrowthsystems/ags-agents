@@ -111,6 +111,9 @@ def _propose_for_gap(brand_id, channel, day, missing):
            AND status IN ('draft','proposed','planned','drafting','needs_approval','approved')
            ORDER BY updated_at DESC LIMIT 40""", (brand_id,))
     q_txt = "\n".join(f"- {(r['master_theme'] or '')[:80]}" for r in queued) or "(pusto)"
+    from . import planner as _pl
+    strat = brand.get("strategy") or {}
+    meta_left = max(0, _pl.META_MAX_WEEK - _pl._meta_week_count(brand_id))
     model, tier, source = tasks.model_for("planner")
     n = min(missing, PROPOSALS_PER_GAP)
     resp = client().messages.create(
@@ -121,7 +124,13 @@ def _propose_for_gap(brand_id, channel, day, missing):
                    f"Subagent kanalu {channel} zglasza luke w kadencji: {day.strftime('%A %d/%m')} brakuje "
                    f"{missing} publikacji. Zaproponuj DOKLADNIE {n} tematy-matki (konkretny kat, brand voice, "
                    f"build-in-public gdzie pasuje). Pisz NIENAGANNA polszczyzna.\n\n"
-                   f"SCHOWEK (wykorzystaj najlepsze):\n{sch_txt}\n\n"
+                   f"ZRODLA TEMATOW - KOLEJNOSC (bramka 19/07): 1) FILARY, 2) PROBLEMY ICP, 3) schowek "
+                   f"POMOCNICZO. NIE buduj tematow z ostatnich publikacji (to tylko antydubel).\n"
+                   f"FILARY/ICP: {json.dumps({'audience': strat.get('target_audience'), 'pillars': strat.get('content_pillars')}, ensure_ascii=False)[:400]}\n"
+                   f"BRAMKA META (twarda): tematy o naszym WLASNYM systemie publikacji (kadencja, sloty, "
+                   f"kolejka, luki, wlasne narzedzia) - zostalo {meta_left} na ten tydzien; 0 = ZAKAZ. "
+                   f"Incydent 13-19/07: petla postow o wlasnych lukach kadencji, 2-8 wyswietlen.\n\n"
+                   f"SCHOWEK (wykorzystaj najlepsze POD FILARY):\n{sch_txt}\n\n"
                    f"OSTATNIE PUBLIKACJE (nie dubluj):\n{rec_txt}\n\n"
                    f"JUZ W KOLEJCE/SZKICACH (ZAKAZ tematow podobnych do ponizszych - nawet innym katem):\n{q_txt}\n\n"
                    f"REGULA PRAWDY: tematy WYLACZNIE na faktach ze schowka/archiwum - ZERO zmyslonych "
@@ -131,9 +140,14 @@ def _propose_for_gap(brand_id, channel, day, missing):
     tu = next((b for b in resp.content if getattr(b, "type", "") == "tool_use"), None)
     themes = [str(t).strip() for t in ((tu.input or {}).get("themes") or [])][:n] if tu else []
     made = 0
+    meta_budget = meta_left
     for theme in themes:
         if not theme:
             continue
+        if _pl._meta_like(theme):  # twarda bramka za promptem
+            if meta_budget <= 0:
+                continue
+            meta_budget -= 1
         row = db.fetchone(
             """INSERT INTO content_items (brand_id, master_theme, target_channels, status)
                VALUES (%s,%s,%s,'draft') RETURNING id""", (brand_id, theme, [channel]))
