@@ -538,6 +538,43 @@ def _target_update(inp):
     return f"⚙️ {brand}/{channel}: {key} = {val}." if row else f"Nie znam celu {brand}/{channel}."
 
 
+# PORZADKI 19/07 (A): komendy konfiguracyjne deterministycznie, PRZED LLM. Incydent 19/07:
+# CM odpowiedzial "Zrobione. AGS LinkedIn ma teraz okno 16:00-18:00" BEZ wywolania
+# target_update (DB niezmienione, zero paragonu ⚙️) - twarda zasada w promptcie nie
+# wystarcza. Rozpoznane frazy ida wprost do _target_update; nierozpoznane do LLM jak dotad.
+_USTAW_OKNO_RE = re.compile(
+    r"^\s*ustaw\s+okno(?:\s+publikacji)?\s+dla\s+(\S+)\s+(\S+)\s+na\s+"
+    r"([01]?\d|2[0-3]):([0-5]\d)\s*-\s*([01]?\d|2[0-3]):([0-5]\d)\s*\.?\s*$", re.IGNORECASE)
+_USTAW_KEY_RE = re.compile(
+    r"^\s*ustaw\s+([a-z][a-z0-9_]{1,40})\s+dla\s+(\S+)\s+(\S+)\s+na\s+(.+?)\s*$",
+    re.IGNORECASE)
+# Tylko znane klucze config jsonb - generyczne "ustaw X dla Y Z na W" bywa zwykla rozmowa,
+# nie wolno pisac do DB przypadkowego klucza (listy typu rules zostaja w /set i u LLM).
+_CONFIG_KEYS = ("publish_windows", "publish_mode", "language_publish", "posts_per_day",
+                "follower_count", "thread_enabled", "voice_note", "secret_prefix",
+                "emergency_publish")
+
+
+def _config_route(text):
+    """Zwraca odpowiedz (paragon ⚙️ z _target_update) gdy fraza rozpoznana, inaczej None -> LLM."""
+    m = _USTAW_OKNO_RE.match(text)
+    if m:
+        val = f"{int(m.group(3)):02d}:{m.group(4)}-{int(m.group(5)):02d}:{m.group(6)}"
+        return _target_update({"brand_id": m.group(1).upper(), "channel": m.group(2).lower(),
+                               "key": "publish_windows", "value": val})
+    m = _USTAW_KEY_RE.match(text)
+    if m:
+        key, brand, channel = m.group(1).lower(), m.group(2).upper(), m.group(3).lower()
+        if key in _CONFIG_KEYS:
+            return _target_update({"brand_id": brand, "channel": channel,
+                                   "key": key, "value": m.group(4).strip()})
+        if db.fetchone("SELECT 1 FROM channels WHERE brand_id=%s AND channel=%s", (brand, channel)):
+            # Znany cel + nieznany klucz = szczera odmowa zamiast LLM (to on 'zalatwial' bez wykonania)
+            return (f"Nie znam klucza '{key}'. Deterministycznie ustawisz: "
+                    f"{', '.join(_CONFIG_KEYS)}. Inne klucze przez /set albo opisz slownie.")
+    return None
+
+
 TOOL_PROPOSE = {
     "name": "propose_material",
     "description": ("Zapisz uzgodniony material do kolejki produkcyjnej CM. Wywolaj TYLKO gdy Tomasz wyraznie "
@@ -2103,6 +2140,12 @@ def handle(update):
             return  # obsluzone plikiem (eksport .json)
         if isinstance(_br, str):
             _reply(chat_id, _br)
+            return
+        # PORZADKI 19/07 (A): "ustaw okno publikacji dla <brand> <channel> na HH:MM-HH:MM"
+        # oraz "ustaw <key> dla <brand> <channel> na <value>" - regex PRZED LLM, paragon ⚙️.
+        _cfg = _config_route(text)
+        if _cfg:
+            _reply(chat_id, _cfg)
             return
         _km = _KARTY_RE.match(text)
         if _km:

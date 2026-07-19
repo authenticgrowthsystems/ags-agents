@@ -672,6 +672,13 @@ def handle(payload, wake_event=None):
         return
     if action in ("ok", "no"):
         db.set_item_status(arg, "approved" if action == "ok" else "rejected")
+        if action == "no":
+            # PORZADKI 19/07 (B): odrzucenie karty sprzata tez wiersze kolejki - dowod: pq 245
+            # odrzuconego artykulu wisial w 'review' na zawsze (nie publikowal sie, ale smiecil
+            # podglady i liczniki slotow).
+            db.execute("UPDATE post_queue SET status='rejected' "
+                       "WHERE content_item_id=%s AND status IN ('review','held','scheduled','queued')",
+                       (arg,))
         if action == "ok" and wake_event:
             wake_event.set()
         # BUG-FIX 12/07 ('kliknalem odrzuc i nic sie nie stalo'): _card() zwraca 3 wartosci od v7 -
