@@ -51,10 +51,12 @@ def _meta_week_count(brand_id):
 
 
 def _enforce_plan_cap(brand_id, cap=PLAN_CAP):
-    """Limit planu: max `cap` proposed; nadwyzka = NAJSTARSZE wypychane do archiwum (kanon e)."""
+    """Limit planu: max `cap` proposed. Nadwyzka = pozycje NAJDALEJ W PRZYSZLOSCI (koniec tygodnia
+    odtworzy niedzielny planner). Bug 19/07: sortowanie po created_at scinalo PIERWSZE wstawione
+    = poniedzialek znikal z planu (dowod: 3 posty X 20/07 w archiwum, Tomasz to wylapal)."""
     rows = db.fetchall(
         """SELECT id FROM content_items WHERE brand_id=%s AND status='proposed'
-           ORDER BY created_at DESC OFFSET %s""", (brand_id, cap))
+           ORDER BY scheduled_for ASC NULLS LAST, created_at ASC OFFSET %s""", (brand_id, cap))
     for r in rows:
         db.execute("UPDATE content_items SET status='archived', updated_at=NOW() WHERE id=%s", (r["id"],))
     return len(rows)
