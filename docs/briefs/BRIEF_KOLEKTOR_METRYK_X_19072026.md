@@ -2,6 +2,23 @@
 
 Wywolanie sesji: `@docs/RESUME_MASTERPROMPT_19072026.md @docs/briefs/BRIEF_KOLEKTOR_METRYK_X_19072026.md zbuduj`
 
+## 0. TRYB ROWNOLEGLY (Tomasz 19/07 ~22:45 - NADPISUJE sekwencyjnosc; przeczytaj PRZED praca)
+
+Wszystkie 4 buildy ida ROWNOLEGLE w osobnych oknach. Zasady twarde:
+1. PIERWSZY RUCH: utworz WLASNY worktree + galaz od galezi bazowej (NIE pracuj na sb-work!):
+   `git -C "C:\Claude-CoWork\AGS\ags-agents" worktree add "C:\Claude-CoWork\AGS\ags-agents\.claude\worktrees\build-kolektor" -b build/kolektor-x origin/claude/silly-blackwell-dfc32d`
+   Wszystkie sciezki i git -C w tej sesji = ten worktree. Committuj na build/kolektor-x.
+2. ZAKAZ deployu: ZERO push na serwer, ZERO rebuild cm-agent, ZERO psql, ZERO zmian n8n
+   (gdy brief wymaga DDL - plik db/0NN LEZY w commicie, wykona go INTEGRATOR). Kod + py_compile
+   + testy lokalne (parser/regex - jak sie da bez serwera) + commit. Weryfikacje read-only
+   (temp webhook) WOLNO.
+3. Dotykaj TYLKO plikow z sekcji KONTRAKT swojego briefu - reszta nalezy do rownoleglych
+   budowniczych (konflikty rozwiazuje integrator, nie mnoz ich).
+4. Model: sesje zaczyna Fable 5 (max 2 prompty: wczytanie + szkielet decyzji), potem Tomasz
+   przelacza na Opus 4.8, ktory KONCZY build w tym samym oknie (kontekst zostaje).
+5. Zamkniecie: commit na build/kolektor-x + STATUS w tym briefie + raport per krok; masterprompt
+   aktualizuje TYLKO INTEGRATOR (unik konfliktow na wspolnym pliku).
+
 ## 1. CO budujemy (definition of done)
 
 Kolektor per-post metryk WLASNYCH postow X do PG, raz dziennie, na oficjalnym X API

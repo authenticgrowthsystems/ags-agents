@@ -135,8 +135,13 @@ decyzje; pelne uzasadnienie: docs/cm/DECYZJA_BE_19072026_plan_kolejki.md): P1 ko
 Articles); P3 X: kadencja zostaje, ZERO budow pod wzrost X do 2 tyg. baseline z kolektora,
 tania dzwignia = comment-radar na postach ICP (zbudowany); P4 Stage 0-1 potwierdzone.
 
-Kazdy build = NOWE okno Cowork (Opus 4.8), DWA prompty: (1) linijka wywolania z briefu,
-(2) ewentualne doprecyzowanie/tap. Sesje SEKWENCYJNIE na sb-work (protokol). Kolejnosc:
+TRYB ROWNOLEGLY (Tomasz 22:45, nadpisal sekwencyjnosc): 4 okna JEDNOCZESNIE, kazde na
+WLASNYM worktree+galezi build/* (komenda w sekcji 0 kazdego briefu; NIKT nie pracuje na
+sb-work!). Kazde okno: startuje Fable 5 (max 2 prompty), potem Tomasz przelacza model na
+Opus 4.8, ktory konczy w tym samym oknie. ZAKAZ deployu/psql/n8n u budowniczych - calosc
+sklada BE-INTEGRATOR (docs/briefs/BRIEF_INTEGRACJA_19072026.md): merge 4 galezi -> jedna
+paczka deploy -> tap-testy -> zamkniecie za wszystkich. Kolejnosc priorytetow (gdyby
+trzeba bylo wybierac): jak nizej.
 
 1. **BE-KOLEKTOR** (najpilniejsze - prywatne metryki X tylko <30 dni wstecz):
    `@docs/RESUME_MASTERPROMPT_19072026.md @docs/briefs/BRIEF_KOLEKTOR_METRYK_X_19072026.md zbuduj`
