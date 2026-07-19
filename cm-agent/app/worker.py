@@ -12,7 +12,7 @@ from . import config, db
 from .brand import load_brand
 from psycopg.types.json import Jsonb
 
-from . import generate, compliance, channels, research, hitl, conversation, logbot, content_memory, reports, planner, matreview, slots, proactive, engagement
+from . import generate, compliance, channels, research, hitl, conversation, logbot, content_memory, reports, planner, matreview, slots, proactive, engagement, metrics_import
 
 api = FastAPI(title="AGS Content Manager")
 wake = threading.Event()
@@ -110,6 +110,17 @@ def cmt(body: dict, x_researcher_secret: str = Header(default="")):
     zatwierdzone dodatkowo do task_queue 'comment'. Wymog Tomasza 08/07."""
     _guard(x_researcher_secret)
     threading.Thread(target=conversation.handle_cmt, args=(body, wake), daemon=True).start()
+    return {"accepted": True}
+
+
+@api.post("/metrics/xlsx", status_code=202)
+def metrics_xlsx(body: dict, x_researcher_secret: str = Header(default="")):
+    """Import metryk LinkedIn z eksportu AggregateAnalytics (plan dnia 19/07 krok [1]).
+    n8n HITL (galaz document) przekazuje {chat_id, file_id, file_name}; parsowanie i paragon w tle."""
+    _guard(x_researcher_secret)
+    if not body.get("file_id"):
+        raise HTTPException(status_code=400, detail="file_id required")
+    threading.Thread(target=metrics_import.handle_telegram_xlsx, args=(body,), daemon=True).start()
     return {"accepted": True}
 
 

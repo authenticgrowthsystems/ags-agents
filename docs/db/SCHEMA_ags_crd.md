@@ -94,6 +94,30 @@ CHECK rozszerzony: active / paused / **archived** (soft-delete z /brand_remove -
 historyczne marki zostaja; /brand_on przywraca). Zarzadzanie: komendy Telegram /brands,
 /brand_on|off|add|remove|config|export (cm-agent/app/brands_ui.py, deterministyczne bez LLM).
 
+## channel_metrics_daily (DDL 023, plan dnia 19/07 krok [1] - koniec slepoty metrycznej)
+Metryki poziomu KANALU per dzien. Zrodla: import xlsx AggregateAnalytics LinkedIn (Telegram
+dokument -> n8n galaz document_xlsx -> POST /metrics/xlsx -> app/metrics_import.py), reczny
+wpis X, przyszly kolektor X (szew stats_mode='x_owned_reads' w reports.refresh_metrics).
+
+| kolumna | typ |
+|---|---|
+| id | BIGSERIAL PK |
+| brand_id / channel | VARCHAR(50) / VARCHAR(40) |
+| metric_date | DATE; UNIQUE (brand_id, channel, metric_date) |
+| impressions / reactions / new_followers / followers_total | INT nullable (COALESCE-merge przy ponownym imporcie) |
+| source | CHECK: linkedin_xlsx / x_manual / x_api / linkedin_api |
+| raw | JSONB (wartosci dnia z importu) |
+| imported_at | TIMESTAMPTZ default NOW() |
+
+Indeks: idx_chan_metrics_lookup (brand_id, channel, metric_date DESC). Raporty subagenta czytaja
+przez reports._profile_lines (sekcja PROFIL; >3 dni bez danych = prosba o swiezy eksport).
+
+## channel_audience_snapshots (DDL 023)
+Demografia obserwujacych per import: brand_id, channel, captured_date (UNIQUE-triplet),
+followers_total INT, demographics JSONB (lista {category, value, pct}), source. Per-post metryki
+NIE tu - zostaja w published_posts.engagement_metrics (merge ||, source 'linkedin_xlsx',
+match po URN ugcPost-/share-<digits> w post_id).
+
 ## TODO (rozszerzenie dokumentacji schematu)
 Pełny `pg_dump --schema-only` do zrzucenia i dopisania tu dla POZOSTAŁYCH tabel bazowych
 (post_queue, task_queue, published_posts, contacts, engagement_log, inspirations, channels,

@@ -73,6 +73,11 @@ def refresh_metrics(brand_id, channel, days=7):
     mode = cfg.get("stats_mode", "manual")
     if mode == "manual":
         return 0
+    if mode == "x_owned_reads":
+        # SZEW pod kolektor X (Owned Reads $0.001/read od 20/04/2026 - do weryfikacji researchem;
+        # prompt: docs/research/RESEARCH_PROMPT_X_METRICS_WYTRYCH_19072026.md). Build po raportach
+        # RESEARCH_X_METRICS_*.md. Do tego czasu cel dziala jak 'manual' (wpisy reczne subagenta).
+        return 0
     prefix = cfg.get("secret_prefix", "linkedin")
     token = db.get_secret(f"{prefix}_access_token")
     if not token:
@@ -118,6 +123,30 @@ def set_manual_metrics(published_id, values, brand_id, channel):
 
 
 # ---------------- raporty ----------------
+def _profile_lines(brand_id, channel, days=7):
+    """Sekcja PROFIL z channel_metrics_daily (DDL 023; import xlsx / wpis reczny). Pusta lista gdy brak
+    danych. Gdy ostatni wpis starszy niz 3 dni - prosba o swiezy eksport (koniec slepoty metrycznej)."""
+    rows = db.fetchall(
+        """SELECT metric_date, impressions, reactions, new_followers, followers_total
+           FROM channel_metrics_daily WHERE brand_id=%s AND channel=%s
+             AND metric_date > CURRENT_DATE - make_interval(days => %s) ORDER BY metric_date""",
+        (brand_id, channel, days))
+    if not rows:
+        return []
+    imp = sum(r["impressions"] or 0 for r in rows)
+    reac = sum(r["reactions"] or 0 for r in rows)
+    nf = sum(r["new_followers"] or 0 for r in rows)
+    total = next((r["followers_total"] for r in reversed(rows) if r["followers_total"] is not None), None)
+    last = rows[-1]["metric_date"]
+    line = f"PROFIL ({days}d): wyswietlenia {imp}, reakcje {reac}, nowi obserwujacy +{nf}"
+    if total is not None:
+        line += f", lacznie {total}"
+    out = ["", line]
+    if (datetime.date.today() - last).days > 3:
+        out.append(f"(ostatnie dane z {last.strftime('%d/%m')} - wyslij swiezy eksport AggregateAnalytics)")
+    return out
+
+
 def _sum_metrics(rows):
     total = {k: 0 for k in METRIC_KEYS}
     have = False
@@ -175,6 +204,7 @@ def daily_report(brand_id, channel):
     for p in pub:
         lines.append(f"- #{p['id']} {(p['content'] or '')[:60]} | {_fmt_metrics(p.get('engagement_metrics') or {})}")
     lines.append(f"\nMETRYKI (suma): {_fmt_metrics(_sum_metrics(pub))}")
+    lines += _profile_lines(brand_id, channel, days=7)
     lines.append(f"\nDECYZJE AUTONOMICZNE: {len(dec)}")
     for d in dec:
         lines.append(f"- {d['rationale'][:100]}")
@@ -229,6 +259,7 @@ def weekly_report(brand_id, channel):
     week_start = (datetime.datetime.now(WARSAW) - datetime.timedelta(days=7)).date()
     lines = [f"📊 Raport tygodniowy {brand_id} {channel} (od {week_start.strftime('%d/%m')})", ""]
     lines.append(f"PUBLIKACJE: {len(pub)} | METRYKI 7 DNI: {_fmt_metrics(total)}")
+    lines += _profile_lines(brand_id, channel, days=7)
     if best:
         lines.append("\nNAJLEPSZE:")
         lines += [f"- #{p['id']} {(p['content'] or '')[:60]} | {_fmt_metrics(p['engagement_metrics'])}" for p in best]
