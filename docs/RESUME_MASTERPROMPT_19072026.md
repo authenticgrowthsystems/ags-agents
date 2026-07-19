@@ -51,11 +51,43 @@ emergency_publish=false na WSZYSTKICH celach (do odwolania!), post_queue review/
 -> held (wszystko zamrozone), proposed (78) -> rejected. Intake drafts zostaly (nieszkodliwe).
 Nic nie publikuje sie bez tapniecia Tomasza.
 
+## 2b. SLOWNICZEK TABEL (dopisane 19/07 po bledzie nastepcy: platform/is_active NIE istnieja w channels)
+
+- **brands**: brand_id PK, brand_name, status (active|paused|archived)
+- **channels** (CELE): id, brand_id, **channel**, **status** (active|draft|ready|paused),
+  supervised bool, adapter_path, execution_mode, config jsonb (language_publish, secret_prefix,
+  publish_windows, publish_mode, follower_count, thread_enabled, rules[], voice_note,
+  emergency_publish)
+- **content_items**: id **UUID**, brand_id, master_theme, status (planned|needs_research|
+  researching|drafting|needs_approval|approved|dispatching|published|rejected|failed|proposed|
+  draft|brief|archived), canonical_body, target_channels[], scheduled_for, media jsonb
+- **post_queue** (KOLEJKA): id serial, **brand**, **platform** (x|linkedin...), content, topic,
+  status (review|scheduled|queued|held|dispatching|published|failed|rejected), content_item_id,
+  scheduled_for, media jsonb
+- **brand_config**: brand_id, config_key, config_value, version - **UNIQUE (brand_id,
+  config_key)**, wersjonowanie przez UPDATE+bump, NIE nowe wiersze!
+- **task_queue**: id UUID, agent_id, task_type (publish|comment|...), platform, payload jsonb,
+  status (pending|in_progress|done|failed|blocked|...)
+- **engagement_log**: id UUID, action_type (x_post|x_comment|linkedin_post|...), channel
+  (X|LinkedIn|... - z wielkiej!), agent ('AGS:x'), content, response, notes
+- **agent_logs**: agent_id, log_type (AUTONOMOUS_DECISION|CONVERSATION_SUMMARY|CHANNEL_NEED|
+  VOICE_EDIT|RE_INTRO_MISSING - bez CHECK), rationale, context jsonb
+- **agent_learning_log**: subagent_id, brand_id, content_item_id UUID, proposed/final_content,
+  correction_type (accepted|edited|rejected|replaced)
+- **brand_tokens**: brand_id PK, tokens jsonb, updated_at, source
+Pelniej: docs/db/SCHEMA_ags_crd.md + docs/SYSTEM_DATAFLOW.md.
+
 ## 3. PIERWSZY RUCH NOWEJ SESJI
 
 1) Pamiec + ten plik. 2) `git -C ...sb-work log --oneline -5` (HEAD >= 67f3acf; sprawdz czy
-Tomasz pushnal - moze byc ahead). 3) Zweryfikuj sprzatanie (verify przez temp webhook:
-emergency_publish per cel, held count, proposed=0). 4) Screeny Tomasza w docs/evidence -
+Tomasz pushnal - moze byc ahead). 3) Zweryfikuj sprzatanie GOTOWYM SQL-em (read-only temp
+webhook, wzorzec Temp/ags-media-spike/verify-close.cjs):
+```sql
+SELECT 'emergency_off' AS co, COUNT(*)::text AS n FROM channels WHERE supervised=true AND (config->>'emergency_publish')='false'
+UNION ALL SELECT 'held', COUNT(*)::text FROM post_queue WHERE status='held'
+UNION ALL SELECT 'proposed', COUNT(*)::text FROM content_items WHERE status='proposed';
+```
+(oczekiwane: emergency_off=11, held>0, proposed=0). 4) Screeny Tomasza w docs/evidence -
 przeanalizuj i uzupelnij diagnoze. 5) PRIORYTETY NAPRAWCZE (sekcja 4) - guziki z Tomaszem.
 
 ## 4. PRIORYTETY NAPRAWCZE (wnioski z incydentu - USTAL Z TOMASZEM KOLEJNOSC)
