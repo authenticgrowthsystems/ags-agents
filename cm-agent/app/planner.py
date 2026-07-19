@@ -108,10 +108,14 @@ def _cadence_text(brand_id):
         elif r["channel"].startswith("linkedin"):
             # FIX 07/07: NIE hardkoduj 10:00 - to przeczylo oknu US 13:00-18:00 (LLM bral jawne 10:00).
             # Czas WYPROWADZAMY z okna publikacji celu (strefa odbiorcow).
+            # KANON 19/07 (Tomasz): niedzielny ARTYKUL = insight tygodnia ze swiata AI, robi go
+            # TOMASZ RECZNIE z materialow zbieranych w sobote - planer NIE planuje niedzieli,
+            # dopoki CM nie umie sam czytac swiata (posty innych + wnioski z tygodnia; backlog).
             w = win or "08:00-18:00"
             start = w.split("-")[0].strip()
-            lines.append(f"- {r['channel']}: poniedzialek-piatek 1 post, sobota NIC, niedziela ARTYKUL "
-                         f"(format article); publikuj WYLACZNIE w oknie {w} (proponuj godzine od {start}, "
+            lines.append(f"- {r['channel']}: poniedzialek-piatek 1 post, sobota NIC, niedziela NIC "
+                         f"(artykul niedzielny robi Tomasz recznie - NIE planuj zadnej pozycji na "
+                         f"niedziele); publikuj WYLACZNIE w oknie {w} (proponuj godzine od {start}, "
                          f"NIGDY przed {start} - to okno strefy czasowej odbiorcow tego celu)")
         else:
             lines.append(f"- {r['channel']}: {json.dumps(cfg.get('weekly_pattern', 'wg uznania'), ensure_ascii=False)}"

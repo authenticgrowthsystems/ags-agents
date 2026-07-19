@@ -54,11 +54,13 @@ def _send(text, kb=None):
 
 # ---------------- (A) luka w kadencji -> subagent wola CM ----------------
 def _expected(channel, cfg, day):
-    """Ile publikacji kanal POWINIEN miec danego dnia (kanon 11d)."""
+    """Ile publikacji kanal POWINIEN miec danego dnia (kanon 11d + korekta 19/07:
+    niedziela LinkedIn = 0 dla automatu - artykul niedzielny robi Tomasz RECZNIE,
+    gap-filler nie ma prawa zglaszac niedzielnej luki ani jej wypelniac)."""
     if channel == "x":
         return int(str(cfg.get("posts_per_day", "3")).split("-")[0] or 3)
     if channel.startswith("linkedin"):
-        return 0 if day.weekday() == 5 else 1
+        return 0 if day.weekday() in (5, 6) else 1
     return 0
 
 
