@@ -129,6 +129,12 @@ OAuth1 user context dziala, ~$4.50/mies; brief buildu: BRIEF_KOLEKTOR_METRYK_X_1
 
 ## 4b. KOLEJKA BUDOWNICZYCH (tryb awaryjny 19/07 ~22:00 - handoff Fable 5 -> Opus 4.8)
 
+DECYZJE PLANU (BE w roli Managera, 22:30 - Manager Opus 4.7 milczal, Tomasz zarzadzil
+decyzje; pelne uzasadnienie: docs/cm/DECYZJA_BE_19072026_plan_kolejki.md): P1 kolejnosc
+1-4 POTWIERDZONA; P2 piaty build = SOP Faza 3 LinkedIn buyer-lane (szosty = adapter X
+Articles); P3 X: kadencja zostaje, ZERO budow pod wzrost X do 2 tyg. baseline z kolektora,
+tania dzwignia = comment-radar na postach ICP (zbudowany); P4 Stage 0-1 potwierdzone.
+
 Kazdy build = NOWE okno Cowork (Opus 4.8), DWA prompty: (1) linijka wywolania z briefu,
 (2) ewentualne doprecyzowanie/tap. Sesje SEKWENCYJNIE na sb-work (protokol). Kolejnosc:
 
