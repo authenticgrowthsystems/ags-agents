@@ -85,3 +85,17 @@ docs/research/x_metrics_19072026/x_cost_scenarios.txt.
 Raport docs/cm/RAPORT_do_Managera_<data>_kolektor_x.md + masterprompt + pamiec + STATUS tu.
 
 STATUS = READY-BILLING (19/07 21:30): billing skonfigurowany i udowodniony (sekcja 5 pkt 1) - build moze startowac od sondy. Wywolanie: @docs/RESUME_MASTERPROMPT_19072026.md @docs/briefs/BRIEF_KOLEKTOR_METRYK_X_19072026.md zbuduj
+
+STATUS = CODE-DONE (19/07 pozno wieczorem, galaz build/kolektor-x): kod kompletny +
+testy lokalne 16/16 PASS (podpis OAuth1 zgodny z zywym wektorem docs.x.com, mapowanie
+metryk, paginacja, twardy stop 500). Zero deployu/psql/n8n (tryb rownolegly - zgodnie
+z sekcja 0). Pliki: cm-agent/app/x_collector.py (nowy), worker.py (szew
+_x_collector_tick w petli), reports.py (galaz x_owned_reads -> merge snapshotow z DB,
+koniec return 0), cm-agent/db/025_x_post_metric_snapshots.sql (nowy) + SCHEMA_ags_crd.md,
+cm-agent/tests/test_x_collector.py (nowy), szkielet decyzji
+docs/briefs/SZKIELET_KOLEKTOR_X_19072026.md. CZEKA NA INTEGRATORA: merge + psql 025 +
+rebuild. Potem Tomasz (kolejnosc DoD): 1) sonda
+`docker exec cm-agent python -m app.x_collector probe`, 2) Developer Console potwierdza
+klase Owned Read $0.001, 3) DOPIERO wtedy wlaczenie SQL-em z naglowka 025
+(UPDATE channels ... stats_mode='x_owned_reads') - tick rusza sam z petli workera.
+Raport per krok: docs/cm/RAPORT_do_Managera_19072026_kolektor_x.md.
