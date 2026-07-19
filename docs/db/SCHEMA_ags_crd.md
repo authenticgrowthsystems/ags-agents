@@ -141,6 +141,30 @@ system po >=10 odpowiedziach i >=80% zgodnosci w ostatnich 20 (propozycja = decy
 mode_transition, ten sam mechanizm guzikow); zmiana trybu = zawsze tapniecie Tomasza.
 Semi-auto NIE obejmuje zatwierdzania tresci do publikacji (kanon: niezatwierdzone nigdy samo).
 
+## x_post_metric_snapshots (DDL 025, build kolektora metryk X 19/07/2026)
+Dzienne snapshoty metryk WLASNYCH postow X z GET /2/users/{id}/tweets (Owned Reads
+$0.001/read, OAuth1 user context). Zbiera app/x_collector.py (tick w petli workera,
+raz na dobe UTC, guard durable po MAX(snapshot_date)). Prywatne metryki tylko <30 dni -
+snapshot utrwala je zanim znikna z API.
+
+| kolumna | typ |
+|---|---|
+| id | BIGSERIAL PK |
+| brand_id / channel | VARCHAR(50) / VARCHAR(40) default 'x' |
+| tweet_id | VARCHAR(30); UNIQUE (tweet_id, snapshot_date) - idempotencja doby |
+| snapshot_date | DATE default dzien UTC |
+| observed_at | TIMESTAMPTZ default NOW() |
+| created_at_x | TIMESTAMPTZ (created_at posta z API) |
+| public_metrics / non_public_metrics / organic_metrics | JSONB (namespaces API 1:1) |
+| raw | JSONB (caly obiekt tweeta z odpowiedzi) |
+
+Indeksy: idx_xpms_tweet (tweet_id, snapshot_date DESC), idx_xpms_brand_date (brand_id,
+snapshot_date DESC). Konsument: reports.refresh_metrics (stats_mode 'x_owned_reads') -
+czyta NAJNOWSZY snapshot per tweet_id i merguje do published_posts.engagement_metrics
+(match post_id=tweet_id, source 'x_api', ZERO odczytow platnych przy raportach).
+Followers dziennie: GET /2/users/me -> channel_metrics_daily (source 'x_api').
+Wlaczenie celu = UPDATE channels.config.stats_mode (SQL w naglowku 025) PO sondzie.
+
 ## TODO (rozszerzenie dokumentacji schematu)
 Pełny `pg_dump --schema-only` do zrzucenia i dopisania tu dla POZOSTAŁYCH tabel bazowych
 (post_queue, task_queue, published_posts, contacts, engagement_log, inspirations, channels,
