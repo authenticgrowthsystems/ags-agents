@@ -201,13 +201,30 @@ def plan_text(brand_id="AGS"):
     return "\n".join(lines).strip()
 
 
-def build_plan(brand_id="AGS", days=7):
-    """Zbuduj propozycje planu (LLM tier 'planner', wymuszone narzedzie) -> INSERT 'proposed' -> wiadomosc."""
+def build_plan(brand_id="AGS", days=7, force=False):
+    """Zbuduj propozycje planu (LLM tier 'planner', wymuszone narzedzie) -> INSERT 'proposed' -> wiadomosc.
+    force=False (cron nd 20:15): NIE dubluj - gdy nadchodzacy tydzien ma juz istotne pokrycie
+    (plan zatwierdzony recznie), cron melduje i odpuszcza. Incydent 19/07: cron zbudowal druga
+    propozycje 3h po recznym zatwierdzeniu planu tygodnia. Rozmowa ('zaplanuj tydzien') = force=True."""
     brand = load_brand(brand_id)
     model, tier, source = tasks.model_for("planner")
     now = datetime.datetime.now(WARSAW)
     start = (now + datetime.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
     end = start + datetime.timedelta(days=days)
+    if not force:
+        covered = (db.fetchone(
+            """SELECT COUNT(*) AS n FROM content_items
+               WHERE brand_id=%s AND status IN ('proposed','planned','needs_research','drafting',
+                                                'needs_approval','approved','dispatching')
+                 AND scheduled_for >= %s AND scheduled_for < %s""", (brand_id, start, end)) or {}).get("n") or 0
+        if covered >= 10:
+            chat = _admin_chat()
+            if chat:
+                _tg_send(chat, f"🗓 Cron planera: nadchodzacy tydzien ma juz {covered} zaplanowanych "
+                               f"pozycji - NIE dubluje planu. Chcesz dodatkowa propozycje? Napisz "
+                               f"\"zaplanuj tydzien\".")
+            print(f"[planner] cron skip: {covered} items already cover the window", flush=True)
+            return 0
     recent = content_memory.get_published(brand_id, days_ago=14, limit=25)
     recent_txt = "\n".join(f"- {(p['content'] or '')[:80]}" for p in recent) or "(brak)"
     strat = brand.get("strategy") or {}

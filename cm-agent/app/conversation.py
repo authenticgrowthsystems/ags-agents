@@ -471,7 +471,8 @@ TOOL_TARGET_UPDATE = {
 
 def _plan_build_async():
     import threading
-    threading.Thread(target=planner.build_plan, args=("AGS",), daemon=True).start()
+    # rozmowa = jawna wola Tomasza -> force=True (guard antydublowy dotyczy TYLKO crona nd 20:15)
+    threading.Thread(target=planner.build_plan, args=("AGS",), kwargs={"force": True}, daemon=True).start()
     return "🗓 Buduje propozycje planu - przyjdzie osobna, ponumerowana wiadomoscia za chwile."
 
 
