@@ -246,7 +246,9 @@ def generate_image_prompt(brand, master_theme, canonical_body, hint, guidance=No
     guide = f"\n\nWSKAZOWKI WLASCICIELA (priorytet, zastosuj wprost): {guidance[:400]}" if guidance else ""
     brand_id = (brand or {}).get("brand_id") or "AGS"
     resp = client().messages.create(
-        model=model, max_tokens=700, thinking={"type": "disabled"},
+        # 19/07: 700 ucinalo prompt w polowie listy zakazow (Sonnet pisze ~400 slow mimo instrukcji
+        # 150-250; guzik 📋 Prompt wysylal kikut konczacy sie "Strictly forbidden:") - zapas 1500
+        model=model, max_tokens=1500, thinking={"type": "disabled"},
         messages=[{"role": "user", "content":
                    "Napisz JEDEN szczegolowy prompt (po angielsku, 150-250 slow) dla generatora obrazow "
                    "gpt-image do grafiki social media klasy PREMIUM, SCISLE w kanonie wizualnym marki "
