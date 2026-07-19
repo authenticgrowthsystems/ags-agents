@@ -110,7 +110,20 @@ PLAN DNIA 19/07 - kod DONE (sesja dnia, commity 30376c3/77b2251/b20a191/576a832)
 [4] BRAMKA TEMATOW: zrodla=FILARY+ICP, meta o wlasnym systemie max 1/tydz (prompt+twardy
     regex, test 6/6 incydentu, 0 FP), limit planu 20 (_enforce_plan_cap), gap-filler na tym
     samym budzecie. Brief: BRIEF_BRAMKA_TEMATOW_19072026.
-CZEKA NA TOMASZA: psql 023+024, SQL held, push+rebuild, tap-testy, "zaplanuj tydzien" z CM.
+WIECZOR 19/07 - WSZYSTKO POWYZSZE LIVE (3 rebuildy, tap-testy PASSED): import xlsx E2E
+(28 dni w channel_metrics_daily, PROFIL w raportach), held sprzatniety (SQL wg dowodu),
+NOWY PLAN zatwierdzony (23 pozycje pod ICP, bramka dziala). Fixy z tapow: pusty plan melduje
+(REGULA PRAWDY w planerze), cap wypycha KONIEC tygodnia (nie poniedzialek), okno LI 16:00-18:00
++ przesuniete sloty, humanize_slot (ludzkie minuty +/-15, nigdy kwadrans), karty po decyzji
+NA DOL czatu, Media bez floodu (galeria na zadanie mgal), gpt-image-2 (docs-first) + guzik
+📋 Prompt (media[].image_prompt), dokumenty .md/.txt -> rozmowa agenta (document_text + /docmsg).
+TASKI POPRZEDNIEJ SESJI 3/3: legacy X OFF od 25/06 (dowod - zero podwojnych publisherow);
+dokumenty obsluzone; Voice Bible zderzenie GOTOWE (docs/cm/ZDERZENIE_VOICE_BIBLE_19072026.md:
+sprzecznosc walutowa Notion s.9 vs kanon s.15; rekomendacja brand_config=SSOT + voice_dna_core
++ mirror) - CZEKA NA DECYZJE TOMASZA guzikami. INCYDENTY dnia z lekcjami: CM "Zrobione" bez
+target_update (test prawdy: config bez paragonu ⚙️ = niewykonane), duplikacja tezy 11/07
+(reguly stylu #11/#12 zapisane trwale z paragonami). Raport dnia:
+docs/cm/RAPORT_do_Managera_19072026_zamkniecie_dnia.md.
 RESEARCH X SKONSUMOWANY: 3 raporty zbiezne -> Owned Reads $0.001, GET /2/users/{id}/tweets,
 OAuth1 user context dziala, ~$4.50/mies; brief buildu: BRIEF_KOLEKTOR_METRYK_X_19072026 (READY).
 

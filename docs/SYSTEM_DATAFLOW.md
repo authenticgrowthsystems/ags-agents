@@ -195,6 +195,30 @@ agentow do PostgreSQL; Notion odbija.
 
 ---
 
+## G. Dzien 19/07/2026 - kanon publikacji + metryki + eskalacja (co gdzie zapisane)
+
+**Kanon 19/07:** zatwierdzone publikuje sie ZAWSZE; niezatwierdzone NIGDY samo
+(_emergency_promote USUNIETY z worker.py; >24h ciszy = decyzja 'stale_approval' guzikami).
+
+| Przeplyw | Droga | Zapis |
+|---|---|---|
+| Metryki LinkedIn (xlsx) | Telegram dokument .xlsx -> HITL galaz document_xlsx -> Doc Secret -> Doc Metrics Fire -> POST /metrics/xlsx -> app/metrics_import.py (parser pozycyjny, locale-odporny) | `channel_metrics_daily` (dzienne; DDL 023), `channel_audience_snapshots` (demografia), merge per-post do `published_posts.engagement_metrics` (match URN); paragon na czat |
+| Raporty subagenta | reports._profile_lines czyta channel_metrics_daily | sekcja PROFIL w raporcie dziennym/tygodniowym (>3 dni bez danych = prosba o eksport) |
+| Decyzje ustrukturyzowane | tool escalate_decision / decisions.ask -> wiadomosc z guzikami dec:<id>:<key> -> HITL galaz dec: -> Dec Secret -> Dec Fire -> POST /decnav -> decisions.handle | `agent_decisions` + `decision_modes` (DDL 024) + wpis `agent_learning_log`; paragon nowa wiadomoscia; progi 10 odp./80% zgody -> propozycja semi-auto (mode_transition, tap Tomasza) |
+| Watcher ciszy | worker._stale_approval_watch (petla) | decyzja stale_approval (Pokaz karte/Odrzuc/Przypomnij jutro), throttle w agent_decisions |
+| Bramka tematow | planner (prompt: FILARY+ICP pierwsze, meta licznik) + twardy regex _meta_like + _enforce_plan_cap(20, wypycha NAJDALSZE sloty) + gap-filler na tym samym budzecie | odrzucenia RAPORTOWANE w wiadomosci planu; pusty plan NIGDY cichy (lista [meta]/[cel]/[slot]) |
+| Ludzkie minuty | slots.humanize_slot przy KAZDYM wpisie slotu do post_queue (stage_variant + assign_if_needed) | pq = czas +/-15 min bez kwadransow; content_items = czysty slot planu (roznica ZAMIERZONA) |
+| Dokumenty tekstowe | Telegram .md/.txt <=120KB -> HITL galaz document_text -> POST /docmsg -> conversation.handle_document | tresc jako [DOKUMENT: nazwa] do rozmowy aktywnego agenta (user_agent_state) |
+| Grafika | gpt-image-2 (bump z image-1, docs-first) + prompt Sonneta zapamietywany w media[].image_prompt; guzik karty 📋 Prompt wysyla go do skopiowania (zewnetrzny generator -> ➕ Media) | media jsonb w content_items/post_queue |
+| UX kart | po decyzji nastepna karta NOWA wiadomoscia na dole (card_bottom); ➕ Media bez floodu galeria (mgal na zadanie) | - |
+
+Kolektor X: sciezka WYBRANA (Owned Reads $0.001, GET /2/users/{id}/tweets, OAuth1) -
+docs/briefs/BRIEF_KOLEKTOR_METRYK_X_19072026.md (build = osobna sesja; DDL 025).
+Voice Bible: zderzenie Notion vs brand_config -> docs/cm/ZDERZENIE_VOICE_BIBLE_19072026.md
+(sprzecznosc walutowa; rekomendacja brand_config=SSOT + voice_dna_core + mirror).
+
+---
+
 ## D. Do udokumentowania dalej
 - [x] Researcher LIVE: diagram graficzny (`docs/researcher-dataflow.svg`) + 3 adaptery w repo (`n8n-workflows/researcher/`) + deploy/README.
 - [ ] OpenAI DR + Manus adaptery (fast-follow) - dopisać gdy zbudowane (+ do `DEPLOYED_ADAPTERS`).
