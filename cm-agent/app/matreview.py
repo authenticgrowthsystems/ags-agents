@@ -302,6 +302,9 @@ def _card(item_id=None, brand_id=None, full=False):
     med = f"\n🖼 zalaczniki: {n_media}" if n_media else ""
     if hint:
         med += f"\n🎨 propozycja wizualu: {hint[:220]}"
+    dup = next((m.get("text") for m in media_all if (m or {}).get("kind") == "dup_warning"), None)
+    if dup:
+        med += f"\n⚠️ DUPLIKACJA: {dup[:250]}"
     if not n_media:
         med += "\n➕ dodasz: wyslij zdjecie botowi i napisz 'dolacz ostatnie zdjecie'"
     brand_hdr = f"   ·   🏷 {it_brand}" if it_brand != "AGS" else ""

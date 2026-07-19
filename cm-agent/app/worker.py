@@ -214,9 +214,20 @@ def _draft(item):
     try:
         hint = generate.generate_media_hint(brand, canonical, content_item_id=item["id"])
         media = [m for m in (item.get("media") or [])
-                 if (m or {}).get("kind") not in ("suggestion",) and not str((m or {}).get("kind", "")).startswith("review_")]
+                 if (m or {}).get("kind") not in ("suggestion", "dup_warning") and not str((m or {}).get("kind", "")).startswith("review_")]
         if hint:
             media.append({"kind": "suggestion", "text": hint})
+        # BRAMKA DUPLIKACJI (kanon 19/07): canonical vs OPUBLIKOWANE (30 dni, pgvector) -> ostrzezenie
+        # na karcie. NIE blokuje - decyzja ZAWSZE u Tomasza. Bez klucza/dopasowania = brak flagi.
+        try:
+            from . import content_memory
+            hit = content_memory.dup_check(canonical, item["brand_id"])
+            wtext = content_memory.dup_warning_text(hit)
+            if wtext:
+                media.append({"kind": "dup_warning", "text": wtext})
+                print(f"[cm] dup_warning on {item['id']}: {wtext}", flush=True)
+        except Exception:
+            traceback.print_exc()  # bramka informacyjna nie moze wywrocic generacji
         # 10/07: sugestia typu GRAFIKA -> obraz generuje sie od razu (karta przychodzi z grafika)
         item["canonical_body"] = canonical
         media = _auto_generate_image(item, brand, hint, media)
