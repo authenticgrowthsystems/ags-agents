@@ -477,34 +477,45 @@ def handle(payload, wake_event=None):
                               "caption": f"🖼 Zalacznik: {(row or {}).get('master_theme', '')[:120]}"})
         return
     if action == "madd":
-        # v9 (feedback 06/07): ➕ Media = GALERIA WYBORU - album ostatnich zdjec ze schowka
-        # (ponumerowane) + guziki [1..N] / [Wyslij nowe] / [Anuluj]; okno trybu 10 min z auto-wyjsciem
+        # v10 (feedback Tomasza 19/07: 'wyswietlanie szesciu ostatnich jest bez sensu'): ➕ Media
+        # = OD RAZU tryb "wyslij zdjecie, dopne automatycznie"; galeria schowka TYLKO na zadanie
+        # guzikiem (mgal). Okno trybu 10 min z auto-wyjsciem bez zmian.
+        row = db.fetchone("SELECT master_theme FROM content_items WHERE id=%s", (arg,))
+        n_photos = (db.fetchone(
+            "SELECT COUNT(*) AS n FROM inspirations WHERE metadata->'media'->>'file_id' IS NOT NULL") or {}).get("n") or 0
+        _state_set("cm_pending_madd", {"item_id": str(arg),
+                                       "ts": datetime.datetime.now(WARSAW).isoformat()})
+        kb_rows = []
+        if n_photos:
+            kb_rows.append([{"text": f"🖼 Pokaz ostatnie ze schowka ({min(n_photos, 6)})",
+                             "callback_data": f"matnav:mgal:{arg}"}])
+        kb_rows.append([{"text": "✖ Anuluj", "callback_data": "matnav:mcancel:-"}])
+        _tg("sendMessage", {"chat_id": chat_id,
+                            "text": f"➕ Wyslij mi teraz zdjecie (zwykla wiadomosc z foto) - dopne je "
+                                    f"automatycznie do:\n\"{(row or {}).get('master_theme', '')[:150]}\"\n"
+                                    f"(tryb zamknie sie sam po 10 min)",
+                            "reply_markup": {"inline_keyboard": kb_rows}})
+        return
+    if action == "mgal":
+        # galeria schowka NA ZADANIE (v10): album ostatnich 6 + guziki wyboru numeru
         row = db.fetchone("SELECT master_theme FROM content_items WHERE id=%s", (arg,))
         photos = db.fetchall(
             """SELECT id, content, metadata FROM inspirations
                WHERE metadata->'media'->>'file_id' IS NOT NULL ORDER BY created_at DESC LIMIT 6""")
-        _state_set("cm_pending_madd", {"item_id": str(arg),
-                                       "ts": datetime.datetime.now(WARSAW).isoformat()})
-        if photos:
-            album = [{"type": ("video" if p["metadata"]["media"].get("kind") == "video" else "photo"),
-                      "media": p["metadata"]["media"]["file_id"],
-                      "caption": f"{i + 1}. {(p.get('content') or '')[:80]}"}
-                     for i, p in enumerate(photos)]
-            _tg("sendMediaGroup", {"chat_id": chat_id, "media": album})
-            pick_row = [{"text": str(i + 1), "callback_data": f"matnav:mpick:{arg}:{p['id']}"}
-                        for i, p in enumerate(photos)]
-            kb = {"inline_keyboard": [pick_row,
-                  [{"text": "📤 Wyslij nowe", "callback_data": f"matnav:mnew:{arg}"},
-                   {"text": "✖ Anuluj", "callback_data": "matnav:mcancel:-"}]]}
-            _tg("sendMessage", {"chat_id": chat_id,
-                                "text": f"➕ Media dla: \"{(row or {}).get('master_theme', '')[:120]}\"\n"
-                                        f"Wybierz numer z galerii wyzej albo wyslij nowe zdjecie "
-                                        f"(tryb zamknie sie sam po 10 min).", "reply_markup": kb})
-        else:
-            _tg("sendMessage", {"chat_id": chat_id,
-                                "text": f"➕ Schowek bez zdjec. Wyslij mi TERAZ zdjecie - przypne je do:\n"
-                                        f"\"{(row or {}).get('master_theme', '')[:150]}\"\n"
-                                        f"(tryb zamknie sie sam po 10 min; 'anuluj' = wycofaj)."})
+        if not photos:
+            _tg("sendMessage", {"chat_id": chat_id, "text": "Schowek bez zdjec - wyslij zdjecie wprost."})
+            return
+        album = [{"type": ("video" if p["metadata"]["media"].get("kind") == "video" else "photo"),
+                  "media": p["metadata"]["media"]["file_id"],
+                  "caption": f"{i + 1}. {(p.get('content') or '')[:80]}"}
+                 for i, p in enumerate(photos)]
+        _tg("sendMediaGroup", {"chat_id": chat_id, "media": album})
+        pick_row = [{"text": str(i + 1), "callback_data": f"matnav:mpick:{arg}:{p['id']}"}
+                    for i, p in enumerate(photos)]
+        kb = {"inline_keyboard": [pick_row, [{"text": "✖ Anuluj", "callback_data": "matnav:mcancel:-"}]]}
+        _tg("sendMessage", {"chat_id": chat_id,
+                            "text": f"Wybierz numer dla: \"{(row or {}).get('master_theme', '')[:120]}\" "
+                                    f"(albo po prostu wyslij nowe zdjecie).", "reply_markup": kb})
         return
     if action == "mpick":
         # wybor z galerii: matnav:mpick:<item_id>:<inspiration_id>
