@@ -19,6 +19,23 @@ def active_targets(brand_id, target_channels):
     return [r for r in rows if r.get("supervised") and r["status"] in ("active", "draft")]
 
 
+def _split_paragraphs(text, target=500):
+    """Mechaniczne ciecie dlugiego wariantu X na samodzielne posty (strażnik 19/07): pakuje
+    cale akapity do czesci ~target znakow (nigdy nie tnie w pol zdania/akapitu; pojedynczy
+    akapit dluzszy niz target zostaje w calosci jako wlasna czesc)."""
+    paras = [p.strip() for p in (text or "").split("\n\n") if p.strip()]
+    parts, cur = [], ""
+    for p in paras:
+        if cur and len(cur) + 2 + len(p) > target:
+            parts.append(cur)
+            cur = p
+        else:
+            cur = (cur + "\n\n" + p) if cur else p
+    if cur:
+        parts.append(cur)
+    return parts or [text]
+
+
 def stage_variant(item, channel_row, variant_text):
     """Eager staging: write the variant as a post_queue row in 'review' (shown at the HITL gate).
     Media (etap 1, 06/07): zalaczniki materialu jada do wiersza kolejki - publisher wgrywa je przy publikacji.
@@ -26,8 +43,15 @@ def stage_variant(item, channel_row, variant_text):
     kazdy z KOLEJNYM wolnym slotem siatki dnia - samodzielne posty, nie nitka, nie kloc."""
     import json
     from . import slots as _slots
-    if channel_row["channel"] == "x" and "===POST===" in (variant_text or ""):
-        parts = [p.strip() for p in variant_text.split("===POST===") if p.strip()]
+    if channel_row["channel"] == "x" and ("===POST===" in (variant_text or "")
+                                          or len(variant_text or "") > 600):
+        # STRAZNIK 19/07 (Tomasz: 'napraw tak, zeby nie trzeba bylo wracac'): dlugi wariant X
+        # bez znacznikow NIE wychodzi jako kloc - tniemy mechanicznie po akapitach na serie
+        # samodzielnych postow (kanon #90; grafika TYLKO przy czesci 1 - patrz i == 0 nizej).
+        if "===POST===" in (variant_text or ""):
+            parts = [p.strip() for p in variant_text.split("===POST===") if p.strip()]
+        else:
+            parts = _split_paragraphs(variant_text)
         ids = []
         for i, part in enumerate(parts):
             # kazda czesc = KOLEJNY wolny slot (bez dziedziczenia slotu materialu - czesc 1
