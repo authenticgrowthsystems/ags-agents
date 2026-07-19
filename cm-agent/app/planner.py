@@ -40,9 +40,12 @@ def _meta_like(theme):
 
 
 def _meta_week_count(brand_id):
+    """Zuzycie budzetu meta = to co REALNIE idzie/poszlo w swiat (fix 19/07 po pustym planie:
+    stare drafty intake z limbo zawyzaly licznik; draft/brief nie konsumuja budzetu)."""
     rows = db.fetchall(
         """SELECT master_theme FROM content_items
-           WHERE brand_id=%s AND status NOT IN ('rejected','archived') AND created_at > NOW() - interval '7 days'""",
+           WHERE brand_id=%s AND status NOT IN ('rejected','archived','draft','brief')
+             AND created_at > NOW() - interval '7 days'""",
         (brand_id,))
     return sum(1 for r in rows if _meta_like(r["master_theme"]))
 
@@ -218,7 +221,13 @@ def build_plan(brand_id="AGS", days=7):
         f"FILARY/ICP: {json.dumps({'audience': strat.get('target_audience'), 'pillars': strat.get('content_pillars'), 'topics': strat.get('core_topics')}, ensure_ascii=False)[:600]}\n\n"
         f"BRAMKA META (twarda): tematy o NASZYM WLASNYM systemie publikacji (kadencja, sloty, kolejka, "
         f"luki, wlasne narzedzia CM, 'moj agent powiedzial...') - limit {META_MAX_WEEK}/tydzien, "
-        f"w tym tygodniu zostalo: {meta_left}. DOWOD z metryk: meta-posty robia 2-44 wyswietlen, "
+        f"w tym tygodniu zostalo: {meta_left}. "
+        + ("UWAGA: budzet WYCZERPANY - ZERO tematow o naszym systemie/procesie/build-in-public w tym planie; "
+           "kazdy taki temat zostanie automatycznie ODRZUCONY przez filtr. Przyklady ZAKAZANE teraz: "
+           "'luka w kadencji jako sygnal', 'slot bez tresci', 'subagent jako czujnik', 'obserwowalnosc "
+           "naszego systemu'. Kazdy temat MUSI dotyczyc problemu KLIENTA (ICP), nie naszego procesu. "
+           if meta_left <= 0 else "")
+        + f"DOWOD z metryk: meta-posty robia 2-44 wyswietlen, "
         f"narracja biznesowa dla ICP 2331 - planuj dla ODBIORCY, nie o nas samych.\n\n"
         f"ZARYS MIESIACA (dotychczasowy): {_month_outline(brand_id)[:500] or '(brak - zaproponuj)'}\n\n"
         f"SCHOWEK (pomysly czekajace - bierz najlepsze POD FILARY, pomijaj meta o systemie ponad limit):\n{_schowek_text(brand_id)}\n\n"
@@ -239,6 +248,10 @@ def build_plan(brand_id="AGS", days=7):
     tasks.log_task("planner", tier, model, source, getattr(resp, "usage", None))
     tu = next((b for b in resp.content if getattr(b, "type", "") == "tool_use" and b.name == "emit_plan"), None)
     if tu is None:
+        # REGULA PRAWDY (fix 19/07 po cichym pustym planie): kazde wyjscie planera MELDUJE
+        _tg_send(_admin_chat(), "⚠️ Planer nie zwrocil planu (model nie wywolal emit_plan). Sprobuj "
+                                "'zaplanuj tydzien' jeszcze raz.")
+        print("[planner] emit_plan missing in LLM response", flush=True)
         return 0
     data = tu.input if isinstance(tu.input, dict) else {}
     items = data.get("items") or []
@@ -252,14 +265,20 @@ def build_plan(brand_id="AGS", days=7):
     n = 0
     meta_budget = max(0, META_MAX_WEEK - _meta_week_count(brand_id))
     meta_dropped = 0
+    dropped_themes = []   # jawnosc: co i dlaczego wypadlo (REGULA PRAWDY, fix 19/07)
+    invalid_dropped = 0
     for it in items:
         theme = str(it.get("theme") or "").strip()
         targets = [t for t in (it.get("targets") or []) if t in valid_channels]
         if not theme or not targets:
+            invalid_dropped += 1
+            if theme:
+                dropped_themes.append(f"[cel] {theme[:70]}")
             continue
         if _meta_like(theme):  # twarda bramka za promptem (LLM bywa glucha na limity)
             if meta_budget <= 0:
                 meta_dropped += 1
+                dropped_themes.append(f"[meta] {theme[:70]}")
                 continue
             meta_budget -= 1
         try:
@@ -267,6 +286,8 @@ def build_plan(brand_id="AGS", days=7):
             if slot.tzinfo is None:
                 slot = slot.replace(tzinfo=WARSAW)
         except (ValueError, TypeError):
+            invalid_dropped += 1
+            dropped_themes.append(f"[slot] {theme[:70]}")
             continue
         if str(it.get("format") or "post") == "article":
             theme = "[ARTYKUL] " + theme
@@ -277,6 +298,8 @@ def build_plan(brand_id="AGS", days=7):
         n += 1
     _save_month_outline(brand_id, str(data.get("month_outline") or ""))
     capped = _enforce_plan_cap(brand_id)
+    print(f"[planner] llm_items={len(items)} inserted={n} meta_dropped={meta_dropped} "
+          f"invalid={invalid_dropped} capped={capped}", flush=True)
     chat = _admin_chat()
     if chat and n:
         outline = str(data.get("month_outline") or "").strip()
@@ -291,6 +314,13 @@ def build_plan(brand_id="AGS", days=7):
                  "\n\nSteruj guzikami ponizej albo rozmowa: \"wywal 3\", \"przesun 2 na czwartek 14:00\", "
                  "\"zamien 5 na temat...\".")
         send_plan_controls(chat, brand_id)
+    elif chat:
+        # REGULA PRAWDY (fix 19/07): pusty plan NIGDY nie jest cichy - pokaz co wypadlo i dlaczego
+        drops = "\n".join(f"- {t}" for t in dropped_themes[:12]) or "(model nie dal zadnych pozycji)"
+        _tg_send(chat, f"⚠️ Plan wyszedl PUSTY: model dal {len(items)} pozycji, bramka meta odrzucila "
+                       f"{meta_dropped}, nieprawidlowe (cel/slot) {invalid_dropped}.\nOdrzucone:\n{drops}\n\n"
+                       f"Powiedz 'zaplanuj tydzien' jeszcze raz - prompt przy wyczerpanym budzecie meta "
+                       f"wymusza tematy dla ICP zamiast o systemie.")
     return n
 
 
