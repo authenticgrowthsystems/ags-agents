@@ -58,4 +58,9 @@ SQL (C) + push + rebuild + 2 tap-testy.
 
 Raport docs/cm/RAPORT_do_Managera_<data>_porzadki.md + masterprompt + pamiec + STATUS tu.
 
-STATUS = READY (brief 19/07, tryb awaryjny - handoff na Opus 4.8)
+STATUS = ZBUDOWANE (19/07 noc, BE-PORZADKI na build/porzadki). (A) route: _USTAW_OKNO_RE +
+_USTAW_KEY_RE z allowlista _CONFIG_KEYS w conversation.handle przed LLM -> _target_update ->
+paragon ⚙️; nieznany klucz przy istniejacym celu = szczera odmowa, reszta do LLM. (B) matnav
+'no' dodatkowo rejectuje wiersze post_queue materialu. py_compile OK, testy regexow 14/14
+PASS. (C) SQL czeka na SSH (w raporcie). CZEKA: integrator (merge+deploy) + 2 tap-testy.
+Raport: docs/cm/RAPORT_do_Managera_19072026_porzadki.md.
