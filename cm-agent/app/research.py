@@ -56,3 +56,54 @@ def research_context(job_id):
     if opts:
         parts.append("Options:\n" + "\n".join(f"- {o['option_label']}: {o['description']}" for o in opts))
     return "\n\n".join(parts)
+
+
+# --- source-linked grounding (BE-SWIAT 19/07: niedzielny podklad wymaga LINKOWANYCH zrodel) ---
+def job_status(job_id):
+    """Status joba Researchera z research_jobs (do pollingu podkladu; None gdy brak)."""
+    if not job_id:
+        return None
+    r = db.fetchone("SELECT status FROM research_jobs WHERE job_id=%s", (job_id,))
+    return (r or {}).get("status")
+
+
+def _clean_url(u):
+    """Artefakt normalizacji Researchera: czesc evidence trafila z prefiksem 'https://arxiv.org/abs/web:'
+    doklejonym przed prawdziwym URL-em. Odetnij go; prawdziwe arxiv (arxiv.org/abs/<id>) zostaw."""
+    import re
+    if not u:
+        return u
+    return re.sub(r'^https?://arxiv\.org/abs/web:(https?://)', r'\1', u.strip())
+
+
+def claims_with_sources(job_id, limit=10, per_claim_urls=3):
+    """REGULA PRAWDY: fakt = claim + jego zrodla (URL-e). Zwraca liste
+    {claim, urls} dla ukonczonego joba. supporting_evidence to text[] (nie uuid[] jak w
+    spec 23/06 - zweryfikowane na zywej bazie 19/07), stad join po evidence_id::text."""
+    if not job_id:
+        return []
+    rows = db.fetchall(
+        """SELECT c.claim_text,
+                  (SELECT array_agg(DISTINCT e.source_url)
+                   FROM evidence_items e
+                   WHERE e.evidence_id::text = ANY(c.supporting_evidence)
+                     AND e.source_url IS NOT NULL AND e.source_url <> '') AS urls
+           FROM claims c
+           WHERE c.job_id=%s
+           ORDER BY c.confidence DESC NULLS LAST
+           LIMIT %s""",
+        (job_id, limit))
+    out = []
+    for r in rows:
+        urls = [_clean_url(u) for u in (r.get("urls") or []) if u][:per_claim_urls]
+        out.append({"claim": r["claim_text"], "urls": urls})
+    return out
+
+
+def grounding_with_sources(job_id, limit=10):
+    """Blok tekstowy do syntezy: kazdy claim z linkami zrodel (zeby model MOGL zacytowac zrodlo)."""
+    parts = []
+    for c in claims_with_sources(job_id, limit=limit):
+        src = ("  [zrodla: " + " | ".join(c["urls"]) + "]") if c["urls"] else "  [zrodlo: brak URL]"
+        parts.append(f"- {c['claim']}\n{src}")
+    return "\n".join(parts)
