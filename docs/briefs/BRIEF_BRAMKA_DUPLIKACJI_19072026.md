@@ -62,4 +62,32 @@ Push + rebuild + jeden tap-test (karta z ⚠️).
 
 Raport docs/cm/RAPORT_do_Managera_<data>_dedup.md + masterprompt + pamiec + STATUS tu.
 
-STATUS = READY (brief 19/07, tryb awaryjny - handoff na Opus 4.8)
+STATUS = BUILT-LOCAL (Opus 4.8, galaz build/dedup, commit czeka na INTEGRATORA)
+
+## 7. WYKONANIE (BE-DEDUP, 19/07, Opus 4.8)
+
+Zbudowane na build/dedup (worktree build-dedup), zero deployu/psql/n8n zgodnie z sekcja 0.
+
+Zmiany (3 pliki KONTRAKTU):
+- cm-agent/app/content_memory.py: nowa `dup_check(text, brand_id, days=30, threshold=None)` -
+  canonical vs published_posts z OSTATNICH 30 dni (pgvector cosine, filtr po published_at -
+  dlatego osobna od find_similar, ktora daty ignoruje). Prog `DUP_THRESHOLD=0.85` z overridem
+  `brand_config['cm_dup_threshold']` (strojenie bez rebuilda, zero DDL). Reuzywa `embed()` +
+  `_backfill_embeddings()`. Degradacja bez crashy: brak klucza/embeddingu/dopasowania -> None.
+  + czysta `dup_warning_text(hit)` -> descriptor 'podobienstwo 0.92 do "<head>" [x, 11/07]'.
+- cm-agent/app/worker.py `_draft`: po compliance.enforce woła dup_check(canonical); trafienie
+  -> media.append({kind:'dup_warning', text:...}) (istniejacym UPDATE media, zero DDL). Filtr
+  czyszczacy media przy regeneracji ('Inny kat') rozszerzony o 'dup_warning' (stare ostrzezenie
+  nie przezywa). try/except - bramka informacyjna NIE wywraca generacji.
+- cm-agent/app/matreview.py `_card`: po propozycji wizualu linia '⚠️ DUPLIKACJA: <text>' gdy
+  media ma kind='dup_warning'.
+
+ZERO blokowania, zero auto-odrzucania, zero zmian statusow - decyzja ZAWSZE u Tomasza (kanon 19/07).
+
+Testy: py_compile 3/3 OK. Test lokalny czystej funkcji dup_warning_text 4/4 PASSED (None-hit,
+pelne trafienie z data, brak daty, newline w head -> spacja; head <= 80 zn.).
+
+DLA INTEGRATORA: brak DDL (descriptor w istniejacej content_items.media). Po deployu tap-test
+wg DoD: material o tezie z ostatnich <=30 dni -> karta z linia '⚠️ DUPLIKACJA'. Opcjonalnie
+`/set cm_dup_threshold 0.85` do strojenia progu na zywo. Wymaga app_secrets.openai_api_key
+(juz jest - embeddingi archiwum LIVE).

@@ -87,6 +87,63 @@ def find_similar(text, brand_id="AGS", top_n=5):
     return rows
 
 
+DUP_THRESHOLD = 0.85  # cosine; strojenie bez rebuilda przez brand_config['cm_dup_threshold']
+DUP_WINDOW_DAYS = 30  # brief 14-30: szersze okno lapie wiecej, koszt embeddingu pomijalny
+
+
+def _dup_threshold(brand_id="AGS"):
+    row = db.fetchone(
+        "SELECT config_value FROM brand_config WHERE brand_id=%s AND config_key='cm_dup_threshold' ORDER BY version DESC LIMIT 1",
+        (brand_id,))
+    try:
+        return float((row or {}).get("config_value"))
+    except (TypeError, ValueError):
+        return DUP_THRESHOLD
+
+
+def dup_check(text, brand_id="AGS", days=DUP_WINDOW_DAYS, threshold=None):
+    """BRAMKA DUPLIKACJI (kanon 19/07): porownuje canonicala z OPUBLIKOWANYMI z ostatnich `days` dni
+    (pgvector cosine). NIE blokuje - tylko INFORMUJE. Zwraca dict najlepszego trafienia >= progu albo None.
+    Degradacja bez crashy: brak klucza/embeddingu/dopasowania -> None (material idzie dalej bez ostrzezenia).
+    Osobna od find_similar, bo filtruje po dacie publikacji (find_similar ignoruje date)."""
+    if threshold is None:
+        threshold = _dup_threshold(brand_id)
+    _backfill_embeddings(brand_id)
+    qv = embed(text)
+    if qv is None:
+        return None
+    row = db.fetchone(
+        """SELECT platform, content, topic, post_url, published_at,
+                  1 - (embedding <=> %s::vector) AS similarity
+           FROM published_posts
+           WHERE brand=%s AND embedding IS NOT NULL
+             AND published_at > NOW() - make_interval(days => %s)
+           ORDER BY embedding <=> %s::vector LIMIT 1""",
+        (_vec_literal(qv), brand_id, days, _vec_literal(qv)),
+    )
+    if not row or row.get("similarity") is None or float(row["similarity"]) < threshold:
+        return None
+    return row
+
+
+def dup_warning_text(hit):
+    """Formatuje descriptor ostrzezenia dla content_items.media (kind='dup_warning'). Czysta funkcja
+    (bez DB/API) - testowalna lokalnie. `hit` = wiersz z dup_check()."""
+    if not hit:
+        return None
+    head = (hit.get("content") or "").strip().replace("\n", " ")[:80]
+    sim = float(hit.get("similarity") or 0)
+    plat = hit.get("platform") or "?"
+    when = ""
+    pa = hit.get("published_at")
+    if pa is not None:
+        try:
+            when = f", {pa.strftime('%d/%m')}"
+        except Exception:
+            when = ""
+    return f'podobienstwo {sim:.2f} do "{head}" [{plat}{when}]'
+
+
 def suggest_adaptation(published_id, target_channel, brand_id="AGS"):
     """Propozycja adaptacji opublikowanego posta na inny kanal (tier 'variant' z routera R4).
     Zwraca tekst propozycji; do kolejki trafia dopiero przez propose_material + approve Tomasza."""
