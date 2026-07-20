@@ -286,7 +286,9 @@ def weekly_report(brand_id, channel):
 
 def run_all(kind):
     """Cron entrypoint: raport dla KAZDEGO supervised celu (open/closed: nowy wiersz channels = nowy raport)."""
-    chans = db.fetchall("SELECT brand_id, channel FROM channels WHERE supervised = true AND status IN ('active','draft')")
+    chans = db.fetchall(
+        """SELECT brand_id, channel FROM channels WHERE supervised = true AND status IN ('active','draft')
+           AND COALESCE(config->>'agent_kind','') <> 'sales'""")  # Agent Sprzedazy nie publikuje - bez raportu kanalu
     fn = daily_report if kind == "daily" else weekly_report
     done = 0
     for c in chans:

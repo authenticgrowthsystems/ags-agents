@@ -79,6 +79,7 @@ DB->Notion [sync-notion]; caly transport i zasady zmian n8n [n8n-transport].
 | Grafika | [komponenty/grafika.md](komponenty/grafika.md) | gpt-image-2, prompt Sonneta, brand_tokens/visual_canon, kanon mediow |
 | Sync Notion | [komponenty/sync-notion.md](komponenty/sync-notion.md) | mirror DB->Notion, sync_registry/page_map, drift check |
 | n8n transport | [komponenty/n8n-transport.md](komponenty/n8n-transport.md) | HITL galezie, publishery, crony, zasady PUT, patchery |
+| Agent Sprzedazy | [komponenty/agent-sprzedazy.md](komponenty/agent-sprzedazy.md) | /prospect research critical, outreach gotowce HITL, lejek sales_pipeline, sales_knowledge z embeddingami |
 
 Schemat tabel: `docs/db/SCHEMA_ags_crd.md` (tabele bazowe + kazda zmiana DDL)
 + masterprompt sekcja 2b (slowniczek najwazniejszych tabel). Migracje:

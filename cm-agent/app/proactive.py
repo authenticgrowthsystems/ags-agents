@@ -162,7 +162,9 @@ def check_gaps(brand_id="AGS"):
     """Petla workera: kazdy supervised aktywny kanal sprawdza SWOJA kadencje na dzis+jutro."""
     now = datetime.datetime.now(WARSAW)
     rows = db.fetchall(
-        "SELECT channel, config FROM channels WHERE brand_id=%s AND supervised=true AND status='active'",
+        # pas bezpieczenstwa BE-SPRZEDAWCA 20/07: cel agent_kind='sales' nigdy nie ma kadencji
+        """SELECT channel, config FROM channels WHERE brand_id=%s AND supervised=true AND status='active'
+           AND COALESCE(config->>'agent_kind','') <> 'sales'""",
         (brand_id,))
     st = _state_get("cm_gap_alerts")
     changed = False

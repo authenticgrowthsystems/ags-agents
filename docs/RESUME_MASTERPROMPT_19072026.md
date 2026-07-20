@@ -191,6 +191,21 @@ relationship_stage + icp_tier CHECK poszerzony; engagement_log.status + author_d
 WDROZENIE: merge -> psql 026 PRZED rebuildem -> rebuild cm-agent -> patch n8n -> 5 tap-testow
 DoD z briefu. Nastepny wolny DDL po tym buildzie: **027**.
 
+**BE-SPRZEDAWCA (20/07 popoludnie): ZBUDOWANY, czeka integracja.** Galaz build/sprzedawca:
+Agent Sprzedazy L1 (brief BRIEF_AGENT_SPRZEDAZY_MVP_20072026, komponent
+docs/komponenty/agent-sprzedazy.md - CZYTAJ ZAMIAST kodu): nowy agent w menu /agents przez
+wiersz channels (AGS,'sprzedaz',config.agent_kind='sales' - menu n8n buduje sie dynamicznie
+z channels, ZERO zmian wezlow menu; guardy w planner/reports/proactive/snapshot wykluczaja
+agent_kind='sales'); komendy /prospect /oferta /pipeline /add_sales_material deterministycznie
+PRZED LLM; patch przepustki: n8n-workflows/patches/hitl-sales-commands-20072026.cjs (komendy
++ .pdf<=8MB do document_text; pypdf dodany do requirements = rebuild obowiazkowy); research
+prospektow tier critical (agent_registry 'sales-agent' z 'critical'; async - wynik tickiem
+sales.tick -> synteza sygnalow buyer + notatka lejka); outreach = GOTOWIEC HITL (czysta
+wklejka osobna wiadomoscia, engagement_log 'proposed', NIC nie wysyla sie samo); DDL 027
+(sales_pipeline + sales_knowledge pgvector 1536). WDROZENIE: merge -> psql 027 PRZED
+rebuildem -> rebuild cm-agent -> patch n8n -> tap-testy DoD z briefu. Nastepny wolny DDL
+po tym buildzie: **028**.
+
 RESEARCHER NAPRAWIONY 20/07 (merge 3fd3560): web_search padal od 28/06 przez domyslne
 dynamic filtering Anthropic w web_search_20260209 (15s->110s) - fix allowed_callers:['direct']
 + koniec polykania bledow (sources/worker/Normalize) + cost_usd z usage; zywy n8n oxwcD1i...

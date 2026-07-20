@@ -96,7 +96,9 @@ def _admin_chat():
 
 def _cadence_text(brand_id):
     rows = db.fetchall(
-        "SELECT channel, config FROM channels WHERE brand_id=%s AND supervised=true AND status IN ('active','draft')",
+        # BE-SPRZEDAWCA 20/07: agent_kind='sales' (wiersz Agenta Sprzedazy w menu /agents) to NIE cel publikacji
+        """SELECT channel, config FROM channels WHERE brand_id=%s AND supervised=true
+           AND status IN ('active','draft') AND COALESCE(config->>'agent_kind','') <> 'sales'""",
         (brand_id,))
     lines = []
     for r in rows:
@@ -284,7 +286,8 @@ def build_plan(brand_id="AGS", days=7, force=False):
         except Exception:
             items = []
     valid_channels = {r["channel"] for r in db.fetchall(
-        "SELECT channel FROM channels WHERE brand_id=%s AND supervised=true AND status IN ('active','draft')", (brand_id,))}
+        """SELECT channel FROM channels WHERE brand_id=%s AND supervised=true
+           AND status IN ('active','draft') AND COALESCE(config->>'agent_kind','') <> 'sales'""", (brand_id,))}
     n = 0
     meta_budget = max(0, META_MAX_WEEK - _meta_week_count(brand_id))
     meta_dropped = 0

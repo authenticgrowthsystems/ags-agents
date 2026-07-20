@@ -272,13 +272,16 @@ def _channels_snapshot(brand_id=None):
     """Konfiguracja CELOW dla rozmowy (fix 06/07: CM nie znal okien publikacji/kadencji).
     Task #83 (12/07): CM widzi WSZYSTKIE marki (bug: hardcode AGS ukrywal cele TNM/RDC -
     12/07 10:52 CM twierdzil, ze celow TNM nie ma, a byly jako 'ready' od 04/07)."""
+    # BE-SPRZEDAWCA 20/07: agent_kind='sales' (Agent Sprzedazy) to NIE cel publikacji - poza snapshotem
     if brand_id:
         rows = db.fetchall(
-            "SELECT brand_id, channel, status, supervised, config FROM channels WHERE brand_id=%s ORDER BY channel",
+            """SELECT brand_id, channel, status, supervised, config FROM channels
+               WHERE brand_id=%s AND COALESCE(config->>'agent_kind','') <> 'sales' ORDER BY channel""",
             (brand_id,))
     else:
         rows = db.fetchall(
-            "SELECT brand_id, channel, status, supervised, config FROM channels ORDER BY brand_id, channel")
+            """SELECT brand_id, channel, status, supervised, config FROM channels
+               WHERE COALESCE(config->>'agent_kind','') <> 'sales' ORDER BY brand_id, channel""")
     lines = []
     last_brand = None
     for r in rows:
@@ -2353,11 +2356,23 @@ def handle_document(body):
         if not blob:
             _reply(chat_id, f"❌ Nie udalo sie pobrac dokumentu {file_name} z Telegrama. Wyslij ponownie.")
             return
-        if len(blob) > 120_000:
-            _reply(chat_id, f"⚠️ {file_name} ma {len(blob) // 1024}KB - za duzy na rozmowe (limit ~100KB). "
+        # BE-SPRZEDAWCA 20/07: PDF-y (materialy sprzedazowe) - ekstrakcja tekstu pypdf;
+        # limit wiekszy, bo PDF to format binarny (tekst po ekstrakcji i tak przycinamy).
+        is_pdf = file_name.lower().endswith(".pdf")
+        if len(blob) > (8_000_000 if is_pdf else 120_000):
+            _reply(chat_id, f"⚠️ {file_name} ma {len(blob) // 1024}KB - za duzy "
+                            f"(limit {'8MB dla PDF' if is_pdf else '~100KB'}). "
                             f"Przytnij albo wyslij kluczowy fragment.")
             return
-        content = blob.decode("utf-8", errors="replace").strip()
+        if is_pdf:
+            from . import sales
+            content = sales.pdf_text(blob)
+            if not content:
+                _reply(chat_id, f"❌ Nie udalo sie wyciagnac tekstu z {file_name} "
+                                f"(PDF ze skanow/obrazow?). Wyslij wersje tekstowa .md/.txt.")
+                return
+        else:
+            content = blob.decode("utf-8", errors="replace").strip()
         text = f"[DOKUMENT: {file_name}]" + (f" {caption}" if caption else "") + f"\n\n{content}"
         handle({"chat_id": chat_id, "text": text, "update_id": body.get("update_id")})
     except Exception as e:
@@ -2390,6 +2405,12 @@ def handle(update):
         _cfg = _config_route(text)
         if _cfg:
             _reply(chat_id, _cfg)
+            return
+        # BE-SPRZEDAWCA 20/07: komendy sprzedazowe (/prospect /oferta /pipeline
+        # /add_sales_material) + konsumpcja uzbrojonego materialu - deterministycznie
+        # PRZED LLM (wzorzec _config_route), niezaleznie od aktywnego agenta.
+        from . import sales
+        if sales.try_command(chat_id, text, active):
             return
         _km = _KARTY_RE.match(text)
         if _km:
@@ -2425,6 +2446,16 @@ def handle(update):
             if ans:
                 _reply(chat_id, ans)
                 return
+        if active == sales.AGENT_KEY:
+            # Agent Sprzedazy (BE-SPRZEDAWCA 20/07): wlasna petla agentowa w sales.py,
+            # NIE _subagent_handle (to nie jest kanal publikacji).
+            if _CANCEL_RE.match(text):
+                sales.clear_pending()
+                _reset_state(chat_id)
+                _reply(chat_id, "Anulowane.")
+                return
+            sales.handle_chat(chat_id, text)
+            return
         if active.startswith("subagent:"):
             if _CANCEL_RE.match(text):
                 _reset_state(chat_id)

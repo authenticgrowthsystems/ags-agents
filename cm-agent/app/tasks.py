@@ -15,6 +15,9 @@ DEFAULT_TIERS = {
     "daily_report": "haiku",    # zestawienie dzienne
     "memory_summary": "haiku",  # skrot wygasajacego watku rozmowy (pamiec dlugoterminowa, 10/07)
     "image_prompt": "sonnet",   # szczegolowy prompt graficzny premium (feedback Tomasza 10/07)
+    "sales_chat": "opus",       # Agent Sprzedazy: partner strategiczny (BE-SPRZEDAWCA 20/07)
+    "sales_outreach": "sonnet",           # personalizowany outreach w Voice Bible
+    "sales_research_summary": "sonnet",   # synteza researchu prospekta (sygnaly buyer)
 }
 
 
