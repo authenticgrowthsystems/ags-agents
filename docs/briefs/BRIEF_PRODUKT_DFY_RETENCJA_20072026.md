@@ -42,4 +42,8 @@ krzeslem; SQL aktywacji tierow (meta_status) przygotowany do decyzji Tomasza guz
 ## 5. Udzial Tomasza
 Decyzja guzikami: aktywacja Pakietow 1-3 + ostateczne kwoty; test krzeslem runbooka.
 
-## 6. Zamkniecie: raport + macierz + STATUS tu. STATUS = READY (20/07 ~13:20)
+## 6. Zamkniecie: raport + macierz + STATUS tu.
+STATUS = DONE (20/07 ~15:15, BE-PRODUKT, galaz build/produkt-dfy). Deliverables 4/4 +
+SQL aktywacji (docs/product/SQL_AKTYWACJA_PAKIETOW_PL_20072026.sql) + raport
+(docs/cm/RAPORT_do_Managera_20072026_BE_PRODUKT.md). Czeka: decyzja Tomasza guzikami
+(aktywacja Pakietow + kwoty EN) + test krzeslem runbooka + merge przez integratora.
