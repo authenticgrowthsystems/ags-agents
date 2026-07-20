@@ -88,4 +88,8 @@ psql 026 + rebuild po merge; skala stadiow relacji + tiery guzikami; 4-5 tap-tes
 Raport docs/cm/RAPORT_do_Managera_<data>_engagement_crm.md + komponent + macierz +
 masterprompt + pamiec + STATUS tu.
 
-STATUS = READY (20/07 ~12:50)
+STATUS = ZBUDOWANE (20/07, BE-ENGAGEMENT, galaz build/engagement-crm) - kod + DDL 026 +
+patch n8n (plik) + dokumentacja w commicie; czeka: merge przez integratora, psql 026 PRZED
+rebuildem, rebuild cm-agent, uruchomienie patcha n8n, 5 tap-testow DoD. Skala stadiow
+ZATWIERDZONA guzikami 20/07: cold/commented/replied/dm/offer/client + 'ghosted' (stan boczny).
+Raport: docs/cm/RAPORT_do_Managera_20072026_engagement_crm.md

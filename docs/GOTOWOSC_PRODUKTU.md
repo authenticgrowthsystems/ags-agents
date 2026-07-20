@@ -12,7 +12,7 @@ Model MVP rozwijany: rdzen dziala od dnia 1, funkcje doplywaja w cenie.
 
 | Obiekt sprzedazowy | Status | Co klient dostaje DZIS | Co dojedzie w cenie |
 |---|---|---|---|
-| **Subagent X pod nadzorem** | SPRZEDAWALNY (MVP) | plan tygodnia pod jego ICP (bramka tematow), tresci do akceptu 1 tapem, publikacja sama w ludzkich minutach, serie zamiast klocow, metryki per post (Owned Reads), raporty dzienne/tygodniowe, komentarze pod widocznosc (ze zrzutow) | samodzielne polowanie na posty do komentowania (po baseline), X Articles |
+| **Subagent X pod nadzorem** | SPRZEDAWALNY (MVP) | plan tygodnia pod jego ICP (bramka tematow), tresci do akceptu 1 tapem, publikacja sama w ludzkich minutach, serie zamiast klocow, metryki per post (Owned Reads), raporty dzienne/tygodniowe, komentarze pod widocznosc (ze zrzutow) | CRM relacji przy komentowaniu (kto, stadium relacji, intake nowych osob, przypomnienia - build 20/07 czeka na wdrozenie), samodzielne polowanie na posty do komentowania (po baseline), X Articles |
 | **Idea Bot** (lapacz pomyslow) | SPRZEDAWALNY (MVP) | pomysl tekstem/glosem/zdjeciem/wideo -> research -> seria postow PL+EN z decyzjami per post | glebsza integracja z planem tygodnia |
 | **Researcher** (dodatek premium) | SPRZEDAWALNY z nota | badania 5 zrodel (web/firecrawl/gemini/openai DR/manus), cost-cascade, koszt per job widoczny | nota: naprawa web_search 20/07 - finalny dowod = sobotni cykl 26/07 |
 | **Subagent LinkedIn** | CZESCIOWY | tresci + gotowce do RECZNEJ publikacji (gotowiec 1-tap copy), import metryk z eksportu xlsx | auto-publikacja i metryki API po review App 2 CMA (poza nasza kontrola czasowo) |
@@ -41,6 +41,7 @@ Model MVP rozwijany: rdzen dziala od dnia 1, funkcje doplywaja w cenie.
 | grafika | CZESCIOWY | gpt-image-2 + kanon barw LIVE; brak assetow referencyjnych (zdjecia/loga) i wariantow per platforma (Agent Wizualny) |
 | sync-notion | KOMPLETNY | - |
 | n8n-transport | KOMPLETNY | - |
+| engagement-crm | W BUDOWIE | kod + DDL 026 w build/engagement-crm; czeka merge + psql 026 + rebuild + patch n8n (media_group_id) + 5 tap-testow DoD |
 
 ## 4. BRAKI BLOKUJACE SPRZEDAZ (per przekroj)
 

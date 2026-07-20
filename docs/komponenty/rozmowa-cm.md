@@ -52,7 +52,10 @@ conversation.handle:
   PL->EN), subagent_remove_post, subagent_reschedule_post,
   subagent_set_metrics, propose_material (tylko wlasny kanal), escalate_to_cm,
   suggest_comment, suggest_comment_from_image, subagent_remember_rule.
-- Komentarze: guziki cmt:done|skip -> `handle_cmt` (konsument gotowcow).
+- Komentarze: guziki cmt:* -> `handle_cmt`. Od buildu 20/07 (W BUDOWIE, czeka wdrozenie):
+  propozycja per AUTOR z wlasnymi guzikami cmt:ok|angle|no, CRM obowiazkowy (contacts),
+  intake nieznanych (cmt:intake|stub), przypomnienia 24h, album = 1 post - szczegoly:
+  [engagement-crm.md](engagement-crm.md).
 
 ## Pamiec (3 warstwy)
 

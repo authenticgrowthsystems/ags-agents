@@ -165,6 +165,32 @@ czyta NAJNOWSZY snapshot per tweet_id i merguje do published_posts.engagement_me
 Followers dziennie: GET /2/users/me -> channel_metrics_daily (source 'x_api').
 Wlaczenie celu = UPDATE channels.config.stats_mode (SQL w naglowku 025) PO sondzie.
 
+## contacts + engagement_log - CRM relacji (DDL 026, BE-ENGAGEMENT 20/07/2026)
+
+Baza contacts istnieje od 001 (31/05, 45 osob z migracji #71); DDL 026 dodaje warstwe
+relacyjna comment-radaru (komponent: docs/komponenty/engagement-crm.md).
+
+contacts - kolumny dodane/zmienione w 026:
+
+| kolumna | typ | uwagi |
+|---|---|---|
+| handles | JSONB NOT NULL default '{}' | jedna osoba, wiele kont: {"x": "handle", "linkedin": "slug"}; pas bezpieczenstwa IF NOT EXISTS (audyt 04/07 widzial ta kolumne) |
+| relationship_stage | VARCHAR(20) NOT NULL default 'cold' | CHECK (skala zatwierdzona guzikami 20/07): cold/commented/replied/dm/offer/client liniowo (bump TYLKO W PRZOD, crm.bump_stage) + 'ghosted' stan boczny (ozywienie = bump jak z cold) |
+| icp_tier | (istniejaca) | CHECK poszerzony: Buyer/Peer/Competitor/Partner (doktryna #71) + legacy Premium/Mid/Free/Watch/N/A (45 zywych wierszy) |
+
+engagement_log - kolumny dodane w 026:
+
+| kolumna | typ | uwagi |
+|---|---|---|
+| contact_id | UUID FK contacts | istnieje od 001 - 026 to pas bezpieczenstwa; od 20/07 FAKTYCZNIE wypelniane (CRM obowiazkowy) |
+| status | VARCHAR(20) NOT NULL default 'logged' | CHECK: logged/proposed/approved/rejected/sent/skipped - cykl zycia propozycji komentarza (koniec decyzji tylko w notes) |
+| author_display | VARCHAR(200) | autor ze zrzutu jawnie (dotad ginal w notes 'od: X') |
+
+Indeksy: idx_engagement_contact_id, idx_engagement_status_open (partial: proposed/approved).
+UWAGA dlug: contacts ma ZDUBLOWANE kolumny (name/full_name, icp_tier/tier, pain_point/
+pain_points...) - konsolidacja PRZED pelnym agentem CRM to osobna decyzja (audyt 04/07 pkt 3),
+026 celowo jej NIE dotyka.
+
 ## TODO (rozszerzenie dokumentacji schematu)
 Pełny `pg_dump --schema-only` do zrzucenia i dopisania tu dla POZOSTAŁYCH tabel bazowych
 (post_queue, task_queue, published_posts, contacts, engagement_log, inspirations, channels,

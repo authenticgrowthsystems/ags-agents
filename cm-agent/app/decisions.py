@@ -159,8 +159,26 @@ def handle(body, wake=None):
 
 def _apply_action(row, key, chat):
     """Akcje domenowe po odpowiedzi (rejestr per typ; typy bez akcji = sama nauka).
-    stale_approval (kanon 19/07, zamiast usunietego stanu awaryjnego): show/reject/wait."""
-    if row["decision_type"] != "stale_approval":
+    stale_approval (kanon 19/07): show/reject/wait. BE-ENGAGEMENT (20/07): crm_tier,
+    stale_comment, stale_comment_task, photo_group (importy lokalne - bez cykli)."""
+    dt = row["decision_type"]
+    if dt == "crm_tier":
+        from . import crm
+        crm.apply_tier(row, key, chat)
+        return
+    if dt == "stale_comment":
+        from . import engagement
+        engagement.apply_stale_comment(row, key, chat)
+        return
+    if dt == "stale_comment_task":
+        from . import engagement
+        engagement.apply_stale_task(row, key, chat)
+        return
+    if dt == "photo_group":
+        from . import conversation
+        conversation.apply_photo_group(row, key, chat)
+        return
+    if dt != "stale_approval":
         return
     item_id = (row.get("context") or {}).get("content_item_id")
     if not item_id:

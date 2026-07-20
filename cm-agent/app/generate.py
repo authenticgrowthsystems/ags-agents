@@ -350,26 +350,71 @@ def inspect_image(image_bytes, media_type, question=None, content_item_id=None):
     return _text(resp)[:1200]
 
 
-def comment_from_image(image_bytes, media_type, brand, channel, lang="en"):
-    """T9 (07/08): Claude VISION analizuje zrzut z 1+ postami/komentarzami i proponuje odpowiedz
-    comment-first PER element (autor osobno). Jezyk celu. Glos marki. Zero pitchu."""
+def comment_from_image(images, brand, channel, lang="en"):
+    """T9 (07/08) + BE-ENGAGEMENT (20/07): Claude VISION analizuje 1+ ZRZUTOW i proponuje odpowiedz
+    comment-first PER autor. images = lista (bytes, media_type); WIELE obrazow = czesci JEDNEGO
+    watku/posta (album media_group_id albo potwierdzenie Tomasza) - jedna sklejona analiza,
+    zero duchow autorow. Format bloku z POST: (kotwica pod 'inny kat' i gotowiec) i KOMENTARZ:."""
     import base64
     model, tier, source = tasks.model_for("canonical")  # sonnet - jakosc komentarzy
-    b64 = base64.b64encode(image_bytes).decode()
-    prompt = (f"Na obrazie sa JEDEN lub WIECEJ postow/komentarzy z {channel}. Dla KAZDEGO osobno "
-              f"(podaj autora jesli widoczny) zaproponuj 1 wartosciowy komentarz-odpowiedz (doktryna "
-              f"comment-first): konkretna wartosc, doswiadczenie albo kontrprzyklad, ton peer-level, "
-              f"2-4 zdania, ZERO linkow, zero pitchu, zero pustych pochlebstw ('great post'). "
-              f"Jezyk: {'polski (czysty, test mamy)' if lang == 'pl' else 'angielski'}. {TRUTH_GUARD}\n"
-              f"Format:\n### <Autor 1>\n<komentarz>\n\n### <Autor 2>\n<komentarz>")
+    multi = len(images) > 1
+    prompt = ((f"Dostajesz {len(images)} zrzutow, ktore sa CZESCIAMI JEDNEGO watku/posta z {channel} "
+               f"(kolejnosc = kolejnosc wyslania). Sklej je w calosc - NIE traktuj kazdego zrzutu "
+               f"jako osobnego posta. " if multi
+               else f"Na obrazie sa JEDEN lub WIECEJ postow/komentarzy z {channel}. ")
+              + "Dla KAZDEGO AUTORA osobno zaproponuj 1 wartosciowy komentarz-odpowiedz (doktryna "
+                "comment-first): konkretna wartosc, doswiadczenie albo kontrprzyklad, ton peer-level, "
+                "2-4 zdania, ZERO linkow, zero pitchu, zero pustych pochlebstw ('great post'). "
+              + f"Jezyk komentarzy: {'polski (czysty, test mamy)' if lang == 'pl' else 'angielski'}. "
+              + TRUTH_GUARD + "\n"
+              "Format (dokladnie tak, PER autor):\n"
+              "### <Autor 1 - dokladnie jak wyswietlony, z @ jesli widac handle>\n"
+              "POST: <1-2 zdania: o czym jest jego post (cytat lub streszczenie)>\n"
+              "KOMENTARZ: <komentarz do wklejenia>\n\n"
+              "### <Autor 2>\n...")
+    content = [{"type": "image", "source": {"type": "base64", "media_type": mt,
+                                            "data": base64.b64encode(img).decode()}}
+               for img, mt in images]
+    content.append({"type": "text", "text": prompt})
     resp = client().messages.create(
-        model=model, max_tokens=1200, thinking={"type": "disabled"},
+        model=model, max_tokens=1500, thinking={"type": "disabled"},
         system=[{"type": "text", "text": f"Glos marki:\n{brand['voice_bible'][:2500]}"}],
-        messages=[{"role": "user", "content": [
-            {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": b64}},
-            {"type": "text", "text": prompt}]}])
+        messages=[{"role": "user", "content": content}])
     tasks.log_task("comment_vision", tier, model, source, getattr(resp, "usage", None))
     return _text(resp)
+
+
+def profile_from_image(images, channel):
+    """BE-ENGAGEMENT (20/07): zrzut PROFILU osoby -> dane do CRM + tier PROPONOWANY przez model
+    (zatwierdza Tomasz guzikami). Zwraca dict {name, handle, bio, proposed_tier, why} albo None."""
+    import base64
+    import json as _json
+    model, tier, source = tasks.model_for("canonical")
+    content = [{"type": "image", "source": {"type": "base64", "media_type": mt,
+                                            "data": base64.b64encode(img).decode()}}
+               for img, mt in images]
+    content.append({"type": "text", "text":
+        f"To zrzut PROFILU osoby z {channel}. Wyciagnij dane do CRM. Doktryna ICP AGS dzieli ludzi "
+        "operacyjnie na: Buyer (founder-led premium service, realna oferta i tarcie operacyjne, "
+        "gotowy na wdrozenie), Peer (rowniesnik-tworca, wymiana, nie klient), Competitor (sprzedaje "
+        "AI OS / frameworki / edukacje AI - sasiad kategorii), Partner (komplementarne uslugi, "
+        "potencjal wspolpracy). " + TRUTH_GUARD + " Jesli czegos nie widac - daj null, nie zgaduj.\n"
+        "Odpowiedz WYLACZNIE poprawnym JSON (bez markdown):\n"
+        '{"name": "imie i nazwisko jak wyswietlone", "handle": "handle bez @ albo null", '
+        '"bio": "skrot bio max 2 zdania", "proposed_tier": "Buyer|Peer|Competitor|Partner", '
+        '"why": "1 zdanie uzasadnienia tieru"}'})
+    resp = client().messages.create(
+        model=model, max_tokens=400, thinking={"type": "disabled"},
+        messages=[{"role": "user", "content": content}])
+    tasks.log_task("profile_vision", tier, model, source, getattr(resp, "usage", None))
+    raw = _text(resp).strip()
+    m = re.search(r"\{.*\}", raw, re.DOTALL)
+    if not m:
+        return None
+    try:
+        return _json.loads(m.group(0))
+    except Exception:
+        return None
 
 
 _X_SERIES_GUIDE = (
