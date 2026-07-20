@@ -43,6 +43,17 @@ def stage_variant(item, channel_row, variant_text):
     kazdy z KOLEJNYM wolnym slotem siatki dnia - samodzielne posty, nie nitka, nie kloc."""
     import json
     from . import slots as _slots
+    # STRAZNIK JEZYKA 20/07 (incydent: polskie warianty trafily do kolejki kanalow EN i wyszly
+    # po polsku na LinkedIn/X). Jezyk kanalu = channels.config.language_publish; wariant w zlym
+    # jezyku tlumaczymy PRZED zapisem do kolejki, zeby karta HITL pokazywala to, co wyjdzie.
+    try:
+        from . import compliance as _comp, generate as _gen
+        if (_gen._language_publish(item["brand_id"], channel_row["channel"]) == "en"
+                and _comp.looks_polish(variant_text or "")):
+            variant_text = _gen.translate_text(
+                variant_text, "en", content_item_id=item.get("id")) or variant_text
+    except Exception:
+        pass  # tlumaczenie nie moze zablokowac stagingu; PL zlapie wtedy karta HITL
     if channel_row["channel"] == "x" and ("===POST===" in (variant_text or "")
                                           or len(variant_text or "") > 600):
         # STRAZNIK 19/07 (Tomasz: 'napraw tak, zeby nie trzeba bylo wracac'): dlugi wariant X

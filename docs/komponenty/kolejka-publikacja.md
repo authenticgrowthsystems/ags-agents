@@ -24,8 +24,13 @@ Przypomnij jutro), nigdy auto-decyzja.
 - `published_posts`: PRAWDA "co opublikowane" (post_id/URL, embedding,
   engagement_metrics) - zasila dedup i content memory.
 - `channels.config.publish_mode` decyduje droga: `webhook` (POST adapter
-  subagenta n8n -> publikacja -> callback), `post_queue` (status 'scheduled',
-  bierze Scheduler n8n co minute), `draft` (status 'held', recznie).
+  subagenta n8n -> publikacja NATYCHMIAST -> callback), `post_queue` (status
+  'scheduled', bierze Scheduler n8n co minute WG SLOTU wiersza), `draft`
+  (status 'held', recznie).
+- STAN PO INCYDENCIE 20/07: AGS/x = `post_queue` (Scheduler pilnuje slotow
+  i wgrywa media), AGS/linkedin = `draft` (gotowce reczne; Scheduler nie
+  publikuje LinkedIn). Tryb `webhook` NIE respektuje slotow post_queue -
+  uzywac tylko dla kanalow, gdzie natychmiastowa publikacja jest zamierzona.
 - Callback publikacji: post_queue 'published' + INSERT published_posts +
   agent_messages RESPONSE + potwierdzenie na kanal logowy (bot #2).
 
@@ -46,6 +51,10 @@ Przypomnij jutro), nigdy auto-decyzja.
   markerem `===POST===`, po slotach dnia, czesci publikowane SEKWENCYJNIE.
 - STRAZNIK: wariant >600 znakow bez `===POST===` = automatyczne ciecie po
   akapitach na serie. Grafika idzie tylko z czescia 1.
+- STRAZNIK JEZYKA (20/07): przed zapisem do kolejki wariant sprawdzany z
+  `channels.config.language_publish`; gdy kanal 'en' a tekst wyglada po polsku
+  (`compliance.looks_polish`) -> `generate.translate_text` na EN. Karta HITL
+  pokazuje dokladnie to, co wyjdzie na kanal.
 - `[ARTYKUL]` = gotowiec do wklejki recznej (API X/LinkedIn nie publikuje
   artykulow z naszego tieru).
 
@@ -79,6 +88,13 @@ Przypomnij jutro), nigdy auto-decyzja.
 
 ## Znane pulapki
 
+- INCYDENT 20/07 (AP-307, raport: docs/ops/INCYDENT_PUBLIKACJI_20072026.md):
+  przy publish_mode='webhook' delegat publikowal WSZYSTKIE wiersze materialu
+  naraz przy dispatchu (burst 4-5 postow/h), gubil media wierszy, a callback
+  X Publishera oznaczal 'published' KAZDY wiersz materialu (takze te ze slotami
+  w przyszlosci) - baza klamala. Adaptery po zmianie trybow NIEUZYWANE, ale
+  callback per-row NIENAPRAWIONY (uzbrojona mina - backlog przed jakimkolwiek
+  powrotem do trybu webhook).
 - 'held' to zamrazarka: po incydencie 13-19/07 wszystko zamrozone, sprzatniete
   wg dowodu 19-20/07 (sieroty pq bez materialu -> rejected; SQL wykonany,
   kontrola = 0). Nowe sieroty nie powstaja (fix matnav 'no').

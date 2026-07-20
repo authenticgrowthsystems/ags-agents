@@ -233,6 +233,13 @@ naprawczej - po pullu przestawic na claude/silly-blackwell-dfc32d.
 
 ## 6. BACKLOG (poza priorytetami naprawczymi)
 
+NOWE 20/07 (INCYDENT PUBLIKACJI, AP-307, raport docs/ops/INCYDENT_PUBLIKACJI_20072026.md):
+tryby publikacji PO NAPRAWIE: AGS/x='post_queue' (Scheduler, sloty+media),
+AGS/linkedin='draft' (gotowce reczne). MINA UZBROJONA: callback Subagent X Publisher
+oznacza 'published' WSZYSTKIE wiersze materialu (WHERE content_item_id bez id wiersza) -
+naprawic PRZED jakimkolwiek powrotem do trybu webhook. Straznik jezyka w stage_variant
+(en-kanal + polski tekst -> translate_text) wchodzi z wieczornym rebuildem.
+
 NOWE 19/07 wieczor: (0) TWARDA BRAMKA DUPLIKACJI przy generacji: embedding canonicala vs content_memory OPUBLIKOWANYCH (pgvector juz jest) -> karta z ostrzezeniem podobienstwa; incydent: material 'Orkiestracja agentow' zdublowal teze posta X z 11/07 mimo listy ostatnich publikacji w prompcie planera (LLM zignorowal; wykryla to dopiero zewnetrzna bramka jakosci przegladarkowego CM). (i) deterministyczna sciezka komend konfiguracyjnych (regex route przed
 LLM) - INCYDENT: CM odpowiedzial "Zrobione" o zmianie okna BEZ wywolania target_update (DB
 niezmienione, brak paragonu ⚙️; naprawa recznym SQL-em). Test prawdy: zmiana configu bez

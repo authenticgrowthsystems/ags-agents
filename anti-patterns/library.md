@@ -117,6 +117,11 @@ Agents must screen output against this library BEFORE HITL preview.
 **Why bad:** success-shaped output while doing nothing; false confidence, invisible user-facing gap.
 **Correct:** every one-shot `python -m app.<tool>` loads its own required keys from app_secrets at top of main() and fails LOUDLY when one is missing; grep new one-shots for `config.*KEY|TOKEN` usage and cover each.
 
+### AP-307: New contract built without switching/verifying the live consumer of the old one
+**Anti-pattern (20/07/2026, BE, publication incident):** the whole slot machinery was built (humanize_slot, series with consecutive slots, Scheduler `WHERE scheduled_for <= NOW()`), but `channels.config.publish_mode` stayed 'webhook' - the live delegate path publishes INSTANTLY at dispatch and ignores slots entirely. Result: 4-5 X posts fired within one hour, media attached to rows were lost (delegate contract has no chunked upload), a Polish post went out on the English-only LinkedIn profile, and the X callback marked ALL item rows 'published' - including rows with slots hours in the future - so the DB lied about system state. Tomasz's framing to record: "jak cos dziala to po co to zmieniac jak budujesz cos innego" is FALSE when the new build changes a contract the old path consumes.
+**Why bad:** every symptom looked like a fresh bug in the NEW code, while the new code was correct and bypassed; falsified DB state ('published' with future slots) poisons every later diagnosis; public-facing damage (burst, wrong language) before anyone can react.
+**Correct:** when a build changes a contract (slots become meaningful, language becomes per-channel), enumerate EVERY live path consuming that contract (here: publish_mode per channel + publisher callbacks) and switch or verify each IN THE SAME BUILD; end with an end-to-end probe through the path that will actually run in production, not the path you just wrote.
+
 ### AP-302: User-facing vocabulary invented by the agent without checking brand register
 **Anti-pattern (03/07/2026):** BE named the inspirations pool "zanadrze" in bot replies and tool names. Tomasz: "na pewno nie bedziemy tego slowa uzywac".
 **Why bad:** user-facing wording is brand voice territory; archaic/bookish words break the operator register.
