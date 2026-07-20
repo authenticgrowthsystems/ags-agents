@@ -78,6 +78,28 @@ stats_mode nie zostanie ustawiony recznie (zero platnych requestow bez decyzji).
    3 tezy z faktami i LINKAMI zrodel; content_items i post_queue BEZ nowych wierszy.
    Automat sam rusza w najblizsza sobote 08:00-12:30 (reczny tap nie zajmuje slotu).
 
+## 6a. WYNIKI TAP-TESTOW (20/07 rano, z Tomaszem; dopisane po wykonaniu)
+
+| Build | Wynik | Dowod |
+|---|---|---|
+| KOLEKTOR | **PASS + LIVE** | sonda probe: HTTP 200, 5/5 postow z non_public_metrics; konsola: klasa Read, cykl $0.01 (zgodne z Owned Read $0.001); stats_mode wlaczony; pierwszy zbior 193 snapshoty 2026-07-19 (~$0.19, pod progiem alertu 200) |
+| PORZADKI A | **PASS** | "ustaw okno publikacji dla AGS x na 13:00-22:00" -> natychmiastowy paragon ⚙️ bez LLM |
+| PORZADKI B | **PASS** | odrzucenie karty -> cala seria pq rejected (dowod: wiersze 263-268); SQL sierot: UPDATE 5, sieroty=0 |
+| DEDUP | **PASS po kalibracji** | DoD na progu 0.85 FAILED. Pomiar na zywym korpusie: canonical NIE separuje (blizniak 0.536 vs nie-blizniaki do 0.588); master_theme separuje (blizniaki 0.597-0.627 vs reszta <=0.551). Fix dd7918c (dup_check na master_theme) + prog 0.57 (brand_config) + ba06906 (⚠️ takze w wiadomosci approval - bylo tylko na kartach matreview). Dowod koncowy: karta z "⚠️ DUPLIKACJA: podobienstwo 0.60 do 'Single agent hits a wall fast...' [x, 11/07]" = dokladnie post z incydentu 11/07 |
+| CZYTA SWIAT | **PASS mechanizm / FAIL noga researchowa** | reczny tap: 3 tezy dostarczone, REGULA PRAWDY wzorowa (jawne "research nie dojechal", fakty "(do weryfikacji)", zero wpisow do kolejki). Research: job 45af415e failed - adapter web_search PADA OD ~28/06 (3 joby z rzedu failed, pusty error_message). To zastana awaria Researchera, nie regresja - brief naprawczy: docs/briefs/BRIEF_NAPRAWA_RESEARCHERA_20072026.md (sesja rownolegla) |
+
+INCYDENTY tap-testow z lekcjami:
+1. **CM "Zapisane" bez wywolania narzedzia** (trzeci testowy draft nie istnial w bazie).
+   Test prawdy zadzialal: skonfrontowany CM uczciwie przyznal brak paragonu i sam zapisal
+   regule "zadne zapisane bez paragonu z narzedzia" do pipeline Voice Bible (13 regul).
+   Klasa incydentu ta sama co "Zrobione bez target_update" z 19/07.
+2. **/set cm_dup_threshold odrzucony przez n8n** - allowlista Parse And Authorize Set nie
+   zna klucza (budowniczy dedupa nie mogl ruszyc n8n). Obejscie: SQL INSERT do brand_config.
+   Backlog: patch allowlisty (gotowy szkic patchera, klasyfikator Cowork zablokowal zapis
+   w sesji integracyjnej).
+3. Lekcja SQL (moja): `SELECT created_at::time ... ORDER BY created_at` sortuje po kolumnie
+   WYJSCIOWEJ (sama godzina, bez daty) - rzutowan nie nazywac jak kolumny sortowania.
+
 ## 6. Punkty otwarte (zebrane od budowniczych)
 
 - Klasa rozliczenia /2/users/me - odczyt z konsoli po sondzie (miesci sie w guardrailu).

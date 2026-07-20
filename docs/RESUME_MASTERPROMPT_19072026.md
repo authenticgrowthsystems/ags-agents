@@ -153,14 +153,17 @@ trzeba bylo wybierac): jak nizej.
 4. **BE-SWIAT** (przed najblizsza sobota - podklad niedzielnego artykulu):
    `@docs/RESUME_MASTERPROMPT_19072026.md @docs/briefs/BRIEF_CM_CZYTA_SWIAT_19072026.md zbuduj`
 
-**STATUS INTEGRACJI (BE-INTEGRATOR, 19/07 noc): ZMERGOWANE, CZEKA NA DEPLOY TOMASZA.**
-Wszystkie 4 galezie build/* DONE i zmergowane do claude/silly-blackwell-dfc32d (kolejnosc
-kolektor->dedup->porzadki->czyta-swiat, zero konfliktow recznych, szwy worker/matreview/
-conversation zweryfikowane, py_compile 9 modulow OK, testy kolektora 16/16 PASS).
-Raport zbiorczy: docs/cm/RAPORT_do_Managera_19072026_integracja.md (tam: paczka deploy
-push+psql 025+rebuild, tap-testy 4 buildow, sekwencja wlaczenia kolektora sonda->konsola->
-UPDATE stats_mode). Buildowe worktree usuniete, galezie build/* zostaly w historii.
-Po deployu tick kolektora SPI dopoki Tomasz nie ustawi stats_mode (zero kosztow do decyzji).
+**STATUS INTEGRACJI (BE-INTEGRATOR, 20/07 rano): ZAKONCZONA - DEPLOY + TAP-TESTY DONE.**
+4 galezie zmergowane, wdrozone (psql 025 + 3 rebuildy) i przetestowane z Tomaszem:
+KOLEKTOR LIVE (sonda PASS, Owned Read potwierdzony w konsoli, stats_mode ON, 193 snapshoty
+19/07); PORZADKI A+B PASS; DEDUP PASS po kalibracji z zywego korpusu (dup_check na
+master_theme zamiast canonicala dd7918c, prog 0.57 w brand_config, ⚠️ takze w approval
+ba06906 - dowod: 0.60 vs post z incydentu 11/07); CZYTA SWIAT mechanizm+fallback PASS,
+ale noga researchowa FAILED - adapter web_search Researchera PADA OD ~28/06 (3 joby failed,
+cichy error) -> **BRIEF_NAPRAWA_RESEARCHERA_20072026.md READY (sesja rownolegla, wyjatkowe
+prawa do n8n Researchera, HITL nietykalny)**. Wyniki + incydenty (CM "Zapisane" bez
+paragonu - test prawdy zadzialal; /set bez klucza cm_dup_threshold - obejscie SQL):
+docs/cm/RAPORT_do_Managera_19072026_integracja.md sekcja 6a.
 
 Dalszy backlog (bez briefow, pisze je sesja planujaca gdy przyjdzie kolej): adapter X Articles
 n8n (sonda tieru), guziki /brands + wizard FSM + egzekwowanie execution_mode, SOP Faza 3,
