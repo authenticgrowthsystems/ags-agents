@@ -1,15 +1,17 @@
 -- INCYDENT PUBLIKACJI 20/07 (burst + PL na kanalach EN + zgubione grafiki) - NAPRAWA.
 -- Root cause: publish_mode='webhook' (delegat publikuje natychmiast, ignoruje sloty pq,
 -- callback oznacza WSZYSTKIE wiersze materialu jako published, gubi media wierszy).
--- Krok 0 idempotentny (gdyby hold jeszcze nie poszedl).
+-- Sonda 20/07 ~22:15: wszystkie wiersze incydentu = 'review', materialy 'approved'
+-- z przyszlymi slotami (21/07 13:15, 23/07 16:00, 23/07 18:45); zero held/scheduled.
+-- Dispatch przy slocie materialu przelaczy review -> scheduled, Scheduler opublikuje
+-- kazdy wiersz w jego slocie. Zadnego freeze nie trzeba - transakcja jest atomowa.
 BEGIN;
--- 0) freeze
-UPDATE post_queue SET status='held' WHERE status IN ('review','scheduled','queued');
 -- 1) tryby publikacji: X wraca na Scheduler (sloty+media), LinkedIn na gotowce reczne
 UPDATE channels SET config = jsonb_set(config, '{publish_mode}', '"post_queue"') WHERE brand_id='AGS' AND channel='x';
 UPDATE channels SET config = jsonb_set(config, '{publish_mode}', '"draft"') WHERE brand_id='AGS' AND channel='linkedin';
--- 2) re-slot wierszy ze slotami z 19/07 (bomby zegarowe)
-UPDATE post_queue SET scheduled_for='2026-07-23 15:37+02' WHERE id=246;
+-- 2) re-slot wierszy ze slotami z 19/07 (material dispatchuje sie 23/07 18:45 -
+--    sloty wierszy MUSZA byc pozniejsze, inaczej Scheduler strzeli od razu)
+UPDATE post_queue SET scheduled_for='2026-07-23 19:12+02' WHERE id=246;
 UPDATE post_queue SET scheduled_for='2026-07-23 20:23+02' WHERE id=247;
 UPDATE post_queue SET scheduled_for='2026-07-24 17:42+02' WHERE id=248;
 -- 3) tlumaczenia EN (karta kontrolna: docs/ops/TLUMACZENIA_EN_20072026.md)
@@ -23,7 +25,8 @@ UPDATE post_queue SET content = $en212$Classifying five hundred tickets: high fr
 UPDATE post_queue SET content = $en213$You need a task matrix. X axis: frequency. Y axis: cost of error. High frequency and low error cost gets the cheap model automatically. Low frequency and high error cost gets the expensive model, no debate. Real architecture lives in the middle of the matrix.$en213$ WHERE id = 213;
 UPDATE post_queue SET content = $en214$Conditional routing: a cheap model as the filter, escalation to a pricier one when confidence drops below a threshold or when the task carries high-risk markers (transaction amount, legal wording, negative sentiment). That's not a compromise. That's architecture that invests in quality exactly where quality matters.$en214$ WHERE id = 214;
 UPDATE post_queue SET content = $en215$One model for everything looks like the simpler decision. It's just more expensive at scale and less accurate where accuracy matters. Cost per task deserves the same attention as your choice of tools or your database schema.$en215$ WHERE id = 215;
--- 4) odmrozenie: wiersze wracaja do review (dispatch przy slotach itemow, publikacja Schedulerem per slot wiersza)
+-- 4) bezpiecznik: gdyby KROK 1 (hold) zostal jednak wykonany wczesniej - odmrozenie;
+--    UWAGA: nie rusza 3 wierszy linkedin/review (te po zmianie trybu obsluzy dispatch jako gotowce)
 UPDATE post_queue SET status='review' WHERE status='held';
 -- 5) kontrola (oczekiwane: pl_na_kanalach_en=0, held=0, tryby: x=post_queue, linkedin=draft)
 SELECT 'pl_na_kanalach_en' AS co, COUNT(*)::text AS n FROM post_queue WHERE status IN ('review','scheduled') AND content ~ '[ąćęłńóśźż]'

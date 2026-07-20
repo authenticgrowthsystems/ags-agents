@@ -41,9 +41,10 @@ AP-307 w anti-patterns/library.md.
   przez BE (Tomasz zatwierdzil SENS po polsku; karta kontrolna:
   docs/ops/TLUMACZENIA_EN_20072026.md; wykonanie SQL = zatwierdzenie).
 - E) Re-slot wierszy z martwymi slotami z 19/07: 246 -> 23/07 15:37,
-  247 -> 23/07 20:23, 248 -> 24/07 17:42.
-- F) Odmrozenie: held -> review (hold z KROKU 1 byl zamrozeniem na czas
-  diagnozy).
+  247 -> 23/07 20:23 (246 -> 23/07 19:12 po sondzie: material dispatchuje 18:45), 248 -> 24/07 17:42.
+- F) Sonda przed wykonaniem (20/07 ~22:15): zero held/scheduled, wszystkie wiersze
+  'review', materialy 'approved' z przyszlymi slotami - freeze niepotrzebny,
+  w SQL zostal tylko bezpiecznik held->review.
 - G) Kod: STRAZNIK JEZYKA w `channels.stage_variant` (kanal 'en' + tekst
   po polsku -> translate_text przed zapisem; karta HITL pokazuje finalna
   tresc). Wchodzi z wieczornym rebuildem cm-agent.
