@@ -103,7 +103,15 @@ c) ags-researcher/app/worker.py (DoD c - widocznosc bledow):
 - Serwerowy klon ~/ags-agents stoi teraz na galezi claude/badacz-naprawa-d324bd - po merge
   do sb-work BE-INTEGRATOR powinien przestawic serwer na docelowa galaz.
 
-## 6. Sprzatanie
+## 6. POSTULAT PROTOKOLARNY (od Tomasza, 20/07 - do kanonu sesji budowlanych)
+
+Po skonczonej pracy KAZDA sesja budowlana ma SAMA upomniec sie o archiwizacje: gdy DoD sa
+domkniete, raporty przekazane i commity wypchniete, sesja konczy ostatnia wiadomosc jasnym
+komunikatem "mozna mnie archiwizowac" (plus ewentualne warunki, np. "po wykonaniu push").
+Tomasz nie ma sam pilnowac, ktora sesja jest martwa. Prosze dopisac do protokolu sesji
+budowlanych (kanon 19/07, "zamkniecie sesji obowiazkowe") jako staly punkt zamkniecia.
+
+## 7. Sprzatanie
 
 Wszystkie tymczasowe workflowy n8n (diag/diag2/diag3/diag4 + check) utworzone i SKASOWANE
 w tej sesji (kazdy przez try/finally deactivate+delete). HITL U5pUZjy2yAhR1sWg nietkniety.
