@@ -16,14 +16,16 @@
 -- 1) contacts: jedna osoba, wiele kont - handles jsonb {"x": "handle", "linkedin": "slug"}
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS handles jsonb NOT NULL DEFAULT '{}'::jsonb;
 
--- 2) contacts: stadium relacji (skala do zatwierdzenia guzikami przy wdrozeniu;
---    CHECK dopuszcza pelna proponowana skale, wiec zmiana skali = zmiana CHECK osobnym DDL)
+-- 2) contacts: stadium relacji. Skala ZATWIERDZONA przez Tomasza guzikami 20/07:
+--    cold -> commented -> replied -> dm -> offer -> client (liniowo, bump tylko w przod)
+--    + 'ghosted' jako stan boczny (relacja ucichla; ustawiany recznie/przyszlymi akcjami,
+--    poza liniowym awansem).
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS relationship_stage varchar(20) NOT NULL DEFAULT 'cold';
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'contacts_relationship_stage_check') THEN
     ALTER TABLE contacts ADD CONSTRAINT contacts_relationship_stage_check
-      CHECK (relationship_stage IN ('cold','commented','replied','dm','offer','client'));
+      CHECK (relationship_stage IN ('cold','commented','replied','dm','offer','client','ghosted'));
   END IF;
 END $$;
 

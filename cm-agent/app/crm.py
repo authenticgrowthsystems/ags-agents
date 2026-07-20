@@ -6,8 +6,10 @@ komentarza dopasowuje autora do contacts, NIEZNANY dostaje od razu STUB (contact
 wypelnione ZAWSZE - DoD 5) + wymuszony intake profilu (zrzut -> wizja -> uzupelnienie
 + tier guzikami przez decisions.ask, typ 'crm_tier').
 
-Stadium relacji: cold -> commented -> replied -> dm -> offer -> client (tylko W PRZOD,
-bump przy potwierdzonym wklejeniu komentarza). Skala w CHECK (db/026)."""
+Stadium relacji (skala zatwierdzona guzikami 20/07): cold -> commented -> replied -> dm
+-> offer -> client (tylko W PRZOD, bump przy potwierdzonym wklejeniu komentarza)
++ 'ghosted' jako stan BOCZNY (relacja ucichla; poza liniowym awansem, ustawiany recznie
+albo przyszlymi akcjami). Skala w CHECK (db/026)."""
 import datetime
 import json
 import re
@@ -17,7 +19,8 @@ from psycopg.types.json import Jsonb
 
 from . import db
 
-STAGES = ["cold", "commented", "replied", "dm", "offer", "client"]
+STAGES = ["cold", "commented", "replied", "dm", "offer", "client"]  # liniowy awans
+SIDE_STAGES = ["ghosted"]  # stany boczne w CHECK, poza kolejnoscia bump_stage
 
 _INTAKE_KEY = "crm_intake_pending"      # stan: czekamy na zrzut PROFILU (brand_config, wzorzec matreview)
 _INTAKE_TTL_MIN = 15

@@ -61,9 +61,9 @@ Notion contacts (DB=SSOT), konsolidacja kolumn contacts.
 
 merge build/engagement-crm -> psql 026 PRZED rebuildem -> rebuild cm-agent -> node patch
 n8n -> tap-testy DoD (5): nieznany autor z intakiem, znany z kontekstem, przypomnienie
-24h + "co wisi?", album 2 zrzutow = 1 analiza, contact_id wypelnione. Decyzja Tomasza
-guzikami przy wdrozeniu: potwierdzenie skali stadiow relacji (CHECK juz dopuszcza pelna
-proponowana skale).
+24h + "co wisi?", album 2 zrzutow = 1 analiza, contact_id wypelnione. Skala stadiow
+ZATWIERDZONA przez Tomasza guzikami 20/07 (jeszcze w sesji buildu): pelna liniowa
+cold->client + 'ghosted' jako stan boczny (ozywienie relacji = bump jak z cold).
 
 ## 7. Postulat do Managera
 

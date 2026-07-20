@@ -175,7 +175,7 @@ contacts - kolumny dodane/zmienione w 026:
 | kolumna | typ | uwagi |
 |---|---|---|
 | handles | JSONB NOT NULL default '{}' | jedna osoba, wiele kont: {"x": "handle", "linkedin": "slug"}; pas bezpieczenstwa IF NOT EXISTS (audyt 04/07 widzial ta kolumne) |
-| relationship_stage | VARCHAR(20) NOT NULL default 'cold' | CHECK: cold/commented/replied/dm/offer/client; bump TYLKO W PRZOD (crm.bump_stage) |
+| relationship_stage | VARCHAR(20) NOT NULL default 'cold' | CHECK (skala zatwierdzona guzikami 20/07): cold/commented/replied/dm/offer/client liniowo (bump TYLKO W PRZOD, crm.bump_stage) + 'ghosted' stan boczny (ozywienie = bump jak z cold) |
 | icp_tier | (istniejaca) | CHECK poszerzony: Buyer/Peer/Competitor/Partner (doktryna #71) + legacy Premium/Mid/Free/Watch/N/A (45 zywych wierszy) |
 
 engagement_log - kolumny dodane w 026:

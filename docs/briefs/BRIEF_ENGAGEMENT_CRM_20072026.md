@@ -90,6 +90,6 @@ masterprompt + pamiec + STATUS tu.
 
 STATUS = ZBUDOWANE (20/07, BE-ENGAGEMENT, galaz build/engagement-crm) - kod + DDL 026 +
 patch n8n (plik) + dokumentacja w commicie; czeka: merge przez integratora, psql 026 PRZED
-rebuildem, rebuild cm-agent, uruchomienie patcha n8n, decyzja Tomasza o skali stadiow
-(CHECK dopuszcza cala proponowana skale cold/commented/replied/dm/offer/client), 5 tap-testow
-DoD. Raport: docs/cm/RAPORT_do_Managera_20072026_engagement_crm.md
+rebuildem, rebuild cm-agent, uruchomienie patcha n8n, 5 tap-testow DoD. Skala stadiow
+ZATWIERDZONA guzikami 20/07: cold/commented/replied/dm/offer/client + 'ghosted' (stan boczny).
+Raport: docs/cm/RAPORT_do_Managera_20072026_engagement_crm.md

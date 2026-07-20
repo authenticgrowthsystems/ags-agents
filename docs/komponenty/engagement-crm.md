@@ -33,7 +33,9 @@ cmt:done -> task done + engagement 'sent' + crm.bump_stage(contact,'commented') 
 
 - `contacts` (45 osob z #71): dopasowanie po `x_handle`, `handles` jsonb ({"x": "...",
   "linkedin": "..."}), `name`/`full_name`. Nowe kolumny (db/026): `handles`,
-  `relationship_stage` (cold/commented/replied/dm/offer/client, CHECK, tylko W PRZOD),
+  `relationship_stage` (skala ZATWIERDZONA guzikami 20/07: cold/commented/replied/dm/offer/
+  client liniowo, tylko W PRZOD + 'ghosted' jako stan boczny; kolejny komentarz do ghosted
+  ozywia relacje - bump traktuje ghosted jak cold),
   `icp_tier` CHECK poszerzony o doktryne #71 (Buyer/Peer/Competitor/Partner) obok legacy
   (Premium/Mid/Free/Watch/N/A). Stub: name, source='Comment', status='Cold', stage='cold'.
 - `engagement_log`: propozycja per autor; `contact_id` FK (od 001, teraz FAKTYCZNIE
