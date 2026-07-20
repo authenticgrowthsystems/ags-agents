@@ -84,11 +84,12 @@ ISO; retap = wyzerowanie klucza, ksztalt sprawdz w `sunday_brief._state_set`).
   tnie prefiks.
 - AWARIA web_search 28/06-20/07 (3 joby failed, PUSTY error_message - worker
   polykal wyjatki): przyczyna = dynamic filtering domyslne w narzedziu
-  web_search_20260209 Anthropic; fix `allowed_callers:['direct']` + widocznosc
-  bledow (commit 3f97d90, galaz build/researcher-fix; DoD a PASS). Stan 20/07:
-  czeka rebuild ags-researcher + niedzielny tap. Szczegoly:
-  docs/briefs/BRIEF_NAPRAWA_RESEARCHERA_20072026.md.
+  web_search_20260209 Anthropic; NAPRAWIONE 20/07 - fix
+  `allowed_callers:['direct']` + widocznosc bledow, LIVE po rebuildzie
+  (galaz claude/badacz-naprawa-d324bd; serwer przestawic na sb-work po merge).
+  Otwarte: wymuszenie medium dla query niedzielnego (4e65278) czeka na rebuild
+  cm-agent. Szczegoly: docs/briefs/BRIEF_NAPRAWA_RESEARCHERA_20072026.md.
 - Critical dziala dzis SEKWENCYJNIE (DR+Manus blokuja workera ~10 min) -
   parallel dispatch w backlogu.
-- Query niedzielne auto-klasyfikuje sie na low (jedno zrodlo = krucho) -
-  otwarta decyzja 4d briefu naprawczego: wymusic minimum medium.
+- Query niedzielne auto-klasyfikowalo sie na low (jedno zrodlo = krucho) -
+  wymuszenie minimum medium w kodzie (4e65278), wchodzi z rebuildem cm-agent.
