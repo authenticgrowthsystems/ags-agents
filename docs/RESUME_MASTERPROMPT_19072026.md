@@ -175,6 +175,14 @@ publishery wolaja /wake, intencja zdjecia w routingu, Voice Bible v2.3 (seria X)
 Agent Wizualny (ZAMROZONY, spec gotowy), App 2 CMA, brand_assets, tryb jezyka canonicala,
 3b automation model_selection. Zamrozone NIE odmrazac bez decyzji Tomasza.
 
+RESEARCHER NAPRAWIONY 20/07 (merge 3fd3560): web_search padal od 28/06 przez domyslne
+dynamic filtering Anthropic w web_search_20260209 (15s->110s) - fix allowed_callers:['direct']
++ koniec polykania bledow (sources/worker/Normalize) + cost_usd z usage; zywy n8n oxwcD1i...
+ZAPATCHOWANY (kopia repo == zywa), kontener ags-researcher LIVE z fixem; 4d: sunday_brief
+wymusza minimum medium (wchodzi po rebuildzie cm-agent). Pamiec:
+project_researcher_awaria_websearch_20072026. UWAGA SERWER: klon ~/ags-agents stal na galezi
+naprawczej - po pullu przestawic na claude/silly-blackwell-dfc32d.
+
 ## 5. STAN LIVE (wszystko z 10-13/07, zweryfikowane tapami przed nieobecnoscia)
 
 - **Sprint briefu #83-#90 + #84 + v2.2 wykonany 12/07 w jeden dzien** (raporty per task
