@@ -52,4 +52,8 @@ Zero SSH/deployu. Jedno przejrzenie struktury + push.
 
 Raport docs/cm/RAPORT_do_Managera_<data>_dokumentacja.md + masterprompt + pamiec + STATUS tu.
 
-STATUS = READY (20/07, kanon DOKUMENTACJA ZYJE wpisany do PROTOKOL_SESJI pkt 6 i masterpromptu)
+STATUS = ZBUDOWANE (20/07, BE-DOKUMENTACJA, galaz build/dokumentacja): 11 plikow
+docs/komponenty/ w stalym szablonie; SYSTEM_DATAFLOW = mapa+indeks; stara tresc
+w docs/archiwum-dataflow.md; masterprompt sekcja 1 zaktualizowany; test
+uzytecznosci 3/3 PASS (raport: docs/cm/RAPORT_do_Managera_20072026_dokumentacja.md).
+Czeka: przejrzenie struktury + push/merge (Tomasz/integrator).

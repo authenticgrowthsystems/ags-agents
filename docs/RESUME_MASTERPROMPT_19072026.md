@@ -23,6 +23,9 @@ po znaczacym kroku (docs/cm/RAPORT_do_Managera_*.md). py_compile przed commitem.
 
 ## 1. GDZIE PRACUJESZ
 
+- **Dokumentacja komponentow: `docs/komponenty/` (11 plikow, staly szablon) -
+  CZYTAJ ZAMIAST kodu** (kanon DOKUMENTACJA ZYJE). `docs/SYSTEM_DATAFLOW.md` =
+  mapa przeplywu + indeks; historia w `docs/archiwum-dataflow.md` i raportach.
 - Worktree KODU: `C:\Claude-CoWork\AGS\ags-agents\.claude\worktrees\sb-work` (galaz
   claude/silly-blackwell-dfc32d; nowa sesja Cowork tworzy swiezy worktree z main - pracuj
   na sb-work przez `git -C`).
