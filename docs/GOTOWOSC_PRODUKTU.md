@@ -42,6 +42,7 @@ Model MVP rozwijany: rdzen dziala od dnia 1, funkcje doplywaja w cenie.
 | sync-notion | KOMPLETNY | - |
 | n8n-transport | KOMPLETNY | - |
 | engagement-crm | W BUDOWIE | kod + DDL 026 w build/engagement-crm; czeka merge + psql 026 + rebuild + patch n8n (media_group_id) + 5 tap-testow DoD |
+| agent-sprzedazy | W BUDOWIE | kod + DDL 027 w build/sprzedawca (narzedzie wewnetrzne sprzedazy, nie produkt); czeka merge + psql 027 + rebuild (nowa zaleznosc pypdf) + patch n8n (komendy+pdf) + tap-testy DoD |
 
 ## 4. BRAKI BLOKUJACE SPRZEDAZ (per przekroj)
 

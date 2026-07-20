@@ -191,6 +191,41 @@ UWAGA dlug: contacts ma ZDUBLOWANE kolumny (name/full_name, icp_tier/tier, pain_
 pain_points...) - konsolidacja PRZED pelnym agentem CRM to osobna decyzja (audyt 04/07 pkt 3),
 026 celowo jej NIE dotyka.
 
+## sales_pipeline + sales_knowledge - Agent Sprzedazy (DDL 027, BE-SPRZEDAWCA 20/07/2026)
+
+Komponent: docs/komponenty/agent-sprzedazy.md. DDL: cm-agent/db/027_sales_agent.sql.
+
+sales_pipeline (lejek sprzedazowy, 1 wiersz = 1 prospekt/deal):
+
+| kolumna | typ | uwagi |
+|---|---|---|
+| id | UUID PK | correlation_id zlecen Researchera (RESPONSE mapuje sie po nim w sales.tick) |
+| contact_id | UUID FK contacts | opcjonalny link do CRM (#71/026) |
+| prospect_name / prospect_url | TEXT | wyszukiwanie ILIKE po obu (sales._find_pipeline) |
+| stage | VARCHAR(20) CHECK | prospect/qualified/proposal/negotiation/won/lost |
+| offer_tier | TEXT | nazwa tieru z pricing_tiers po dopasowaniu oferty |
+| value, currency | NUMERIC(12,2), VARCHAR(10) | default PLN |
+| next_followup_at | TIMESTAMPTZ | higiena lejka: brak = ⚠️ w widoku; outreach_sent ustawia +3 dni |
+| research_job_id | TEXT | job Researchera (research_jobs.job_id) |
+| notes | TEXT | append z timestampem, LEFT 4000 (research, outreachy, ustalenia) |
+
+Indeksy: idx_sales_pipeline_stage, idx_sales_pipeline_followup (partial, otwarte).
+
+sales_knowledge (baza wiedzy sprzedazowej Tomasza; dokument -> kawalki):
+
+| kolumna | typ | uwagi |
+|---|---|---|
+| material_type | VARCHAR(20) CHECK | book/technique/case_study/framework/script/recording/other |
+| material_name, chunk_no | TEXT, INT | jeden dokument = wiele kawalkow (~2000 znakow, max 40) |
+| content_excerpt | TEXT | tresc kawalka |
+| embedding | vector(1536) | OpenAI text-embedding-3-small (jak published_posts); NULL = fallback ILIKE |
+| tags | TEXT[] | z hinta komendy /add_sales_material |
+
+Ponadto 027: agent_registry wiersz 'sales-agent' (allowed_model_tiers z 'critical' -
+warunek pelnej kaskady Researchera) oraz channels wiersz (AGS,'sprzedaz','draft',
+supervised=true, config.agent_kind='sales') - TYLKO dla menu /agents; kod (planner/
+reports/proactive/snapshot celow) wyklucza agent_kind='sales'.
+
 ## TODO (rozszerzenie dokumentacji schematu)
 Pełny `pg_dump --schema-only` do zrzucenia i dopisania tu dla POZOSTAŁYCH tabel bazowych
 (post_queue, task_queue, published_posts, contacts, engagement_log, inspirations, channels,

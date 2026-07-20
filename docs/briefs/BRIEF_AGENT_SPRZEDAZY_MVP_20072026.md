@@ -61,4 +61,10 @@ funkcji; konflikty zlozy integrator). Zadnego auto-wysylania czegokolwiek (HITL 
 ## 5. Udzial Tomasza
 psql 027 + rebuild (w paczce wieczornej), tap-testy, decyzja guzikami gdy niejasna skala/tier.
 
-## 6. Zamkniecie: raport + komponent + macierz + STATUS tu. STATUS = READY (20/07 ~13:15)
+## 6. Zamkniecie: raport + komponent + macierz + STATUS tu.
+
+STATUS = ZBUDOWANE (BE-SPRZEDAWCA, 20/07 wieczor) - galaz build/sprzedawca, kod
+skompilowany; czeka paczka integratora: merge -> psql 027 PRZED rebuildem -> rebuild
+cm-agent (pypdf!) -> patch n8n hitl-sales-commands -> tap-testy DoD. Raport:
+docs/cm/RAPORT_do_Managera_20072026_agent_sprzedazy.md; komponent:
+docs/komponenty/agent-sprzedazy.md.

@@ -11,7 +11,7 @@ from fastapi import FastAPI, Header, HTTPException
 from . import config, db
 from .brand import load_brand
 
-from . import generate, compliance, channels, research, hitl, conversation, logbot, content_memory, reports, planner, matreview, slots, proactive, engagement, metrics_import, decisions, sunday_brief
+from . import generate, compliance, channels, research, hitl, conversation, logbot, content_memory, reports, planner, matreview, slots, proactive, engagement, metrics_import, decisions, sunday_brief, sales
 
 api = FastAPI(title="AGS Content Manager")
 wake = threading.Event()
@@ -471,6 +471,7 @@ def loop():
             conversation.memory_tick()            # 10/07: wygasajacy watek rozmowy -> skrot do pamieci trwalej
             engagement.consumer_tick()            # 10/07: zatwierdzone komentarze -> gotowiec do wklejenia + guziki
             engagement.stale_watch()              # 20/07 BE-ENGAGEMENT: propozycje/wklejenia >24h -> przypomnienie guzikami
+            sales.tick()                          # 20/07 BE-SPRZEDAWCA: wyniki researchu prospektow -> synteza + lejek
             _brand_tokens_tick()                  # 12/07 #84: Notion Brand Config -> brand_tokens (poll 10 min)
             _x_collector_tick()                   # 19/07 kolektor X: snapshoty Owned Reads raz na dobe UTC
             item = db.claim_content_item()
