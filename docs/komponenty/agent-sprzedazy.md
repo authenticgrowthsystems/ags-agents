@@ -8,7 +8,8 @@ Nowy agent w istniejacym frameworku subagentow: partner strategiczny Tomasza w s
 (kogo targetowac, jak, kiedy follow-up, kiedy domykac) + wykonawca operacyjny. Zna macierz
 gotowosci produktu (co WOLNO sprzedawac), pelny cennik pricing_tiers (Pakiety PL 1-3 =
 TOP OFFERING: DFY "system retencji klientow"), sales_playbook, ICP i Voice Bible. Zleca
-research prospektow Researcherowi (tier critical = pelna kaskada z Manus), pisze outreach
+research prospektow Researcherowi (tier medium ~1-2 PLN; kanon kosztowy 20/07: critical
+NIGDY przez API - glebokie przeswietlenia recznie na abonamentach), pisze outreach
 jako GOTOWIEC (HITL - NIC nie wysyla sie samo), prowadzi lejek sales_pipeline i uczy sie
 z materialow Tomasza (sales_knowledge z embeddingami). Frameworki Anthropic sales skills
 (draft-outreach, account-research, pipeline-review) zdestylowane w promptcie systemowym.
@@ -21,7 +22,7 @@ z materialow Tomasza (sales_knowledge z embeddingami). Frameworki Anthropic sale
   config.agent_kind='sales') -> active_agent='subagent:AGS:sprzedaz'
 conversation.handle:
   - sales.try_command PRZED LLM (wzorzec _config_route), z KAZDEGO agenta:
-    /prospect <nazwa|URL>  -> research critical + wpis w lejku (deterministycznie)
+    /prospect <nazwa|URL>  -> research medium + wpis w lejku (deterministycznie)
     /pipeline              -> widok lejka (deterministycznie)
     /oferta                -> pelny cennik; /oferta <prospekt> -> rekomendacja tieru (LLM)
     /add_sales_material [hint] -> uzbrojenie na 2h: nastepny dokument .md/.txt/.pdf
@@ -35,8 +36,9 @@ Dokumenty: n8n document_text (po patchu takze .pdf <=8MB) -> /docmsg ->
 
 ## Narzedzia (9)
 
-prospect_research (Researcher /request, from='sales-agent', default tier critical -
-wpis w agent_registry z 'critical' w allowed_model_tiers; async, wynik tickiem),
+prospect_research (Researcher /request, from='sales-agent', default tier medium,
+critical zablokowany w kodzie; payload.model_tier = NAZWA MODELU (mapowanie _TIER_MODEL:
+medium->sonnet) - poziomy bylyby zignorowane; async, wynik tickiem),
 prospect_results (claims z linkami), draft_outreach (email/linkedin_dm/x_dm w Voice
 Bible; gotowiec = naglowek + CZYSTA WKLEJKA osobna wiadomoscia, wzorzec comment-radar;
 zapis engagement_log status 'proposed' + notatka lejka), offer_for (pakiet danych:
@@ -87,7 +89,8 @@ fallback ILIKE), outreach_sent (propozycja -> 'sent', follow-up +3 dni).
 
 - Wiersz channels 'sprzedaz' pojawia sie w menu ⚙️ Cele (n8n) - NIE wlaczac go jako celu
   publikacji; guardy w kodzie (planner/reports/proactive/snapshot) i tak go ignoruja.
-- Research critical dziala SEKWENCYJNIE u Researchera (~10-20 min, kilkanascie PLN/job)
+- Research medium trwa kilka minut (~1-2 PLN/job); critical przez API zablokowany
+  (kanon kosztowy 20/07) - kod cicho obniza 'critical' do medium
   - /prospect zwraca paragon od razu, wynik przychodzi tickiem; nie czekac w rozmowie.
 - PDF ze skanow (obrazy) nie da tekstu - pypdf zwraca pusto, bot melduje jawnie.
 - Embeddingi wymagaja openai_api_key w app_secrets - bez niego sales_knowledge dziala

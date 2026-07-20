@@ -1,7 +1,8 @@
 """Agent Sprzedazy Level 1 (BE-SPRZEDAWCA 20/07/2026, brief BRIEF_AGENT_SPRZEDAZY_MVP_20072026).
 
 Rozmowny partner strategiczny + operacyjny wykonawca sprzedazy AGS:
-- prospect research przez Researchera (kontrakt /request, tier critical = pelna kaskada z Manus),
+- prospect research przez Researchera (kontrakt /request, tier medium; kanon kosztowy 20/07:
+  critical NIGDY przez API - glebokie przeswietlenia Tomasz robi recznie na abonamentach),
 - outreach w Voice Bible jako GOTOWIEC do recznego wyslania (HITL ZAWSZE - nic nie wychodzi samo),
 - lejek sales_pipeline (paragony przy kazdej zmianie stanu),
 - baza wiedzy sprzedazowej sales_knowledge (dokumenty przez Telegram -> chunk -> embedding
@@ -291,16 +292,17 @@ def _system(chat_id):
 # ---------------- narzedzia ----------------
 TOOL_PROSPECT_RESEARCH = {
     "name": "prospect_research",
-    "description": ("Zlec Researcherowi GLEBOKI research prospekta (firma/osoba; URL albo nazwa). "
-                    "Async: kaskada zrodel (tier critical = takze OpenAI DR + Manus, ~10-20 min, "
-                    "kilkanascie PLN), wynik przyjdzie na Telegram i zapisze sie w lejku. "
-                    "Tworzy/aktualizuje wpis w lejku (stage prospect). Uzywaj gdy Tomasz podaje "
-                    "nowego prospekta albo prosi o rozpoznanie firmy."),
+    "description": ("Zlec Researcherowi research prospekta (firma/osoba; URL albo nazwa). "
+                    "Async: kilka minut, ~1-2 PLN (tier medium), wynik przyjdzie na Telegram "
+                    "i zapisze sie w lejku. Tworzy/aktualizuje wpis w lejku (stage prospect). "
+                    "Uzywaj gdy Tomasz podaje nowego prospekta albo prosi o rozpoznanie firmy. "
+                    "KANON KOSZTOWY 20/07: critical NIGDY przez API (~18 PLN) - glebokie "
+                    "przeswietlenie Tomasz robi RECZNIE na abonamentach i wrzuca zrzut."),
     "input_schema": {"type": "object", "properties": {
         "prospect": {"type": "string", "description": "Nazwa firmy/osoby (jak w lejku)."},
         "url": {"type": ["string", "null"], "description": "URL strony/profilu, jesli jest."},
-        "tier": {"type": ["string", "null"], "enum": ["low", "medium", "critical", None],
-                 "description": "Glebokosc researchu; default critical (pelna kaskada)."}},
+        "tier": {"type": ["string", "null"], "enum": ["low", "medium", None],
+                 "description": "Glebokosc researchu; default medium."}},
         "required": ["prospect"]},
 }
 
@@ -432,10 +434,15 @@ def _research_query(name, url):
         "5) kto decyduje i jak ich dosiegnac. Kazdy fakt z linkiem zrodla.")
 
 
+# GOTCHA (docs/komponenty/researcher.md): payload.model_tier = NAZWA MODELU (haiku/sonnet/
+# opus), nie poziom kaskady - 'medium'/'critical' bylyby zignorowane (router decydowalby sam).
+_TIER_MODEL = {"low": "haiku", "medium": "sonnet", "critical": "opus"}
+
+
 def _request_research(query, tier, correlation_id):
     body = {"query": query, "from": AGENT_ID, "correlation_id": str(correlation_id)}
     if tier:
-        body["model_tier"] = tier
+        body["model_tier"] = _TIER_MODEL.get(tier, tier)
     try:
         r = httpx.post(config.RESEARCHER_URL + "/request", json=body,
                        headers={"X-Researcher-Secret": config.RESEARCHER_WEBHOOK_SECRET}, timeout=20)
@@ -452,7 +459,10 @@ def _prospect_research(inp):
     url = (inp.get("url") or "").strip() or None
     if not url and re.match(r"^https?://", name, re.IGNORECASE):
         url, name = name, re.sub(r"^https?://(www\.)?", "", name).split("/")[0]
-    tier = inp.get("tier") or "critical"
+    # kanon kosztowy 20/07: default medium (~1-2 PLN); critical przez API zablokowany
+    tier = inp.get("tier") or "medium"
+    if tier == "critical":
+        tier = "medium"
     row, created = _ensure_pipeline(name, url, source="research")
     code, resp = _request_research(_research_query(name, url), tier, row["id"])
     job_id = (resp or {}).get("job_id")
@@ -460,7 +470,7 @@ def _prospect_research(inp):
         db.execute("UPDATE sales_pipeline SET research_job_id=%s, updated_at=NOW() WHERE id=%s",
                    (str(job_id), row["id"]))
         _append_notes(row["id"], f"research zlecony (tier {tier}, job {str(job_id)[:8]})")
-        eta = "~10-20 min, kilkanascie PLN" if tier == "critical" else "kilka minut"
+        eta = "kilka minut, ~1-2 PLN"
         return (f"🔍 Research zlecony: {name} (tier {tier}, {eta}). "
                 f"{'Nowy wpis w lejku. ' if created else ''}Wynik przyjdzie na Telegram "
                 f"i doklei sie do lejka - NIE czekaj w tej rozmowie.")
@@ -772,11 +782,12 @@ def try_command(chat_id, text, active):
             return True
     m = _PROSPECT_RE.match(text)
     if m:
-        _tg_send(chat_id, _prospect_research({"prospect": m.group(1).strip(), "tier": "critical"}))
+        _tg_send(chat_id, _prospect_research({"prospect": m.group(1).strip(), "tier": "medium"}))
         return True
     if re.match(r"^/prospect(?:@\w+)?\s*$", text, re.IGNORECASE):
-        _tg_send(chat_id, "Uzycie: /prospect <nazwa firmy albo URL> - zleca research critical "
-                          "(pelna kaskada, ~10-20 min) i dodaje prospekta do lejka.")
+        _tg_send(chat_id, "Uzycie: /prospect <nazwa firmy albo URL> - zleca research medium "
+                          "(kilka minut, ~1-2 PLN) i dodaje prospekta do lejka. Glebokie "
+                          "przeswietlenie: recznie na abonamencie, zrzut wrzuc jako material.")
         return True
     if _PIPELINE_RE.match(text):
         _tg_send(chat_id, pipeline_text())
