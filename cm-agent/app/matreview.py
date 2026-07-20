@@ -736,8 +736,20 @@ def handle(payload, wake_event=None):
 
 def modes_snapshot():
     """Migawka stanu trybow dla ROZMOWY CM (fix 06/07: LLM twierdzil 'nie dopialem zadnego
-    zdjecia' sekunde przed prawdziwym przypieciem przez straznika). Zwraca tekst PL."""
+    zdjecia' sekunde przed prawdziwym przypieciem przez straznika). Zwraca tekst PL.
+    20/07 (split-brain podkladu): stan podkladu niedzielnego TEZ tu - CM nie ma prawa twierdzic
+    'research nie wrocil', gdy podklad juz dostarczony i lezy w brand_config."""
     lines = []
+    sb = _state_get("cm_sunday_brief")
+    if sb.get("phase") == "sent":
+        row = db.fetchone("SELECT LEFT(config_value, 160) AS head, updated_at FROM brand_config "
+                          "WHERE brand_id='AGS' AND config_key='cm_sunday_brief_last'")
+        if row:
+            lines.append(f"- PODKLAD NIEDZIELNY DOSTARCZONY ({row['head'][:120]}...) - pelna tresc "
+                         f"w brand_config 'cm_sunday_brief_last' + plik .md na czacie; NIE mow ze "
+                         f"'research nie wrocil', tylko odeslij Tomasza do dostarczonego podkladu")
+    elif sb.get("phase") == "polling":
+        lines.append("- PODKLAD NIEDZIELNY: research W TOKU (job zlecony, czekamy) - tak mow, nie zgaduj")
     st = _state_get("cm_pending_madd")
     if st.get("item_id"):
         row = db.fetchone("SELECT master_theme FROM content_items WHERE id=%s", (st["item_id"],))

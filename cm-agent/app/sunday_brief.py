@@ -14,6 +14,7 @@ TWARDE GRANICE (DoD briefu):
 """
 import datetime
 import json
+import traceback
 import uuid
 from zoneinfo import ZoneInfo
 
@@ -160,7 +161,11 @@ def _synthesize(job_id, has_research):
 
 
 def _do_send(job_id, has_research):
-    """Zawsze COS wysyla (podklad albo jasny komunikat), zeby cykl sie domknal bez spamu ponowien."""
+    """Zawsze COS wysyla (podklad albo jasny komunikat), zeby cykl sie domknal bez spamu ponowien.
+    20/07 (incydent split-brain: podklad wyszedl na czat z workera, mozg rozmowy CM go NIE widzial
+    i twierdzil 'research nie wrocil'; tresc nie byla nigdzie zapisana): podklad jest PERSYSTOWANY
+    (brand_config cm_sunday_brief_last - widzi go modes_snapshot w prompcie CM) i wysylany DODATKOWO
+    jako plik .md (prosba Tomasza: gotowiec do wklejenia przegladarkowemu CM, zero kopiowania)."""
     body = _synthesize(job_id, has_research)
     if not body:
         _send_long("📰 Podklad pod niedzielny artykul: nie udalo sie zsyntetyzowac tresci "
@@ -171,7 +176,27 @@ def _do_send(job_id, has_research):
     header = ("📰 PODKLAD POD NIEDZIELNY ARTYKUL (insight tygodnia ze swiata AI)\n"
               "Draft do Twojej recznej obrobki - NIC nie wchodzi do planu ani kolejki.\n"
               "----------------------------------------")
-    _send_long(f"{header}\n\n{body}{src_note}")
+    full = f"{header}\n\n{body}{src_note}"
+    _send_long(full)
+    now_iso = datetime.datetime.now(WARSAW).isoformat()
+    try:
+        db.execute(
+            """INSERT INTO brand_config (brand_id, config_key, config_value, version, updated_by, updated_at)
+               VALUES ('AGS', 'cm_sunday_brief_last', %s, 1, 'sunday_brief', NOW())
+               ON CONFLICT (brand_id, config_key) DO UPDATE SET config_value=EXCLUDED.config_value,
+                 version=brand_config.version+1, updated_by='sunday_brief', updated_at=NOW()""",
+            (f"[dostarczony {now_iso}; job {job_id}; research={'TAK' if has_research else 'FALLBACK'}]\n\n{full}",))
+    except Exception:
+        traceback.print_exc()  # persist best-effort, nie blokuje dostawy
+    try:
+        chat = _admin_chat()
+        if chat:
+            from . import matreview
+            matreview._tg_send_document(
+                chat, f"podklad_niedzielny_{datetime.date.today().strftime('%Y%m%d')}.md", full,
+                caption="📎 Ten sam podklad jako plik .md - do wkleienia np. przegladarkowemu CM.")
+    except Exception:
+        traceback.print_exc()
 
 
 # ---------------- maszyna stanu ----------------

@@ -34,7 +34,7 @@ model_selection (korekta guzikami mtier:<gate>:<tier>).
 
 ## Wejscia-wyjscia i tabele
 
-- `research_jobs` (master; UWAGA: klucz to `job_id`, NIE `id`): query, hash,
+- `research_jobs` (master; UWAGA: klucz to `job_id`, NIE `id`; tresc zapytania = `query_text`, NIE `query`): hash,
   embedding, complexity, model_tier, level_override, status, cost_pln,
   confidence. `research_runs` (per zrodlo): status, raw_output, cost_pln.
 - `evidence_items` (znormalizowane, source_url), `claims` (fakty +
@@ -95,3 +95,13 @@ ISO; retap = wyzerowanie klucza, ksztalt sprawdz w `sunday_brief._state_set`).
   parallel dispatch w backlogu.
 - Query niedzielne auto-klasyfikowalo sie na low (jedno zrodlo = krucho) -
   wymuszenie minimum medium w kodzie (4e65278), wchodzi z rebuildem cm-agent.
+
+## Podklad niedzielny - persist + plik (fix split-brain 20/07)
+
+Incydent: podklad wyszedl na czat z workera, mozg ROZMOWY CM go nie widzial (out-of-band
+nie wchodzi do historii) i twierdzil "research nie wrocil"; tresc nie byla zapisana.
+Fix: _do_send (a) persystuje pelny podklad w brand_config `cm_sunday_brief_last`
+(wersjonowanie bump), (b) wysyla DODATKOWO plik .md (gotowiec dla przegladarkowego CM),
+(c) modes_snapshot pokazuje CM stan podkladu (dostarczony/w toku) w kazdym prompcie.
+Poprawka tieru guzikiem (mtier) uczy Managera NA PRZYSZLOSC - nie przerabia wykonanego
+joba (propose-and-run); minimum medium dla query niedzielnego wymusza sunday_brief (4d).
