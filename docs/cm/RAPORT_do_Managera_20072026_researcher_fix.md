@@ -99,4 +99,10 @@ c) ags-researcher/app/worker.py (DoD c - widocznosc bledow):
 
 Wszystkie tymczasowe workflowy n8n (diag/diag2/diag3/diag4 + check) utworzone i SKASOWANE
 w tej sesji (kazdy przez try/finally deactivate+delete). HITL U5pUZjy2yAhR1sWg nietkniety.
-Inne adaptery nietkniete. Zero DDL, zero zmian w cm-agent (pkt 4d czeka na decyzje guzikami).
+Inne adaptery nietkniete. Zero DDL. Pkt 4d ROZSTRZYGNIETY guzikami 20/07: Tomasz wybral "wymus medium" -
+zrealizowane w cm-agent/app/sunday_brief.py (commit 4e65278): koncowka SUNDAY_QUERY
+ze slowami kluczowymi routera + len>500 => klasyfikacja minimum medium (zweryfikowane
+lokalnie na app.router: stare query=low, nowe=medium). /request nie przyjmuje poziomu
+kaskady wprost, wiec wymuszenie idzie przez tresc query (udokumentowane w kodzie).
+Wchodzi w zycie po rebuildzie cm-agent (osobna, swiadoma decyzja deployowa Tomasza -
+NIE laczyc z rebuildem ags-researcher).
