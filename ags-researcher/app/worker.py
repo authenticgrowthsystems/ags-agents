@@ -371,7 +371,10 @@ def process_job(job):
         runs[s] = r["run_id"]
 
     def _run_source(s):
-        return s, sources.run(s, job_id, runs[s], payloads[s])
+        try:
+            return s, sources.run(s, job_id, runs[s], payloads[s])
+        except Exception as e:  # sources.run already catches transport errors; this is the last resort
+            return s, {"status": "error", "evidence": [], "error": f"worker dispatch: {e}"}
 
     src_results = {}
     if srcs:
@@ -402,14 +405,25 @@ def process_job(job):
         if res.get("cost_usd") is not None:
             budget.log_cost(run_id, src, str(payloads[src].get("model") or src),
                             res.get("input_tokens"), res.get("output_tokens"), res.get("cost_usd"))
-        db.execute("UPDATE research_runs SET status=%s, completed_at=NOW() WHERE run_id=%s",
-                   (res.get("status", "completed"), run_id))
+        run_status = res.get("status", "completed")
+        run_error = (str(res.get("error"))[:500] if res.get("error") else None)
+        if run_status not in ("completed",) or run_error:
+            print(f"[researcher] job {job_id} source {src} status={run_status} error={run_error}", flush=True)
+        db.execute("UPDATE research_runs SET status=%s, error_message=%s, completed_at=NOW() WHERE run_id=%s",
+                   (run_status, run_error, run_id))
 
     # 4) failure assessment
     status, cap = failure.assess(evidence_by_source)
     if status == "failed":
-        db.set_status(job_id, "failed", error_message="no sources returned evidence", completed_at=_now())
-        _escalate(f"research failed (no evidence) job={job_id}")
+        # aggregate per-source reasons so a total failure is diagnosable from research_jobs alone
+        parts = []
+        for s in srcs:
+            r = src_results.get(s) or {}
+            parts.append(f"{s}={r.get('status', 'no_result')}" + (f" ({r.get('error')})" if r.get("error") else ""))
+        detail = ("no sources returned evidence: " + "; ".join(parts))[:500]
+        print(f"[researcher] job {job_id} failed: {detail}", flush=True)
+        db.set_status(job_id, "failed", error_message=detail, completed_at=_now())
+        _escalate(f"research failed (no evidence) job={job_id}: {detail}"[:900])
         return "failed"
 
     # 5) synthesis (Sonnet 4.6 -> exactly 4 options)

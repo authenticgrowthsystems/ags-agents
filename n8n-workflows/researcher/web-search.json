@@ -63,7 +63,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1500, tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: ($('Webhook').first().json.body.max_uses || 3) }], messages: [{ role: 'user', content: 'Search the web and list the key sources (titles and URLs) for: ' + ($('Webhook').first().json.body.query || '') }] }) }}",
+        "body": "={{ JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1500, tools: [{ type: 'web_search_20260209', name: 'web_search', allowed_callers: ['direct'], max_uses: ($('Webhook').first().json.body.max_uses || 3) }], messages: [{ role: 'user', content: 'Search the web and list the key sources (titles and URLs) for: ' + ($('Webhook').first().json.body.query || '') }] }) }}",
         "options": {}
       },
       "id": "h3",
@@ -79,7 +79,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const msg=$json;const content=(msg&&msg.content)||[];const seen={};const evidence=[];for(const b of content){if(b&&b.type==='web_search_tool_result'){const arr=b.content||[];for(const x of arr){if(x&&x.type==='web_search_result'&&x.url&&!seen[x.url]){seen[x.url]=1;evidence.push({source_url:x.url,source_name:'web_search',content:x.title||x.url,freshness:x.page_age||null,authority:null});}}}}return [{json:{status:evidence.length?'completed':'empty',source:'web_search',evidence_count:evidence.length,evidence:evidence}}];"
+        "jsCode": "const msg=$json;const base={source:'web_search',evidence_count:0,evidence:[]};const mkerr=(st,er)=>[{json:Object.assign({},base,{status:st,error:String(er||'').slice(0,400)})}];if(!msg)return mkerr('error','no_response');if(msg.type==='error'||msg.error){const e=(msg.error&&typeof msg.error==='object')?msg.error:{message:String(msg.error)};return mkerr('error','anthropic_or_http_error: '+((e.type?e.type+' ':'')+(e.message||JSON.stringify(e))).slice(0,350));}const content=msg.content||[];const seen={};const evidence=[];let toolErr=null;for(const b of content){if(b&&b.type==='web_search_tool_result'){const c=b.content;if(c&&!Array.isArray(c)&&c.type==='web_search_tool_result_error'){toolErr=c.error_code||'unknown';continue;}const arr=Array.isArray(c)?c:[];for(const x of arr){if(x&&x.type==='web_search_result'&&x.url&&!seen[x.url]){seen[x.url]=1;evidence.push({source_url:x.url,source_name:'web_search',content:x.title||x.url,freshness:x.page_age||null,authority:null});}}}}const u=msg.usage||{};const searches=(u.server_tool_use&&u.server_tool_use.web_search_requests)||0;const cost=((u.input_tokens||0)/1e6*3)+((u.output_tokens||0)/1e6*15)+searches*0.01;const costRounded=Math.round(cost*1e6)/1e6;if(evidence.length)return[{json:{status:'completed',source:'web_search',evidence_count:evidence.length,evidence:evidence,cost_usd:costRounded,input_tokens:u.input_tokens||0,output_tokens:u.output_tokens||0}}];const r=mkerr(toolErr?'error':'empty',toolErr?('web_search_tool_error: '+toolErr):('empty_result stop_reason='+(msg.stop_reason||'?')+' searches='+searches));r[0].json.cost_usd=costRounded;return r;"
       },
       "id": "h4",
       "name": "Normalize",
@@ -153,6 +153,6 @@
   "settings": {
     "executionOrder": "v1",
     "saveDataSuccessExecution": "none",
-    "saveDataErrorExecution": "none"
+    "saveDataErrorExecution": "all"
   }
 }
