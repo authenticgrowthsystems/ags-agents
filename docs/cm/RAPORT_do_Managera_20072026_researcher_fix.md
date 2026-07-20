@@ -92,8 +92,16 @@ c) ags-researcher/app/worker.py (DoD c - widocznosc bledow):
 - Testowy job przez /request: completed w 62 s, 18 evidence, 4 opcje, cost_pln 0.7435. [DoD a PASS]
 - Kopia repo == zywa definicja (body/Normalize/Guard/settings match:true przez API).
 - Sprzatanie: 0 workflowow TEMP w n8n po sesji (weryfikacja przez API).
-- DoD b (tap niedzielny): CZEKA na kroki Tomasza z sekcji 4.
-- DoD c: kod na galezi (commit 3f97d90), efekt po rebuildzie kontenera.
+- DoD b (tap niedzielny) PASS 20/07 ~10:44-10:46: po rebuildzie ags-researcher (build 78.2s,
+  health ok, "secrets loaded") + SQL resecie cm_sunday_brief (UPDATE 1) Tomasz tapnal
+  "podklad na niedziele" -> Researcher completed (4 opcje, koszt 0.8308 PLN, confidence 0.5),
+  podklad dojechal z 3 TEZAMI + twardymi faktami + ZRODLAMI (linki), BEZ fallbacku.
+  Bonus: petla uczenia 3a-2 zadzialala po drodze (Tomasz poprawil tier haiku->sonnet guzikiem,
+  "Manager sie uczy" zapisane). UWAGA redakcyjna: fakty w tezach wymagaja recznej weryfikacji
+  przed publikacja (draft z zalozenia; czesc liczb wyglada na niezweryfikowane agregaty zrodel).
+- DoD c: LIVE w kontenerze od rebuildu 20/07 (commit 3f97d90 wdrozony na serwerze).
+- Serwerowy klon ~/ags-agents stoi teraz na galezi claude/badacz-naprawa-d324bd - po merge
+  do sb-work BE-INTEGRATOR powinien przestawic serwer na docelowa galaz.
 
 ## 6. Sprzatanie
 

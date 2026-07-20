@@ -113,6 +113,8 @@ czerwca - web_search_20260209 domyslnie dynamic filtering przez code_execution (
 Fix: allowed_callers:['direct'] w zywym workflow (22-28s) + Normalize przepuszcza bledy i liczy
 cost_usd + saveDataErrorExecution:'all' + worker/sources zapisuja error_message (commit 3f97d90).
 DoD a PASS (job 854de5b8: completed, 18 evidence, 4 opcje, cost_pln 0.7435, 62s - na starym
-obrazie, sama naprawa n8n wystarczyla). CZEKA: rebuild ags-researcher (DoD c w kontenerze),
-reset cm_sunday_brief + tap-test niedzielny (DoD b), decyzja 4d.
+obrazie, sama naprawa n8n wystarczyla). DoD b PASS 20/07 ~10:46 (po rebuildzie + SQL resecie:
+podklad z 3 tezami i linkami, bez fallbacku; job 0.8308 PLN; 3a-2 korekta haiku->sonnet po drodze).
+DoD c LIVE (rebuild 20/07). 4d = decyzja Tomasza "wymus medium" zrealizowana (4e65278, czeka
+na rebuild cm-agent). CZEKA: merge do sb-work (BE-INTEGRATOR) + rebuild cm-agent (4d).
 Raport: docs/cm/RAPORT_do_Managera_20072026_researcher_fix.md
