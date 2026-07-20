@@ -470,6 +470,7 @@ def loop():
             sunday_brief.tick()                   # 19/07 BE-SWIAT: sob. podklad pod niedzielny artykul (research swiata)
             conversation.memory_tick()            # 10/07: wygasajacy watek rozmowy -> skrot do pamieci trwalej
             engagement.consumer_tick()            # 10/07: zatwierdzone komentarze -> gotowiec do wklejenia + guziki
+            engagement.stale_watch()              # 20/07 BE-ENGAGEMENT: propozycje/wklejenia >24h -> przypomnienie guzikami
             _brand_tokens_tick()                  # 12/07 #84: Notion Brand Config -> brand_tokens (poll 10 min)
             _x_collector_tick()                   # 19/07 kolektor X: snapshoty Owned Reads raz na dobe UTC
             item = db.claim_content_item()

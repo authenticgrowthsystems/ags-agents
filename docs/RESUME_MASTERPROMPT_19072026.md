@@ -178,6 +178,19 @@ publishery wolaja /wake, intencja zdjecia w routingu, Voice Bible v2.3 (seria X)
 Agent Wizualny (ZAMROZONY, spec gotowy), App 2 CMA, brand_assets, tryb jezyka canonicala,
 3b automation model_selection. Zamrozone NIE odmrazac bez decyzji Tomasza.
 
+**BE-ENGAGEMENT (20/07 popoludnie): ZBUDOWANE, czeka integracja.** Galaz build/engagement-crm:
+comment-radar dostaje CRM relacji (brief BRIEF_ENGAGEMENT_CRM_20072026, komponent
+docs/komponenty/engagement-crm.md - CZYTAJ ZAMIAST kodu): propozycja per AUTOR = wlasny wiersz
+engagement_log (status proposed/approved/sent/... + contact_id + author_display) z wlasnymi
+guzikami cmt:; contacts z #71 dopasowywane po handle/nazwie, NIEZNANY = stub + wymuszony intake
+profilu (zrzut -> wizja -> tier Buyer/Peer/Competitor/Partner guzikami przez decisions 'crm_tier');
+przypomnienia 24h (typy stale_comment / stale_comment_task); album media_group_id = JEDEN post
+(patch n8n: n8n-workflows/patches/hitl-photo-mediagroup-20072026.cjs; bez patcha fallback =
+pytanie 'jeden post czy rozne?' przy zrzutach <60 s). DDL 026 (contacts.handles +
+relationship_stage + icp_tier CHECK poszerzony; engagement_log.status + author_display).
+WDROZENIE: merge -> psql 026 PRZED rebuildem -> rebuild cm-agent -> patch n8n -> 5 tap-testow
+DoD z briefu. Nastepny wolny DDL po tym buildzie: **027**.
+
 RESEARCHER NAPRAWIONY 20/07 (merge 3fd3560): web_search padal od 28/06 przez domyslne
 dynamic filtering Anthropic w web_search_20260209 (15s->110s) - fix allowed_callers:['direct']
 + koniec polykania bledow (sources/worker/Normalize) + cost_usd z usage; zywy n8n oxwcD1i...

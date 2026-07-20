@@ -7,6 +7,7 @@ after approve the loop publishes in the slot and confirms on the log channel (bo
 import datetime
 import json
 import re
+import time
 import traceback
 from zoneinfo import ZoneInfo
 
@@ -1454,7 +1455,12 @@ def _sub_comment(inp, brand, channel):
     tasks.log_task("comment_suggest", tier, model, source, getattr(resp, "usage", None))
     out = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
     if out:
-        _log_engagement(brand, channel, (inp.get("post_text") or "")[:500], out, kind="comment", who=author)
+        contact_id = None
+        if author:  # BE-ENGAGEMENT 20/07: CRM obowiazkowy takze w sciezce tekstowej
+            from . import crm
+            contact_id, _ = crm.ensure_contact(author, brand, channel)
+        _log_engagement(brand, channel, (inp.get("post_text") or "")[:500], out, kind="comment",
+                        who=author, contact_id=contact_id)
         return "💬 Propozycje komentarzy:\n" + out
     return "Nie wyszlo - sprobuj jeszcze raz."
 
@@ -1465,17 +1471,22 @@ _ENG_CHANNEL = {"x": "X", "linkedin": "LinkedIn", "instagram": "Instagram", "fac
 _LAST_ENG_ID = [None]  # ostatnia propozycja w TYM watku obslugi -> guziki decyzji (pojedynczy operator, Pareto)
 
 
-def _log_engagement(brand, channel, incoming, response, kind="comment", who=None):
-    """T9 (07/08): pamiec interakcji na koncie -> engagement_log. Subagent widzi to potem w kontekscie
-    ('co juz bylo i jak reagowalismy'). Zwraca id wiersza (kotwica dla guzikow decyzji cmt:)."""
+def _log_engagement(brand, channel, incoming, response, kind="comment", who=None,
+                    contact_id=None, status="proposed"):
+    """T9 (07/08) + BE-ENGAGEMENT (20/07): pamiec interakcji na koncie -> engagement_log.
+    Kazda propozycja = WLASNY wiersz (per autor) z contact_id (CRM obowiazkowy), jawnym autorem
+    i statusem cyklu zycia (proposed -> approved/rejected -> sent/skipped; db/026).
+    Zwraca id wiersza (kotwica dla guzikow decyzji cmt:)."""
     fam = channel.split("_")[0]
     try:
         row = db.fetchone(
-            """INSERT INTO engagement_log (action_type, channel, agent, content, response, notes)
-               VALUES (%s,%s,%s,%s,%s,%s) RETURNING id""",
+            """INSERT INTO engagement_log (action_type, channel, agent, content, response, notes,
+                                           contact_id, status, author_display)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
             (f"{fam}_comment" if kind == "comment" else "other", _ENG_CHANNEL.get(fam, "Other"),
              f"{brand}:{channel}", (incoming or "")[:1000], (response or "")[:3000],
-             (f"od: {who}; " if who else "") + "propozycja subagenta (comment-first)"))
+             (f"od: {who}; " if who else "") + "propozycja subagenta (comment-first)",
+             contact_id, status, (who or None)))
         _LAST_ENG_ID[0] = str(row["id"]) if row else None
         return _LAST_ENG_ID[0]
     except Exception:
@@ -1526,20 +1537,54 @@ def handle_cmt(payload, wake_event=None):
                    (new_status, eng_id))
         src_eng = (task.get("payload") or {}).get("engagement_id")
         if src_eng:
-            db.execute("UPDATE engagement_log SET notes = COALESCE(notes,'') || %s WHERE id=%s::uuid",
-                       ((f" | WYKONANE {stamp}" if action == "done" else f" | POMINIETE {stamp}"), src_eng))
-        edit("✅ Odhaczone - komentarz wykonany, zapisane w pamieci konta." if action == "done"
-             else "⏭ Pominiete - zadanie zamkniete bez wykonania.")
+            db.execute("UPDATE engagement_log SET status=%s, notes = COALESCE(notes,'') || %s WHERE id=%s::uuid",
+                       ("sent" if action == "done" else "skipped",
+                        (f" | WYKONANE {stamp}" if action == "done" else f" | POMINIETE {stamp}"), src_eng))
+            if action == "done":  # BE-ENGAGEMENT 20/07: potwierdzone wklejenie -> stadium relacji
+                from . import crm
+                src = db.fetchone("SELECT contact_id FROM engagement_log WHERE id=%s::uuid", (src_eng,))
+                if src and src.get("contact_id"):
+                    crm.bump_stage(str(src["contact_id"]), "commented")
+        edit("✅ Odhaczone - komentarz wykonany, zapisane w pamieci konta i na kontakcie (CRM)."
+             if action == "done" else "⏭ Pominiete - zadanie zamkniete bez wykonania.")
         return
-    row = db.fetchone("SELECT id, agent, channel, content, response FROM engagement_log WHERE id=%s::uuid",
-                      (eng_id,)) if eng_id else None
+    if action in ("intake", "stub"):
+        # BE-ENGAGEMENT 20/07: tu parts[2] = contact_id (stub z propozycji). intake = uzbrojenie
+        # stanu 'nastepny zrzut to PROFIL'; stub = swiadome zostawienie minimalnego wpisu.
+        from . import crm
+        contact = db.fetchone("SELECT id, name FROM contacts WHERE id=%s::uuid", (eng_id,)) if eng_id else None
+        if not contact:
+            edit("Nie znam tego kontaktu (brak wpisu w contacts).")
+            return
+        if action == "intake":
+            try:
+                active = db.fetchone("SELECT active_agent FROM user_agent_state WHERE chat_id=%s",
+                                     (int(chat_id),))
+            except Exception:
+                active = None
+            agent_str = ((active or {}).get("active_agent") or "subagent:AGS:x")
+            _, _, rest = agent_str.partition(":")
+            i_brand, _, i_channel = rest.partition(":")
+            crm.arm_intake(chat_id, str(contact["id"]), contact.get("name") or "",
+                           i_brand or "AGS", i_channel or "x")
+            edit(f"📸 Czekam na zrzut PROFILU: {contact.get('name') or ''}. Wyslij go teraz - "
+                 f"odczytam bio i handle, zaproponuje tier do zatwierdzenia guzikami.")
+        else:
+            crm.clear_intake()
+            edit(f"⏭ Zostaje stub w CRM: {contact.get('name') or ''} (uzupelnisz profil kiedy zechcesz - "
+                 f"wystarczy znow tapnac intake przy nastepnej propozycji).")
+        return
+    row = db.fetchone(
+        """SELECT id, agent, channel, content, response, author_display, contact_id
+           FROM engagement_log WHERE id=%s::uuid""", (eng_id,)) if eng_id else None
     if not row:
         edit("Nie znam tej propozycji (brak wpisu w engagement_log).")
         return
     agent = row.get("agent") or "AGS:x"
     brand, _, channel = agent.partition(":")
+    author = row.get("author_display") or ""
     if action == "ok":
-        db.execute("UPDATE engagement_log SET notes = COALESCE(notes,'') || %s WHERE id=%s::uuid",
+        db.execute("UPDATE engagement_log SET status='approved', notes = COALESCE(notes,'') || %s WHERE id=%s::uuid",
                    (f" | DECYZJA {stamp}: ZATWIERDZONE", eng_id))
         try:
             db.execute(
@@ -1547,8 +1592,10 @@ def handle_cmt(payload, wake_event=None):
                    VALUES (%s,'comment',%s,%s,1,'pending')""",
                 (agent, channel.split("_")[0] or "x",
                  Jsonb({"engagement_id": eng_id, "proposals": (row.get("response") or "")[:3000],
-                        "source_post": (row.get("content") or "")[:800]})))
-            note = "✅ Zatwierdzone - decyzja zapisana, komentarze czekaja w kolejce zadan (task_queue/comment)."
+                        "source_post": (row.get("content") or "")[:800], "author": author[:120],
+                        "contact_id": str(row["contact_id"]) if row.get("contact_id") else None})))
+            note = (f"✅ Zatwierdzone ({author[:60]})" if author else "✅ Zatwierdzone") \
+                + " - decyzja zapisana, gotowiec zaraz przyjdzie z kolejki zadan."
         except Exception:
             traceback.print_exc()
             note = "✅ Zatwierdzone - decyzja zapisana (kolejka zadan niedostepna, zgloszenie w logu)."
@@ -1557,66 +1604,226 @@ def handle_cmt(payload, wake_event=None):
             wake_event.set()
         return
     if action == "no":
-        db.execute("UPDATE engagement_log SET notes = COALESCE(notes,'') || %s WHERE id=%s::uuid",
+        db.execute("UPDATE engagement_log SET status='rejected', notes = COALESCE(notes,'') || %s WHERE id=%s::uuid",
                    (f" | DECYZJA {stamp}: ODRZUCONE", eng_id))
-        edit("❌ Odrzucone - decyzja zapisana w pamieci konta.")
+        edit((f"❌ Odrzucone ({author[:60]})" if author else "❌ Odrzucone") + " - decyzja zapisana.")
         return
     if action == "angle":
-        db.execute("UPDATE engagement_log SET notes = COALESCE(notes,'') || %s WHERE id=%s::uuid",
+        # BE-ENGAGEMENT 20/07: inny kat PER AUTOR (nie caly zrzut) - stara propozycja uniewazniona,
+        # nowa idzie tym samym torem trzech wiadomosci z wlasnymi guzikami.
+        db.execute("UPDATE engagement_log SET status='rejected', notes = COALESCE(notes,'') || %s WHERE id=%s::uuid",
                    (f" | DECYZJA {stamp}: INNY KAT (regeneracja)", eng_id))
-        edit("🔄 Robie inne katy...")
+        edit(f"🔄 Robie inny kat dla: {author[:60]}..." if author else "🔄 Robie inny kat...")
         try:
-            if channel and db.fetchone(
-                    "SELECT 1 AS x FROM inspirations WHERE metadata->'media'->>'file_id' IS NOT NULL LIMIT 1"):
-                out = _sub_comment_vision(brand or "AGS", channel or "x", chat_id)
+            from .generate import _language_publish
+            brand_data = load_brand(brand or "AGS")
+            lang = _language_publish(brand or "AGS", channel or "x")
+            model, tier, source = tasks.model_for("canonical")
+            resp = client().messages.create(
+                model=model, max_tokens=700, thinking={"type": "disabled"},
+                system=[{"type": "text", "text": f"Glos marki:\n{brand_data['voice_bible'][:2500]}"}],
+                messages=[{"role": "user", "content":
+                           f"Zaproponuj 1 komentarz pod cudzy post na {channel or 'x'}"
+                           f"{(' (autor: ' + author + ')') if author else ''} z INNEGO KATA niz "
+                           f"poprzednia propozycja. Doktryna comment-first: konkretna wartosc, "
+                           f"ton peer-level, 2-4 zdania, zero linkow, zero pitchu. "
+                           f"Jezyk: {'polski' if lang == 'pl' else 'angielski'}. {TRUTH_GUARD}\n\n"
+                           f"POST:\n{(row.get('content') or '')[:1200]}\n\n"
+                           f"POPRZEDNIA PROPOZYCJA (nie powtarzaj tej tezy):\n"
+                           f"{(row.get('response') or '')[:800]}"}])
+            tasks.log_task("comment_suggest", tier, model, source, getattr(resp, "usage", None))
+            new_comment = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
+            if new_comment:
+                _send_author_proposal(chat_id, brand or "AGS", channel or "x",
+                                      author or "(autor ze zrzutu)", row.get("content") or "", new_comment)
+                _LAST_ENG_ID[0] = None
             else:
-                out = _sub_comment({"post_text": row.get("content") or ""}, brand or "AGS", channel or "x")
-            _reply(chat_id, out)
-            _send_comment_controls(chat_id)
+                _tg("sendMessage", {"chat_id": chat_id, "text": "Nie wyszla regeneracja - sprobuj jeszcze raz."})
         except Exception:
             traceback.print_exc()
             _tg("sendMessage", {"chat_id": chat_id, "text": "Nie wyszla regeneracja - sprobuj jeszcze raz."})
         return
 
 
+_SHOT_KEY = "cmt_last_shot"      # ostatnia analiza zrzutu: {insp_ids, eng_ids, ts, chat_id}
+_GROUP_KEY = "cmt_group_claim"   # przetworzone albumy: {gid, ts} (drugi zrzut albumu = cichy ack)
+_SHOT_WINDOW_S = 60              # zrzuty osobno w <60 s -> JEDNO pytanie zamiast duchow autorow
+
+
+def _parse_comment_blocks(out):
+    """Format wizji: '### Autor / POST: ... / KOMENTARZ: ...' -> [(autor, post, komentarz)].
+    Fallback na stary format (bez POST:/KOMENTARZ:): cale cialo bloku = komentarz."""
+    blocks = []
+    for b in re.split(r"\n?#{2,3} +", out):
+        b = b.strip()
+        if not b:
+            continue
+        lines = b.split("\n", 1)
+        author = lines[0].strip()
+        body = (lines[1] if len(lines) > 1 else "").strip()
+        if not body:
+            continue
+        m = re.search(r"POST:\s*(.*?)\s*KOMENTARZ:\s*(.+)", body, re.DOTALL | re.IGNORECASE)
+        if m:
+            blocks.append((author, m.group(1).strip(), m.group(2).strip()))
+        else:
+            blocks.append((author, "", re.sub(r"^KOMENTARZ:\s*", "", body, flags=re.IGNORECASE)))
+    return blocks
+
+
+def _fetch_images(insp_rows):
+    """Wiersze inspirations (metadata.media.file_id) -> lista (bytes, media_type). Braki pomija."""
+    images = []
+    for p in insp_rows:
+        fid = (((p.get("metadata") or {}).get("media")) or {}).get("file_id")
+        img, mt = _fetch_telegram_image(fid)
+        if img:
+            images.append((img, mt))
+    return images
+
+
+def _send_author_proposal(chat_id, brand, channel, author, post_excerpt, comment):
+    """BE-ENGAGEMENT (20/07): propozycja per AUTOR = wlasny wiersz engagement_log (z contact_id -
+    CRM obowiazkowy) + TRZY wiadomosci: naglowek z kontekstem relacji / CZYSTA wklejka / guziki
+    decyzji POD TA KONKRETNA propozycja. Nieznany autor dodatkowo dostaje wymuszony intake.
+    Zwraca eng_id albo None."""
+    from . import crm
+    contact_id, is_new = crm.ensure_contact(author, brand, channel)
+    eng_id = _log_engagement(brand, channel, post_excerpt or "zrzut", comment, kind="comment",
+                             who=author, contact_id=contact_id, status="proposed")
+    ctx = None if is_new else crm.relation_context(contact_id)
+    header = f"💬 Komentarz dla: {author[:100]}"
+    if ctx:
+        header += f"\n👤 {ctx}"
+    elif is_new and contact_id:
+        header += "\n🆕 Nowa osoba - zalozylem wpis w CRM (stub), intake ponizej."
+    _tg("sendMessage", {"chat_id": chat_id, "text": header})
+    _tg("sendMessage", {"chat_id": chat_id, "text": comment[:4000]})  # CZYSTA wklejka
+    if eng_id:
+        _tg("sendMessage", {"chat_id": chat_id, "text": f"Decyzja dla: {author[:80]}", "reply_markup":
+            {"inline_keyboard": [[
+                {"text": "✅ Zatwierdz", "callback_data": f"cmt:ok:{eng_id}"},
+                {"text": "🔄 Inny kat", "callback_data": f"cmt:angle:{eng_id}"},
+                {"text": "❌ Odrzuc", "callback_data": f"cmt:no:{eng_id}"}]]}})
+    if is_new and contact_id:
+        _tg("sendMessage", {"chat_id": chat_id, "text":
+            f"🆕 Nowa osoba: {author[:100]}. Nie znam jej. Wejdz na profil i daj zrzut - zaloze "
+            f"pelny wpis (bio + tier do zatwierdzenia guzikami).", "reply_markup":
+            {"inline_keyboard": [[
+                {"text": "📸 Dam zrzut profilu", "callback_data": f"cmt:intake:{contact_id}"},
+                {"text": "⏭ Zostaw stub", "callback_data": f"cmt:stub:{contact_id}"}]]}})
+    return eng_id
+
+
+def _comment_vision_run(brand, channel, chat_id, insp_rows, supersede_eng_ids=None):
+    """Sklejona analiza 1+ zrzutow -> propozycje per autor (osobne wiersze + guziki).
+    supersede_eng_ids: wczesniejsze propozycje do uniewaznienia (analiza wielozrzutowa)."""
+    images = _fetch_images(insp_rows)
+    if not images:
+        return "Nie moge pobrac obrazu z Telegrama - sprobuj wyslac zrzut jeszcze raz."
+    from .generate import comment_from_image, _language_publish
+    lang = _language_publish(brand, channel)
+    out = comment_from_image(images, load_brand(brand), channel, lang)
+    if not out:
+        return "Nie wyszlo - sprobuj jeszcze raz."
+    for old_id in (supersede_eng_ids or []):
+        try:
+            db.execute("""UPDATE engagement_log SET status='rejected',
+                          notes = COALESCE(notes,'') || ' | zastapione analiza wielozrzutowa'
+                          WHERE id=%s::uuid AND status='proposed'""", (old_id,))
+        except Exception:
+            traceback.print_exc()
+    blocks = _parse_comment_blocks(out)
+    if not chat_id:
+        return "💬 Propozycje komentarzy (z analizy zrzutu, per autor):\n\n" + out
+    eng_ids = []
+    for author, post_excerpt, comment in blocks:
+        eng_id = _send_author_proposal(chat_id, brand, channel, author, post_excerpt, comment)
+        if eng_id:
+            eng_ids.append(eng_id)
+    _LAST_ENG_ID[0] = None  # guziki poszly per autor - zbiorczy panel decyzji juz NIE
+    _mrv_state_set(_SHOT_KEY, {"insp_ids": [int(p["id"]) for p in insp_rows], "eng_ids": eng_ids,
+                               "ts": datetime.datetime.now(WARSAW).isoformat(), "chat_id": chat_id})
+    if eng_ids:
+        return (f"(wyslalem {len(eng_ids)} propozycji - kazda osobno: naglowek z kontekstem CRM, "
+                f"czysta wklejka i wlasne guziki decyzji)")
+    return "Nie rozpoznalem zadnego autora na zrzucie - sprobuj wyrazniejszy zrzut."
+
+
 def _sub_comment_vision(brand, channel, chat_id=None):
-    """T9 (07/08): pobierz OSTATNI obraz ze schowka -> Claude vision -> komentarze PER element ->
-    zapis do engagement_log. Dziala bez zmian n8n (obraz laduje w schowku starym torem wizji).
-    20/07 (feedback Tomasza z telefonu): przy chat_id kazda propozycja idzie DWOMA wiadomosciami -
-    naglowek z autorem osobno, CZYSTY tekst komentarza osobno (przytrzymaj-kopiuj-wklej bez
-    wycinania naglowkow); zwrot dla modelu = krotki paragon, nie tresc."""
+    """T9 (07/08) + BE-ENGAGEMENT (20/07): zrzut(y) ze schowka -> Claude vision -> propozycje
+    per AUTOR (wlasny wiersz engagement_log + wlasne guziki; CRM obowiazkowy). Album Telegram
+    (media_group_id w metadata, patch n8n) = JEDEN post, jedna sklejona analiza. Zrzuty wyslane
+    OSOBNO w <60 s = jedno pytanie 'czesci jednego posta czy rozne?' zamiast duchow autorow.
+    Uzbrojony intake CRM ma pierwszenstwo: zrzut = PROFIL osoby, nie post do komentowania."""
+    from . import crm
     photo = db.fetchone(
         """SELECT id, content, metadata FROM inspirations
            WHERE metadata->'media'->>'file_id' IS NOT NULL ORDER BY created_at DESC LIMIT 1""")
     if not photo:
         return ("Nie widze zadnego obrazu w schowku. Wyslij najpierw ZRZUT posta/komentarza (zwykle "
                 "zdjecie), potem powiedz 'skomentuj ostatni zrzut'.")
-    fid = photo["metadata"]["media"]["file_id"]
-    img, mt = _fetch_telegram_image(fid)
-    if not img:
-        return "Nie moge pobrac obrazu z Telegrama - sprobuj wyslac zrzut jeszcze raz."
-    from .generate import comment_from_image, _language_publish
-    lang = _language_publish(brand, channel)
-    out = comment_from_image(img, mt, load_brand(brand), channel, lang)
-    if not out:
-        return "Nie wyszlo - sprobuj jeszcze raz."
-    _log_engagement(brand, channel, (photo.get("content") or "zrzut")[:500], out, kind="comment")
+    # 0) intake profilu (wymuszony dla nieznanych) ma pierwszenstwo
     if chat_id:
-        blocks = [b.strip() for b in re.split(r"\n?#{2,3} +", out) if b.strip()]
-        sent = 0
-        for b in blocks:
-            lines = b.split("\n", 1)
-            author = lines[0].strip()
-            body = (lines[1] if len(lines) > 1 else "").strip()
-            if not body:
-                continue
-            _tg("sendMessage", {"chat_id": chat_id, "text": f"💬 Komentarz dla: {author[:100]}"})
-            _tg("sendMessage", {"chat_id": chat_id, "text": body[:4000]})  # CZYSTA wklejka
-            sent += 1
-        if sent:
-            return (f"(wyslalem {sent} propozycji - kazda jako OSOBNA czysta wiadomosc do skopiowania; "
-                    f"decyzje guzikami ponizej)")
-    return "💬 Propozycje komentarzy (z analizy zrzutu, per autor):\n\n" + out
+        intake = crm.get_intake(chat_id)
+        if intake:
+            images = _fetch_images([photo])
+            if not images:
+                return "Nie moge pobrac obrazu z Telegrama - sprobuj wyslac zrzut profilu jeszcze raz."
+            return crm.process_profile_photo(intake, images)
+    meta_media = ((photo.get("metadata") or {}).get("media")) or {}
+    gid = str(meta_media.get("media_group_id") or "")
+    if gid:
+        # album: pierwszy trigger zbiera CALA grupe (krotka pauza az reszta doleci), kolejne = cichy ack
+        claim = _mrv_state(_GROUP_KEY)
+        if claim.get("gid") == gid:
+            return "(zrzut z tego samego albumu - juz analizuje go razem z pozostalymi)"
+        _mrv_state_set(_GROUP_KEY, {"gid": gid, "ts": datetime.datetime.now(WARSAW).isoformat()})
+        time.sleep(4)
+        group = db.fetchall(
+            """SELECT id, content, metadata FROM inspirations
+               WHERE metadata->'media'->>'media_group_id' = %s
+                 AND created_at > NOW() - interval '15 minutes' ORDER BY created_at""", (gid,))
+        return _comment_vision_run(brand, channel, chat_id, group or [photo])
+    # zrzuty wyslane OSOBNO tuz po sobie: dopytaj JEDNYM pytaniem zamiast produkowac duchy autorow
+    last = _mrv_state(_SHOT_KEY)
+    if chat_id and last.get("insp_ids") and int(photo["id"]) not in last["insp_ids"]:
+        try:
+            age = (datetime.datetime.now(WARSAW)
+                   - datetime.datetime.fromisoformat(last["ts"])).total_seconds()
+        except Exception:
+            age = None
+        if age is not None and age < _SHOT_WINDOW_S:
+            from . import decisions
+            return decisions.ask(
+                f"{brand}:{channel}", brand, "photo_group",
+                "Dostalem drugi zrzut chwile po poprzednim. To czesci JEDNEGO posta czy ROZNE posty?",
+                [{"key": "one", "label": "Jeden post - sklej analize"},
+                 {"key": "sep", "label": "Rozne posty - analizuj osobno"}],
+                context={"prev_insp_ids": last["insp_ids"], "prev_eng_ids": last.get("eng_ids") or [],
+                         "new_insp_id": int(photo["id"]), "brand": brand, "channel": channel,
+                         "chat_id": chat_id}, chat_id=chat_id)
+    return _comment_vision_run(brand, channel, chat_id, [photo])
+
+
+def apply_photo_group(row, key, chat):
+    """Akcja decyzji 'photo_group' (decisions._apply_action): 'one' = sklejona analiza starych+nowego
+    zrzutu (stare propozycje uniewaznione), 'sep' = nowy zrzut analizowany osobno."""
+    ctx = row.get("context") or {}
+    brand, channel = ctx.get("brand") or "AGS", ctx.get("channel") or "x"
+    chat_id = ctx.get("chat_id") or chat
+    ids = (ctx.get("prev_insp_ids") or []) + [ctx.get("new_insp_id")] if key == "one" \
+        else [ctx.get("new_insp_id")]
+    ids = [i for i in ids if i]
+    rows = db.fetchall(
+        "SELECT id, content, metadata FROM inspirations WHERE id = ANY(%s) ORDER BY created_at", (ids,))
+    if not rows:
+        _tg("sendMessage", {"chat_id": chat_id, "text": "Nie znajduje juz tych zrzutow w schowku."})
+        return
+    supersede = (ctx.get("prev_eng_ids") or []) if key == "one" else []
+    note = _comment_vision_run(brand, channel, chat_id, rows, supersede_eng_ids=supersede)
+    if note:
+        _tg("sendMessage", {"chat_id": chat_id, "text": note[:4000]})
 
 
 TOOL_SUB_RULE = {
@@ -2042,6 +2249,11 @@ def _subagent_handle(chat_id, text, active):
         return
     if re.match(r"^/?raport\s*(dzienny|tygodniowy)?\s*$", low):
         _reply(chat_id, _sub_report(brand, channel))
+        return
+    # BE-ENGAGEMENT 20/07: 'co wisi?' = wiszace propozycje komentarzy + niepotwierdzone wklejenia
+    if re.match(r"^/?(co\s+wisi|wisz[aą]ce(\s+(propozycje|komentarze))?)\s*\??$", low):
+        from . import crm
+        _reply(chat_id, f"Wiszace {brand} {channel}:\n{crm.pending_text(brand, channel)}")
         return
     # T9 (07/08): 'skomentuj ostatni zrzut' / 'odpowiedz na ten screen' -> wizja Claude na obrazie ze schowka
     if (re.search(r"\b(skomentuj|odpowiedz|komentarz)\b", low)

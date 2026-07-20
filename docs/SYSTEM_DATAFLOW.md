@@ -74,6 +74,7 @@ DB->Notion [sync-notion]; caly transport i zasady zmian n8n [n8n-transport].
 | Metryki | [komponenty/metryki.md](komponenty/metryki.md) | kolektor X Owned Reads, import xlsx LinkedIn, channel_metrics_daily, PROFIL |
 | Dedup | [komponenty/dedup.md](komponenty/dedup.md) | dup_check na master_theme, prog cm_dup_threshold 0.57, ⚠️ w kartach i approval |
 | Rozmowa CM/subagenci | [komponenty/rozmowa-cm.md](komponenty/rozmowa-cm.md) | route deterministyczne, narzedzia, pamiec 3 warstwy, subagent=ten sam kod |
+| Engagement-CRM | [komponenty/engagement-crm.md](komponenty/engagement-crm.md) | comment-radar per autor, contacts+stadium relacji, intake nieznanych, przypomnienia 24h, album=1 post |
 | Researcher | [komponenty/researcher.md](komponenty/researcher.md) | kaskada 5 zrodel, kontrakt /request, bramki critical/model, sunday brief |
 | Grafika | [komponenty/grafika.md](komponenty/grafika.md) | gpt-image-2, prompt Sonneta, brand_tokens/visual_canon, kanon mediow |
 | Sync Notion | [komponenty/sync-notion.md](komponenty/sync-notion.md) | mirror DB->Notion, sync_registry/page_map, drift check |
