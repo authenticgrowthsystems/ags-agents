@@ -53,3 +53,18 @@ Zero SSH/deployu. Jedno przejrzenie struktury + push.
 Raport docs/cm/RAPORT_do_Managera_<data>_dokumentacja.md + masterprompt + pamiec + STATUS tu.
 
 STATUS = READY (20/07, kanon DOKUMENTACJA ZYJE wpisany do PROTOKOL_SESJI pkt 6 i masterpromptu)
+
+## 1b. DOPISEK ZAKRESU (Tomasz 20/07, w trakcie buildu - "nie moge sprzedawac czegos co nie jest gotowe")
+
+MACIERZ GOTOWOSCI PRODUKTU: nowy plik `docs/GOTOWOSC_PRODUKTU.md` + STATUS GOTOWOSCI
+w naglowku KAZDEGO pliku komponentu. Skala uczciwa, bez marketingu do wewnatrz:
+- KOMPLETNY (LIVE, przetestowany tapami, ma dokumentacje) / CZESCIOWY (dziala rdzen,
+  brak wymienionych funkcji) / W BUDOWIE / ZAMROZONY / NIEZACZETY.
+`GOTOWOSC_PRODUKTU.md` odpowiada wprost na pytanie "JUTRO MAM KLIENTA - CO MOGE SPRZEDAC":
+1) definicja MVP per obiekt sprzedazowy (subagent X pod CM, Idea Bot, Researcher, LinkedIn
+   tryb reczny...) - co klient dostaje DZIS w cenie, co dojedzie w cenie pozniej (model:
+   MVP rozwijany, funkcje doplywaja);
+2) czego NIE sprzedajemy (zamrozone/niekompletne) - lista wprost;
+3) braki blokujace sprzedaz per obiekt (np. interfejs tylko Telegram, wdrozenie bez
+   playbooka do czasu BE-SNAPSHOT).
+Kazdy przyszly build MA OBOWIAZEK aktualizowac te macierz (kanon DOKUMENTACJA ZYJE pkt 6a).

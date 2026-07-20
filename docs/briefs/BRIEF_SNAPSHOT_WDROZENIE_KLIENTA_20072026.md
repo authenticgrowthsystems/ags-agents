@@ -80,4 +80,16 @@ Zero SSH poza ewentualnym odpaleniem skryptu eksportu n8n.
 
 Raport docs/cm/RAPORT_do_Managera_<data>_snapshot.md + masterprompt + pamiec + STATUS tu.
 
-STATUS = READY (20/07; kanon produktu zapisany w pamieci trwalej)
+STATUS = READY-HOLD (20/07 - patrz sekcja 7; start po macierzy gotowosci)
+
+## 7. KOREKTA TOMASZA 20/07 (przeczytaj przed startem)
+
+- STATUS = READY-HOLD: NIE uruchamiac teraz. Kolejnosc: dokumentacja komponentowa + MACIERZ
+  GOTOWOSCI najpierw (agenci nie sa gotowi; "nie moge sprzedawac czegos co nie jest gotowe").
+  Sprzedaz KONKRETNEGO agenta klientowi = osobna sesja z Managerem, gdy Manager uruchomiony.
+- WYMOG ARCHITEKTONICZNY do warstwy B playbooka: INTERFEJS KLIENTA = WYMIENNY KONEKTOR.
+  Telegram to nasz obecny front, ale klient wybiera: Telegram / Slack / aplikacja webowa
+  (prawdopodobny glowny kandydat) / aplikacja mobilna (docelowo zastepuje komunikatory).
+  Architektura JUZ to umozliwia (n8n=transport, logika w cm-agent /message {chat_id, text}
+  - kazdy front to nowy transport do tego samego kontraktu); playbook ma opisac warstwe
+  konektorow i miejsce wpiecia nowego frontu, NIE zakladac Telegrama na sztywno.
