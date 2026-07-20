@@ -1568,7 +1568,7 @@ def handle_cmt(payload, wake_event=None):
         try:
             if channel and db.fetchone(
                     "SELECT 1 AS x FROM inspirations WHERE metadata->'media'->>'file_id' IS NOT NULL LIMIT 1"):
-                out = _sub_comment_vision(brand or "AGS", channel or "x")
+                out = _sub_comment_vision(brand or "AGS", channel or "x", chat_id)
             else:
                 out = _sub_comment({"post_text": row.get("content") or ""}, brand or "AGS", channel or "x")
             _reply(chat_id, out)
@@ -1579,9 +1579,12 @@ def handle_cmt(payload, wake_event=None):
         return
 
 
-def _sub_comment_vision(brand, channel):
+def _sub_comment_vision(brand, channel, chat_id=None):
     """T9 (07/08): pobierz OSTATNI obraz ze schowka -> Claude vision -> komentarze PER element ->
-    zapis do engagement_log. Dziala bez zmian n8n (obraz laduje w schowku starym torem wizji)."""
+    zapis do engagement_log. Dziala bez zmian n8n (obraz laduje w schowku starym torem wizji).
+    20/07 (feedback Tomasza z telefonu): przy chat_id kazda propozycja idzie DWOMA wiadomosciami -
+    naglowek z autorem osobno, CZYSTY tekst komentarza osobno (przytrzymaj-kopiuj-wklej bez
+    wycinania naglowkow); zwrot dla modelu = krotki paragon, nie tresc."""
     photo = db.fetchone(
         """SELECT id, content, metadata FROM inspirations
            WHERE metadata->'media'->>'file_id' IS NOT NULL ORDER BY created_at DESC LIMIT 1""")
@@ -1598,6 +1601,21 @@ def _sub_comment_vision(brand, channel):
     if not out:
         return "Nie wyszlo - sprobuj jeszcze raz."
     _log_engagement(brand, channel, (photo.get("content") or "zrzut")[:500], out, kind="comment")
+    if chat_id:
+        blocks = [b.strip() for b in re.split(r"\n?#{2,3} +", out) if b.strip()]
+        sent = 0
+        for b in blocks:
+            lines = b.split("\n", 1)
+            author = lines[0].strip()
+            body = (lines[1] if len(lines) > 1 else "").strip()
+            if not body:
+                continue
+            _tg("sendMessage", {"chat_id": chat_id, "text": f"💬 Komentarz dla: {author[:100]}"})
+            _tg("sendMessage", {"chat_id": chat_id, "text": body[:4000]})  # CZYSTA wklejka
+            sent += 1
+        if sent:
+            return (f"(wyslalem {sent} propozycji - kazda jako OSOBNA czysta wiadomosc do skopiowania; "
+                    f"decyzje guzikami ponizej)")
     return "💬 Propozycje komentarzy (z analizy zrzutu, per autor):\n\n" + out
 
 
@@ -1986,7 +2004,7 @@ def _sub_dispatch_tool(name, inp, brand, channel, chat_id=None):
     if name == "suggest_comment":
         return _sub_comment(inp, brand, channel)
     if name == "suggest_comment_from_image":
-        return _sub_comment_vision(brand, channel)
+        return _sub_comment_vision(brand, channel, chat_id)
     if name == "subagent_remember_rule":
         out = _sub_remember_rule(inp, brand, channel)
         if out.startswith("✅"):
@@ -2028,7 +2046,7 @@ def _subagent_handle(chat_id, text, active):
     # T9 (07/08): 'skomentuj ostatni zrzut' / 'odpowiedz na ten screen' -> wizja Claude na obrazie ze schowka
     if (re.search(r"\b(skomentuj|odpowiedz|komentarz)\b", low)
             and re.search(r"\b(zrzut|screen|obraz|obrazek|ekran|ostatni)\b", low)):
-        _reply(chat_id, _sub_comment_vision(brand, channel))
+        _reply(chat_id, _sub_comment_vision(brand, channel, chat_id))
         _send_comment_controls(chat_id)  # decyzja Tomasza zapisuje sie w bazie (08/07)
         return
     # DETERMINISTYCZNY start edycji (fix 07/08): 'edytuj #21' / 'popraw #21' bez tresci -> ustaw pending
