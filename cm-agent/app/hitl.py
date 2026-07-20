@@ -46,6 +46,12 @@ def send_approval(item, variants):
     can_tier, _ = tasks.tier_for("canonical")
     lines = [f"CM: nowy material (marka {item['brand_id']}) - {item.get('master_theme')}",
              "", "Ponizej FINALNE teksty do publikacji (jezyk wg celu; AGS = EN):", ""]
+    # 20/07 tap-test integracji: dup_warning bylo tylko na kartach przegladu (matreview),
+    # a decyzja zapada TU - ostrzezenie musi byc w wiadomosci approval (na gorze, pod tytulem)
+    _dup = next((m.get("text") for m in (item.get("media") or [])
+                 if (m or {}).get("kind") == "dup_warning"), None)
+    if _dup:
+        lines.insert(1, f"⚠️ DUPLIKACJA: {_dup[:250]}")
     for ch, txt in variants:
         lines.append(f"--- {ch} ---\n{txt}\n")
     if not variants:
