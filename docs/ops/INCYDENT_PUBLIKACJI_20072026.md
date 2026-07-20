@@ -40,8 +40,9 @@ AP-307 w anti-patterns/library.md.
 - D) 10 polskich wierszy kolejki X (182-185, 210-215) przetlumaczone na EN
   przez BE (Tomasz zatwierdzil SENS po polsku; karta kontrolna:
   docs/ops/TLUMACZENIA_EN_20072026.md; wykonanie SQL = zatwierdzenie).
-- E) Re-slot wierszy z martwymi slotami z 19/07: 246 -> 23/07 15:37,
-  247 -> 23/07 20:23 (246 -> 23/07 19:12 po sondzie: material dispatchuje 18:45), 248 -> 24/07 17:42.
+- E) Re-slot wierszy z martwymi slotami z 19/07: 246 -> 23/07 19:12,
+  247 -> 23/07 20:23, 248 -> 24/07 17:42 (material dispatchuje sie 23/07 18:45,
+  sloty wierszy musza byc POZNIEJSZE - zlapane sonda przed wykonaniem).
 - F) Sonda przed wykonaniem (20/07 ~22:15): zero held/scheduled, wszystkie wiersze
   'review', materialy 'approved' z przyszlymi slotami - freeze niepotrzebny,
   w SQL zostal tylko bezpiecznik held->review.
