@@ -40,11 +40,15 @@
 - Link partnerski GHL (40%): oznaczony w ofercie i runbooku jako "przygotowac przed pierwsza
   sprzedaza"; wdrozenie NIE jest od niego zalezne.
 
-## 4. Czeka na Tomasza (guziki + test krzeslem)
+## 4. Decyzje Tomasza (guziki, 20/07 ~15:20) - PARAGON
 
-1. Aktywacja Pakietow PL 1-3 (SQL gotowy) - rekomendacja: TAK, bez zmian kwot.
-2. Kwoty EN retention_en - rekomendacja: przyjac propozycje z oferty.
-3. Test krzeslem runbooka + przeczytanie oferty PL (DoD: wysylalna bez poprawek).
+1. Aktywacja Pakietow PL 1-3: **TAK, bez zmian kwot** (guzik, rekomendacja przyjeta).
+2. Kwoty EN retention_en ($700-1000 / $1200-1900 / $2500-3500): **TAK, propozycja przyjeta**.
+SQL docs/product/SQL_AKTYWACJA_PAKIETOW_PL_20072026.sql wykonuje Tomasz w CALOSCI (krok 1 + 2)
+po merge do sb-work i pullu na serwerze.
+
+Zostaje na Tomaszu: test krzeslem runbooka + przeczytanie oferty PL przed pierwsza wysylka
+(DoD: wysylalna bez poprawek).
 
 ## 5. Dla integratora
 
