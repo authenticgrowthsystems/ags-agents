@@ -356,7 +356,12 @@ def handle_agent_requests(brand_id="AGS"):
 
 def weekly_metrics_reminder(brand_id="AGS"):
     """Poniedzialek 09:30-11:30: subagent x UPOMINA SIE o metryki tygodnia (decyzja Tomasza 06/07:
-    recznie raz w tygodniu; wpis przez rozmowe z subagentem, narzedzie subagent_set_metrics)."""
+    recznie raz w tygodniu; wpis przez rozmowe z subagentem, narzedzie subagent_set_metrics).
+    20/07: monit TYLKO gdy cel realnie potrzebuje wpisu recznego (stats_mode='manual') - kolektor
+    Owned Reads zbiera X sam, a przypomnienie i tak wyszlo (relikt; zgloszenie Tomasza 10:10)."""
+    ch = db.fetchone("SELECT config FROM channels WHERE brand_id=%s AND channel='x'", (brand_id,))
+    if ((ch or {}).get("config") or {}).get("stats_mode", "manual") != "manual":
+        return
     now = datetime.datetime.now(WARSAW)
     if now.weekday() != 0:
         return
