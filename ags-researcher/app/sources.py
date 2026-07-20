@@ -34,7 +34,7 @@ class SourceClient:
             return {"status": "error", "evidence": [], "error": str(e)}
         if source in config.ASYNC_SOURCES:
             return self._poll(source, run_id, resp)
-        return resp or {"status": "error", "evidence": []}
+        return resp or {"status": "error", "evidence": [], "error": "adapter returned empty/non-json response"}
 
     @retry(
         stop=stop_after_attempt(config.SOURCE_RETRIES + 1),
@@ -52,7 +52,9 @@ class SourceClient:
         provider_job_id = start_resp.get("provider_job_id")
         status_path = config.ADAPTER_PATHS.get(f"{source}_status")
         if not provider_job_id or not status_path:
-            return start_resp if start_resp.get("evidence") else {"status": "error", "evidence": []}
+            return start_resp if start_resp.get("evidence") else {
+                "status": "error", "evidence": [],
+                "error": start_resp.get("error") or "async start returned no provider_job_id"}
         url = config.N8N_BASE_URL + status_path
         deadline = time.time() + config.SOURCE_TIMEOUT_S
         while time.time() < deadline:
@@ -65,4 +67,5 @@ class SourceClient:
                 data = {}
             if data.get("status") == "completed":
                 return data
-        return {"status": "timeout", "evidence": []}
+        return {"status": "timeout", "evidence": [],
+                "error": f"async poll timeout after {config.SOURCE_TIMEOUT_S}s (provider_job_id={provider_job_id})"}
