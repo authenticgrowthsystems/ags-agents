@@ -11,12 +11,20 @@ Research w tle, NIE blokuje buildow B/C. Zero zmian kodu/n8n poza zleceniami do 
 
 ## 1. CO robisz
 
+**KOREKTA TOMASZA 20/07 ~15:30 (nadpisuje tiery ponizej): tier critical NIE idzie przez API**
+(koszt ~18 PLN/job). Podzial pracy:
+- **critical = RECZNIE Tomasz** na wlasnych abonamentach (Manus Pro / Gemini / ChatGPT DR);
+  wyniki dostarcza jako pliki do `docs/research/sprzedaz_20072026/` (konwencja intake:
+  README.md w tym folderze). Dotyczy zwlaszcza tematu 1 (konkurencja).
+- **API Researchera = TYLKO tier medium** (tematy rynkowe 2-4). Zadnych jobow critical z API.
+
 Zlecasz Researcherowi (LIVE po naprawie 20/07; kontrakt POST /request na ags-researcher:8088,
-wzorzec zlecania: docs/komponenty/researcher.md; secret z app_secrets; tier: medium dla
-rynkowych, critical/Manus dla konkurencji) rownolegle badania, potem SYNTETYZUJESZ
+wzorzec zlecania: docs/komponenty/researcher.md; secret z app_secrets; tier: WYLACZNIE medium)
+rownolegle badania, konsumujesz reczne zrzuty Tomasza z folderu, potem SYNTETYZUJESZ
 w decyzyjne dokumenty docs/research/sprzedaz_20072026/:
 
-1. **KONKURENCJA "GHL setup/retention dla malych firm"** (critical): kto sprzedaje (PL i US),
+1. **KONKURENCJA "GHL setup/retention dla malych firm"** (critical = RECZNIE Tomasz,
+   zrzuty w folderze; BE tylko syntetyzuje): kto sprzedaje (PL i US),
    ceny setup/abonament, delivery, gdzie sie promuja (FB Groups, Reddit, YT, LinkedIn).
    Wynik: tabela + luka pozycjonowania dla AGS (my: rezultat-retencja, nie narzedzie).
 2. **AI sales agent tools** (medium): Clay, Instantly, HeyReach, Attio AI - co robia, ceny,
@@ -34,6 +42,7 @@ REKOMENDACJE_SPRZEDAZ_20072026.md (max 1 strona: 5 decyzji do podjecia przez Tom
 Managera, kazda z opcjami i rekomendacja). Koszty jobow raportujesz (cost_pln z ledgera).
 
 ## 5. Udzial Tomasza
-Zero, poza przeczytaniem rekomendacji. Ewentualny tap gdy Researcher poprosi o tier.
+Reczny research critical na abonamentach (Manus Pro / Gemini / ChatGPT DR) -> pliki do
+docs/research/sprzedaz_20072026/ wg README. Poza tym: przeczytanie rekomendacji.
 
 ## 6. Zamkniecie: raport + STATUS tu. STATUS = READY (20/07 ~13:20)
