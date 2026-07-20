@@ -34,13 +34,19 @@ MANUAL_FALLBACK_S = 20 * 60        # tap-test: research nie dojechal w 20 min ->
 RESEARCHER_DONE = ("completed", "partial_failure")   # partial = mniej zrodel, ale evidence jest
 RESEARCHER_DEAD = ("failed", "archived")
 
+# DECYZJA 20/07 (brief 4d): koncowka "Porownaj opcje ... praktyki i rekomendacje" celowo trafia w
+# slowa kluczowe routera Researchera (por[o]wn/opcj/najlep/praktyk/rekomend) + len>500, wiec zapytanie
+# klasyfikuje sie MINIMUM medium (kaskada web_search+firecrawl+gemini_dr zamiast samego web_search).
+# Odpornosc na pad jednego adaptera (awaria 28/06-20/07 = low mial jedno zrodlo); ~1-3 PLN/tydzien.
+# /request nie przyjmuje poziomu kaskady wprost - poziom idzie z klasyfikacji tresci query.
 SUNDAY_QUERY = (
     "Najwazniejsze wydarzenia, premiery i dyskusje w swiecie AI z ostatnich 7 dni, istotne dla "
     "solo-founderow i malych zespolow budujacych z AI (2-4h dziennie, ograniczony budzet). "
     "Interesuja mnie: konkretne premiery modeli/narzedzi z datami, zmiany cen i limitow, realne "
     "wzorce wdrozen i porazki, liczby i benchmarki. Dla kazdego watku podaj tworde fakty (co, "
     "kiedy, ile) i zrodla. Kontekst odbiorcy: przedsiebiorca-operator, buduje agentow AI, "
-    "publikuje build-in-public na LinkedIn/X."
+    "publikuje build-in-public na LinkedIn/X. "
+    "Porownaj opcje, wskaz najlepsze praktyki i rekomendacje dla operatora."
 )
 
 
