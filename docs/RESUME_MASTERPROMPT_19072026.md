@@ -255,6 +255,11 @@ oznacza 'published' WSZYSTKIE wiersze materialu (WHERE content_item_id bez id wi
 naprawic PRZED jakimkolwiek powrotem do trybu webhook. Straznik jezyka w stage_variant
 (en-kanal + polski tekst -> translate_text) wchodzi z wieczornym rebuildem.
 
+OBSERWACJE tap-testow Sprzedawcy 20/07 (kosmetyka): Telegram nie renderuje ** ** u
+Sprzedawcy; stopka syntezy ticka radzi "przelacz /agents" gdy Sprzedawca juz aktywny;
+pusta sekcja HAK PERSONALIZACJI przy niskim confidence (lepiej jawne "brak haka");
+material_name = poczatek wklejki gdy brak podpowiedzi typu.
+
 NOWE 19/07 wieczor: (0) TWARDA BRAMKA DUPLIKACJI przy generacji: embedding canonicala vs content_memory OPUBLIKOWANYCH (pgvector juz jest) -> karta z ostrzezeniem podobienstwa; incydent: material 'Orkiestracja agentow' zdublowal teze posta X z 11/07 mimo listy ostatnich publikacji w prompcie planera (LLM zignorowal; wykryla to dopiero zewnetrzna bramka jakosci przegladarkowego CM). (i) deterministyczna sciezka komend konfiguracyjnych (regex route przed
 LLM) - INCYDENT: CM odpowiedzial "Zrobione" o zmianie okna BEZ wywolania target_update (DB
 niezmienione, brak paragonu ⚙️; naprawa recznym SQL-em). Test prawdy: zmiana configu bez
