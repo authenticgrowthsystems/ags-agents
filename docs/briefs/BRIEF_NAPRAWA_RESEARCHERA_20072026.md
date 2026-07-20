@@ -107,4 +107,12 @@ Raport docs/cm/RAPORT_do_Managera_<data>_researcher_fix.md (dowody per DoD) + ST
 briefie + commit na build/researcher-fix + pamiec trwala (project_researcher_build - dopisac
 awarie i naprawe). Merge do sb-work robi BE-INTEGRATOR / sesja glowna (zglos gotowosc).
 
-STATUS = READY (20/07 ~10:00, brief od BE-INTEGRATORA z dowodami z zywej bazy)
+STATUS = NAPRAWIONE (20/07 ~10:30, BE-RESEARCHER-FIX). Przyczyna: zmiana Anthropic ok. konca
+czerwca - web_search_20260209 domyslnie dynamic filtering przez code_execution (15s -> 50-110s
++ nowe tryby padu); do tego potrojne polykanie bledow (Normalize/worker/brak executions).
+Fix: allowed_callers:['direct'] w zywym workflow (22-28s) + Normalize przepuszcza bledy i liczy
+cost_usd + saveDataErrorExecution:'all' + worker/sources zapisuja error_message (commit 3f97d90).
+DoD a PASS (job 854de5b8: completed, 18 evidence, 4 opcje, cost_pln 0.7435, 62s - na starym
+obrazie, sama naprawa n8n wystarczyla). CZEKA: rebuild ags-researcher (DoD c w kontenerze),
+reset cm_sunday_brief + tap-test niedzielny (DoD b), decyzja 4d.
+Raport: docs/cm/RAPORT_do_Managera_20072026_researcher_fix.md
