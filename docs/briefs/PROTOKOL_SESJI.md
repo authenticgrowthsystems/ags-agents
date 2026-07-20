@@ -12,3 +12,15 @@ spojne z kregoslupem architektury. Zero dodatkowych promptow od Tomasza poza wyw
    od sb-work per build + sesja integracyjna (merge); NIGDY dwie sesje na tej samej galezi.
 5. ZAMKNIECIE (obowiazkowe, sekcja 6 briefu): raport + masterprompt + pamiec + status briefu.
    Sesja, ktora tego nie zrobi, zostawia nastepcy zgadywanie - to byl blad handoffu 19/07.
+
+6. DOKUMENTACJA ZYJE (kanon Tomasza, utwardzony 20/07 - "po co szukac problemow w kodzie
+   i marnowac tokeny, jak mozna przeczytac dokumentacje"):
+   a) KAZDA zmiana zachowania systemu = aktualizacja dokumentacji W TYM SAMYM COMMICIE
+      (jak regula DDL->SCHEMA): SYSTEM_DATAFLOW / SCHEMA / dok komponentu. Commit bez
+      dokumentacji przy zmianie zachowania = commit niekompletny.
+   b) Dokumentacja opisuje STAN OBECNY, nie historie. Historia mieszka w raportach
+      docs/cm/ i w git log - NIE w dokumentacji zywej.
+   c) Nowa sesja czyta DOKUMENTACJE PRZED kodem. Kod czyta sie dopiero tam, gdzie
+      dokumentacja nie wystarcza - a wtedy sesja DOPISUJE brakujacy fragment.
+   d) Niezgoda z zastanym rozwiazaniem = rozmowa z Tomaszem (guziki) -> decyzja ->
+      zmiana -> aktualizacja dokumentacji. Nigdy cicha przebudowa.

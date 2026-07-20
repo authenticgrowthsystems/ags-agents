@@ -16,6 +16,10 @@ po znaczacym kroku (docs/cm/RAPORT_do_Managera_*.md). py_compile przed commitem.
 - DB zapisy = Tomasz SSH (ja podaje SQL); ja czytam read-only przez temp webhook (wzorzec:
   Temp/ags-media-spike/verify-*.cjs). Git push = Tomasz. Sekrety TYLKO app_secrets.
 - KAZDA zmiana DDL = docs/db/SCHEMA_ags_crd.md w TYM SAMYM commicie.
+- DOKUMENTACJA ZYJE (kanon 20/07): kazda zmiana ZACHOWANIA = dokumentacja w TYM SAMYM
+  commicie; dokumentacja = STAN OBECNY (historia w raportach/git log); sesja czyta
+  DOKUMENTACJE PRZED kodem, a gdy dokumentacji brakuje - dopisuje ja. Pelny zapis:
+  docs/briefs/PROTOKOL_SESJI.md pkt 6.
 
 ## 1. GDZIE PRACUJESZ
 
