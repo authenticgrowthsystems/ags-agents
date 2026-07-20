@@ -224,11 +224,14 @@ def _draft(item):
                  if (m or {}).get("kind") not in ("suggestion", "dup_warning") and not str((m or {}).get("kind", "")).startswith("review_")]
         if hint:
             media.append({"kind": "suggestion", "text": hint})
-        # BRAMKA DUPLIKACJI (kanon 19/07): canonical vs OPUBLIKOWANE (30 dni, pgvector) -> ostrzezenie
+        # BRAMKA DUPLIKACJI (kanon 19/07): TEMAT vs OPUBLIKOWANE (30 dni, pgvector) -> ostrzezenie
         # na karcie. NIE blokuje - decyzja ZAWSZE u Tomasza. Bez klucza/dopasowania = brak flagi.
+        # KALIBRACJA 20/07 (pomiar na zywym korpusie): pelny canonical NIE separuje (blizniak 0.536
+        # vs nie-blizniaki do 0.588 - dlugi tekst w stylu domowym rozmywa teze); master_theme separuje
+        # (blizniaki 0.60-0.63 vs reszta <0.552). Prog w brand_config cm_dup_threshold = 0.57.
         try:
             from . import content_memory
-            hit = content_memory.dup_check(canonical, item["brand_id"])
+            hit = content_memory.dup_check(item.get("master_theme") or canonical, item["brand_id"])
             wtext = content_memory.dup_warning_text(hit)
             if wtext:
                 media.append({"kind": "dup_warning", "text": wtext})
