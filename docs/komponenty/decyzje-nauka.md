@@ -70,6 +70,17 @@ Przypomnij jutro); throttle w DB = jedna otwarta/swieza decyzja per item.
 - Paragon kazdej decyzji nowa wiadomoscia (kanon 05/07).
 - Manager decisions approval-learning: autonomia jest ZARABIANA odpowiedziami.
 
+## Zmiany 22/07 (uwagi Tomasza 00:05)
+
+- Zgloszenia PO LUDZKU i WYTLUSZCZONE (HTML): naglowek = przyjazna nazwa typu
+  (_TYPE_LABEL w decisions.py, np. "Outreach czeka na wyslanie (AGS:sprzedaz)"),
+  zero [decision_type]/#id w tekscie widocznym (id zyje tylko w callbackach).
+  Potwierdzenie: "<b>wybor</b> - typ: poczatek pytania".
+- NOWY typ 'stale_outreach': gotowce SPRZEDAWCY (agent *:sprzedaz) wypadly z maszynerii
+  komentarzy - wlasne guziki [Wyslalem/Czekam/Pokaz tresc/Rezygnuje]; 'Pokaz tresc' =
+  czysta wklejka BEZ intake'u ("Dam zrzut profilu" przy prospekcie z researchem strony
+  to byl incydent decyzji #14). Zrodlo prawdy o prospekcie = sales_pipeline.
+
 ## Znane pulapki
 
 - decision_type musi byc STALY (nie freetext) - po nim grupuje sie nauka;

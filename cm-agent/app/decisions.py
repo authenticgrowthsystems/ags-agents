@@ -16,6 +16,7 @@ UWAGA KANON: to NIE dotyczy zatwierdzania TRESCI do publikacji (niezatwierdzone 
 wychodzi samo). Semi-auto obejmuje decyzje OPERACYJNE (sloty, podmiany tematow, modele itd.).
 """
 import datetime
+import html as _html
 import json
 
 import httpx
@@ -26,6 +27,28 @@ from . import config, db
 PROG_MIN = 10      # min odpowiedzi danego typu zanim zaproponujemy semi_autonomous
 PROG_ZGODY = 0.8   # udzial odpowiedzi zgodnych z rekomendacja (ostatnie 20)
 _OKNO = 20
+
+# 22/07 (uwaga Tomasza 00:05: "skad mam wiedziec jaka to decyzja 14? nie potrzebuje znacznikow
+# z programu, ma byc wytluszczone"): zgloszenia po ludzku, naglowek pogrubiony (HTML),
+# zero [decision_type]/#id w tekscie widocznym. Id zyje tylko w callbackach.
+_TYPE_LABEL = {
+    "stale_comment": "Komentarz czeka na wyslanie",
+    "stale_comment_task": "Komentarz do odhaczenia",
+    "stale_outreach": "Outreach czeka na wyslanie",
+    "stale_approval": "Material czeka na Twoja decyzje",
+    "crm_tier": "Klasyfikacja osoby",
+    "intent_menu": "Co robimy z wrzutka",
+    "photo_group": "Album zdjec",
+    "model_selection": "Wybor modelu",
+    "mode_transition": "Zmiana trybu nauki",
+    "topic_swap": "Podmiana tematu",
+}
+
+
+def _friendly(decision_type, subagent_id):
+    typ = _TYPE_LABEL.get(decision_type, (decision_type or "decyzja").replace("_", " "))
+    who = {"CM": "Content Manager"}.get(subagent_id, subagent_id)
+    return f"{typ} ({who})"
 
 
 def _tg(method, payload):
@@ -94,9 +117,10 @@ def ask(subagent_id, brand_id, decision_type, question, options, recommendation=
              Jsonb(context or {}), reco))
         label = next(o["label"] for o in opts if o["key"] == reco)
         _learn(subagent_id, brand_id, question, label, True, f"auto:semi_autonomous dec:{row['id']}")
-        _tg("sendMessage", {"chat_id": chat, "text":
-            f"🤖 Decyzja semi-auto #{row['id']} [{decision_type}] {subagent_id}:\n{question[:500]}\n"
-            f"➡️ {label}\n(Tryb nadales przez wczesniejsze odpowiedzi; cofniesz go odpowiadajac "
+        _tg("sendMessage", {"chat_id": chat, "parse_mode": "HTML", "text":
+            f"🤖 <b>Decyzja podjeta sama: {_html.escape(_friendly(decision_type, subagent_id))}</b>\n"
+            f"{_html.escape(question[:500])}\n➡️ {_html.escape(label)}\n"
+            f"(Tryb nadales przez wczesniejsze odpowiedzi; cofniesz go odpowiadajac "
             f"inaczej przy nastepnych pytaniach tego typu.)"})
         return f"Decyzja podjeta automatycznie (semi_autonomous): {label}."
     # supervised: guziki do Tomasza, rekomendacja pierwsza z gwiazdka
@@ -108,8 +132,9 @@ def ask(subagent_id, brand_id, decision_type, question, options, recommendation=
     ordered = ([o for o in opts if o["key"] == reco] + [o for o in opts if o["key"] != reco]) if reco else opts
     kb = [[{"text": ("⭐ " if o["key"] == reco else "") + o["label"],
             "callback_data": f"dec:{row['id']}:{o['key']}"}] for o in ordered]
-    r = _tg("sendMessage", {"chat_id": chat,
-                            "text": f"🔔 DECYZJA #{row['id']} [{decision_type}] od {subagent_id}:\n{question[:3500]}",
+    r = _tg("sendMessage", {"chat_id": chat, "parse_mode": "HTML",
+                            "text": f"🔔 <b>{_html.escape(_friendly(decision_type, subagent_id))}</b>\n"
+                                    f"{_html.escape(question[:3500])}",
                             "reply_markup": {"inline_keyboard": kb}})
     mid = ((r or {}).get("result") or {}).get("message_id")
     if mid:
@@ -145,9 +170,11 @@ def handle(body, wake=None):
     if row.get("tg_message_id"):  # zdejmij guziki z oryginalu, zeby nie dalo sie kliknac drugi raz
         _tg("editMessageReplyMarkup", {"chat_id": chat, "message_id": row["tg_message_id"],
                                        "reply_markup": {"inline_keyboard": []}})
-    _tg("sendMessage", {"chat_id": chat,  # paragon KAZDEJ decyzji nowa wiadomoscia (kanon 05/07)
-                        "text": f"✅ Paragon decyzji #{dec_id} [{row['decision_type']}]: {label}"
-                                + ("" if accepted else " (inaczej niz rekomendacja - zapamietane)")})
+    _tg("sendMessage", {"chat_id": chat, "parse_mode": "HTML",  # potwierdzenie NOWA wiadomoscia (kanon 05/07)
+                        "text": f"✅ <b>{_html.escape(label)}</b> - "
+                                f"{_html.escape(_friendly(row['decision_type'], row['subagent_id']))}: "
+                                f"{_html.escape((row.get('question') or '')[:120])}"
+                                + ("" if accepted else "\n(inaczej niz rekomendacja - zapamietane)")})
     if row["decision_type"] == "mode_transition":
         _apply_mode_transition(row, key, chat)
     else:
@@ -173,6 +200,10 @@ def _apply_action(row, key, chat):
     if dt == "stale_comment_task":
         from . import engagement
         engagement.apply_stale_task(row, key, chat)
+        return
+    if dt == "stale_outreach":
+        from . import engagement
+        engagement.apply_stale_outreach(row, key, chat)
         return
     if dt == "photo_group":
         from . import conversation

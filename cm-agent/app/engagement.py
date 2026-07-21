@@ -82,15 +82,35 @@ def _watch_proposed():
            ORDER BY created_at LIMIT 5""")
     for r in rows:
         eid = str(r["id"])
+        agent = r.get("agent") or "AGS:x"
+        who = r.get("author_display") or "(autor ze zrzutu)"
+        # 22/07 (incydent decyzja #14): outreach SPRZEDAWCY to nie komentarz - inny gatunek,
+        # inne guziki, ZERO maszynerii komentarzy/intake'u ("Dam zrzut profilu" przy prospekcie
+        # przebadanym przez strone to herezja). Zrodlem prawdy o prospekcie jest sales_pipeline.
+        if agent.endswith(":sprzedaz"):
+            if db.fetchone(
+                    """SELECT 1 AS x FROM agent_decisions
+                       WHERE decision_type='stale_outreach' AND context->>'engagement_id'=%s
+                         AND (status='pending' OR answered_at > NOW() - interval '24 hours') LIMIT 1""",
+                    (eid,)):
+                continue
+            decisions.ask(
+                agent, agent.split(":")[0], "stale_outreach",
+                f"Gotowiec outreach do {who} czeka na wyslanie ponad 24h. Co z nim?",
+                [{"key": "sent", "label": "Wyslalem (odhacz)"},
+                 {"key": "wait", "label": "Czekam (przypomnij jutro)"},
+                 {"key": "show", "label": "Pokaz tresc"},
+                 {"key": "drop", "label": "Rezygnuje"}],
+                recommendation=None, context={"engagement_id": eid})
+            continue
         if db.fetchone(
                 """SELECT 1 AS x FROM agent_decisions
                    WHERE decision_type='stale_comment' AND context->>'engagement_id'=%s
                      AND (status='pending' OR answered_at > NOW() - interval '24 hours') LIMIT 1""",
                 (eid,)):
             continue
-        who = r.get("author_display") or "(autor ze zrzutu)"
         decisions.ask(
-            r.get("agent") or "AGS:x", (r.get("agent") or "AGS:x").split(":")[0], "stale_comment",
+            agent, agent.split(":")[0], "stale_comment",
             f"Propozycja komentarza dla {who} wisi bez decyzji ponad 24h. Co z nia?",
             [{"key": "sent", "label": "Wyslalem (odhacz)"},
              {"key": "skip", "label": "Pomin"},
@@ -159,6 +179,42 @@ def apply_stale_comment(row, key, chat):
         _send_author_proposal(chat, brand or "AGS", channel or "x",
                               e.get("author_display") or "(autor ze zrzutu)",
                               e.get("content") or "", e.get("response") or "")
+
+
+def apply_stale_outreach(row, key, chat):
+    """Akcja decyzji 'stale_outreach' (22/07): gotowce sprzedawcy. sent = odhacz (sent);
+    wait = czekamy (np. na telefon rodziny) - przypomnienie wroci; show = SAMA TRESC
+    czysta wklejka (zero intake'u/komentarzowej maszynerii); drop = rezygnacja."""
+    ctx = row.get("context") or {}
+    eng_id = ctx.get("engagement_id")
+    if not eng_id:
+        return
+    e = db.fetchone(
+        """SELECT id, agent, author_display, content, response FROM engagement_log
+           WHERE id=%s::uuid""", (eng_id,))
+    if not e:
+        _tg("sendMessage", {"chat_id": chat, "text": "Nie znajduje juz tego gotowca w bazie."})
+        return
+    stamp = datetime.datetime.now().strftime("%d/%m %H:%M")
+    who = e.get("author_display") or (e.get("content") or "")[:60]
+    if key == "sent":
+        db.execute("UPDATE engagement_log SET status='sent', notes = COALESCE(notes,'') || %s WHERE id=%s::uuid",
+                   (f" | WYSLANE (przypomnienie {stamp})", eng_id))
+        _tg("sendMessage", {"chat_id": chat, "text": f"✅ Odhaczone - outreach do {who} zapisany jako wyslany."})
+    elif key == "wait":
+        db.execute("UPDATE engagement_log SET notes = COALESCE(notes,'') || %s WHERE id=%s::uuid",
+                   (f" | CZEKAMY ({stamp})", eng_id))
+        _tg("sendMessage", {"chat_id": chat, "text": f"⏳ Jasne, czekamy - przypomne jutro o {who}."})
+    elif key == "drop":
+        db.execute("UPDATE engagement_log SET status='skipped', notes = COALESCE(notes,'') || %s WHERE id=%s::uuid",
+                   (f" | REZYGNACJA ({stamp})", eng_id))
+        _tg("sendMessage", {"chat_id": chat, "text": f"⏭ Zamkniete - outreach do {who} wycofany."})
+    elif key == "show":
+        _tg("sendMessage", {"chat_id": chat,
+                            "text": f"📋 OUTREACH do {who} - ponizej czysta wklejka (po wyslaniu tapnij "
+                                    f"'Wyslalem' na przypomnieniu albo napisz sprzedawcy):"})
+        _tg("sendMessage", {"chat_id": chat, "text": (e.get("response") or e.get("content") or "")[:4096],
+                            "disable_web_page_preview": True})
 
 
 def apply_stale_task(row, key, chat):
