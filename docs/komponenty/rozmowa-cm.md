@@ -28,6 +28,10 @@ conversation.handle:
        language_publish, posts_per_day, follower_count, thread_enabled,
        voice_note, secret_prefix, emergency_publish); klucz spoza listy na
        ISTNIEJACYM celu = szczera odmowa z lista kluczy
+  3b. LACZNIK 22/07 (przed sales.try_command!): '[raport pracy' w tekscie ->
+     engagement.apply_work_report (parser bez LLM, potwierdzenie z licznikami);
+     /kontekst [x|linkedin|sprzedaz|all] -> reports.send_kontekst (stan gry bez LLM,
+     tekst albo plik .md; wymaga przepustki n8n hitl-kontekst-command-22072026.cjs)
   4. _KARTY_RE i inne skroty -> dopiero potem LLM
 ```
 

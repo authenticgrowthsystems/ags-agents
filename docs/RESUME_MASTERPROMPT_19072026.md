@@ -206,6 +206,19 @@ wklejka osobna wiadomoscia, engagement_log 'proposed', NIC nie wysyla sie samo);
 rebuildem -> rebuild cm-agent -> patch n8n -> tap-testy DoD z briefu. Nastepny wolny DDL
 po tym buildzie: **028**.
 
+**BE-LACZNIK (22/07): ZBUDOWANY, czeka integracja.** Galaz build/lacznik (brief
+BRIEF_LACZNIK_22072026, komponent docs/komponenty/lacznik.md - CZYTAJ ZAMIAST kodu):
+parser RAPORT PRACY bez LLM (route '[raport pracy' w conversation.handle PRZED sales,
+idempotencja sync:<hash> w engagement_log.notes, karta crm_tier 1/24h dla nowych osob) +
+/kontekst [x|linkedin|sprzedaz|all] (reports.kontekst_text, tekst albo .md; wymaga patcha
+n8n hitl-kontekst-command-22072026.cjs) + strona Notion "Stan gry AGS" (sync/stan_gry.py
+tick z petli notion_workera, throttle 15 min, konfiguracja SQL brand_config
+stan_gry_page_id) + masterprompt czatowy X v1 (docs/product/masterprompty-czat/;
+<LINK_STAN_GRY> podmienia Tomasz). Mini-porzadki 0.5 DONE w tym samym oknie
+(potwierdzenie zamiast paragonu w komunikatach; potwierdzenie po [Wyslalem] NOWA
+wiadomoscia; sales-HTML = no-op po merge INTAKE-UX). ZERO DDL. WDROZENIE: merge ->
+rebuild cm-agent -> patch n8n -> strona Notion + SQL -> tap-testy DoD a-d z briefu.
+
 RESEARCHER NAPRAWIONY 20/07 (merge 3fd3560): web_search padal od 28/06 przez domyslne
 dynamic filtering Anthropic w web_search_20260209 (15s->110s) - fix allowed_callers:['direct']
 + koniec polykania bledow (sources/worker/Normalize) + cost_usd z usage; zywy n8n oxwcD1i...

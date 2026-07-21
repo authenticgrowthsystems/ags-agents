@@ -14,7 +14,11 @@ STRAZNIK (kanon 19/07, wzorzec _stale_approval_watch): NIC nie ginie i NIC nie z
    do X?" [Tak, odhacz][Nie, pomin] (decision_type='stale_comment_task').
 Throttle w DB jak w stale_approval: jedna otwarta/swieza decyzja per wiersz."""
 import datetime
+import hashlib
+import re
 import traceback
+
+from psycopg.types.json import Jsonb
 
 from . import db, decisions, hitl
 from .conversation import _tg
@@ -215,6 +219,212 @@ def apply_stale_outreach(row, key, chat):
                                     f"'Wyslalem' na przypomnieniu albo napisz sprzedawcy):"})
         _tg("sendMessage", {"chat_id": chat, "text": (e.get("response") or e.get("content") or "")[:4096],
                             "disable_web_page_preview": True})
+
+
+# ---------------- LACZNIK (22/07): parser RAPORT PRACY czat -> serwer, BEZ LLM ----------------
+# Kontrakt 1 konceptu docs/product/LACZNIK_SYNCHRONIZACYJNY_21072026.md: czatowy agent na
+# abonamencie konczy sesje blokiem [RAPORT PRACY v1]; Tomasz wkleja go do Telegrama (albo
+# wrzuca .md przez handle_document) -> deterministyczny route w conversation.handle ->
+# apply_work_report. Idempotencja: sha256 znormalizowanej linii w engagement_log.notes
+# ('sync:<hash>') - podwojna wklejka = zero dubli. ZERO DDL, zero LLM.
+
+_REPORT_HEAD_RE = re.compile(
+    r"\[RAPORT\s+PRACY(?:\s+v\d+)?\]\s*(?:kana[lł]\s*:\s*([A-Za-z_]+))?"
+    r"(?:\s*\|\s*data\s*:\s*(\S+))?", re.IGNORECASE)
+_REPORT_END_RE = re.compile(r"\[KONIEC\s+RAPORTU\]", re.IGNORECASE)
+_CHANNEL_ALIASES = {"x": "x", "twitter": "x", "linkedin": "linkedin", "li": "linkedin",
+                    "sprzedaz": "sprzedaz"}
+_ENG_CHANNEL = {"x": "X", "linkedin": "LinkedIn", "sprzedaz": "Other"}
+_LINE_TYPES = {"komentarz": "komentarz", "dm_wyslany": "dm_wyslany", "dm wyslany": "dm_wyslany",
+               "dm_odebrany": "dm_odebrany", "dm odebrany": "dm_odebrany", "reakcja": "reakcja",
+               "nowa_osoba": "nowa_osoba", "nowa osoba": "nowa_osoba", "obserwacja": "obserwacja"}
+_VALID_TIERS = {"buyer": "Buyer", "peer": "Peer", "competitor": "Competitor", "partner": "Partner"}
+
+
+def _line_hash(channel, line):
+    """Znormalizowana linia (male litery, sklejone biale znaki) + kanal -> sha256[:16].
+    Ta sama linia w tym samym kanale wkleona drugi raz = duplikat."""
+    norm = re.sub(r"\s+", " ", (line or "")).strip().lower()
+    return hashlib.sha256(f"{channel}|{norm}".encode("utf-8")).hexdigest()[:16]
+
+
+def _hash_seen(h):
+    try:
+        return bool(db.fetchone("SELECT 1 AS x FROM engagement_log WHERE notes LIKE %s LIMIT 1",
+                                (f"%sync:{h}%",)))
+    except Exception:
+        traceback.print_exc()
+        return False
+
+
+def parse_work_report(text):
+    """Wyciagnij (channel, data, [(typ, czesci, surowa_linia)], zle_linie) z bloku RAPORT PRACY.
+    channel=None gdy naglowek bez kanalu (wolajacy podstawia kanal aktywnego subagenta)."""
+    m = _REPORT_HEAD_RE.search(text or "")
+    if not m:
+        return None
+    channel = _CHANNEL_ALIASES.get((m.group(1) or "").strip().lower()) if m.group(1) else None
+    rdate = (m.group(2) or "").strip() or None
+    body = text[m.end():]
+    endm = _REPORT_END_RE.search(body)
+    if endm:
+        body = body[:endm.start()]
+    entries, bad = [], []
+    for raw in body.split("\n"):
+        line = raw.strip()
+        if not line.startswith(("-", "•", "*")):
+            continue
+        line = line.lstrip("-•*").strip()
+        if not line:
+            continue
+        parts = [p.strip() for p in line.split("|")]
+        typ = _LINE_TYPES.get(re.sub(r"\s+", " ", parts[0].lower()))
+        if not typ or (typ != "obserwacja" and len(parts) < 2):
+            bad.append(line)
+            continue
+        entries.append((typ, parts[1:], line))
+    return {"channel": channel, "date": rdate, "entries": entries, "bad": bad}
+
+
+def _report_insert(action_type, channel, agent, content, response, notes, contact_id, status, author):
+    db.execute(
+        """INSERT INTO engagement_log (action_type, channel, agent, content, response, notes,
+                                       contact_id, status, author_display)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+        (action_type, _ENG_CHANNEL.get(channel, "Other"), agent, (content or "")[:1000],
+         (response or None), notes, contact_id, status, (author or None)))
+
+
+def _report_tier_card(contact_id, disp, bio, tier_raw, brand, channel):
+    """JEDNA karta crm_tier per osoba/24h (mechanizm z INTAKE-UX B3, wzorzec
+    crm.process_profile_photo). Zwraca notke do potwierdzenia."""
+    dup = db.fetchone(
+        """SELECT id, status, answer FROM agent_decisions
+           WHERE decision_type='crm_tier' AND context->>'contact_id'=%s
+             AND (status='pending' OR answered_at > NOW() - interval '24 hours')
+           ORDER BY created_at DESC LIMIT 1""", (str(contact_id),))
+    if dup:
+        return (f"karta tieru dla {disp} juz czeka" if dup["status"] == "pending"
+                else f"tier {disp} rozstrzygniety w ostatnich 24h ({dup.get('answer')})")
+    tier = _VALID_TIERS.get((tier_raw or "").strip().lower())
+    decisions.ask(
+        f"{brand}:{channel}", brand, "crm_tier",
+        f"Klasyfikacja ICP dla {disp} (z RAPORTU PRACY):\n"
+        + (f"NOTKA: {bio}\n" if bio else "")
+        + (f"Propozycja z raportu: {tier}" if tier else "Raport bez propozycji tieru - wybierz."),
+        [{"key": "buyer", "label": "Buyer"}, {"key": "peer", "label": "Peer"},
+         {"key": "competitor", "label": "Competitor"}, {"key": "partner", "label": "Partner"}],
+        recommendation={"Buyer": "buyer", "Peer": "peer", "Competitor": "competitor",
+                        "Partner": "partner"}.get(tier),
+        context={"contact_id": str(contact_id)})
+    return f"karta tieru dla {disp} ponizej (guziki)"
+
+
+def apply_work_report(chat_id, text, active_agent=None):
+    """Route '[RAPORT PRACY' (conversation.handle): parsuj -> INSERTy -> POTWIERDZENIE z licznikami.
+    Kazda sciezka konczy sie tekstem (REGULA PRAWDY); zero LLM."""
+    from . import crm
+    rep = parse_work_report(text)
+    if not rep:
+        return "Widze '[RAPORT PRACY', ale nie moge odczytac naglowka - format: [RAPORT PRACY v1] kanal: X"
+    channel = rep["channel"]
+    if not channel and (active_agent or "").startswith("subagent:"):
+        channel = active_agent.split(":", 2)[2] if active_agent.count(":") >= 2 else None
+    channel = channel or "x"
+    brand = "AGS"
+    agent = f"{brand}:{channel}"
+    stamp = rep["date"] or datetime.date.today().strftime("%Y-%m-%d")
+    cnt = {"komentarz": 0, "dm_wyslany": 0, "dm_odebrany": 0, "reakcja": 0,
+           "nowa_osoba": 0, "znana_osoba": 0, "obserwacja": 0}
+    dupes = 0
+    tier_notes = []
+    for typ, parts, raw_line in rep["entries"]:
+        h = _line_hash(channel, raw_line)
+        if _hash_seen(h):
+            dupes += 1
+            continue
+        base_note = f"sync:{h} | RAPORT PRACY {stamp} (praca reczna na abonamencie)"
+        try:
+            if typ == "komentarz":
+                who = parts[0]
+                link = parts[1] if len(parts) > 1 else ""
+                tresc = " | ".join(parts[2:]) if len(parts) > 2 else ""
+                contact_id, _new = crm.ensure_contact(who, brand, channel)
+                fam = channel.split("_")[0]
+                _report_insert(f"{fam}_comment" if fam in ("x", "linkedin") else "other",
+                               channel, agent, link or raw_line,
+                               tresc or None, base_note + " | komentarz wklejony recznie",
+                               contact_id, "sent", crm.clean_author(who) or who)
+                if contact_id:
+                    crm.bump_stage(contact_id, "commented")
+                cnt["komentarz"] += 1
+            elif typ in ("dm_wyslany", "dm_odebrany"):
+                who = parts[0]
+                tresc = " | ".join(parts[1:])
+                contact_id, _new = crm.ensure_contact(who, brand, channel)
+                _report_insert("other", channel, agent, tresc, None,
+                               base_note + (" | [DM] wyslany recznie" if typ == "dm_wyslany"
+                                            else " | [DM] odebrany (streszczenie)"),
+                               contact_id, "sent" if typ == "dm_wyslany" else "logged",
+                               crm.clean_author(who) or who)
+                if contact_id:
+                    crm.bump_stage(contact_id, "dm")
+                cnt[typ] += 1
+            elif typ == "reakcja":
+                who = parts[0]
+                rest = " | ".join(parts[1:])
+                contact_id, _new = crm.ensure_contact(who, brand, channel)
+                _report_insert("other", channel, agent, rest or raw_line, None,
+                               base_note + " | reakcja", contact_id, "logged",
+                               crm.clean_author(who) or who)
+                cnt["reakcja"] += 1
+            elif typ == "nowa_osoba":
+                who = parts[0]
+                bio = parts[1] if len(parts) > 1 else ""
+                tier_raw = parts[2] if len(parts) > 2 else ""
+                contact_id, is_new = crm.ensure_contact(who, brand, channel)
+                disp = crm.clean_author(who) or who
+                if contact_id and bio:
+                    db.execute(
+                        "UPDATE contacts SET narration = COALESCE(narration,'') || %s WHERE id=%s::uuid",
+                        (f" | [raport {stamp}] {bio[:400]}", contact_id))
+                _report_insert("other", channel, agent, bio or raw_line, None,
+                               base_note + " | nowa osoba (poznana recznie)", contact_id,
+                               "logged", disp)
+                cnt["nowa_osoba" if is_new else "znana_osoba"] += 1
+                if contact_id:
+                    tier_notes.append(_report_tier_card(contact_id, disp, bio, tier_raw,
+                                                        brand, channel))
+            elif typ == "obserwacja":
+                notka = " | ".join(parts)
+                db.execute(
+                    """INSERT INTO inspirations (source, content, brand, status, metadata)
+                       VALUES ('raport_pracy', %s, %s, 'new', %s)""",
+                    (notka[:2000], brand, Jsonb({"channel": channel, "via": "raport_pracy",
+                                                 "date": stamp})))
+                _report_insert("other", channel, agent, notka, None,
+                               base_note + " | obserwacja radaru (kopia w inspirations)",
+                               None, "logged", None)
+                cnt["obserwacja"] += 1
+        except Exception:
+            traceback.print_exc()
+            rep["bad"].append(raw_line)
+    labels = [("komentarz", "komentarze"), ("dm_wyslany", "DM wyslane"),
+              ("dm_odebrany", "DM odebrane"), ("reakcja", "reakcje"),
+              ("nowa_osoba", "nowe osoby"), ("znana_osoba", "znane osoby zaktualizowane"),
+              ("obserwacja", "obserwacje do radaru")]
+    saved = [f"{lbl}: {cnt[k]}" for k, lbl in labels if cnt[k]]
+    lines = [f"📥 POTWIERDZENIE - RAPORT PRACY zapisany (kanal {channel}, {stamp}):",
+             ("zapisane: " + ", ".join(saved)) if saved else "zapisane: nic nowego",
+             f"pominiete duplikaty: {dupes}"]
+    if rep["bad"]:
+        lines.append("NIEZROZUMIANE LINIE (nie zapisane - popraw i wklej ponownie tylko je):")
+        lines += [f"- {b[:160]}" for b in rep["bad"][:8]]
+    if tier_notes:
+        lines.append("Tiery: " + "; ".join(tier_notes))
+    if not rep["entries"] and not rep["bad"]:
+        lines.append("(raport bez linii akcji - miedzy naglowkiem a [KONIEC RAPORTU] nic nie znalazlem)")
+    return "\n".join(lines)
 
 
 def apply_stale_task(row, key, chat):

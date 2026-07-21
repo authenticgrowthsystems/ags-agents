@@ -99,6 +99,12 @@ def _loop():
         except Exception:
             pass
         _drain(conn)
+        # LACZNIK 22/07: strona "Stan gry AGS" (throttle 15 min w module; blad = log, nie crash)
+        try:
+            from . import stan_gry
+            stan_gry.tick()
+        except Exception as e:
+            _log(f"stan_gry tick: {type(e).__name__}: {e}")
 
 
 def run_forever():

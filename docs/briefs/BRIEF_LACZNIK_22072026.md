@@ -79,4 +79,12 @@ intencji, scalanie starych stubow contacts - zamrozone do decyzji Tomasza.
 Wklejka masterpromptow na starcie; link/strona-matka Notion (gdzie zalozyc "Stan gry");
 tap-testy a-d.
 
-## 6. Zamkniecie: raport + komponent + STATUS tu. STATUS = READY (22/07 ~00:50)
+## 6. Zamkniecie: raport + komponent + STATUS tu.
+
+STATUS = ZBUDOWANY (22/07, galaz build/lacznik) - czeka: wdrozenie u integratora
+(rebuild cm-agenta + patch n8n hitl-kontekst-command-22072026.cjs + strona Notion
+"Stan gry AGS" + SQL stan_gry_page_id) + tap-testy DoD a-d + wsad masterpromptow
+Tomasza (scalimy z MASTERPROMPT_CZAT_X_v1.md, podbicie wersji).
+Mini-porzadki 0.5: DONE (commit "Mini-porzadki po INTAKE-UX"; (a) okazalo sie no-op -
+sales juz szedl przez _send_rendered od merge INTAKE-UX B4).
+Raport: docs/cm/RAPORT_do_Managera_22072026_lacznik.md. Komponent: docs/komponenty/lacznik.md.

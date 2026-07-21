@@ -284,6 +284,139 @@ def weekly_report(brand_id, channel):
     return text
 
 
+# ---------------- LACZNIK (22/07): /kontekst = pakiet kontekstu serwer -> czat, BEZ LLM ----------------
+# Kontrakt 2 konceptu docs/product/LACZNIK_SYNCHRONIZACYJNY_21072026.md: zwarty stan gry do
+# skopiowania w czat na abonamencie. Czysty odczyt z bazy, format staly. To jest FALLBACK -
+# preferowana droga to strona Notion "Stan gry AGS" (sync/stan_gry.py, ta sama tresc).
+
+_KONTEKST_SCOPES = ("x", "linkedin", "sprzedaz", "all")
+
+
+def _kontekst_channels(scope):
+    if scope in ("x", "linkedin"):
+        return [scope]
+    if scope == "sprzedaz":
+        return []
+    rows = db.fetchall(
+        """SELECT channel FROM channels WHERE brand_id='AGS' AND supervised=true
+           AND status IN ('active','draft') AND COALESCE(config->>'agent_kind','') <> 'sales'
+           ORDER BY channel""")
+    return [r["channel"] for r in rows]
+
+
+def _kontekst_contacts(limit=20):
+    rows = db.fetchall(
+        """SELECT name, x_handle, icp_tier, relationship_stage, last_interaction_date
+           FROM contacts WHERE COALESCE(relationship_stage,'cold') NOT IN ('cold')
+           ORDER BY last_interaction_date DESC NULLS LAST, updated_at DESC LIMIT %s""", (limit,))
+    out = []
+    for r in rows:
+        bits = [r.get("relationship_stage") or "?"]
+        if r.get("icp_tier"):
+            bits.append(r["icp_tier"])
+        if r.get("last_interaction_date"):
+            bits.append(f"ostatnio {r['last_interaction_date'].strftime('%d/%m')}")
+        out.append(f"- {r.get('name') or '(bez nazwy)'}"
+                   + (f" (@{r['x_handle']})" if r.get("x_handle") else "")
+                   + f" [{', '.join(bits)}]")
+    return out
+
+
+def _kontekst_radar(limit=10):
+    rows = db.fetchall(
+        """SELECT content, source, created_at FROM inspirations
+           WHERE status='new' AND created_at > NOW() - interval '14 days'
+           ORDER BY created_at DESC LIMIT %s""", (limit,))
+    return [f"- {r['created_at'].strftime('%d/%m')} [{r.get('source') or '?'}] {(r['content'] or '')[:160]}"
+            for r in rows]
+
+
+def kontekst_text(scope="all"):
+    """Stan gry jako jeden tekst markdown. Sekcje wg konceptu: plan tygodnia (sloty+statusy),
+    ostatnie publikacje z metrykami, kontakty w grze, otwarte decyzje, lejek, radar."""
+    scope = scope if scope in _KONTEKST_SCOPES else "all"
+    now = datetime.datetime.now(WARSAW)
+    lines = [f"# STAN GRY AGS ({scope}) - {now.strftime('%d/%m/%Y %H:%M')} Europe/Warsaw", ""]
+    chans = _kontekst_channels(scope)
+    if chans:
+        try:
+            from . import planner
+            pt = planner.plan_text("AGS")
+            if pt != "(brak propozycji planu)":
+                lines += ["## PLAN TYGODNIA (propozycja do zatwierdzenia)", pt, ""]
+        except Exception:
+            lines += ["## PLAN TYGODNIA", "(nie moge odczytac planu - blad w logu)", ""]
+        for ch in chans:
+            q = _queue_upcoming("AGS", ch)
+            lines.append(f"## KOLEJKA {ch.upper()} ({len(q)}):")
+            for r in q:
+                when = (r["scheduled_for"].astimezone(WARSAW).strftime("%d/%m %H:%M")
+                        if r.get("scheduled_for") else "bez slotu")
+                lines.append(f"- #{r['id']} [{r['status']}] {when} | {(r['content'] or '')[:70]}")
+            if not q:
+                lines.append("- (pusto)")
+            pub = db.fetchall(
+                """SELECT id, content, post_url, engagement_metrics, published_at FROM published_posts
+                   WHERE brand='AGS' AND platform=%s AND published_at > NOW() - interval '7 days'
+                   ORDER BY published_at DESC LIMIT 10""", (ch,))
+            lines.append(f"## OSTATNIE PUBLIKACJE {ch.upper()} (7 dni, {len(pub)}):")
+            for p in pub:
+                lines.append(f"- {p['published_at'].astimezone(WARSAW).strftime('%d/%m %H:%M')} "
+                             f"{(p['content'] or '')[:70]} | {_fmt_metrics(p.get('engagement_metrics') or {})}"
+                             + (f" | {p['post_url']}" if p.get("post_url") else ""))
+            if not pub:
+                lines.append("- (brak publikacji w 7 dni)")
+            lines.append("")
+    if scope != "linkedin":
+        contacts = _kontekst_contacts()
+        lines.append(f"## KONTAKTY W GRZE (stadium != cold, {len(contacts)}):")
+        lines += contacts or ["- (zero kontaktow w grze)"]
+        lines.append("")
+    try:
+        from . import decisions
+        pend = decisions.pending_text()
+    except Exception:
+        pend = "(nie moge odczytac decyzji - blad w logu)"
+    lines += ["## OTWARTE DECYZJE (czekaja na guzik):", pend, ""]
+    if scope in ("sprzedaz", "all"):
+        try:
+            from . import sales
+            lines += ["## LEJEK SPRZEDAZY", sales.pipeline_text(), ""]
+        except Exception:
+            lines += ["## LEJEK SPRZEDAZY", "(nie moge odczytac lejka - blad w logu)", ""]
+    radar = _kontekst_radar()
+    lines.append(f"## RADAR / OBSERWACJE (14 dni, {len(radar)}):")
+    lines += radar or ["- (pusto)"]
+    lines += ["", "---",
+              "Na koniec sesji czatowej wygeneruj blok [RAPORT PRACY v1] i wklej go do Telegrama "
+              "(bot AGS) - serwer zapisze prace do bazy."]
+    return "\n".join(lines)
+
+
+def send_kontekst(chat_id, scope="all"):
+    """Wysylka pakietu: tekst gdy miesci sie w 4096, inaczej plik .md (wzorzec _tg_send_document).
+    Kazda sciezka konczy sie wiadomoscia (REGULA PRAWDY)."""
+    from . import conversation, matreview
+    try:
+        text = kontekst_text(scope)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        conversation._reply(chat_id, f"❌ Nie zlozylem pakietu kontekstu: {type(e).__name__}: {str(e)[:150]}")
+        return
+    if len(text) <= 4000:
+        conversation._tg("sendMessage", {"chat_id": chat_id, "text": text,
+                                         "disable_web_page_preview": True})
+        return
+    fname = f"kontekst_{scope}_{datetime.datetime.now(WARSAW).strftime('%d%m_%H%M')}.md"
+    if matreview._tg_send_document(chat_id, fname, text,
+                                   caption=f"📦 Pakiet kontekstu ({scope}) - skopiuj do czatu"):
+        return
+    for part in conversation._split(text):
+        conversation._tg("sendMessage", {"chat_id": chat_id, "text": part,
+                                         "disable_web_page_preview": True})
+
+
 def run_all(kind):
     """Cron entrypoint: raport dla KAZDEGO supervised celu (open/closed: nowy wiersz channels = nowy raport)."""
     chans = db.fetchall(

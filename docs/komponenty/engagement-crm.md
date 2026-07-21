@@ -99,6 +99,16 @@ do nowych kolumn), patch n8n `n8n-workflows/patches/hitl-photo-mediagroup-200720
   stale_comment_task / photo_group.
 - `cm-agent/app/worker.py`: `engagement.stale_watch()` w petli.
 
+## Warstwa LACZNIK (22/07): praca reczna z czatu na abonamencie
+
+Interakcje wykonane RECZNIE poza Telegramem (czat na abonamencie w podrozy) wchodza do
+TEGO SAMEGO CRM przez parser RAPORT PRACY (bez LLM): blok `[RAPORT PRACY v1]` wklejony
+do rozmowy -> `engagement.apply_work_report` -> engagement_log (komentarz='sent',
+dm_wyslany='sent', dm_odebrany/reakcja/obserwacja='logged') + contacts (clean_author,
+stadium: komentarz->commented, dm_*->dm) + inspirations (obserwacje) + karta crm_tier
+dla nowych osob (1/24h). Idempotencja: 'sync:<hash>' w notes. Szczegoly, format i
+pulapki: [lacznik.md](lacznik.md).
+
 ## Kanony ktore go dotycza
 
 - "Zapisywac w jakie relacje wchodze z jakimi ludzmi" (kanon od poczatku projektu) -

@@ -38,6 +38,19 @@ Drift check (cron n8n 03:00, app.sync.drift_check): wykrywa reczne edycje
 - v1 enabled: brand_config + manager_daily_log; reszta tabel czeka na wlaczenie
   w sync_registry (plan: docs/cm/SYNC_ENABLE_PLAN.md).
 
+## Strona "Stan gry AGS" (LACZNIK 22/07)
+
+Wyjatek od mirrora per-tabela: JEDNA strona Notion skladana z WIELU tabel
+(tresc = reports.kontekst_text('all'), to samo co /kontekst). Odswieza ja
+`sync/stan_gry.py:tick()` wolany z petli notion_workera po kazdym drainie:
+throttle 15 min + odcisk stanu (md5 max timestampow published_posts / sales_pipeline /
+contacts / engagement_log / agent_decisions / content_items) -> zmiana ->
+`table_registry._re_render('stan_gry','AGS', page, ...)` (ten sam soft-clear
+i sync_mirror_state co mirror tabel; bez wpisu w sync_registry - tick woła render
+bezposrednio). Konfiguracja: brand_config AGS `stan_gry_page_id` (SQL, /set nie zna
+klucza); stan throttla w `stan_gry_state`. Konsument: czatowy agent na abonamencie
+czyta strone z linku (komponent [lacznik.md](lacznik.md)).
+
 ## Konfiguracja
 
 - `sync_registry` (enable/disable tabel, page_map) - sterowanie bez deployu.

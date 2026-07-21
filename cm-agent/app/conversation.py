@@ -32,6 +32,7 @@ _KARTY_RE = re.compile(r"^\s*(?:/karty|karty|przegl[aą]daj|poka[zż]\s+(?:karty
                        r"(?:\s+do\s+przegl[aą]du)?"  # fix 12/07: 'karty do przegladu' szlo do LLM, ktory kwitowal 'Przyjete.'
                        r"(?:\s+(dzi[sś]|dzisiaj|jutro|jutrzejsze))?\s*\??\s*$", re.IGNORECASE)
 _DECYZJE_RE = re.compile(r"^\s*(/decyzje|decyzje|poka[zż]\s+decyzje|czekaj[aą]ce\s+decyzje)\s*\??\s*$", re.IGNORECASE)
+_KONTEKST_RE = re.compile(r"^\s*/?kontekst(?:@\w+)?(?:\s+(x|linkedin|sprzedaz|all))?\s*$", re.IGNORECASE)
 _CANCEL_RE = re.compile(r"^\s*(/cancel|anuluj)\s*$", re.IGNORECASE)
 
 
@@ -2863,6 +2864,19 @@ def handle(update):
         _cfg = _config_route(text)
         if _cfg:
             _reply(chat_id, _cfg)
+            return
+        # LACZNIK 22/07 (kontrakt 1): wklejka/plik z blokiem [RAPORT PRACY v1] -> parser BEZ LLM
+        # -> potwierdzenie z licznikami. PRZED sales.try_command, zeby uzbrojony tryb materialu
+        # sprzedazowego nie zjadl raportu (wklejki >=200 znakow).
+        if "[raport pracy" in text.lower():
+            from . import engagement
+            _reply(chat_id, engagement.apply_work_report(chat_id, text, active))
+            return
+        # LACZNIK 22/07 (kontrakt 2): /kontekst [x|linkedin|sprzedaz|all] = pakiet stanu gry
+        # BEZ LLM (fallback dla strony Notion "Stan gry AGS").
+        _kx = _KONTEKST_RE.match(text)
+        if _kx:
+            reports.send_kontekst(chat_id, (_kx.group(1) or "all").lower())
             return
         # BE-SPRZEDAWCA 20/07: komendy sprzedazowe (/prospect /oferta /pipeline
         # /add_sales_material) + konsumpcja uzbrojonego materialu - deterministycznie
