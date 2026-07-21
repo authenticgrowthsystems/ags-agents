@@ -73,5 +73,23 @@ w kazdym czacie (Claude, ChatGPT, cokolwiek) - dlatego wchodzi pierwszy.
    raportu i kontekstu) - plik, ktory Tomasz wkleja do projektu w aplikacji czatowej.
 4. Idempotencja: kolumna external_ref w engagement_log (maly DDL) albo hash w notes.
 
-STATUS: KONCEPT - czeka na decyzje Tomasza (guziki w rozmowie 21/07). Po TAK:
-brief BE-LACZNIK, build rownolegly (nie dotyka publikacji ani intake-ux).
+## DECYZJA TOMASZA (21/07 wieczor, guziki)
+
+**TAK - budujemy PO zakonczeniu buildu INTAKE-UX** (zero ryzyka konfliktow w
+conversation.py). Dwa doprecyzowania od Tomasza, ktore wchodza do zakresu:
+
+1. **Masterprompty czatowe od Tomasza jako wsad.** Tomasz dostarczy masterprompty,
+   ktorymi JUZ uruchamia agentow w czacie. BE modyfikuje je wg naszych wytycznych
+   (glos, kontrakty RAPORT PRACY / PAKIET KONTEKSTU, regula prawdy) do wersji STALEJ,
+   wielokrotnego uzytku - wrzucasz raz i kontynuujesz prace w kazdej sesji.
+2. **Stan gry przez LINK, nie wklejke (preferencja):** masterprompt czatowy zawiera
+   staly LINK do strony Notion (lustra), na ktorej serwer AKTUALIZUJE stan gry
+   (pakiet kontekstu). Czatowy agent na starcie sesji CZYTA stan sam z linku -
+   zero recznego wklejania. `/kontekst` w Telegramie zostaje jako fallback, a organ
+   sync-notion dostaje zadanie: strona "Stan gry <kanal>" odswiezana po kazdej
+   istotnej zmianie (publikacja, zmiana lejka, nowy kontakt). UWAGA projektowa:
+   zapis do Notion bywa wolny (timeouts #71) - stan gry to JEDNA strona nadpisywana,
+   nie append; przy niedostepnosci Notion czat prosi Tomasza o /kontekst.
+
+STATUS: ZATWIERDZONY, START PO DONE INTAKE-UX. Brief BE-LACZNIK powstanie wtedy
+(wsad: masterprompty od Tomasza + ten dokument).
