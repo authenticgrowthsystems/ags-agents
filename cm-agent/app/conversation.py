@@ -2037,9 +2037,15 @@ def _dm_reply_run(brand, channel, chat_id, insp_rows):
         f"To zrzut(y) PRYWATNEJ konwersacji (DM) z {channel}. Napisz JEDNA propozycje odpowiedzi "
         f"od wlasciciela konta do rozmowcy. Ton naturalny, partnerski, konkretny; odnies sie do "
         f"TRESCI jego wiadomosci; ZERO pitchu i linkow, chyba ze rozmowca wprost o nie prosi. "
-        f"Jezyk odpowiedzi: TEN SAM co jezyk rozmowy na zrzucie. {TRUTH_GUARD}\n"
+        f"{TRUTH_GUARD}\n"
+        "JEZYK ODPOWIEDZI (twarda zasada, fix 21/07 - model odpowiadal po polsku na angielski DM): "
+        "KROK 1: odczytaj, w jakim jezyku rozmowca napisal SWOJA OSTATNIA wiadomosc na zrzucie. "
+        "KROK 2: napisz odpowiedz DOKLADNIE w tym jezyku. Rozmowca pisze po angielsku = odpowiedz "
+        "po angielsku, nawet jesli wlasciciel konta jest Polakiem i reszta tego promptu jest po "
+        "polsku. Zadeklaruj jezyk w polu JEZYK ponizej ZANIM napiszesz odpowiedz.\n"
         "Format (dokladnie tak):\nOD: <rozmowca jak wyswietlony>\n"
-        "STRESZCZENIE: <1-2 zdania co napisal>\nODPOWIEDZ: <tekst do wyslania>"})
+        "JEZYK: <jezyk ostatniej wiadomosci rozmowcy, np. en / pl>\n"
+        "STRESZCZENIE: <1-2 zdania po polsku co napisal>\nODPOWIEDZ: <tekst do wyslania w JEZYKU>"})
     resp = client().messages.create(
         model=model, max_tokens=800, thinking={"type": "disabled"},
         system=[{"type": "text", "text": f"Glos marki:\n{brand_data['voice_bible'][:2500]}"}],
