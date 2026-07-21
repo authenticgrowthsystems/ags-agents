@@ -1684,6 +1684,18 @@ def handle_cmt(payload, wake_event=None):
     brand, _, channel = agent.partition(":")
     author = row.get("author_display") or ""
     prop_kind = "dm" if "[DM]" in (row.get("notes") or "") else "comment"  # INTAKE-UX 21/07
+    if action == "sent":
+        # feedback Tomasza 21/07 (tap-test b): JEDNO zatwierdzenie wystarczy - Tomasz kopiuje
+        # wklejke od razu z propozycji, wiec [Wkleilem] domyka caly cykl jednym tapnieciem
+        # (sent + stadium CRM), bez task_queue i drugiego gotowca.
+        db.execute("UPDATE engagement_log SET status='sent', notes = COALESCE(notes,'') || %s WHERE id=%s::uuid",
+                   (f" | WKLEJONE {stamp} (jeden tap)", eng_id))
+        if row.get("contact_id"):
+            from . import crm
+            crm.bump_stage(str(row["contact_id"]), "dm" if prop_kind == "dm" else "commented")
+        edit((f"✅ Wyslane ({author[:60]})" if prop_kind == "dm" else f"✅ Wklejone ({author[:60]})")
+             + " - domkniete jednym tapnieciem, zapisane w pamieci konta i na kontakcie (CRM).")
+        return
     if action == "ok":
         db.execute("UPDATE engagement_log SET status='approved', notes = COALESCE(notes,'') || %s WHERE id=%s::uuid",
                    (f" | DECYZJA {stamp}: ZATWIERDZONE", eng_id))
@@ -1795,14 +1807,20 @@ def _send_author_proposal(chat_id, brand, channel, author, post_excerpt, comment
     decyzji POD TA KONKRETNA propozycja. Nieznany autor dodatkowo dostaje wymuszony intake.
     INTAKE-UX (21/07): kind='dm' = ten sam tor dla odpowiedzi na DM (jeden framework, nie fork);
     karta 'Nowa osoba' ma strażnika 24h (B3: Djordje dostal ja 3x w jednej sesji).
+    Feedback Tomasza 21/07 (tap-test b): JEDNO zatwierdzenie - guzik [Wkleilem] domyka od razu
+    (sent + CRM), bez dwustopniowego Zatwierdz -> gotowiec -> Wkleilem. Naglowek mowi KANAL
+    i JEZYK publikacji; kanal nie-PL dostaje kontrole po polsku pod wklejka (translate_text).
     Zwraca eng_id albo None."""
     from . import crm
+    from .generate import _language_publish, translate_text
     contact_id, is_new = crm.ensure_contact(author, brand, channel)
     eng_id = _log_engagement(brand, channel, post_excerpt or "zrzut", comment, kind=kind,
                              who=author, contact_id=contact_id, status="proposed")
+    lang = _language_publish(brand, channel)
     ctx = None if is_new else crm.relation_context(contact_id)
     header = (f"✉️ Odpowiedz na DM dla: {author[:100]}" if kind == "dm"
               else f"💬 Komentarz dla: {author[:100]}")
+    header += f"\n🎯 {brand}/{channel} • publikacja: {lang.upper()}"
     if ctx:
         header += f"\n👤 {ctx}"
     elif is_new and contact_id:
@@ -1810,9 +1828,20 @@ def _send_author_proposal(chat_id, brand, channel, author, post_excerpt, comment
     _tg("sendMessage", {"chat_id": chat_id, "text": header})
     _tg("sendMessage", {"chat_id": chat_id, "text": comment[:4000]})  # CZYSTA wklejka
     if eng_id:
-        _tg("sendMessage", {"chat_id": chat_id, "text": f"Decyzja dla: {author[:80]}", "reply_markup":
+        decision_text = f"Decyzja dla: {author[:80]}"
+        if lang != "pl":
+            # dwujezycznosc (feedback 21/07): Tomasz czyta PL, publikuje native - kontrola
+            # tlumaczeniem haiku; wklejka wyzej zostaje czysta i doslowna.
+            try:
+                pl = translate_text(comment, "pl")
+                if pl:
+                    decision_text = f"🇵🇱 Kontrola po polsku:\n{pl[:2800]}\n\n" + decision_text
+            except Exception:
+                traceback.print_exc()
+        _tg("sendMessage", {"chat_id": chat_id, "text": decision_text[:4000], "reply_markup":
             {"inline_keyboard": [[
-                {"text": "✅ Zatwierdz", "callback_data": f"cmt:ok:{eng_id}"},
+                {"text": ("✅ Wyslalem" if kind == "dm" else "✅ Wkleilem"),
+                 "callback_data": f"cmt:sent:{eng_id}"},
                 {"text": "🔄 Inny kat", "callback_data": f"cmt:angle:{eng_id}"},
                 {"text": "❌ Odrzuc", "callback_data": f"cmt:no:{eng_id}"}]]}})
     if is_new and contact_id and not crm.intake_recently_offered(contact_id):
