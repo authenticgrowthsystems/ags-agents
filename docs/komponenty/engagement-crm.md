@@ -28,16 +28,19 @@ tap dec:<id>:<key> -> apply_intent_menu (wykonanie SEKWENCYJNE, paragon po kazdy
   comment -> _comment_vision_run -> bloki '### Autor / POST: / KOMENTARZ:' -> per autor:
      crm.ensure_contact (match po handle/nazwie OCZYSZCZONEJ clean_author; stub gdy nieznany)
      -> engagement_log (status='proposed', contact_id, author_display)
-     -> 3 wiadomosci: naglowek z kontekstem relacji / CZYSTA wklejka / guziki cmt:ok|angle|no
+     -> 3 wiadomosci: naglowek (kontekst relacji + KANAL i JEZYK publikacji) / CZYSTA wklejka /
+        [kanal nie-PL: kontrola po polsku translate_text] + guziki cmt:sent|angle|no
      -> nieznany: 4. wiadomosc intake [Dam zrzut profilu][Zostaw stub] (max 1/24h per osoba)
   dm -> _dm_reply_run (wizja czyta konwersacje, 1 odpowiedz w glosie marki) -> TEN SAM tor
      _send_author_proposal(kind='dm') -> engagement_log z markerem [DM] w notes
   intake -> profil widoczny? crm.process_profile_photo od razu : crm.arm_intake (czekamy na zrzut)
   po ostatnim watku: 'co dalej?'; pojedynczy wybor -> karta z POZOSTALYMI intencjami
-cmt:ok -> status='approved' + task_queue 'comment' (payload.kind comment|dm)
-  -> gotowiec z kontekstem CRM ('KOMENTARZ DO WKLEJENIA' / 'ODPOWIEDZ NA DM') + [Wkleilem][Pomin]
-cmt:done -> task done + engagement 'sent' + crm.bump_stage(contact, 'dm' gdy DM, inaczej
-  'commented') + last_interaction
+cmt:sent ([Wkleilem]/[Wyslalem]) -> JEDNO tapniecie domyka cykl (feedback 21/07): engagement
+  'sent' + crm.bump_stage(contact, 'dm' gdy DM, inaczej 'commented') + last_interaction -
+  bez task_queue i drugiego gotowca (Tomasz kopiuje wklejke od razu z propozycji)
+cmt:ok (LEGACY, stare karty sprzed 21/07) -> status='approved' + task_queue 'comment'
+  (payload.kind comment|dm) -> gotowiec + [Wkleilem][Pomin]; cmt:done -> task done + 'sent'
+  + bump_stage jak wyzej
 ```
 
 ## Wejscia-wyjscia i tabele
@@ -85,8 +88,9 @@ do nowych kolumn), patch n8n `n8n-workflows/patches/hitl-photo-mediagroup-200720
   z trasy wrzutki), `_screen_shots`/`_intent_menu_open`/`apply_intent_menu`/`_intake_run`
   (INTAKE-UX 21/07), `_dm_reply_run`/`_sub_reply_dm` (odpowiedzi DM), `_comment_vision_run`,
   `_send_author_proposal` (3 wiadomosci + guziki per autor; kind comment|dm),
-  `_parse_comment_blocks`, `handle_cmt` (ok/no/angle per autor + done/skip + intake/stub;
-  kind z markera [DM] w notes), `apply_photo_group`, trasa "co wisi?" w `_subagent_handle`.
+  `_parse_comment_blocks`, `handle_cmt` (sent = jeden tap 21/07; legacy ok/done/skip +
+  no/angle per autor + intake/stub; kind z markera [DM] w notes), `apply_photo_group`,
+  trasa "co wisi?" w `_subagent_handle`.
 - `cm-agent/app/engagement.py`: `consumer_tick` (gotowiec z autorem + kontekstem CRM),
   `stale_watch` (przypomnienia 24h), `apply_stale_comment`, `apply_stale_task`.
 - `cm-agent/app/generate.py`: `comment_from_image` (lista obrazow, format POST:/KOMENTARZ:),

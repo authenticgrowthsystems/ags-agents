@@ -78,6 +78,21 @@ a) streszczenie DM -> 3 wiadomosci dalej "odpowiedz na ten DM" bez proszenia
    (kolejne tapniecia) -> 2 paragony -> "co dalej"; c) ten sam profil 2x ->
    zero drugiej karty/decyzji; d) pogrubienie bez gwiazdek.
 
+## Iteracja po tap-testach z Tomaszem (21/07 wieczor)
+
+Testy d (formatowanie) i b (album -> jedna karta -> sekwencja -> "co dalej") PASS na zywo
+(Neil Patel, decyzje #8-#10, intake + crm_tier Competitor). Dwie uwagi Tomasza wdrozone
+od reki:
+1. **JEDNO zatwierdzenie**: guzik [✅ Wkleilem]/[✅ Wyslalem] (cmt:sent) domyka caly cykl
+   jednym tapnieciem (sent + stadium CRM) - koniec dwustopniowego Zatwierdz -> gotowiec ->
+   Wkleilem. Stary tor cmt:ok/done zostaje jako legacy dla kart sprzed zmiany; przypomnienie
+   24h (stale_comment) dalej lapie niedomkniete propozycje.
+2. **Dwujezycznosc + przejrzystosc celu**: naglowek propozycji mowi "🎯 brand/kanal •
+   publikacja: EN/PL"; przy kanale nie-PL pod wklejka idzie "🇵🇱 Kontrola po polsku"
+   (translate_text, haiku) - Tomasz czyta PL, publikuje native, wklejka zostaje czysta.
+   n8n bez zmian (galezie cmt:/dec: routuja po prefiksie - dowod: done/skip weszly 20/07
+   bez patcha, dec:intent_menu dzialalo dzis na zywo).
+
 ## Ryzyka / obserwacje do backlogu
 - Screening = +1 wywolanie wizji (sonnet) per wrzutka - celowy koszt za trafna
   akcje; gdy urosnie, kandydat na haiku.
