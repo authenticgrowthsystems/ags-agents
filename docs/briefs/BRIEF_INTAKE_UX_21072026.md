@@ -60,9 +60,10 @@ Tap-testy DoD. Decyzje guzikami gdy trzeba wybrac zakres.
 
 ## 6. Zamkniecie: raport + komponenty + STATUS tu.
 
-STATUS = ZBUDOWANE (21/07, galaz build/intake-ux). B1+B2+B3+B4 gotowe, zero DDL,
-zero n8n (wszystko w istniejacych trasach dec:/cmt:). Raport:
-docs/cm/RAPORT_do_Managera_21072026_intake_ux.md. Komponenty zaktualizowane
-w tym samym commicie (rozmowa-cm.md + engagement-crm.md). Bonus: naprawiony
-martwy guzik 'Inny kat' (brak importu TRUTH_GUARD od 20/07).
-Czeka: merge do sb-work -> rebuild cm-agent -> tap-testy DoD a-d z sekcji 2.
+STATUS = DONE (22/07 ~00:35): WDROZONE LIVE, tap-testy DoD 4/4 PASS (a-d, z iteracjami
+z zywych tapow: cmt:sent jeden tap, kontrola PL po tresci, jezyk DM = jezyk rozmowcy,
+koniec podwojnej linii guzikow). Commity build/intake-ux: 00226bf + 2c5a545 + 5b09cb5 +
+b8de7bb, wszystkie zmergowane do silly-blackwell i przebudowane. Zero DDL, zero n8n.
+Raporty: docs/cm/RAPORT_do_Managera_21072026_intake_ux.md (wykonawczy) +
+docs/cm/RAPORT_dla_BE_22072026_INTAKE_UX_zamkniecie.md (zamkniecie, backlog, next).
+Bonus: naprawiony martwy guzik 'Inny kat' (brak importu TRUTH_GUARD od 20/07).
