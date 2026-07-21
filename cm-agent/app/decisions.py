@@ -178,6 +178,11 @@ def _apply_action(row, key, chat):
         from . import conversation
         conversation.apply_photo_group(row, key, chat)
         return
+    if dt == "intent_menu":
+        # INTAKE-UX (21/07): menu intencji po wrzutce zrzutu - wykonanie sekwencyjne z paragonami
+        from . import conversation
+        conversation.apply_intent_menu(row, key, chat)
+        return
     if dt != "stale_approval":
         return
     item_id = (row.get("context") or {}).get("content_item_id")

@@ -1,6 +1,6 @@
 # Komponent: ROZMOWA CM I SUBAGENTOW (route, narzedzia, pamiec 3 warstwy)
 
-**STATUS GOTOWOSCI: CZESCIOWY (komendy configu deterministyczne; poza nimi test prawdy: paragon)** (macierz: docs/GOTOWOSC_PRODUKTU.md; aktualizuj przy kazdej zmianie zachowania)
+**STATUS GOTOWOSCI: CZESCIOWY (komendy configu deterministyczne; poza nimi test prawdy: paragon). Warstwa INTAKE-UX 21/07 (pamiec watku subagenta, menu intencji, HTML) w galezi build/intake-ux - czeka merge + rebuild + tap-testy DoD** (macierz: docs/GOTOWOSC_PRODUKTU.md; aktualizuj przy kazdej zmianie zachowania)
 
 ## Co robi
 
@@ -33,11 +33,42 @@ conversation.handle:
 
 - CM: model z brand_config `cm_tier_conversation` (default Opus), PETLA
   AGENTOWA do 5 krokow (wynik narzedzia wraca do modelu), max_tokens 4000.
-- Subagent: Sonnet default, SINGLE-PASS (narzedzie raz, wynik nie wraca),
-  max_tokens 2000. Jezyk rozmowy: brand_config `language_comm`.
+- Subagent: Sonnet default, PETLA AGENTOWA jak CM (10/07), max_tokens 2000.
+  Jezyk rozmowy: brand_config `language_comm`.
 - Zdjecie przy aktywnym CM -> rozmowa CM (pyta o intencje); przy subagencie ->
-  komentarz z vision; przy Idea Bocie -> triage. Dokumenty .md/.txt <=120KB ->
-  `handle_document` -> tresc jako [DOKUMENT: nazwa] do rozmowy aktywnego agenta.
+  KARTA INTENCJI (INTAKE-UX 21/07, nizej); przy Idea Bocie -> triage. Dokumenty
+  .md/.txt <=120KB -> `handle_document` -> tresc jako [DOKUMENT: nazwa] do
+  rozmowy aktywnego agenta.
+- FORMATOWANIE (B4 21/07): kazda wiadomosc agenta idzie przez `_reply` ->
+  `_send_rendered`: znaczniki markdownu (`**`, `###`, backticki) konwertowane
+  do parse_mode=HTML w TYM JEDNYM miejscu; tekst bez znacznikow idzie plain;
+  blad renderowania = fallback plain (wiadomosc zawsze dochodzi).
+
+## Wrzutka zrzutu przy subagencie = MENU INTENCJI (INTAKE-UX 21/07)
+
+Zrzut(y) przy aktywnym subagencie NIE odpalaja od razu propozycji komentarzy.
+Trasa: n8n Photo Route -> POST /message 'skomentuj ostatni zrzut' -> regex ->
+`_sub_comment_vision(menu=True)`:
+1. uzbrojony intake CRM ma pierwszenstwo (zrzut = PROFIL),
+2. album media_group_id = jeden kontekst (claim + pauza 4 s),
+3. zrzuty osobno <60 s = pytanie 'jeden post czy rozne?' (photo_group),
+4. potem `_intent_menu_open`: wizja-klasyfikacja (`_screen_shots`: co widac -
+   post/DM/profil + osoby) -> JEDNA karta "CO WIDZE + PROPONUJE" z guzikami
+   intencji przez decisions.ask, typ **intent_menu**: [Skomentuj] [Odpowiedz
+   na DM] [Poznaj osobe (intake)] [Wszystko po kolei] [Tylko zapisz].
+Tap -> `apply_intent_menu`: wykonanie SEKWENCYJNE (komentarze = tor cmt: per
+autor; DM = `_dm_reply_run`, ten sam tor gotowca; intake = od razu z zrzutow
+gdy widac profil, inaczej arm_intake), KAZDY watek domkniety paragonem
+"✅ Watek ... domkniety", po ostatnim "co dalej?". Pojedynczy wybor przy
+pozostalych intencjach = nowa karta z POZOSTALYMI opcjami (+ [Nic wiecej]).
+WATEK INTENCJI JEST OBIEKTEM W DB (agent_decisions.context: insp_ids,
+contact_id, screening, done_keys) - przyszly konektor UI (Slack watki, webapp
+lista wiszacych zadan - kierunek produktowy SNAPSHOT) tylko inaczej go
+wyswietli. DEDUP (B3): ta sama osoba (match przez contacts) z OTWARTA karta
+<24h = doklejka insp_ids do jej kontekstu, zero drugiej karty.
+Jawne narzedzie `suggest_comment_from_image` w rozmowie = bez menu, od razu
+propozycje (stara sciezka); 'odpowiedz na ten DM' = `subagent_reply_dm`
+(siega po ostatnie zrzuty watku, nie prosi o powtorzenie).
 
 ## Narzedzia
 
@@ -48,10 +79,11 @@ conversation.handle:
   describe_material_image, generate_material_image, view_last_screenshot,
   hold_todays_queue (STOP przed doprecyzowaniem), sunday_world_brief,
   log_external_publication ([ZEWN]).
-- Subagent (10): subagent_show_post, subagent_edit_post (edycja=akceptacja,
+- Subagent (11): subagent_show_post, subagent_edit_post (edycja=akceptacja,
   PL->EN), subagent_remove_post, subagent_reschedule_post,
   subagent_set_metrics, propose_material (tylko wlasny kanal), escalate_to_cm,
-  suggest_comment, suggest_comment_from_image, subagent_remember_rule.
+  suggest_comment, suggest_comment_from_image, subagent_reply_dm (odpowiedz
+  na DM z ostatnich zrzutow, 21/07), subagent_remember_rule.
 - Komentarze: guziki cmt:* -> `handle_cmt`. Od buildu 20/07 (W BUDOWIE, czeka wdrozenie):
   propozycja per AUTOR z wlasnymi guzikami cmt:ok|angle|no, CRM obowiazkowy (contacts),
   intake nieznanych (cmt:intake|stub), przypomnienia 24h, album = 1 post - szczegoly:
@@ -60,7 +92,12 @@ conversation.handle:
 ## Pamiec (3 warstwy)
 
 1. Historia rozmowy: `user_agent_state.fsm_data.histories[agent]` - OSOBNY
-   watek per agent, 16 tur, TTL 30 min (stan nie gnije).
+   watek per agent, 16 tur, TTL 30 min (stan nie gnije). B1 INTAKE-UX (21/07):
+   trasy DETERMINISTYCZNE subagenta (kolejka/raport/co wisi/wrzutki zrzutow/
+   karty intencji/guziki intent_menu) tez zapisuja wymiane przez `_sub_record`
+   - wczesniej odpowiadaly z pominieciem historii i subagent 3 wiadomosci
+   pozniej "nie mial kontekstu" do wlasnego streszczenia DM (sesja 21/07).
+   System prompt subagenta kaze SPRAWDZIC historie zanim poprosi o powtorzenie.
 2. Skrot przy wygasaniu: `memory_tick` zapisuje podsumowanie watku
    (agent_logs CONVERSATION_SUMMARY) i wstrzykuje ostatnie skroty do kontekstu
    ("pamietasz o czym wczoraj" dziala).
@@ -96,6 +133,12 @@ conversation.handle:
   stanu powinna dostac deterministyczny route albo twardy paragon.
 - TTL 30 min czysci LUZNY watek - co ma przetrwac, musi trafic do warstwy
   trwalej (schowek, zasady, reguly).
-- Subagent single-pass: zlozone watki wielonarzedziowe dziala tylko CM.
 - active_agent wartosci to 'idea'/'cm'/'subagent:<brand>:<channel>' - nie
   zgadywac innych (blad briefu #88).
+- Karta intencji dodaje 1 wywolanie wizji (screening) per wrzutka - to celowy
+  koszt za trafna akcje zamiast floodu; typ 'intent_menu' moze z czasem przejsc
+  semi-auto przez petle nauki decisions (NIE dotyczy tresci).
+- _md_to_html konwertuje TYLKO gdy tekst ma znaczniki - czyste wklejki
+  (gotowce) ida przez _tg bez parse_mode i zostaja doslowne.
+- fix 21/07: galaz 'Inny kat' (cmt:angle) nie importowala TRUTH_GUARD - kazde
+  tapniecie padalo NameError polykanym przez except; naprawione.
