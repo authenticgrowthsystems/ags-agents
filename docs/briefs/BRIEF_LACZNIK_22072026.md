@@ -15,6 +15,16 @@ n8n: TYLKO ewentualna przepustka komendy /kontekst (patcher z backupem, wzorzec
 hitl-sales-commands). DOTYKASZ: engagement.py, conversation.py (sekcje intake/route),
 reports.py, sync_notion. NIE DOTYKASZ: publikacja, planner, sales.py, decisions core.
 
+## 0.5 MINI-PORZADKI NA START (30-45 min, zalecenie raportu zamkniecia INTAKE-UX)
+
+Przed wlasciwym buildem, w TYM oknie (osobny commit "mini-porzadki po INTAKE-UX"):
+a) sales.py: wysylka odpowiedzi przez conversation._send_rendered (koniec surowych **
+   u Sprzedawcy) - JEDYNY dozwolony dotyk sales.py w tym buildzie.
+b) "paragon" -> "potwierdzenie" w komunikatach WIDOCZNYCH dla Tomasza
+   (decisions/conversation/matreview); doktryna w docs zostaje "paragonem".
+c) Potwierdzenie po [Wyslalem]/[Wkleilem] NOWA wiadomoscia zamiast nadpisywania -
+   kontrola PL zostaje widoczna w czacie (drobiazg 6 z raportu zamkniecia).
+
 ## 1. CO budujemy (etap 1 konceptu, 4 klocki)
 
 1. **Parser RAPORT PRACY (bez LLM).** Deterministyczny route na `[RAPORT PRACY` w
@@ -60,7 +70,10 @@ aktualizacja engagement-crm.md i sync-notion.md + masterprompt (sekcja 6 backlog
 ## 3. Czego NIE robic
 
 Etap 2 (MCP/endpoint read-only dla czatu) = NIE TERAZ. Zadnego LLM w parserze ani
-w /kontekst. Zadnych zmian w decisions/publikacji/sales.
+w /kontekst. Zadnych zmian w publikacji/planner/sales POZA mini-porzadkami 0.5
+(a: jedna linia wysylki w sales.py; b: slownictwo; c: potwierdzenie nowa wiadomoscia).
+NIE buduj bez sygnalu (raport zamkniecia pkt 3): ujednolicanie zdjec przy CM do karty
+intencji, scalanie starych stubow contacts - zamrozone do decyzji Tomasza.
 
 ## 5. Udzial Tomasza
 Wklejka masterpromptow na starcie; link/strona-matka Notion (gdzie zalozyc "Stan gry");
