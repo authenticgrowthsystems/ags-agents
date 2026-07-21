@@ -559,8 +559,39 @@ _CONFIG_KEYS = ("publish_windows", "publish_mode", "language_publish", "posts_pe
                 "emergency_publish")
 
 
+_WKLEJONE_RE = re.compile(r"^\s*wklejone\s+#?(\d+)\s*\.?\s*$", re.IGNORECASE)
+
+
+def _wklejone_route(text):
+    """A4 (21/07): domkniecie gotowca recznej wklejki. 'wklejone <id>' -> pq held->published +
+    wpis do ksiegi published_posts (source manual_paste). Deterministycznie, z paragonem."""
+    m = _WKLEJONE_RE.match(text)
+    if not m:
+        return None
+    pid = int(m.group(1))
+    row = db.fetchone(
+        "SELECT id, platform, brand, status, content, topic, content_item_id FROM post_queue WHERE id=%s", (pid,))
+    if not row:
+        return f"Nie ma wiersza kolejki #{pid}."
+    if row["status"] == "published":
+        return f"⚙️ Wiersz #{pid} juz jest oznaczony jako opublikowany - nic nie zmieniam."
+    if row["status"] != "held":
+        return f"Wiersz #{pid} ma status '{row['status']}' - 'wklejone' domyka tylko gotowce (held)."
+    db.execute("UPDATE post_queue SET status='published', updated_at=NOW() WHERE id=%s", (pid,))
+    db.execute(
+        """INSERT INTO published_posts (platform, brand, content, topic, post_url, post_id,
+                                        published_at, content_item_id, metadata)
+           VALUES (%s,%s,%s,%s,'','',NOW(),%s,'{"source":"manual_paste"}'::jsonb)""",
+        (row["platform"], row["brand"], row["content"], row.get("topic"), row["content_item_id"]))
+    return (f"⚙️ Odhaczone: #{pid} ({row['platform']}) opublikowany recznie - wpis w ksiedze "
+            f"publikacji zrobiony. Jak masz link do posta, wklej go, dopisze do wpisu.")
+
+
 def _config_route(text):
     """Zwraca odpowiedz (paragon ⚙️ z _target_update) gdy fraza rozpoznana, inaczej None -> LLM."""
+    r = _wklejone_route(text)
+    if r is not None:
+        return r
     m = _USTAW_OKNO_RE.match(text)
     if m:
         val = f"{int(m.group(3)):02d}:{m.group(4)}-{int(m.group(5)):02d}:{m.group(6)}"

@@ -36,6 +36,17 @@ def _split_paragraphs(text, target=500):
     return parts or [text]
 
 
+def _pub_media(media):
+    """A3 (21/07, incydent grafik): do kolejki publikacji ida TYLKO prawdziwe pliki (file_id).
+    'Propozycje wizualne' (kind=suggestion, opis grafiki) zostaja na materiale - to zadanie
+    do karty, nie zalacznik; publisher probowal wgrywac OPIS jako obraz (INIT 400)."""
+    out = []
+    for m in (media or []):
+        if isinstance(m, dict) and m.get("file_id"):
+            out.append(m)
+    return out
+
+
 def stage_variant(item, channel_row, variant_text):
     """Eager staging: write the variant as a post_queue row in 'review' (shown at the HITL gate).
     Media (etap 1, 06/07): zalaczniki materialu jada do wiersza kolejki - publisher wgrywa je przy publikacji.
@@ -76,7 +87,7 @@ def stage_variant(item, channel_row, variant_text):
                    VALUES (%s,%s,%s,%s,'review',%s,%s,%s::jsonb) RETURNING id""",
                 (part, item["brand_id"], "x", item.get("master_theme"), item["id"],
                  _slots.humanize_slot(slot),  # kanon 19/07: niepelne godziny +/-15 min
-                 json.dumps(item.get("media") or [] if i == 0 else [])),
+                 json.dumps(_pub_media(item.get("media")) if i == 0 else [])),
             )
             if row:
                 ids.append(row["id"])
@@ -86,7 +97,7 @@ def stage_variant(item, channel_row, variant_text):
            VALUES (%s,%s,%s,%s,'review',%s,%s,%s::jsonb) RETURNING id""",
         (variant_text, item["brand_id"], channel_row["channel"], item.get("master_theme"),
          item["id"], _slots.humanize_slot(item.get("scheduled_for")),  # kanon 19/07: niepelne godziny
-         json.dumps(item.get("media") or [])),
+         json.dumps(_pub_media(item.get("media")))),
     )
     return row["id"] if row else None
 

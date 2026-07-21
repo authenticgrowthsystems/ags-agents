@@ -368,16 +368,22 @@ def _dispatch_alert_set(obj):
 
 
 def _dispatch_timeout_alert(item, pending):
-    """Zwis publikacji: item siedzi w 'dispatching' dluzej niz DISPATCH_TIMEOUT_H bez potwierdzenia ->
-    JEDEN glosny alert (to jest to, co wczesniej ginelo pod optymistycznym 'opublikowal')."""
-    upd = item.get("updated_at")
-    if not upd:
-        return
-    try:
-        age_h = (_now() - upd).total_seconds() / 3600.0
-    except Exception:
-        return
-    if age_h < config.DISPATCH_TIMEOUT_H:
+    """Zwis publikacji liczony OD SLOTU WIERSZA (A6, 21/07): wiersz z przyszlym slotem nie jest
+    zwisem - alarm dopiero gdy slot minal o DISPATCH_TIMEOUT_H bez stanu terminalnego.
+    (Stara wersja liczyla od dispatchu materialu i alarmowala o 15:15 o postach ze slotami
+    na 20:10/21:57 - falszywe alarmy ucza ignorowania prawdziwych.)"""
+    now = _now()
+    overdue = []
+    for r in pending:
+        ref = r.get("scheduled_for") or item.get("updated_at")
+        if not ref:
+            continue
+        try:
+            if (now - ref).total_seconds() / 3600.0 >= config.DISPATCH_TIMEOUT_H:
+                overdue.append(r)
+        except Exception:
+            continue
+    if not overdue:
         return
     st = _dispatch_alert_state()
     ids = st.get("ids", [])
@@ -385,9 +391,10 @@ def _dispatch_timeout_alert(item, pending):
         return
     st["ids"] = (ids + [str(item["id"])])[-100:]
     _dispatch_alert_set(st)
-    chans = ", ".join(sorted({_chan_label(item["brand_id"], r["platform"]) for r in pending}))
-    logbot.send(f"⏱️ ZWIS PUBLIKACJI ({age_h:.0f} h bez potwierdzenia): {item['master_theme'][:80]}\n"
-                f"   Kanaly wciaz w locie: {chans}. Sprawdz egzekucje Schedulera/Publishera (media_errors?).")
+    chans = ", ".join(sorted({_chan_label(item["brand_id"], r["platform"]) for r in overdue}))
+    logbot.send(f"⏱️ ZWIS PUBLIKACJI (slot minal >{config.DISPATCH_TIMEOUT_H:.0f} h temu): "
+                f"{item['master_theme'][:80]}\n"
+                f"   Po slocie bez potwierdzenia: {chans}. Sprawdz egzekucje Schedulera/Publishera (media_errors?).")
 
 
 def reconcile_publications():
@@ -397,7 +404,9 @@ def reconcile_publications():
     rows = db.fetchall(
         "SELECT id, brand_id, master_theme, updated_at FROM content_items WHERE status='dispatching'")
     for item in rows:
-        pq = db.fetchall("SELECT platform, status FROM post_queue WHERE content_item_id=%s", (item["id"],))
+        pq = db.fetchall(
+            "SELECT id, platform, status, content, media, scheduled_for FROM post_queue WHERE content_item_id=%s",
+            (item["id"],))
         if not pq:
             continue  # nic nie zdazylo trafic do kolejki - nastepny tick
         pending = [r for r in pq if r["status"] not in (_DISPATCH_OK + _DISPATCH_FAIL)]
@@ -406,7 +415,48 @@ def reconcile_publications():
             continue
         db.set_item_status(item["id"], "published")
         logbot.send(_publish_report(item, pq))
+        _send_manual_paste_kits(item, pq)  # A4 (21/07): gotowiec held z TRESCIA do rozmowy Tomasza
         print(f"[cm] reconciled -> published {item['id']}", flush=True)
+
+
+def _send_manual_paste_kits(item, pq):
+    """A4 (21/07, incydent #194): wiersz 'held' (tryb draft, np. LinkedIn profil) = gotowiec do
+    RECZNEJ wklejki. Dotad szla tylko notka na kanal logowy - Tomasz nie mial CZEGO wkleic i post
+    nie wychodzil. Teraz: pelna tresc + grafika ida do glownej rozmowy, domkniecie deterministyczna
+    komenda 'wklejone <id>' (route w conversation)."""
+    held = [r for r in pq if r["status"] == "held"]
+    if not held:
+        return
+    try:
+        chat = hitl._admin_chat_id()
+    except Exception:
+        chat = None
+    if not chat:
+        return
+    for r in held:
+        try:
+            lab = _chan_label(item["brand_id"], r["platform"])
+            conversation._tg("sendMessage", {
+                "chat_id": chat,
+                "text": (f"📋 GOTOWIEC DO WKLEJENIA ({lab}) - {item['master_theme'][:80]}\n"
+                         f"Ponizej czysta wklejka. Po opublikowaniu odpisz: wklejone {r['id']}"),
+                "disable_web_page_preview": True})
+            conversation._tg("sendMessage", {"chat_id": chat, "text": (r.get("content") or "")[:4096],
+                                             "disable_web_page_preview": True})
+            media = r.get("media") or []
+            if isinstance(media, str):
+                import json as _json
+                try:
+                    media = _json.loads(media)
+                except Exception:
+                    media = []
+            for m in media:
+                if isinstance(m, dict) and m.get("file_id"):
+                    conversation._tg("sendPhoto", {"chat_id": chat, "photo": m["file_id"],
+                                                   "caption": f"grafika do wklejki #{r['id']}"})
+                    break
+        except Exception:
+            traceback.print_exc()
 
 
 def _welcome_new_channels():

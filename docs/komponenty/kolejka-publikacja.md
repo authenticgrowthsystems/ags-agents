@@ -66,6 +66,19 @@ Przypomnij jutro), nigdy auto-decyzja.
 - Adaptery n8n: Subagent X Publisher `G3nEIt5lIkiKemiK`, Subagent LinkedIn
   Publisher `Uv9TvUMI8MRSqCLz` (generyczny per cel: secret_prefix), Scheduler
   `x1jJEbcWAe3FnpCa` (co minute, OAuth1). Klucze WYLACZNIE z app_secrets.
+- MEDIA X (naprawa 21/07, patch scheduler-media-ledger-21072026.cjs): upload
+  = POST /2/media/upload z WSZYSTKIMI parametrami w multipart/form-data BODY
+  (kontrakt docs.x.com; parametry w query = INIT 400). STATUS = GET z query.
+  Naprawione w OBU workflow (wspolny kod). Do kolejki ida tylko wpisy media
+  z file_id (`channels._pub_media`) - propozycje wizualne zostaja na materiale.
+- KSIEGA (naprawa 21/07): Mark Published Schedulera per-wiersz robi UPDATE pq
+  + INSERT published_posts + agent_messages RESPONSE + domyka content_items,
+  gdy nie ma juz wierszy w locie. Bez tego CM/raporty klamaly "nic nie wyszlo"
+  mimo opublikowanych postow (incydent 21/07).
+- GOTOWIEC RECZNY (A4, 21/07): wiersz 'held' = worker wysyla do glownej
+  rozmowy pelny zestaw (naglowek + czysta wklejka + grafika); domkniecie
+  deterministyczna komenda `wklejone <id>` (pq->published + ksiega, source
+  manual_paste). ZWIS publikacji liczony OD SLOTU wiersza, nie od dispatchu.
 
 ## Punkty zaczepienia w kodzie
 
