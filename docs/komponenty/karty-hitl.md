@@ -69,6 +69,17 @@ Dwa widoki decyzyjne w Telegramie:
 - Zatwierdzanie TRESCI nigdy nie przechodzi na semi-auto (kanon 19/07).
 - Ostrzezenie musi byc w widoku, w ktorym zapada decyzja (lekcja 20/07).
 
+## Zmiany 22/07 (uwagi Tomasza 00:03)
+
+- Wiadomosc zatwierdzenia (hitl.send_approval) POKAZUJE kopie PL (media kind='review_pl',
+  sekcja "Odpowiednik do przegladu") - wczesniej byla tylko na kartach przegladu,
+  a decyzja zapada na approval.
+- Klawiatura approval ma guziki grafiki: "Generuj grafike" (matnav:gen) i "Dopnij zdjecie"
+  (matnav:madd) - te same akcje co na kartach, obraz dopina sie do materialu I wierszy kolejki.
+- Straznik preambuly (generate._strip_meta_preamble): meta-komentarz modelu przed '---'
+  ("I've reviewed the canonical...") jest ucinany z wariantu przed stagingiem
+  (incydent: wiersz 280 poszedl do kolejki z preambula w tresci).
+
 ## Znane pulapki
 
 - BUG matnav unpack (od v7, naprawiony 12/07): rozpakowanie `_card()` do 2

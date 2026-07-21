@@ -453,6 +453,24 @@ def _x_guide(brand_id, content_item_id=None):
     return _X_SERIES_GUIDE
 
 
+_META_MARKERS_RE = re.compile(
+    r"(?i)canonical|adaptation|i'?ve reviewed|here'?s the|safe to proceed|duplication|avoid duplicat")
+
+
+def _strip_meta_preamble(text):
+    """Straznik 22/07 (incydent wiersz 280): model potrafi dopisac preambule-meta
+    ("I've reviewed the canonical... Here's the adaptation:") przed separatorem '---'
+    mimo 'Return ONLY the adapted text'. Gdy blok przed PIERWSZYM samotnym '---'
+    wyglada na komentarz modelu (markery meta), publikowalna jest tylko reszta."""
+    t = (text or "").strip()
+    parts = re.split(r"(?m)^\s*-{3,}\s*$", t, maxsplit=1)
+    if len(parts) == 2:
+        head, body = parts[0].strip(), parts[1].strip()
+        if body and head and _META_MARKERS_RE.search(head):
+            return body
+    return text
+
+
 def generate_variant(brand, canonical_body, channel, content_item_id=None):
     """Adaptacja per kanal; model per task z routera R4 (default haiku); jezyk per cel (R6)."""
     model, tier, source = tasks.model_for("variant")
@@ -478,4 +496,4 @@ def generate_variant(brand, canonical_body, channel, content_item_id=None):
         messages=[{"role": "user", "content": msg}],
     )
     tasks.log_task("variant", tier, model, source, getattr(resp, "usage", None), content_item_id)
-    return _text(resp), getattr(resp, "usage", None)
+    return _strip_meta_preamble(_text(resp)), getattr(resp, "usage", None)

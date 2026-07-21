@@ -60,12 +60,22 @@ def send_approval(item, variants):
         canon = (item.get("canonical_body") or "").strip()
         lines.append("--- TRESC (cel bez aktywnego kanalu - publikacja RECZNA; pelna tresc: karty -> 📄) ---\n"
                      + (canon[:2800] if canon else "(tekst w produkcji)") + "\n")
+    # 22/07 (uwaga Tomasza 00:03): kopia PL do przegladu MUSI byc widoczna TU, gdzie zapada
+    # decyzja - nie tylko na kartach przegladu. Material ma ja w media (kind='review_pl', T8).
+    _rev = next((m.get("text") for m in (item.get("media") or [])
+                 if str((m or {}).get("kind", "")).startswith("review_")), None)
+    if _rev:
+        lines.append("———\n🇵🇱 Odpowiednik do przegladu (NIE publikuje sie):\n" + _rev.strip()[:1400] + "\n")
     lines.append(f"Model tekstu-matki: {can_tier} (zmiana guzikiem 🎚 dziala od nastepnego materialu)")
     text = "\n".join(lines)[:3800]
     kb = {"inline_keyboard": [
         [{"text": "✅ Zatwierdz", "callback_data": f"cm:{item['id']}:approve"},
          {"text": "❌ Odrzuc", "callback_data": f"cm:{item['id']}:reject"}],
+        # 22/07: grafike mozna wygenerowac/dopiac Z KARTY ZATWIERDZENIA (istniejace akcje
+        # matnav gen/madd) - uwaga Tomasza "czemu nie moge dodac grafiki?"
         [{"text": "✏️ Edytuj tekst", "callback_data": f"matnav:edit:{item['id']}"}],
+        [{"text": "🎨 Generuj grafike", "callback_data": f"matnav:gen:{item['id']}"},
+         {"text": "➕ Dopnij zdjecie", "callback_data": f"matnav:madd:{item['id']}"}],
         # korekta tieru = approval-learning (R4): zapis do agent_approval_gates + brand_config przez galaz cmtier: w HITL
         [{"text": "🎚 haiku", "callback_data": "cmtier:canonical:haiku"},
          {"text": "🎚 sonnet", "callback_data": "cmtier:canonical:sonnet"},
