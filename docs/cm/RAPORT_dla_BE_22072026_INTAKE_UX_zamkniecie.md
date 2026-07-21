@@ -66,8 +66,20 @@ na zywo). Dotkniete pliki: conversation.py, crm.py, decisions.py, engagement.py
 6. Tapniecie [Wyslalem] nadpisuje tresc wiadomosci z kontrola PL - kontrola znika z czatu
    po decyzji; jesli Tomasz zechce ja zachowac, potwierdzenie moze isc NOWA wiadomoscia.
 
-## Nastepny ruch wg planu
+## WSKAZOWKI od BE-INTAKE-UX dla nastepnej sesji (kolejnosc Pareto, Tomasz 22/07 ~00:45)
 
-LACZNIK SYNCHRONIZACYJNY (decyzja Tomasza TAK, START po DONE INTAKE-UX - warunek
-spelniony). Koncept: docs/product/LACZNIK_SYNCHRONIZACYJNY_21072026.md (commit fb10ea9).
-Sesja lacznika pisze wlasny brief wg protokolu (docs/briefs/PROTOKOL_SESJI.md).
+1. **LACZNIK SYNCHRONIZACYJNY = glowny build** (decyzja Tomasza TAK, warunek "po DONE
+   INTAKE-UX" SPELNIONY tej nocy). Koncept: docs/product/LACZNIK_SYNCHRONIZACYJNY_21072026.md
+   (commit fb10ea9). Sesja pisze wlasny brief wg docs/briefs/PROTOKOL_SESJI.md.
+2. **Mini-porzadki po INTAKE-UX doklej na START tego samego okna** (30-45 min, nie osobna
+   sesja): (a) sales.py wysylka przez conversation._send_rendered - koniec surowych ** u
+   Sprzedawcy; (b) zamiana "paragon" -> "potwierdzenie" w komunikatach WIDOCZNYCH
+   (decisions/conversation/matreview; doktryna w docs zostaje "paragonem");
+   (c) potwierdzenie po [Wyslalem]/[Wkleilem] NOWA wiadomoscia zamiast nadpisywania -
+   kontrola PL zostaje w czacie.
+3. **NIE buduj bez sygnalu**: ujednolicenie zdjec przy CM do karty intencji (CM = partner
+   dialogiczny, pyta po swojemu - moze byc zaleta) i scalanie starych stubow contacts
+   (dopiero przy realnym dublu). Zamrozone nie odmrazac bez decyzji Tomasza.
+4. Kazde z tych zachowan dziala we WSZYSTKICH subagentach kanalowych (jeden kod,
+   konfiguracja z channels) - nowy kanal dostaje INTAKE-UX za darmo; wyjatki opisane
+   w backlogu (sales.py, CM).
