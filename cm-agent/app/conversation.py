@@ -1705,8 +1705,14 @@ def handle_cmt(payload, wake_event=None):
         if row.get("contact_id"):
             from . import crm
             crm.bump_stage(str(row["contact_id"]), "dm" if prop_kind == "dm" else "commented")
-        edit((f"✅ Wyslane ({author[:60]})" if prop_kind == "dm" else f"✅ Wklejone ({author[:60]})")
-             + " - domkniete jednym tapnieciem, zapisane w pamieci konta i na kontakcie (CRM).")
+        # mini-porzadki 22/07 (drobiazg 6 raportu zamkniecia INTAKE-UX): potwierdzenie NOWA
+        # wiadomoscia, nie edycja - edycja nadpisywala kontrole PL i znikala z czatu po decyzji.
+        # Z oryginalu zdejmujemy tylko guziki (drugi tap niemozliwy), tresc zostaje.
+        _tg("editMessageReplyMarkup", {"chat_id": chat_id, "message_id": message_id,
+                                       "reply_markup": {"inline_keyboard": []}})
+        _tg("sendMessage", {"chat_id": chat_id, "text":
+            (f"✅ Wyslane ({author[:60]})" if prop_kind == "dm" else f"✅ Wklejone ({author[:60]})")
+            + " - domkniete jednym tapnieciem, zapisane w pamieci konta i na kontakcie (CRM)."})
         return
     if action == "ok":
         db.execute("UPDATE engagement_log SET status='approved', notes = COALESCE(notes,'') || %s WHERE id=%s::uuid",
@@ -2003,7 +2009,7 @@ def _intent_menu_open(brand, channel, chat_id, insp_rows):
          + f"\n\nOSOBY:\n{who_lines}"
          + (f"\n\n💡 PROPONUJE: {_INTENT_LABELS.get(reco, reco)}"
             + (f" - {sc.get('why')}" if sc.get("why") else "") if reco else "")
-         + "\n\nCo mam z tym zrobic? Po wyborze wykonuje PO KOLEI, kazdy watek domykam paragonem.")
+         + "\n\nCo mam z tym zrobic? Po wyborze wykonuje PO KOLEI, kazdy watek domykam potwierdzeniem.")
     q = q.replace("**", "")
     note = decisions.ask(
         f"{brand}:{channel}", brand, "intent_menu", q, opts, recommendation=reco,

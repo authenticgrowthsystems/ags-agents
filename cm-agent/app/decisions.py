@@ -268,7 +268,7 @@ def _maybe_propose_transition(subagent_id, brand_id, decision_type, chat):
         return
     ask(subagent_id, brand_id, "mode_transition",
         f"Typ decyzji [{decision_type}]: {len(rows)} ostatnich odpowiedzi, {agree:.0%} zgodnych z moja "
-        f"rekomendacja. Przelaczyc ten typ na semi_autonomous (decyduje sam + paragon po fakcie)?",
+        f"rekomendacja. Przelaczyc ten typ na semi_autonomous (decyduje sam + potwierdzenie po fakcie)?",
         [{"key": "semi", "label": "Przelacz na semi-auto"}, {"key": "keep", "label": "Zostaw supervised"}],
         recommendation="semi", context={"target_type": decision_type}, chat_id=chat)
 
