@@ -1561,6 +1561,18 @@ def _sub_comment(inp, brand, channel):
 
 _ENG_CHANNEL = {"x": "X", "linkedin": "LinkedIn", "instagram": "Instagram", "facebook": "Facebook"}
 
+_PL_CHARS = set("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ")
+_PL_WORDS = re.compile(r"\b(nie|si[eę]|jest|dzi[eę]ki|prosz[eę]|mo[zż]na|bardzo|pozdrawiam|wracam|"
+                       r"je[sś]li|teraz|dzie[nń])\b", re.IGNORECASE)
+
+
+def _looks_polish(text):
+    """Detekcja PL po TRESCI (fix 21/07 test a): kontrola po polsku ma sens tylko dla tekstu
+    nie-polskiego. Kanal EN + odpowiedz DM po polsku (jezyk rozmowy!) tlumaczona 'na polski'
+    dawala absurd - haiku odbijalo na angielski."""
+    t = text or ""
+    return any(ch in _PL_CHARS for ch in t) or bool(_PL_WORDS.search(t))
+
 
 _LAST_ENG_ID = [None]  # ostatnia propozycja w TYM watku obslugi -> guziki decyzji (pojedynczy operator, Pareto)
 
@@ -1829,12 +1841,13 @@ def _send_author_proposal(chat_id, brand, channel, author, post_excerpt, comment
     _tg("sendMessage", {"chat_id": chat_id, "text": comment[:4000]})  # CZYSTA wklejka
     if eng_id:
         decision_text = f"Decyzja dla: {author[:80]}"
-        if lang != "pl":
+        if not _looks_polish(comment):
             # dwujezycznosc (feedback 21/07): Tomasz czyta PL, publikuje native - kontrola
-            # tlumaczeniem haiku; wklejka wyzej zostaje czysta i doslowna.
+            # tlumaczeniem haiku TYLKO gdy wklejka nie jest po polsku (detekcja po TRESCI,
+            # nie po jezyku kanalu - odpowiedz DM idzie w jezyku rozmowy ze zrzutu).
             try:
                 pl = translate_text(comment, "pl")
-                if pl:
+                if pl and _looks_polish(pl):
                     decision_text = f"🇵🇱 Kontrola po polsku:\n{pl[:2800]}\n\n" + decision_text
             except Exception:
                 traceback.print_exc()
@@ -1844,6 +1857,9 @@ def _send_author_proposal(chat_id, brand, channel, author, post_excerpt, comment
                  "callback_data": f"cmt:sent:{eng_id}"},
                 {"text": "🔄 Inny kat", "callback_data": f"cmt:angle:{eng_id}"},
                 {"text": "❌ Odrzuc", "callback_data": f"cmt:no:{eng_id}"}]]}})
+    # fix 21/07 (test a): propozycja MA juz wlasne guziki - czyscimy flage zbiorczego panelu
+    # (_send_comment_controls), inaczej po turze LLM dolatywala DRUGA linia guzikow legacy.
+    _LAST_ENG_ID[0] = None
     if is_new and contact_id and not crm.intake_recently_offered(contact_id):
         crm.mark_intake_offered(contact_id)
         _tg("sendMessage", {"chat_id": chat_id, "text":

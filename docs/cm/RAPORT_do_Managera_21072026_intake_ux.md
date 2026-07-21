@@ -93,6 +93,20 @@ od reki:
    n8n bez zmian (galezie cmt:/dec: routuja po prefiksie - dowod: done/skip weszly 20/07
    bez patcha, dec:intent_menu dzialalo dzis na zywo).
 
+## Tap-testy DoD - wyniki (21/07 ~23:45)
+
+- d (formatowanie): PASS (oba subagenty, zero surowych **).
+- b (album -> 1 karta -> sekwencja -> co dalej): PASS (Neil Patel, dec #8-#10).
+- c (ten sam profil 2x): PASS (druga wrzutka -> doklejka do dec #11, zero drugiej karty).
+- a (pamiec DM): PASS w sednie ("odpowiedz na ten DM" po 3 wiadomosciach bez proszenia
+  o powtorzenie, kontekst Djordje z historii) + 2 bledy zlapane i naprawione od reki:
+  1. kontrola PL odpalala sie po JEZYKU KANALU - odpowiedz DM po polsku (jezyk rozmowy)
+     tlumaczona "na polski" odbijala na angielski; fix: detekcja PL po TRESCI
+     (_looks_polish) + kontrola tylko gdy wklejka nie-PL i tlumaczenie wyszlo po polsku;
+  2. DRUGA linia guzikow (legacy zbiorczy panel _send_comment_controls) - _dm_reply_run
+     nie czyscil _LAST_ENG_ID; fix: flaga czyszczona w _send_author_proposal (propozycja
+     zawsze ma wlasne guziki).
+
 ## Ryzyka / obserwacje do backlogu
 - Screening = +1 wywolanie wizji (sonnet) per wrzutka - celowy koszt za trafna
   akcje; gdy urosnie, kandydat na haiku.
