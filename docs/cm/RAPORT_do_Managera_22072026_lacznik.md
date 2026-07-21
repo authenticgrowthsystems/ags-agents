@@ -65,6 +65,26 @@ b) /kontekst x -> stan zgodny z baza (sonda read-only);
 c) strona Notion odswieza sie po zmianie (timestamp w callout);
 d) masterprompt X w czacie na abonamencie: czyta stan z linku, konczy poprawnym RAPORTEM.
 
+## Uzupelnienie: wsad masterpromptow Tomasza (22/07, ten sam dzien)
+
+Tomasz dostarczyl 3 robocze masterprompty (LinkedIn SM, Content Manager 15/06,
+X Comment Specialist 30/04). Scalone:
+- **X_v2** (zastepuje v1): szablony reply A-D z balansem, 17 zelaznych zasad,
+  prawdziwe historie Tomasza (jedyne dozwolone case studies), listy kont Tier 1-3/
+  peers/competitors/big-tech, strategia QT; wyciete stan sesji i logowanie Notion.
+- **LINKEDIN_AGS_v1** (nowy): reguly operacyjne (komentarz=obserwacja, DM bez
+  Calendly, anti-fabrication, banned words), klasyfikacja Buyer/Peer/Partner/
+  Competitor-adjacent, frame buyer-lane (anti-dryf w AI-educatorow); stan pipeline
+  wyciety - zyje w stanie gry.
+- **DECYZJA GUZIKAMI: Lead Tracker Notion = archiwum do odczytu.** Czat nie pisze
+  do Notion; praca wraca WYLACZNIE raportem do bazy (kanon SSOT). Seed pipeline
+  z Trackera = jednorazowy raport liniami nowa_osoba.
+- **Czatowy CM bez wersji stalej** (serwerowy CM = orkiestrator; dublowanie prawdy).
+  Prompty "content X/LinkedIn" nieuzywane - pominiete.
+- **Parser rozszerzony o typ 'zaproszenie'** (`- zaproszenie | @slug | wyslane/
+  przyjete | notka`; contact + logged, bez bumpu stadium - 'connected' nie istnieje
+  w skali relacji).
+
 ## Ryzyka / uwagi
 
 - Notion timeouts (#71): stan gry ma throttle i nie blokuje niczego; fallback /kontekst.

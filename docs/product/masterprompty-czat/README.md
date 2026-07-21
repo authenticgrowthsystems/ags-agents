@@ -11,12 +11,30 @@ zaczyna sie sama: agent czyta stan gry z linku Notion i konczy sesje blokiem
 - Kazdy plik jest SAMOWYSTARCZALNY: tozsamosc + glos + kontrakty (RAPORT PRACY /
   stan gry z linku) + regula prawdy.
 - `<LINK_STAN_GRY>` w pliku podmienia Tomasz na publiczny link strony Notion
-  "Stan gry AGS" (zaklada ja przy wdrozeniu Lacznika; fallback = /kontekst w Telegramie).
-- Masterprompty ROBOCZE Tomasza (te, ktorymi juz uruchamial agentow w czacie) sa
-  WSADEM: przy ich dostarczeniu BE scala je z wersja stala i podbija wersje pliku
-  (decyzja Tomasza 21/07, koncept LACZNIK_SYNCHRONIZACYJNY_21072026.md).
+  "Stan gry AGS" (fallback = /kontekst w Telegramie).
 
-## Pliki
+## Aktualne wersje (22/07/2026, po wsadzie roboczych promptow Tomasza)
 
-- `MASTERPROMPT_CZAT_X_v1.md` - praca reczna na X (komentarze, DM, poznawanie ludzi).
-- LinkedIn / sprzedaz: powstana przy dostarczeniu wsadu Tomasza (ten sam szkielet).
+- **`MASTERPROMPT_CZAT_X_v2.md`** - praca reczna na X. Scalone z "X Comment
+  Specialist" (szablony A-D, zelazne zasady, prawdziwe historie, listy kont, QT);
+  wyciete: stan sesji/statystyki i logowanie Notion (zastapione RAPORTEM PRACY).
+  v1 zostaje w repo jako historia.
+- **`MASTERPROMPT_CZAT_LINKEDIN_AGS_v1.md`** - praca reczna na LinkedIn. Scalone
+  z "LinkedIn SM AGS" (reguly operacyjne, klasyfikacja Buyer/Peer/Partner/
+  Competitor-adjacent, frame buyer-lane); wyciety stan pipeline (zyje w stanie gry).
+
+## Decyzje 22/07 (guziki)
+
+- **Lead Tracker Notion = archiwum do odczytu.** Czat NIE pisze do Lead Trackera;
+  cala praca wraca RAPORTEM PRACY do bazy ags_crd (SSOT), stan kontaktow czytany
+  ze strony Stan gry. Pipeline z Trackera zasiewa jednorazowy raport liniami
+  `nowa_osoba` (Tomasz przy pierwszej sesji LinkedIn).
+- **Content Manager czatowy: BEZ wersji stalej.** Orkiestracje tresci robi serwerowy
+  CM (Telegram); czatowy CM zdublowalby prawde o planie/kolejce. Roboczy prompt CM
+  (wsad 15/06) pozostaje zrodlem doktryny contentowej, nie osobnym agentem czatowym.
+- Prompty "content X" i "content LinkedIn" - nieuzywane przez Tomasza, nie przerabiamy.
+
+## Format RAPORT PRACY v1 (parser: cm-agent/app/engagement.py)
+
+Typy linii: komentarz, dm_wyslany, dm_odebrany, reakcja, zaproszenie (22/07, wsad
+LinkedIn), nowa_osoba, obserwacja. Pelny format i pulapki: docs/komponenty/lacznik.md.

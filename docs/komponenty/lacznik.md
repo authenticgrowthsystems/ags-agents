@@ -12,6 +12,9 @@ Cztery klocki etapu 1:
 1. **RAPORT PRACY (czat -> serwer):** czatowy agent konczy sesje blokiem
    `[RAPORT PRACY v1]`; Tomasz wkleja go do Telegrama (albo wrzuca .md) -> parser
    BEZ LLM -> engagement_log + contacts + inspirations -> POTWIERDZENIE z licznikami.
+   Typy linii: komentarz, dm_wyslany, dm_odebrany, reakcja, zaproszenie (22/07,
+   wsad LinkedIn: `- zaproszenie | @slug | wyslane/przyjete | notka`, bez bumpu
+   stadium), nowa_osoba, obserwacja.
 2. **/kontekst [x|linkedin|sprzedaz|all] (serwer -> czat, FALLBACK):** zwarty stan gry
    BEZ LLM - plan tygodnia, kolejka, publikacje z metrykami, kontakty w grze, otwarte
    decyzje, lejek, radar. Tekst do 4000 znakow albo plik .md.
@@ -19,7 +22,10 @@ Cztery klocki etapu 1:
    JEDNA strona NADPISYWANA przez tick sync workera (throttle 15 min). Czatowy agent
    czyta stan sam z linku na starcie sesji.
 4. **Masterprompty czatowe:** docs/product/masterprompty-czat/ - pliki wklejane RAZ
-   do projektu w aplikacji czatowej (tozsamosc + glos + oba kontrakty).
+   do projektu w aplikacji czatowej (tozsamosc + glos + oba kontrakty). Wsad Tomasza
+   scalony 22/07: X_v2 (z "X Comment Specialist") + LINKEDIN_AGS_v1 (z "LinkedIn SM");
+   decyzja guzikami: Notion Lead Tracker = archiwum do odczytu, praca wraca WYLACZNIE
+   raportem; czatowy CM bez wersji stalej (serwerowy CM = orkiestrator).
 
 ## Przeplyw
 

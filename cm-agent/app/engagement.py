@@ -237,7 +237,10 @@ _CHANNEL_ALIASES = {"x": "x", "twitter": "x", "linkedin": "linkedin", "li": "lin
 _ENG_CHANNEL = {"x": "X", "linkedin": "LinkedIn", "sprzedaz": "Other"}
 _LINE_TYPES = {"komentarz": "komentarz", "dm_wyslany": "dm_wyslany", "dm wyslany": "dm_wyslany",
                "dm_odebrany": "dm_odebrany", "dm odebrany": "dm_odebrany", "reakcja": "reakcja",
-               "nowa_osoba": "nowa_osoba", "nowa osoba": "nowa_osoba", "obserwacja": "obserwacja"}
+               "nowa_osoba": "nowa_osoba", "nowa osoba": "nowa_osoba", "obserwacja": "obserwacja",
+               # rozszerzenie 22/07 (wsad masterpromptow LinkedIn): zaproszenia do sieci
+               "zaproszenie": "zaproszenie", "zaproszenie_wyslane": "zaproszenie",
+               "zaproszenie wyslane": "zaproszenie"}
 _VALID_TIERS = {"buyer": "Buyer", "peer": "Peer", "competitor": "Competitor", "partner": "Partner"}
 
 
@@ -335,7 +338,7 @@ def apply_work_report(chat_id, text, active_agent=None):
     agent = f"{brand}:{channel}"
     stamp = rep["date"] or datetime.date.today().strftime("%Y-%m-%d")
     cnt = {"komentarz": 0, "dm_wyslany": 0, "dm_odebrany": 0, "reakcja": 0,
-           "nowa_osoba": 0, "znana_osoba": 0, "obserwacja": 0}
+           "nowa_osoba": 0, "znana_osoba": 0, "obserwacja": 0, "zaproszenie": 0}
     dupes = 0
     tier_notes = []
     for typ, parts, raw_line in rep["entries"]:
@@ -378,6 +381,17 @@ def apply_work_report(chat_id, text, active_agent=None):
                                base_note + " | reakcja", contact_id, "logged",
                                crm.clean_author(who) or who)
                 cnt["reakcja"] += 1
+            elif typ == "zaproszenie":
+                # 22/07 (praca LinkedIn): '- zaproszenie | @handle | wyslane/przyjete | notka'.
+                # Stadium bez zmian ('connected' nie istnieje w skali; awans robia dopiero
+                # komentarz/dm) - zapis samego faktu + kontakt w CRM.
+                who = parts[0]
+                kierunek = " | ".join(parts[1:]) or "wyslane"
+                contact_id, _new = crm.ensure_contact(who, brand, channel)
+                _report_insert("other", channel, agent, kierunek, None,
+                               base_note + f" | zaproszenie ({kierunek[:60]})", contact_id,
+                               "logged", crm.clean_author(who) or who)
+                cnt["zaproszenie"] += 1
             elif typ == "nowa_osoba":
                 who = parts[0]
                 bio = parts[1] if len(parts) > 1 else ""
@@ -411,8 +425,8 @@ def apply_work_report(chat_id, text, active_agent=None):
             rep["bad"].append(raw_line)
     labels = [("komentarz", "komentarze"), ("dm_wyslany", "DM wyslane"),
               ("dm_odebrany", "DM odebrane"), ("reakcja", "reakcje"),
-              ("nowa_osoba", "nowe osoby"), ("znana_osoba", "znane osoby zaktualizowane"),
-              ("obserwacja", "obserwacje do radaru")]
+              ("zaproszenie", "zaproszenia"), ("nowa_osoba", "nowe osoby"),
+              ("znana_osoba", "znane osoby zaktualizowane"), ("obserwacja", "obserwacje do radaru")]
     saved = [f"{lbl}: {cnt[k]}" for k, lbl in labels if cnt[k]]
     lines = [f"📥 POTWIERDZENIE - RAPORT PRACY zapisany (kanal {channel}, {stamp}):",
              ("zapisane: " + ", ".join(saved)) if saved else "zapisane: nic nowego",
