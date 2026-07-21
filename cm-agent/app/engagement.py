@@ -46,9 +46,11 @@ def consumer_tick():
         if p.get("contact_id"):  # BE-ENGAGEMENT 20/07: gotowiec pokazuje kontekst relacji
             from . import crm
             ctx = crm.relation_context(p["contact_id"])
-        text = (f"🧾 KOMENTARZ DO WKLEJENIA - konto {r['agent_id']}\n"
+        is_dm = (p.get("kind") == "dm")  # INTAKE-UX 21/07: odpowiedzi na DM jada tym samym torem
+        text = (("✉️ ODPOWIEDZ NA DM DO WYSLANIA" if is_dm else "🧾 KOMENTARZ DO WKLEJENIA")
+                + f" - konto {r['agent_id']}\n"
                 + (f"AUTOR: {author}" + (f" ({ctx})" if ctx else "") + "\n\n" if author else "\n")
-                + (f"POD POSTEM:\n{src[:400]}\n\n" if src else "")
+                + ((f"W WATKU:\n{src[:400]}\n\n" if is_dm else f"POD POSTEM:\n{src[:400]}\n\n") if src else "")
                 + f"PROPOZYCJA (skopiuj i wklej w aplikacji):\n{props[:2800]}\n\n"
                 "Po wklejeniu odhacz guzikiem - wykonanie zapisze sie w pamieci konta i na kontakcie.")
         kb = {"inline_keyboard": [[

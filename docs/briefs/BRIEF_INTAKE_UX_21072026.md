@@ -58,4 +58,11 @@ Telegram robi co moze - projektuj B2 tak, zeby intencje/watki byly obiektami w D
 ## 5. Udzial Tomasza
 Tap-testy DoD. Decyzje guzikami gdy trzeba wybrac zakres.
 
-## 6. Zamkniecie: raport + komponenty + STATUS tu. STATUS = READY (21/07 ~22:45)
+## 6. Zamkniecie: raport + komponenty + STATUS tu.
+
+STATUS = ZBUDOWANE (21/07, galaz build/intake-ux). B1+B2+B3+B4 gotowe, zero DDL,
+zero n8n (wszystko w istniejacych trasach dec:/cmt:). Raport:
+docs/cm/RAPORT_do_Managera_21072026_intake_ux.md. Komponenty zaktualizowane
+w tym samym commicie (rozmowa-cm.md + engagement-crm.md). Bonus: naprawiony
+martwy guzik 'Inny kat' (brak importu TRUTH_GUARD od 20/07).
+Czeka: merge do sb-work -> rebuild cm-agent -> tap-testy DoD a-d z sekcji 2.

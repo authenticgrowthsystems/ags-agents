@@ -83,16 +83,50 @@ def _split(text, limit=TG_LIMIT):
     return chunks or [" "]
 
 
+_MD_MARK_RE = re.compile(r"\*\*[^*\n]+\*\*|^#{1,3} .+$|`[^`\n]+`", re.MULTILINE)
+
+
+def _md_to_html(text):
+    """B4 INTAKE-UX (21/07): Telegram pokazywal surowe ** i ### w odpowiedziach agentow.
+    JEDNO miejsce konwersji (kazda wiadomosc agenta idzie przez _reply): znaczniki markdownu
+    -> HTML (parse_mode=HTML). Zwraca None gdy tekst nie ma znacznikow - wtedy wysylka plain
+    bez parse_mode (zero ryzyka na tekstach z '<' czy '&')."""
+    if not _MD_MARK_RE.search(text or ""):
+        return None
+    esc = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    esc = re.sub(r"\*\*([^*\n]+)\*\*", r"<b>\1</b>", esc)
+    esc = re.sub(r"^#{1,3} +(.+)$", r"<b>\1</b>", esc, flags=re.MULTILINE)
+    esc = re.sub(r"`([^`\n]+)`", r"<code>\1</code>", esc)
+    return esc
+
+
+def _send_rendered(chat_id, text, message_id=None):
+    """Wysylka (albo edycja placeholdera) z proba HTML; kazdy blad renderowania = fallback
+    plain (REGULA PRAWDY: wiadomosc MUSI dojsc, formatowanie jest dodatkiem)."""
+    html = _md_to_html(text)
+    if html and len(html) <= TG_LIMIT:
+        payload = {"chat_id": chat_id, "text": html, "parse_mode": "HTML",
+                   "disable_web_page_preview": True}
+        r = _tg("editMessageText", {**payload, "message_id": message_id}) if message_id \
+            else _tg("sendMessage", payload)
+        if r and r.get("ok"):
+            return r
+    payload = {"chat_id": chat_id, "text": text, "disable_web_page_preview": True}
+    if message_id:
+        r = _tg("editMessageText", {**payload, "message_id": message_id})
+        if r and r.get("ok"):
+            return r
+    return _tg("sendMessage", payload)
+
+
 def _reply(chat_id, text, placeholder_id=None):
     """Send a reply; the first chunk edits the '⏳' placeholder when we have one (live-stream pattern)."""
     parts = _split(text)
     if placeholder_id:
-        r = _tg("editMessageText", {"chat_id": chat_id, "message_id": placeholder_id,
-                                    "text": parts[0], "disable_web_page_preview": True})
-        if r and r.get("ok"):
-            parts = parts[1:]
+        _send_rendered(chat_id, parts[0], message_id=placeholder_id)
+        parts = parts[1:]
     for p in parts:
-        _tg("sendMessage", {"chat_id": chat_id, "text": p, "disable_web_page_preview": True})
+        _send_rendered(chat_id, p)
 
 
 # ---------------- dedup + state ----------------
@@ -135,6 +169,22 @@ def _save_history(chat_id, history, agent="cm"):
 def _reset_state(chat_id):
     db.execute("UPDATE user_agent_state SET fsm_state='idle', fsm_data='{}'::jsonb, updated_at=NOW() WHERE chat_id=%s",
                (chat_id,))
+
+
+def _sub_record(chat_id, agent, user_text, reply_text):
+    """B1 INTAKE-UX (21/07): trasy DETERMINISTYCZNE subagenta (zrzuty, kolejka, karty intencji,
+    guziki decyzji) tez zapisuja sie w historii watku - dotad odpowiadaly z pominieciem
+    _save_history i 3 wiadomosci pozniej subagent 'nie mial kontekstu' do wlasnego streszczenia
+    DM (dowod: sesja 21/07, Djordje Klikovac). Ten sam kontrakt historii co CM (_load/_save)."""
+    if not chat_id:
+        return
+    try:
+        hist = _load_history(chat_id, agent=agent)
+        hist += [{"role": "user", "content": str(user_text)[:1500]},
+                 {"role": "assistant", "content": str(reply_text)[:3000]}]
+        _save_history(chat_id, hist, agent=agent)
+    except Exception:
+        traceback.print_exc()
 
 
 # ---------------- pamiec dlugoterminowa rozmow (10/07) ----------------
@@ -1443,6 +1493,16 @@ TOOL_SUB_COMMENT_VISION = {
 }
 
 
+TOOL_SUB_DM = {
+    "name": "subagent_reply_dm",
+    "description": ("Zaproponuj odpowiedz na PRYWATNA wiadomosc (DM) z OSTATNIEGO zrzutu/watku tego "
+                    "konta. Uzyj gdy Tomasz mowi 'odpowiedz na ten DM', 'odpisz mu', 'napisz odpowiedz "
+                    "na wiadomosc'. Kontekst DM masz w HISTORII tej rozmowy (streszczenia zrzutow) - "
+                    "NIE pros o ponowne wklejenie tresci, narzedzie samo siega po ostatnie zrzuty."),
+    "input_schema": {"type": "object", "properties": {}},
+}
+
+
 def _sub_escalate(inp, brand, channel):
     from .proactive import _agent_id
     # antydubel (fix 06/07: 'i jak zatwierdzil?' wyslalo propozycje 2. raz)
@@ -1512,6 +1572,11 @@ def _log_engagement(brand, channel, incoming, response, kind="comment", who=None
     i statusem cyklu zycia (proposed -> approved/rejected -> sent/skipped; db/026).
     Zwraca id wiersza (kotwica dla guzikow decyzji cmt:)."""
     fam = channel.split("_")[0]
+    # INTAKE-UX (21/07): kind='dm' = propozycja odpowiedzi na DM; action_type zostaje 'other'
+    # (schemat engagement_log bez DDL), rodzaj niesie marker [DM] w notes (czyta go handle_cmt).
+    note_txt = ((f"od: {who}; " if who else "")
+                + ("[DM] propozycja subagenta (odpowiedz na DM)" if kind == "dm"
+                   else "propozycja subagenta (comment-first)"))
     try:
         row = db.fetchone(
             """INSERT INTO engagement_log (action_type, channel, agent, content, response, notes,
@@ -1519,8 +1584,7 @@ def _log_engagement(brand, channel, incoming, response, kind="comment", who=None
                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
             (f"{fam}_comment" if kind == "comment" else "other", _ENG_CHANNEL.get(fam, "Other"),
              f"{brand}:{channel}", (incoming or "")[:1000], (response or "")[:3000],
-             (f"od: {who}; " if who else "") + "propozycja subagenta (comment-first)",
-             contact_id, status, (who or None)))
+             note_txt, contact_id, status, (who or None)))
         _LAST_ENG_ID[0] = str(row["id"]) if row else None
         return _LAST_ENG_ID[0]
     except Exception:
@@ -1578,7 +1642,9 @@ def handle_cmt(payload, wake_event=None):
                 from . import crm
                 src = db.fetchone("SELECT contact_id FROM engagement_log WHERE id=%s::uuid", (src_eng,))
                 if src and src.get("contact_id"):
-                    crm.bump_stage(str(src["contact_id"]), "commented")
+                    # INTAKE-UX 21/07: wyslany DM podnosi stadium do 'dm' (skala 20/07), komentarz do 'commented'
+                    is_dm = (task.get("payload") or {}).get("kind") == "dm"
+                    crm.bump_stage(str(src["contact_id"]), "dm" if is_dm else "commented")
         edit("✅ Odhaczone - komentarz wykonany, zapisane w pamieci konta i na kontakcie (CRM)."
              if action == "done" else "⏭ Pominiete - zadanie zamkniete bez wykonania.")
         return
@@ -1609,7 +1675,7 @@ def handle_cmt(payload, wake_event=None):
                  f"wystarczy znow tapnac intake przy nastepnej propozycji).")
         return
     row = db.fetchone(
-        """SELECT id, agent, channel, content, response, author_display, contact_id
+        """SELECT id, agent, channel, content, response, author_display, contact_id, notes
            FROM engagement_log WHERE id=%s::uuid""", (eng_id,)) if eng_id else None
     if not row:
         edit("Nie znam tej propozycji (brak wpisu w engagement_log).")
@@ -1617,6 +1683,7 @@ def handle_cmt(payload, wake_event=None):
     agent = row.get("agent") or "AGS:x"
     brand, _, channel = agent.partition(":")
     author = row.get("author_display") or ""
+    prop_kind = "dm" if "[DM]" in (row.get("notes") or "") else "comment"  # INTAKE-UX 21/07
     if action == "ok":
         db.execute("UPDATE engagement_log SET status='approved', notes = COALESCE(notes,'') || %s WHERE id=%s::uuid",
                    (f" | DECYZJA {stamp}: ZATWIERDZONE", eng_id))
@@ -1627,6 +1694,7 @@ def handle_cmt(payload, wake_event=None):
                 (agent, channel.split("_")[0] or "x",
                  Jsonb({"engagement_id": eng_id, "proposals": (row.get("response") or "")[:3000],
                         "source_post": (row.get("content") or "")[:800], "author": author[:120],
+                        "kind": prop_kind,
                         "contact_id": str(row["contact_id"]) if row.get("contact_id") else None})))
             note = (f"✅ Zatwierdzone ({author[:60]})" if author else "✅ Zatwierdzone") \
                 + " - decyzja zapisana, gotowiec zaraz przyjdzie z kolejki zadan."
@@ -1649,7 +1717,9 @@ def handle_cmt(payload, wake_event=None):
                    (f" | DECYZJA {stamp}: INNY KAT (regeneracja)", eng_id))
         edit(f"🔄 Robie inny kat dla: {author[:60]}..." if author else "🔄 Robie inny kat...")
         try:
-            from .generate import _language_publish
+            # fix 21/07 (INTAKE-UX): TRUTH_GUARD nie byl importowany w tej galezi - kazde
+            # tapniecie 'Inny kat' padalo NameError polykanym przez except ('Nie wyszla regeneracja').
+            from .generate import _language_publish, TRUTH_GUARD
             brand_data = load_brand(brand or "AGS")
             lang = _language_publish(brand or "AGS", channel or "x")
             model, tier, source = tasks.model_for("canonical")
@@ -1657,19 +1727,22 @@ def handle_cmt(payload, wake_event=None):
                 model=model, max_tokens=700, thinking={"type": "disabled"},
                 system=[{"type": "text", "text": f"Glos marki:\n{brand_data['voice_bible'][:2500]}"}],
                 messages=[{"role": "user", "content":
-                           f"Zaproponuj 1 komentarz pod cudzy post na {channel or 'x'}"
-                           f"{(' (autor: ' + author + ')') if author else ''} z INNEGO KATA niz "
+                           (f"Zaproponuj 1 odpowiedz na PRYWATNA wiadomosc (DM) na {channel or 'x'}"
+                            if prop_kind == "dm" else
+                            f"Zaproponuj 1 komentarz pod cudzy post na {channel or 'x'}")
+                           + f"{(' (autor: ' + author + ')') if author else ''} z INNEGO KATA niz "
                            f"poprzednia propozycja. Doktryna comment-first: konkretna wartosc, "
                            f"ton peer-level, 2-4 zdania, zero linkow, zero pitchu. "
                            f"Jezyk: {'polski' if lang == 'pl' else 'angielski'}. {TRUTH_GUARD}\n\n"
-                           f"POST:\n{(row.get('content') or '')[:1200]}\n\n"
+                           f"{'WIADOMOSC' if prop_kind == 'dm' else 'POST'}:\n{(row.get('content') or '')[:1200]}\n\n"
                            f"POPRZEDNIA PROPOZYCJA (nie powtarzaj tej tezy):\n"
                            f"{(row.get('response') or '')[:800]}"}])
             tasks.log_task("comment_suggest", tier, model, source, getattr(resp, "usage", None))
             new_comment = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
             if new_comment:
                 _send_author_proposal(chat_id, brand or "AGS", channel or "x",
-                                      author or "(autor ze zrzutu)", row.get("content") or "", new_comment)
+                                      author or "(autor ze zrzutu)", row.get("content") or "", new_comment,
+                                      kind=prop_kind)
                 _LAST_ENG_ID[0] = None
             else:
                 _tg("sendMessage", {"chat_id": chat_id, "text": "Nie wyszla regeneracja - sprobuj jeszcze raz."})
@@ -1716,17 +1789,20 @@ def _fetch_images(insp_rows):
     return images
 
 
-def _send_author_proposal(chat_id, brand, channel, author, post_excerpt, comment):
+def _send_author_proposal(chat_id, brand, channel, author, post_excerpt, comment, kind="comment"):
     """BE-ENGAGEMENT (20/07): propozycja per AUTOR = wlasny wiersz engagement_log (z contact_id -
     CRM obowiazkowy) + TRZY wiadomosci: naglowek z kontekstem relacji / CZYSTA wklejka / guziki
     decyzji POD TA KONKRETNA propozycja. Nieznany autor dodatkowo dostaje wymuszony intake.
+    INTAKE-UX (21/07): kind='dm' = ten sam tor dla odpowiedzi na DM (jeden framework, nie fork);
+    karta 'Nowa osoba' ma strażnika 24h (B3: Djordje dostal ja 3x w jednej sesji).
     Zwraca eng_id albo None."""
     from . import crm
     contact_id, is_new = crm.ensure_contact(author, brand, channel)
-    eng_id = _log_engagement(brand, channel, post_excerpt or "zrzut", comment, kind="comment",
+    eng_id = _log_engagement(brand, channel, post_excerpt or "zrzut", comment, kind=kind,
                              who=author, contact_id=contact_id, status="proposed")
     ctx = None if is_new else crm.relation_context(contact_id)
-    header = f"💬 Komentarz dla: {author[:100]}"
+    header = (f"✉️ Odpowiedz na DM dla: {author[:100]}" if kind == "dm"
+              else f"💬 Komentarz dla: {author[:100]}")
     if ctx:
         header += f"\n👤 {ctx}"
     elif is_new and contact_id:
@@ -1739,7 +1815,8 @@ def _send_author_proposal(chat_id, brand, channel, author, post_excerpt, comment
                 {"text": "✅ Zatwierdz", "callback_data": f"cmt:ok:{eng_id}"},
                 {"text": "🔄 Inny kat", "callback_data": f"cmt:angle:{eng_id}"},
                 {"text": "❌ Odrzuc", "callback_data": f"cmt:no:{eng_id}"}]]}})
-    if is_new and contact_id:
+    if is_new and contact_id and not crm.intake_recently_offered(contact_id):
+        crm.mark_intake_offered(contact_id)
         _tg("sendMessage", {"chat_id": chat_id, "text":
             f"🆕 Nowa osoba: {author[:100]}. Nie znam jej. Wejdz na profil i daj zrzut - zaloze "
             f"pelny wpis (bio + tier do zatwierdzenia guzikami).", "reply_markup":
@@ -1784,12 +1861,279 @@ def _comment_vision_run(brand, channel, chat_id, insp_rows, supersede_eng_ids=No
     return "Nie rozpoznalem zadnego autora na zrzucie - sprobuj wyrazniejszy zrzut."
 
 
-def _sub_comment_vision(brand, channel, chat_id=None):
-    """T9 (07/08) + BE-ENGAGEMENT (20/07): zrzut(y) ze schowka -> Claude vision -> propozycje
-    per AUTOR (wlasny wiersz engagement_log + wlasne guziki; CRM obowiazkowy). Album Telegram
-    (media_group_id w metadata, patch n8n) = JEDEN post, jedna sklejona analiza. Zrzuty wyslane
-    OSOBNO w <60 s = jedno pytanie 'czesci jednego posta czy rozne?' zamiast duchow autorow.
-    Uzbrojony intake CRM ma pierwszenstwo: zrzut = PROFIL osoby, nie post do komentowania."""
+# ---------------- INTAKE-UX (21/07): menu intencji po wrzutce (B2) ----------------
+# Wrzutka zrzutu NIE odpala juz od razu floodu propozycji: subagent najpierw pokazuje JEDNA
+# karte 'co widze + co proponuje' z guzikami intencji (decisions.ask, typ 'intent_menu').
+# Watek intencji jest OBIEKTEM w agent_decisions (context: insp_ids/contact_id/screening/
+# done_keys) - przyszly konektor (Slack/webapp, kanon SNAPSHOT) tylko inaczej go wyswietli.
+_INTENT_LABELS = {"comment": "Skomentuj", "dm": "Odpowiedz na DM",
+                  "intake": "Poznaj osobe (intake)", "save": "Tylko zapisz",
+                  "all": "Wszystko po kolei", "done": "Nic wiecej - domknij"}
+
+
+def _screen_shots(images, channel):
+    """Wizja-KLASYFIKACJA przed generacja: co jest na zrzutach (post/DM/profil, osoby).
+    Jedno tanie wywolanie zamiast kart z niewlasciwa akcja. Zwraca dict albo None."""
+    import base64
+    model, tier, source = tasks.model_for("canonical")
+    content = [{"type": "image", "source": {"type": "base64", "media_type": mt,
+                                            "data": base64.b64encode(img).decode()}}
+               for img, mt in images]
+    content.append({"type": "text", "text":
+        f"To zrzut(y) ekranu z {channel} wyslane przez wlasciciela konta. SKLASYFIKUJ co widac "
+        "(nie generuj jeszcze zadnych tresci). Odpowiedz WYLACZNIE poprawnym JSON bez markdown:\n"
+        '{"summary": "1-2 zdania po polsku: co jest na zrzutach (kto, jaki post/DM/profil, o czym)", '
+        '"persons": [{"author": "nazwa jak wyswietlona", "handle": "handle bez @ albo null"}], '
+        '"has_post": true/false (widac cudzy post nadajacy sie do komentarza), '
+        '"has_dm": true/false (widac PRYWATNA wiadomosc/konwersacje DM), '
+        '"is_profile": true/false (widac strone profilu osoby: bio, liczby obserwujacych), '
+        '"proposal": "comment|dm|intake|save" (najsensowniejsza pierwsza akcja), '
+        '"why": "1 zdanie uzasadnienia propozycji"}\n'
+        "Jesli czegos nie widac - false/null, nie zgaduj."})
+    try:
+        resp = client().messages.create(model=model, max_tokens=500, thinking={"type": "disabled"},
+                                        messages=[{"role": "user", "content": content}])
+        tasks.log_task("shot_screening", tier, model, source, getattr(resp, "usage", None))
+        raw = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text")
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        return json.loads(m.group(0)) if m else None
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def _intent_menu_open(brand, channel, chat_id, insp_rows):
+    """B2: JEDNA karta intencji po wrzutce. B3: ta sama osoba (match po handle/nazwie przez
+    contacts) z OTWARTYM watkiem <24h = doklejka zrzutow do jego kontekstu, zero drugiej karty."""
+    from . import crm, decisions
+    images = _fetch_images(insp_rows)
+    if not images:
+        return "Nie moge pobrac obrazu z Telegrama - sprobuj wyslac zrzut jeszcze raz."
+    sc = _screen_shots(images, channel) or {}
+    persons = [p for p in (sc.get("persons") or [])
+               if isinstance(p, dict) and (p.get("author") or p.get("handle"))]
+    primary = persons[0] if persons else None
+    contact_id, is_new = (None, False)
+    if primary:
+        contact_id, is_new = crm.ensure_contact(
+            ("@" + str(primary["handle"])) if primary.get("handle") else (primary.get("author") or ""),
+            brand, channel)
+    insp_ids = [int(p["id"]) for p in insp_rows]
+    if contact_id:
+        open_dec = db.fetchone(
+            """SELECT id, context FROM agent_decisions
+               WHERE decision_type='intent_menu' AND status='pending'
+                 AND context->>'contact_id'=%s AND created_at > NOW() - interval '24 hours'
+               ORDER BY created_at DESC LIMIT 1""", (contact_id,))
+        if open_dec:
+            ctx = open_dec.get("context") or {}
+            merged = list(dict.fromkeys((ctx.get("insp_ids") or []) + insp_ids))
+            ctx["insp_ids"] = merged
+            db.execute("UPDATE agent_decisions SET context=%s WHERE id=%s", (Jsonb(ctx), open_dec["id"]))
+            who = (primary.get("author") or primary.get("handle") or "ta osoba")
+            note = (f"➕ Doklejone do OTWARTEGO watku: {who} (decyzja #{open_dec['id']} czeka wyzej, "
+                    f"obejmuje teraz {len(merged)} zrzutow). Tapnij tam intencje - nie otwieram drugiej karty.")
+            _sub_record(chat_id, f"subagent:{brand}:{channel}", "[ZRZUT] kolejna wrzutka tej samej osoby", note)
+            return note
+    opts = []
+    if sc.get("has_post"):
+        opts.append({"key": "comment", "label": _INTENT_LABELS["comment"]})
+    if sc.get("has_dm"):
+        opts.append({"key": "dm", "label": _INTENT_LABELS["dm"]})
+    if primary:
+        opts.append({"key": "intake", "label": _INTENT_LABELS["intake"]})
+    if not opts:  # wizja niepewna - komentarz to podstawowa praca konta
+        opts.append({"key": "comment", "label": _INTENT_LABELS["comment"]})
+    if len(opts) >= 2:
+        opts.append({"key": "all", "label": _INTENT_LABELS["all"]})
+    opts.append({"key": "save", "label": _INTENT_LABELS["save"]})
+    reco = sc.get("proposal") if sc.get("proposal") in {o["key"] for o in opts} else None
+    who_lines = "\n".join(
+        "- " + (p.get("author") or "?") + (f" (@{p['handle']})" if p.get("handle") else "")
+        + ("  🆕 nowa osoba (brak w CRM)" if (p is primary and is_new) else "")
+        for p in persons) or "- (nie rozpoznalem osob na zrzucie)"
+    q = (("🖼 CO WIDZE NA ZRZUTACH" if len(insp_rows) > 1 else "🖼 CO WIDZE NA ZRZUCIE")
+         + f" ({len(insp_rows)} szt.):\n"
+         + (sc.get("summary") or "Nie mam pewnosci co to jest - wybierz intencje recznie.")
+         + f"\n\nOSOBY:\n{who_lines}"
+         + (f"\n\n💡 PROPONUJE: {_INTENT_LABELS.get(reco, reco)}"
+            + (f" - {sc.get('why')}" if sc.get("why") else "") if reco else "")
+         + "\n\nCo mam z tym zrobic? Po wyborze wykonuje PO KOLEI, kazdy watek domykam paragonem.")
+    q = q.replace("**", "")
+    note = decisions.ask(
+        f"{brand}:{channel}", brand, "intent_menu", q, opts, recommendation=reco,
+        context={"insp_ids": insp_ids, "brand": brand, "channel": channel, "chat_id": chat_id,
+                 "contact_id": contact_id, "is_new": is_new,
+                 "screening": {k: sc.get(k) for k in ("summary", "persons", "has_post", "has_dm",
+                                                      "is_profile", "proposal")},
+                 "done_keys": []},
+        chat_id=chat_id)
+    # B1: karta (z tym co subagent ZOBACZYL) laduje w historii watku - 'ten DM' / 'ta osoba'
+    # 3 wiadomosci pozniej ma sie do czego odniesc.
+    _sub_record(chat_id, f"subagent:{brand}:{channel}", "[ZRZUT] wrzutka do analizy", q)
+    return "(karta intencji z guzikami wyslana - tapnij co mam zrobic)"
+
+
+def _dm_reply_run(brand, channel, chat_id, insp_rows):
+    """Intencja 'Odpowiedz na DM': wizja czyta konwersacje ze zrzutow i proponuje JEDNA odpowiedz
+    w glosie marki. Gotowiec jedzie tym samym torem co komentarze (_send_author_proposal,
+    guziki cmt:) - jeden framework, nie fork."""
+    import base64
+    images = _fetch_images(insp_rows)
+    if not images:
+        return "Nie moge pobrac obrazu z Telegrama - sprobuj wyslac zrzut jeszcze raz."
+    from .generate import _language_publish, TRUTH_GUARD
+    brand_data = load_brand(brand)
+    model, tier, source = tasks.model_for("canonical")
+    content = [{"type": "image", "source": {"type": "base64", "media_type": mt,
+                                            "data": base64.b64encode(img).decode()}}
+               for img, mt in images]
+    content.append({"type": "text", "text":
+        f"To zrzut(y) PRYWATNEJ konwersacji (DM) z {channel}. Napisz JEDNA propozycje odpowiedzi "
+        f"od wlasciciela konta do rozmowcy. Ton naturalny, partnerski, konkretny; odnies sie do "
+        f"TRESCI jego wiadomosci; ZERO pitchu i linkow, chyba ze rozmowca wprost o nie prosi. "
+        f"Jezyk odpowiedzi: TEN SAM co jezyk rozmowy na zrzucie. {TRUTH_GUARD}\n"
+        "Format (dokladnie tak):\nOD: <rozmowca jak wyswietlony>\n"
+        "STRESZCZENIE: <1-2 zdania co napisal>\nODPOWIEDZ: <tekst do wyslania>"})
+    resp = client().messages.create(
+        model=model, max_tokens=800, thinking={"type": "disabled"},
+        system=[{"type": "text", "text": f"Glos marki:\n{brand_data['voice_bible'][:2500]}"}],
+        messages=[{"role": "user", "content": content}])
+    tasks.log_task("dm_reply", tier, model, source, getattr(resp, "usage", None))
+    out = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
+    if not out:
+        return "Nie wyszlo - sprobuj jeszcze raz."
+    m_who = re.search(r"^OD:\s*(.+)$", out, re.MULTILINE)
+    m_sum = re.search(r"^STRESZCZENIE:\s*(.+)$", out, re.MULTILINE)
+    m_rep = re.search(r"ODPOWIEDZ:\s*(.+)", out, re.DOTALL)
+    author = (m_who.group(1).strip() if m_who else "(rozmowca ze zrzutu)")
+    summary = (m_sum.group(1).strip() if m_sum else "")
+    reply_text = (m_rep.group(1).strip() if m_rep else out)
+    eng_id = _send_author_proposal(chat_id, brand, channel, author, f"DM: {summary}" if summary else "DM ze zrzutu",
+                                   reply_text, kind="dm")
+    if eng_id:
+        return f"propozycja odpowiedzi DM dla {author[:60]} wyslana z guzikami" + (f" (DM: {summary[:150]})" if summary else "")
+    return "Nie udalo sie zapisac propozycji DM (blad bazy - szczegoly w logu)."
+
+
+def _intake_run(ctx, insp_rows, brand, channel, chat_id):
+    """Intencja 'Poznaj osobe': profil WIDOCZNY na zrzutach -> intake od razu (wizja + tier
+    guzikami, dedup 24h w crm.process_profile_photo); niewidoczny -> uzbrojenie intake'u."""
+    from . import crm
+    contact_id = ctx.get("contact_id")
+    sc = ctx.get("screening") or {}
+    persons = sc.get("persons") or []
+    author = ((persons[0] or {}).get("author") if persons else "") or ""
+    if not contact_id:
+        return "Nie rozpoznalem osoby na zrzucie - wyslij zrzut profilu, zaloze wpis z niego."
+    if sc.get("is_profile"):
+        images = _fetch_images(insp_rows)
+        if images:
+            return crm.process_profile_photo(
+                {"contact_id": contact_id, "author": author, "brand": brand, "channel": channel},
+                images)
+    crm.arm_intake(chat_id, contact_id, author, brand, channel)
+    return (f"na zrzutach nie widze strony PROFILU - wyslij teraz zrzut profilu: "
+            f"{author or 'tej osoby'}, odczytam bio i handle, tier zatwierdzisz guzikami")
+
+
+def apply_intent_menu(row, key, chat):
+    """Akcja decyzji 'intent_menu' (B2): wykonanie intencji SEKWENCYJNIE, kazdy watek domkniety
+    paragonem, po ostatnim 'co dalej?'. Pojedynczy wybor przy pozostalych intencjach = nowa karta
+    z POZOSTALYMI opcjami (wybor kilku pozycji = kolejne tapniecia, zero rownoleglego floodu)."""
+    from . import decisions
+    ctx = row.get("context") or {}
+    brand, channel = ctx.get("brand") or "AGS", ctx.get("channel") or "x"
+    chat_id = ctx.get("chat_id") or chat
+    active = f"subagent:{brand}:{channel}"
+    sc = ctx.get("screening") or {}
+    done = list(ctx.get("done_keys") or [])
+    if key in ("save", "done"):
+        note = ("📌 Zapisane w schowku (zrzuty juz siedza w inspirations) - bez dalszych akcji."
+                if key == "save" else "✅ Watek domkniety.")
+        _tg("sendMessage", {"chat_id": chat_id,
+                            "text": note + "\n\nCo dalej? Wrzuc kolejny zrzut albo wydaj polecenie."})
+        _sub_record(chat_id, active, f"[GUZIK] intencja: {_INTENT_LABELS.get(key, key)}", note)
+        return
+    insp_rows = db.fetchall(
+        "SELECT id, content, metadata FROM inspirations WHERE id = ANY(%s) ORDER BY created_at",
+        (ctx.get("insp_ids") or [],))
+    if not insp_rows:
+        _tg("sendMessage", {"chat_id": chat_id, "text": "Nie znajduje juz tych zrzutow w schowku."})
+        return
+    seq = [key]
+    if key == "all":
+        seq = [k for k in ("comment", "dm", "intake")
+               if (k == "comment" and sc.get("has_post")) or (k == "dm" and sc.get("has_dm"))
+               or (k == "intake" and ctx.get("contact_id"))] or ["comment"]
+    receipts = []
+    for step in seq:
+        try:
+            if step == "comment":
+                note = _comment_vision_run(brand, channel, chat_id, insp_rows)
+                para = "✅ Watek KOMENTARZ domkniety: " + (note or "zrobione")
+            elif step == "dm":
+                note = _dm_reply_run(brand, channel, chat_id, insp_rows)
+                para = "✅ Watek DM domkniety: " + (note or "zrobione")
+            elif step == "intake":
+                note = _intake_run(ctx, insp_rows, brand, channel, chat_id)
+                para = "✅ Watek INTAKE domkniety: " + (note or "zrobione")
+            else:
+                continue
+        except Exception as e:
+            traceback.print_exc()
+            para = f"❌ Watek {step.upper()} padl: {type(e).__name__}: {str(e)[:150]} (reszta idzie dalej)"
+        done.append(step)
+        _tg("sendMessage", {"chat_id": chat_id, "text": para[:4000]})
+        receipts.append(para)
+    remaining = [k for k in ("comment", "dm", "intake")
+                 if k not in done
+                 and ((k == "comment" and sc.get("has_post")) or (k == "dm" and sc.get("has_dm"))
+                      or (k == "intake" and ctx.get("contact_id")))]
+    if key != "all" and remaining:
+        opts = [{"key": k, "label": _INTENT_LABELS[k]} for k in remaining] \
+            + [{"key": "done", "label": _INTENT_LABELS["done"]}]
+        decisions.ask(f"{brand}:{channel}", brand, "intent_menu",
+                      "Zostaly jeszcze intencje z tej wrzutki. Co dalej?", opts,
+                      recommendation=None, context={**ctx, "done_keys": done}, chat_id=chat_id)
+    else:
+        _tg("sendMessage", {"chat_id": chat_id,
+                            "text": "Wszystkie watki tej wrzutki domkniete. Co dalej? "
+                                    "Wrzuc kolejny zrzut albo wydaj polecenie."})
+    _sub_record(chat_id, active, f"[GUZIK] intencja: {_INTENT_LABELS.get(key, key)}",
+                "\n".join(receipts) or "ok")
+
+
+def _sub_reply_dm(brand, channel, chat_id):
+    """Narzedzie subagent_reply_dm: 'odpowiedz na ten DM' w rozmowie -> odpowiedz z OSTATNICH
+    zrzutow tego konta (kontekst z watku intent_menu albo schowka), bez proszenia o powtorzenie."""
+    dec = db.fetchone(
+        """SELECT context FROM agent_decisions
+           WHERE decision_type='intent_menu' AND subagent_id=%s
+             AND created_at > NOW() - interval '24 hours'
+           ORDER BY created_at DESC LIMIT 1""", (f"{brand}:{channel}",))
+    ids = (((dec or {}).get("context") or {}).get("insp_ids")
+           or _mrv_state(_SHOT_KEY).get("insp_ids") or [])
+    rows = db.fetchall(
+        "SELECT id, content, metadata FROM inspirations WHERE id = ANY(%s) ORDER BY created_at",
+        (ids,)) if ids else []
+    if not rows:
+        row = db.fetchone(
+            """SELECT id, content, metadata FROM inspirations
+               WHERE metadata->'media'->>'file_id' IS NOT NULL ORDER BY created_at DESC LIMIT 1""")
+        rows = [row] if row else []
+    if not rows:
+        return "Nie mam zadnego zrzutu z DM w schowku - wyslij zrzut konwersacji."
+    return _dm_reply_run(brand, channel, chat_id, rows)
+
+
+def _sub_comment_vision(brand, channel, chat_id=None, menu=False):
+    """T9 (07/08) + BE-ENGAGEMENT (20/07) + INTAKE-UX (21/07): zrzut(y) ze schowka -> wizja.
+    menu=True (wrzutka zrzutu przez n8n): NAJPIERW karta intencji (_intent_menu_open, B2).
+    menu=False (jawne narzedzie suggest_comment_from_image w rozmowie): od razu propozycje
+    per AUTOR jak dotad. Album Telegram (media_group_id) = JEDEN post, jedna analiza. Zrzuty
+    OSOBNO w <60 s = jedno pytanie 'czesci jednego posta czy rozne?'. Uzbrojony intake CRM
+    ma pierwszenstwo: zrzut = PROFIL osoby, nie post do komentowania."""
     from . import crm
     photo = db.fetchone(
         """SELECT id, content, metadata FROM inspirations
@@ -1805,6 +2149,7 @@ def _sub_comment_vision(brand, channel, chat_id=None):
             if not images:
                 return "Nie moge pobrac obrazu z Telegrama - sprobuj wyslac zrzut profilu jeszcze raz."
             return crm.process_profile_photo(intake, images)
+    run = _intent_menu_open if menu else _comment_vision_run
     meta_media = ((photo.get("metadata") or {}).get("media")) or {}
     gid = str(meta_media.get("media_group_id") or "")
     if gid:
@@ -1818,7 +2163,7 @@ def _sub_comment_vision(brand, channel, chat_id=None):
             """SELECT id, content, metadata FROM inspirations
                WHERE metadata->'media'->>'media_group_id' = %s
                  AND created_at > NOW() - interval '15 minutes' ORDER BY created_at""", (gid,))
-        return _comment_vision_run(brand, channel, chat_id, group or [photo])
+        return run(brand, channel, chat_id, group or [photo])
     # zrzuty wyslane OSOBNO tuz po sobie: dopytaj JEDNYM pytaniem zamiast produkowac duchy autorow
     last = _mrv_state(_SHOT_KEY)
     if chat_id and last.get("insp_ids") and int(photo["id"]) not in last["insp_ids"]:
@@ -1836,13 +2181,15 @@ def _sub_comment_vision(brand, channel, chat_id=None):
                  {"key": "sep", "label": "Rozne posty - analizuj osobno"}],
                 context={"prev_insp_ids": last["insp_ids"], "prev_eng_ids": last.get("eng_ids") or [],
                          "new_insp_id": int(photo["id"]), "brand": brand, "channel": channel,
-                         "chat_id": chat_id}, chat_id=chat_id)
-    return _comment_vision_run(brand, channel, chat_id, [photo])
+                         "chat_id": chat_id, "menu": bool(menu)}, chat_id=chat_id)
+    return run(brand, channel, chat_id, [photo])
 
 
 def apply_photo_group(row, key, chat):
     """Akcja decyzji 'photo_group' (decisions._apply_action): 'one' = sklejona analiza starych+nowego
-    zrzutu (stare propozycje uniewaznione), 'sep' = nowy zrzut analizowany osobno."""
+    zrzutu (stare propozycje uniewaznione), 'sep' = nowy zrzut analizowany osobno.
+    INTAKE-UX (21/07): gdy pytanie wyszlo z trasy wrzutki (context.menu), dalej idzie KARTA
+    INTENCJI zamiast bezposredniej generacji komentarzy."""
     ctx = row.get("context") or {}
     brand, channel = ctx.get("brand") or "AGS", ctx.get("channel") or "x"
     chat_id = ctx.get("chat_id") or chat
@@ -1854,8 +2201,11 @@ def apply_photo_group(row, key, chat):
     if not rows:
         _tg("sendMessage", {"chat_id": chat_id, "text": "Nie znajduje juz tych zrzutow w schowku."})
         return
-    supersede = (ctx.get("prev_eng_ids") or []) if key == "one" else []
-    note = _comment_vision_run(brand, channel, chat_id, rows, supersede_eng_ids=supersede)
+    if ctx.get("menu"):
+        note = _intent_menu_open(brand, channel, chat_id, rows)
+    else:
+        supersede = (ctx.get("prev_eng_ids") or []) if key == "one" else []
+        note = _comment_vision_run(brand, channel, chat_id, rows, supersede_eng_ids=supersede)
     if note:
         _tg("sendMessage", {"chat_id": chat_id, "text": note[:4000]})
 
@@ -2170,8 +2520,15 @@ def _sub_system(brand_row, brand, channel):
         "zasady masz w sekcji ZASADY TEGO KONTA i STOSUJESZ je bez przypominania. "
         "Gdy Tomasz wkleja CUDZY post TEKSTEM - suggest_comment; gdy wysyla ZRZUT/obraz posta lub "
         "komentarza (albo mowi 'skomentuj ostatni zrzut') - suggest_comment_from_image (Claude analizuje "
-        "OBRAZ, proponuje odpowiedz per autor). Kazda taka interakcja zapisuje sie w pamieci konta - "
+        "OBRAZ, proponuje odpowiedz per autor). Gdy Tomasz chce ODPOWIEDZIEC NA DM ('odpowiedz na ten "
+        "DM', 'odpisz mu') - subagent_reply_dm (samo siega po ostatnie zrzuty, NIE pros o tresc). "
+        "Kazda taka interakcja zapisuje sie w pamieci konta - "
         "znasz OSTATNIE INTERAKCJE (sekcja nizej), wiec wiesz co juz bylo i nie powtarzasz sie. "
+        "PAMIEC WATKU (twarda zasada 21/07): HISTORIA TEJ ROZMOWY (wiadomosci powyzej) zawiera tez "
+        "Twoje wlasne analizy zrzutow, karty intencji, streszczenia DM i wyniki intake'ow. Gdy Tomasz "
+        "mowi 'ten DM', 'ta osoba', 'to co pokazales' - odnosi sie do historii. ZANIM powiesz 'nie mam "
+        "kontekstu' albo poprosisz o powtorzenie CZEGOKOLWIEK, SPRAWDZ historie rozmowy i sekcje "
+        "PAMIEC WCZESNIEJSZYCH ROZMOW - proszenie o cos, co juz masz, to blad. "
         "Metryki wpisuje Tomasz recznie (subagent_set_metrics) - "
         "raz w tygodniu sam sie o nie upominasz. "
         "TWARDA ZASADA WYKONANIA (incydent 10/07): kazda zmiana stanu (usuniecie, przesuniecie, edycja, "
@@ -2204,10 +2561,10 @@ def _sub_system(brand_row, brand, channel):
 
 
 _SUB_VERBATIM = {"subagent_show_post", "suggest_comment", "suggest_comment_from_image",
-                 "describe_material_image"}
+                 "subagent_reply_dm", "describe_material_image"}
 _SUB_TOOLS = [TOOL_SUB_REMOVE, TOOL_SUB_RESCHEDULE, TOOL_SUB_SHOW, TOOL_SUB_EDIT, TOOL_SUB_METRICS,
-              TOOL_PROPOSE, TOOL_SUB_ESCALATE, TOOL_SUB_COMMENT, TOOL_SUB_COMMENT_VISION, TOOL_SUB_RULE,
-              TOOL_GEN_IMAGE, TOOL_INSPECT_IMAGE]
+              TOOL_PROPOSE, TOOL_SUB_ESCALATE, TOOL_SUB_COMMENT, TOOL_SUB_COMMENT_VISION, TOOL_SUB_DM,
+              TOOL_SUB_RULE, TOOL_GEN_IMAGE, TOOL_INSPECT_IMAGE]
 
 
 def _sub_dispatch_tool(name, inp, brand, channel, chat_id=None):
@@ -2246,6 +2603,8 @@ def _sub_dispatch_tool(name, inp, brand, channel, chat_id=None):
         return _sub_comment(inp, brand, channel)
     if name == "suggest_comment_from_image":
         return _sub_comment_vision(brand, channel, chat_id)
+    if name == "subagent_reply_dm":
+        return _sub_reply_dm(brand, channel, chat_id)
     if name == "subagent_remember_rule":
         out = _sub_remember_rule(inp, brand, channel)
         if out.startswith("✅"):
@@ -2278,21 +2637,32 @@ def _subagent_handle(chat_id, text, active):
         _reply(chat_id, f"Nie znam celu {brand}/{channel}. /agents aby wybrac.")
         return
     low = text.lower().strip()
+    # B1 INTAKE-UX (21/07): kazda trasa deterministyczna zapisuje wymiane do historii watku
+    # (_sub_record) - subagent pamieta co sam pokazal i nie prosi o powtorzenie.
     if re.match(r"^/?(kolejka|poka[zż]\s+kolejk\w*)\s*\??$", low):
-        _reply(chat_id, f"Kolejka {brand} {channel}:\n{_sub_queue_text(brand, channel)}")
+        out = f"Kolejka {brand} {channel}:\n{_sub_queue_text(brand, channel)}"
+        _reply(chat_id, out)
+        _sub_record(chat_id, active, text, out)
         return
     if re.match(r"^/?raport\s*(dzienny|tygodniowy)?\s*$", low):
-        _reply(chat_id, _sub_report(brand, channel))
+        out = _sub_report(brand, channel)
+        _reply(chat_id, out)
+        _sub_record(chat_id, active, text, out)
         return
     # BE-ENGAGEMENT 20/07: 'co wisi?' = wiszace propozycje komentarzy + niepotwierdzone wklejenia
     if re.match(r"^/?(co\s+wisi|wisz[aą]ce(\s+(propozycje|komentarze))?)\s*\??$", low):
         from . import crm
-        _reply(chat_id, f"Wiszace {brand} {channel}:\n{crm.pending_text(brand, channel)}")
+        out = f"Wiszace {brand} {channel}:\n{crm.pending_text(brand, channel)}"
+        _reply(chat_id, out)
+        _sub_record(chat_id, active, text, out)
         return
-    # T9 (07/08): 'skomentuj ostatni zrzut' / 'odpowiedz na ten screen' -> wizja Claude na obrazie ze schowka
+    # T9 (07/08) + B2 INTAKE-UX (21/07): wrzutka zrzutu (n8n Photo Route wysyla 'skomentuj ostatni
+    # zrzut') -> NAJPIERW karta intencji z guzikami (menu=True), nie flood propozycji.
     if (re.search(r"\b(skomentuj|odpowiedz|komentarz)\b", low)
             and re.search(r"\b(zrzut|screen|obraz|obrazek|ekran|ostatni)\b", low)):
-        _reply(chat_id, _sub_comment_vision(brand, channel, chat_id))
+        out = _sub_comment_vision(brand, channel, chat_id, menu=True)
+        _reply(chat_id, out)
+        _sub_record(chat_id, active, text, out)
         _send_comment_controls(chat_id)  # decyzja Tomasza zapisuje sie w bazie (08/07)
         return
     # DETERMINISTYCZNY start edycji (fix 07/08): 'edytuj #21' / 'popraw #21' bez tresci -> ustaw pending

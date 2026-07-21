@@ -1,6 +1,6 @@
 # Komponent: ENGAGEMENT-CRM (comment-radar + relacje z ludzmi)
 
-**STATUS GOTOWOSCI: W BUDOWIE (kod + DDL 026 w galezi build/engagement-crm; czeka merge + psql + rebuild + patch n8n + tap-testy)** (macierz: docs/GOTOWOSC_PRODUKTU.md; aktualizuj przy kazdej zmianie zachowania)
+**STATUS GOTOWOSCI: LIVE (wdrozone 20/07: psql 026 + rebuild + patch n8n, tap-testy PASS) + warstwa INTAKE-UX 21/07 (menu intencji, DM, dedup osoby) W GALEZI build/intake-ux - czeka merge + rebuild + tap-testy DoD** (macierz: docs/GOTOWOSC_PRODUKTU.md; aktualizuj przy kazdej zmianie zachowania)
 
 ## Co robi
 
@@ -12,21 +12,32 @@ intake profilu (zrzut profilu -> wizja -> bio/handle + tier zatwierdzany guzikam
 Nic nie ginie: propozycje bez decyzji i zatwierdzone-a-niepotwierdzone wracaja po 24h
 guzikami. Album Telegram = JEDEN post (jedna sklejona analiza).
 
-## Przeplyw (szczesliwa sciezka)
+## Przeplyw (szczesliwa sciezka; INTAKE-UX 21/07: najpierw MENU INTENCJI)
 
 ```
-zrzut posta (subagent aktywny) -> n8n Photo Route -> POST /message 'skomentuj ostatni zrzut'
-  -> _sub_comment_vision:
+zrzut/album (subagent aktywny) -> n8n Photo Route -> POST /message 'skomentuj ostatni zrzut'
+  -> _sub_comment_vision(menu=True):
      0. uzbrojony intake CRM? -> zrzut = PROFIL (crm.process_profile_photo, nie post)
-     1. album (media_group_id)? -> claim grupy + pauza 4 s + JEDNA analiza calosci
+     1. album (media_group_id)? -> claim grupy + pauza 4 s + JEDEN kontekst
      2. drugi zrzut osobno w <60 s? -> decyzja 'photo_group': jeden post czy rozne?
-     3. comment_from_image (1+ obrazow) -> bloki '### Autor / POST: / KOMENTARZ:'
-  -> per autor: crm.ensure_contact (dopasowanie po handle/nazwie, INSERT stub gdy nieznany)
+     3. _intent_menu_open: _screen_shots (wizja-klasyfikacja: osoby/post/DM/profil)
+        -> B3: osoba z OTWARTA karta intent_menu <24h? -> doklejka insp_ids, KONIEC
+        -> JEDNA karta 'CO WIDZE + PROPONUJE' z guzikami (decisions.ask 'intent_menu'):
+           [Skomentuj][Odpowiedz na DM][Poznaj osobe][Wszystko po kolei][Tylko zapisz]
+tap dec:<id>:<key> -> apply_intent_menu (wykonanie SEKWENCYJNE, paragon po kazdym watku):
+  comment -> _comment_vision_run -> bloki '### Autor / POST: / KOMENTARZ:' -> per autor:
+     crm.ensure_contact (match po handle/nazwie OCZYSZCZONEJ clean_author; stub gdy nieznany)
      -> engagement_log (status='proposed', contact_id, author_display)
      -> 3 wiadomosci: naglowek z kontekstem relacji / CZYSTA wklejka / guziki cmt:ok|angle|no
-     -> nieznany: 4. wiadomosc intake [Dam zrzut profilu][Zostaw stub]
-cmt:ok -> status='approved' + task_queue 'comment' -> gotowiec z kontekstem CRM + [Wkleilem][Pomin]
-cmt:done -> task done + engagement 'sent' + crm.bump_stage(contact,'commented') + last_interaction
+     -> nieznany: 4. wiadomosc intake [Dam zrzut profilu][Zostaw stub] (max 1/24h per osoba)
+  dm -> _dm_reply_run (wizja czyta konwersacje, 1 odpowiedz w glosie marki) -> TEN SAM tor
+     _send_author_proposal(kind='dm') -> engagement_log z markerem [DM] w notes
+  intake -> profil widoczny? crm.process_profile_photo od razu : crm.arm_intake (czekamy na zrzut)
+  po ostatnim watku: 'co dalej?'; pojedynczy wybor -> karta z POZOSTALYMI intencjami
+cmt:ok -> status='approved' + task_queue 'comment' (payload.kind comment|dm)
+  -> gotowiec z kontekstem CRM ('KOMENTARZ DO WKLEJENIA' / 'ODPOWIEDZ NA DM') + [Wkleilem][Pomin]
+cmt:done -> task done + engagement 'sent' + crm.bump_stage(contact, 'dm' gdy DM, inaczej
+  'commented') + last_interaction
 ```
 
 ## Wejscia-wyjscia i tabele
@@ -43,14 +54,19 @@ cmt:done -> task done + engagement 'sent' + crm.bump_stage(contact,'commented') 
   (logged = wpisy historyczne), `author_display`. Decyzje NIE zyja juz tylko w notes.
 - `task_queue` (task_type='comment'): payload + author + contact_id; pending -> gotowiec
   -> in_progress -> done/failed.
-- `agent_decisions` (przez decisions.ask): typy `crm_tier` (Buyer/Peer/Competitor/Partner),
+- `agent_decisions` (przez decisions.ask): typy `crm_tier` (Buyer/Peer/Competitor/Partner;
+  B3 21/07: JEDNA decyzja per osoba w 24h - dubel = nota zamiast drugiego pytania),
   `stale_comment` ([Wyslalem][Pomin][Pokaz jeszcze raz]), `stale_comment_task`
-  ([Tak, odhacz][Nie, pomin]), `photo_group` (jeden post / rozne). Kazda odpowiedz uczy
-  (agent_learning_log); typy moga z czasem przejsc na semi-auto (NIE dotyczy tresci).
+  ([Tak, odhacz][Nie, pomin]), `photo_group` (jeden post / rozne; context.menu=true gdy
+  z trasy wrzutki), **`intent_menu`** (INTAKE-UX 21/07: watek wrzutki jako OBIEKT -
+  context: insp_ids/contact_id/screening/done_keys; przyszly konektor UI wyswietli te
+  wiersze jako liste wiszacych zadan). Kazda odpowiedz uczy (agent_learning_log); typy
+  moga z czasem przejsc na semi-auto (NIE dotyczy tresci).
 - `inspirations`: zrzuty ze schowka; po patchu n8n `metadata.media.media_group_id`.
 - Stan przejsciowy w brand_config (wzorzec matreview): `crm_intake_pending` (czekamy na
   zrzut profilu, TTL 15 min), `cmt_last_shot` (okno 60 s na pytanie o sklejenie),
-  `cmt_group_claim` (album przetworzony raz).
+  `cmt_group_claim` (album przetworzony raz), `crm_intake_offered` (B3 21/07: karta
+  'Nowa osoba' max 1/24h per kontakt).
 
 ## Konfiguracja
 
@@ -60,13 +76,17 @@ do nowych kolumn), patch n8n `n8n-workflows/patches/hitl-photo-mediagroup-200720
 
 ## Punkty zaczepienia w kodzie
 
-- `cm-agent/app/crm.py` (NOWY): `find_contact`, `ensure_contact` (stub), `relation_context`,
-  `bump_stage` (tylko w przod), `arm_intake`/`get_intake`/`clear_intake`,
-  `process_profile_photo`, `apply_tier`, `pending_text` ("co wisi?").
-- `cm-agent/app/conversation.py`: `_sub_comment_vision` (intake/album/okno 60 s),
-  `_comment_vision_run`, `_send_author_proposal` (3 wiadomosci + guziki per autor),
-  `_parse_comment_blocks`, `handle_cmt` (ok/no/angle per autor + done/skip + intake/stub),
-  `apply_photo_group`, trasa "co wisi?" w `_subagent_handle`.
+- `cm-agent/app/crm.py`: `find_contact`/`ensure_contact` (stub; match takze po nazwie
+  oczyszczonej `clean_author` - B3), `relation_context`, `bump_stage` (tylko w przod),
+  `arm_intake`/`get_intake`/`clear_intake`, `intake_recently_offered`/`mark_intake_offered`
+  (strażnik karty 24h), `process_profile_photo` (z dedupem decyzji crm_tier 24h),
+  `apply_tier`, `pending_text` ("co wisi?").
+- `cm-agent/app/conversation.py`: `_sub_comment_vision` (intake/album/okno 60 s; menu=True
+  z trasy wrzutki), `_screen_shots`/`_intent_menu_open`/`apply_intent_menu`/`_intake_run`
+  (INTAKE-UX 21/07), `_dm_reply_run`/`_sub_reply_dm` (odpowiedzi DM), `_comment_vision_run`,
+  `_send_author_proposal` (3 wiadomosci + guziki per autor; kind comment|dm),
+  `_parse_comment_blocks`, `handle_cmt` (ok/no/angle per autor + done/skip + intake/stub;
+  kind z markera [DM] w notes), `apply_photo_group`, trasa "co wisi?" w `_subagent_handle`.
 - `cm-agent/app/engagement.py`: `consumer_tick` (gotowiec z autorem + kontekstem CRM),
   `stale_watch` (przypomnienia 24h), `apply_stale_comment`, `apply_stale_task`.
 - `cm-agent/app/generate.py`: `comment_from_image` (lista obrazow, format POST:/KOMENTARZ:),
@@ -97,5 +117,9 @@ do nowych kolumn), patch n8n `n8n-workflows/patches/hitl-photo-mediagroup-200720
   POSTach z n8n teoretyczny wyscig; pauza 4 s + pojedynczy operator = ryzyko pomijalne.
 - Wizja nie zawsze widzi handle (czesto tylko display name) - dopasowanie po nazwie
   case-insensitive; multi-platformowa tozsamosc scala dopiero intake (handles jsonb).
+  B3 (21/07): warianty wyswietlania ('X • 2nd', emoji, zaimki) czysci clean_author PRZED
+  dopasowaniem i zapisem stuba - wczesniej kazdy wariant = nowy stub i nowa karta.
+- Istniejace stuby sprzed 21/07 z brudna nazwa (np. 'Djordje Klikovac • 2nd') NIE scala
+  sie automatem z czysta - jesli po wdrozeniu pojawi sie dubel, scalic recznie SQL-em.
 - 'Pokaz jeszcze raz' przy przypomnieniu tworzy NOWY wiersz proposed (stary -> rejected
   z nota) - guziki zawsze wskazuja zywy wiersz, licznik interakcji nie liczy odrzuconych.

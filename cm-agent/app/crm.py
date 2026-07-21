@@ -43,27 +43,43 @@ def norm_handle(h):
     return (h or "").strip().lstrip("@").strip().lower()
 
 
+def clean_author(a):
+    """B3 INTAKE-UX (21/07): 'Djordje Klikovac • 2nd (He/Him) 🔹' -> 'Djordje Klikovac'.
+    Wizja widzi te sama osobe z roznymi dopiskami platformy (stopien sieci, zaimki, emoji) -
+    kazdy wariant zakladal NOWY stub i nowa karte 'Nowa osoba' (dowod: 3x karta dla Djordje).
+    Zdejmujemy dopiski przed dopasowaniem I przed zapisem nazwy stuba."""
+    a = (a or "").strip()
+    a = re.sub(r"\((?:he|she|they|on|ona)[^)]*\)", " ", a, flags=re.IGNORECASE)
+    a = re.sub(r"[•·|].*$", " ", a)  # wszystko od '•'/'·'/'|' to dopisek platformy
+    a = re.sub(r"\b(1st|2nd|3rd|following|follows you|obserwuje(sz)?|premium)\b", " ", a,
+               flags=re.IGNORECASE)
+    a = "".join(ch for ch in a if ch.isalnum() or ch.isspace() or ch in "@._-'")
+    return re.sub(r"\s+", " ", a).strip()
+
+
 def _platform_family(channel):
     return (channel or "x").split("_")[0].lower()
 
 
 def find_contact(author, channel):
     """Dopasuj wyswietlanego autora do contacts: po handle (x_handle / handles jsonb rodziny
-    platformy) i po nazwie (name / full_name, case-insensitive). Zwraca wiersz albo None."""
+    platformy) i po nazwie (name / full_name, case-insensitive; takze po nazwie OCZYSZCZONEJ
+    z dopiskow platformy - B3 21/07). Zwraca wiersz albo None."""
     author = (author or "").strip()
     if not author:
         return None
     fam = _platform_family(channel)
     h = norm_handle(author)
+    cleaned = clean_author(author) or author
     try:
         row = db.fetchone(
             """SELECT id, name, icp_tier, relationship_stage, handles FROM contacts
                WHERE lower(trim(both '@' from COALESCE(x_handle,''))) = %s
                   OR lower(COALESCE(handles->>%s, '')) = %s
-                  OR lower(name) = lower(%s)
-                  OR lower(COALESCE(full_name, '')) = lower(%s)
+                  OR lower(name) IN (lower(%s), lower(%s))
+                  OR lower(COALESCE(full_name, '')) IN (lower(%s), lower(%s))
                ORDER BY updated_at DESC LIMIT 1""",
-            (h, fam, h, author, author))
+            (h, fam, h, author, cleaned, author, cleaned))
         return row
     except Exception:
         traceback.print_exc()
@@ -72,7 +88,9 @@ def find_contact(author, channel):
 
 def ensure_contact(author, brand, channel):
     """Znajdz kontakt albo zaloz STUB (CRM obowiazkowy - kazda interakcja ma contact_id).
-    Zwraca (contact_id, is_new). Autor zaczynajacy sie od '@' = handle platformy."""
+    Zwraca (contact_id, is_new). Autor zaczynajacy sie od '@' = handle platformy.
+    B3 (21/07): nazwa stuba = wersja OCZYSZCZONA (bez '• 2nd' itd.) - kolejne warianty
+    wyswietlania tej samej osoby trafiaja w ten sam wiersz, nie w nowy stub."""
     author = (author or "").strip()
     if not author:
         return None, False
@@ -81,7 +99,7 @@ def ensure_contact(author, brand, channel):
         return str(row["id"]), False
     fam = _platform_family(channel)
     is_handle = author.startswith("@")
-    name = author.lstrip("@").strip()[:200]
+    name = (clean_author(author.lstrip("@")) or author.lstrip("@").strip())[:200]
     handles = {fam: norm_handle(author)} if is_handle else {}
     try:
         row = db.fetchone(
@@ -142,6 +160,39 @@ def bump_stage(contact_id, stage):
 
 
 # ---------------- intake profilu (wymuszony dla nieznanych) ----------------
+_OFFERED_KEY = "crm_intake_offered"  # {contact_id: iso_ts} - strażnik B3: karta 'Nowa osoba' max 1/24h
+
+
+def intake_recently_offered(contact_id):
+    """B3 (21/07): czy karta 'Nowa osoba / dam zrzut profilu' poszla dla tej osoby w ostatnich 24h.
+    Dowod wady: Djordje dostal 3x karte w jednej sesji."""
+    st = _state_get(_OFFERED_KEY)
+    ts = st.get(str(contact_id))
+    if not ts:
+        return False
+    try:
+        age = (datetime.datetime.now(datetime.timezone.utc)
+               - datetime.datetime.fromisoformat(ts)).total_seconds()
+        return age < 24 * 3600
+    except Exception:
+        return False
+
+
+def mark_intake_offered(contact_id):
+    st = {k: v for k, v in _state_get(_OFFERED_KEY).items()
+          if _fresh_iso(v, 24 * 3600)}  # przytnij stare wpisy przy okazji
+    st[str(contact_id)] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    _state_set(_OFFERED_KEY, st)
+
+
+def _fresh_iso(ts, max_age_s):
+    try:
+        return (datetime.datetime.now(datetime.timezone.utc)
+                - datetime.datetime.fromisoformat(ts)).total_seconds() < max_age_s
+    except Exception:
+        return False
+
+
 def arm_intake(chat_id, contact_id, author, brand, channel):
     """Uzbroj stan: NASTEPNY zrzut od Tomasza = profil tej osoby (nie post do komentowania)."""
     _state_set(_INTAKE_KEY, {"chat_id": chat_id, "contact_id": contact_id, "author": author,
@@ -205,17 +256,30 @@ def process_profile_photo(intake, images):
         traceback.print_exc()
         return "Nie zapisalem profilu (blad bazy - szczegoly w logu). Wpis w contacts zostal jako stub."
     disp = name or intake.get("author") or "nowa osoba"
-    ask_note = decisions.ask(
-        f"{brand}:{channel}", brand, "crm_tier",
-        f"Klasyfikacja ICP dla {disp}" + (f" (@{handle})" if handle else "") + ":\n"
-        + (f"BIO: {bio}\n" if bio else "")
-        + (f"Propozycja modelu: {tier}" + (f" - {why}" if why else "") if tier
-           else "Model nie mial pewnosci - wybierz tier."),
-        [{"key": "buyer", "label": "Buyer"}, {"key": "peer", "label": "Peer"},
-         {"key": "competitor", "label": "Competitor"}, {"key": "partner", "label": "Partner"}],
-        recommendation={"Buyer": "buyer", "Peer": "peer", "Competitor": "competitor",
-                        "Partner": "partner"}.get(tier),
-        context={"contact_id": contact_id})
+    # B3 (21/07): JEDNA decyzja crm_tier per osoba w oknie 24h (dowod wady: Djordje dostal
+    # decyzje #6 i #7 o ten sam tier). Otwarta albo swiezo rozstrzygnieta = nie pytamy drugi raz.
+    dup = db.fetchone(
+        """SELECT id, status, answer FROM agent_decisions
+           WHERE decision_type='crm_tier' AND context->>'contact_id'=%s
+             AND (status='pending' OR answered_at > NOW() - interval '24 hours')
+           ORDER BY created_at DESC LIMIT 1""", (str(contact_id),))
+    if dup:
+        ask_note = (f"Decyzja tieru #{dup['id']} dla tej osoby juz CZEKA wyzej - nie dubluje."
+                    if dup["status"] == "pending"
+                    else f"Tier juz rozstrzygniety w ostatnich 24h (decyzja #{dup['id']}: "
+                         f"{dup.get('answer')}) - nie pytam drugi raz.")
+    else:
+        ask_note = decisions.ask(
+            f"{brand}:{channel}", brand, "crm_tier",
+            f"Klasyfikacja ICP dla {disp}" + (f" (@{handle})" if handle else "") + ":\n"
+            + (f"BIO: {bio}\n" if bio else "")
+            + (f"Propozycja modelu: {tier}" + (f" - {why}" if why else "") if tier
+               else "Model nie mial pewnosci - wybierz tier."),
+            [{"key": "buyer", "label": "Buyer"}, {"key": "peer", "label": "Peer"},
+             {"key": "competitor", "label": "Competitor"}, {"key": "partner", "label": "Partner"}],
+            recommendation={"Buyer": "buyer", "Peer": "peer", "Competitor": "competitor",
+                            "Partner": "partner"}.get(tier),
+            context={"contact_id": contact_id})
     return (f"🧬 Profil zapisany w CRM: {disp}" + (f" (@{handle})" if handle else "")
             + (f"\nBIO: {bio}" if bio else "") + f"\n{ask_note}")
 
