@@ -113,9 +113,12 @@ STAN GRY: notion_worker._loop -> stan_gry.tick() (po kazdym drainie, <=60 s):
   ingest materialu - dlatego route raportu stoi PRZED sales.try_command.
 - Raport >4096 znakow: Telegram TNIE wklejke na kilka wiadomosci, a czesc bez
   naglowka [RAPORT PRACY nie trafia do parsera (idzie do aktywnego agenta jak
-  zwykly tekst). Kontrakt (tap-test d 22/07): dluga sesja = CZESCI po ~20 linii,
-  kazda z wlasnym naglowkiem i [KONIEC RAPORTU]. Parser toleruje linie bez '- '
-  (decyduje pierwszy token przed '|').
+  zwykly tekst). KONTRAKT PODSTAWOWY (decyzja Tomasza 22/07 po tap-tescie d):
+  raport = PLIK .md o nazwie RAPORT_PRACY_<kanal>_RRRR-MM-DD_HHMM.md wyslany do
+  Telegrama jako dokument (handle_document -> ten sam parser, zero ciecia, slad
+  audytowy w nazwie). Fallback: krotka wklejka tekstem; dluga = CZESCI po ~20
+  linii, kazda z wlasnym naglowkiem i [KONIEC RAPORTU]. Parser toleruje linie
+  bez '- ' (decyduje pierwszy token przed '|').
 - reports.kontekst_text importuje planner/sales/decisions LENIWIE (cykl importow:
   conversation -> reports).
 - `/set` NIE zna klucza stan_gry_page_id (allowlista n8n) - konfiguracja SQL-em.
