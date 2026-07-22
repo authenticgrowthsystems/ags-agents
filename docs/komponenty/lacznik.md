@@ -1,6 +1,6 @@
 # Komponent: LACZNIK SYNCHRONIZACYJNY (praca na abonamencie <-> serwer)
 
-**STATUS GOTOWOSCI: ZBUDOWANY (galaz build/lacznik, 22/07) - czeka wdrozenie: rebuild cm-agenta + patch n8n /kontekst + strona Notion + tap-testy DoD a-d** (macierz: docs/GOTOWOSC_PRODUKTU.md; aktualizuj przy kazdej zmianie zachowania)
+**STATUS GOTOWOSCI: LIVE (wdrozone 22/07: 2 rebuildy + patch n8n + strona Notion 3a5c00c9... + sync_registry stan_gry; tap-testy DoD 4/4 PASS na zywych danych)** (macierz: docs/GOTOWOSC_PRODUKTU.md; aktualizuj przy kazdej zmianie zachowania)
 
 ## Co robi
 
