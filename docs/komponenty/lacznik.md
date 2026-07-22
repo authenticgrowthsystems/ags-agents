@@ -79,8 +79,8 @@ STAN GRY: notion_worker._loop -> stan_gry.tick() (po kazdym drainie, <=60 s):
 - Przepustka n8n: `n8n-workflows/patches/hitl-kontekst-command-22072026.cjs`
   (deactivate+activate w skrypcie). Bez patcha /kontekst wpada do 'other' i ginie;
   wklejka RAPORTU dziala bez patcha (zwykly tekst).
-- Masterprompt czatowy: `docs/product/masterprompty-czat/MASTERPROMPT_CZAT_X_v1.md`
-  (`<LINK_STAN_GRY>` podmienia Tomasz na link strony Notion).
+- Masterprompty czatowe: `docs/product/masterprompty-czat/` (aktualne: X_v2 +
+  LINKEDIN_AGS_v1; link i ID strony juz wpisane, rytual startu = KONEKTOR Notion).
 
 ## Punkty zaczepienia w kodzie
 
