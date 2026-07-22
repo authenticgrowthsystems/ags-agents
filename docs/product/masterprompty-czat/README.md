@@ -10,8 +10,9 @@ zaczyna sie sama: agent czyta stan gry z linku Notion i konczy sesje blokiem
 - Wersjonowanie jak prompty agentow: pelny nowy plik z podbita wersja, nigdy diffy.
 - Kazdy plik jest SAMOWYSTARCZALNY: tozsamosc + glos + kontrakty (RAPORT PRACY /
   stan gry z linku) + regula prawdy.
-- `https://app.notion.com/p/3a5c00c90b938140b271dc5d18a4920a` w pliku podmienia Tomasz na publiczny link strony Notion
-  "Stan gry AGS" (fallback = /kontekst w Telegramie).
+- Link stanu gry jest juz WPISANY w pliki (strona Notion "Stan gry AGS",
+  https://app.notion.com/p/3a5c00c90b938140b271dc5d18a4920a, dostep przez konektor
+  Notion czatu - strona NIE jest publikowana do webu; fallback = /kontekst w Telegramie).
 
 ## Aktualne wersje (22/07/2026, po wsadzie roboczych promptow Tomasza)
 
