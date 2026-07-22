@@ -70,4 +70,11 @@ podpiecia + masterprompt (backlog: wpis DONE).
 Weryfikacja wersji n8n (1 komenda SSH od budowniczego), dodanie konektora w claude.ai
 (instrukcja), tap-testy a-d.
 
-## 6. Zamkniecie: raport + STATUS tu. STATUS = READY (22/07 ~18:20)
+## 6. Zamkniecie: raport + STATUS tu. STATUS = ZBUDOWANY (22/07 wieczor, BE-LACZNIK-E2)
+
+Galaz build/lacznik-e2. Workflow n8n yxJUJmZpSUe0tw9K LIVE (sonda MCP tools/list
+PASS), endpointy /lacznik/* w worker.py (czekaja na rebuild), masterprompty v3,
+README podpiecia, OpenAPI wariantu B. Wersja n8n potwierdzona empirycznie
+(mcpTrigger typeVersion 2 = streamable HTTP dziala). ZERO DDL. Zostalo u Tomasza:
+merge+push, rebuild cm-agent, SQL sekretu, konektor claude.ai, tap-testy a-d.
+Raport: docs/cm/RAPORT_dla_BE_22072026_LACZNIK_E2_build.md.

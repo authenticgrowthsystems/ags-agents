@@ -1,6 +1,6 @@
 # Komponent: LACZNIK SYNCHRONIZACYJNY (praca na abonamencie <-> serwer)
 
-**STATUS GOTOWOSCI: LIVE (wdrozone 22/07: 2 rebuildy + patch n8n + strona Notion 3a5c00c9... + sync_registry stan_gry; tap-testy DoD 4/4 PASS na zywych danych)** (macierz: docs/GOTOWOSC_PRODUKTU.md; aktualizuj przy kazdej zmianie zachowania)
+**STATUS GOTOWOSCI: Etap 1 LIVE (22/07, DoD 4/4 PASS); Etap 2 ZBUDOWANY 22/07 wieczor - workflow n8n LIVE + sonda MCP PASS, czeka: rebuild cm-agent + SQL sekretu + konektor claude.ai + tap-testy a-d** (macierz: docs/GOTOWOSC_PRODUKTU.md; aktualizuj przy kazdej zmianie zachowania)
 
 ## Co robi
 
@@ -53,6 +53,44 @@ STAN GRY: notion_worker._loop -> stan_gry.tick() (po kazdym drainie, <=60 s):
   table_registry._re_render('stan_gry','AGS', page, ...) (soft-clear, mirror_state)
 ```
 
+## Etap 2: narzedzia czatu - zero kopiowania (BRIEF_LACZNIK_ETAP2_22072026)
+
+Czat na abonamencie dostaje NARZEDZIA zamiast instrukcji "wklej Tomaszowi".
+Transport, nie logika: parser, /kontekst, strona Notion i format raportu BEZ zmian.
+
+- **Workflow n8n `AGS Lacznik Chat Tools` (id yxJUJmZpSUe0tw9K, NOWY, osobny -
+  HITL i Scheduler nietkniete):** MCP Server Trigger (typeVersion 2, streamable
+  HTTP) + 2 narzedzia httpRequestTool ($fromAI):
+  - `stan_gry(scope)` -> GET cm-agent /lacznik/stan -> markdown z
+    reports.kontekst_text. Zastepuje czytanie Notion w rytuale startowym
+    (Notion zostaje lustrem i fallbackiem).
+  - `wyslij_raport_pracy(kanal, raport_md)` -> POST cm-agent /lacznik/raport ->
+    istniejacy parser (idempotencja sync:<hash>) -> potwierdzenie z licznikami
+    wraca DO CZATU + kopia do Telegrama.
+  URL konektora: `https://.../mcp/lacznik-<SEKRET>` (claude.ai -> Settings ->
+  Connectors -> Add custom connector; instrukcja: docs/product/masterprompty-czat/
+  README.md). Skrypt tworzacy (idempotentny, z sonda MCP initialize/tools-list):
+  `n8n-workflows/lacznik-chat-tools-create-22072026.cjs`; kopia definicji BEZ
+  sekretu: `n8n-workflows/lacznik-chat-tools.json`.
+- **Cienkie endpointy cm-agent (worker.py):** GET /lacznik/stan (sync, zero LLM)
+  + POST /lacznik/raport (sync - parser deterministyczny). Guard `_lacznik_guard`:
+  sekret `lacznik_e2_secret` czytany z APP_SECRETS W DB przy kazdym zadaniu
+  (rotacja bez rebuildu; brak klucza w DB = endpointy zamkniete).
+- **Wariant B (fallback bez MCP, ChatGPT Custom GPT / dowolny HTTP):** w tym samym
+  workflow webhooki POST /webhook/chat-raport + GET /webhook/stan-gry - czysty
+  przelot do cm-agent, sekret podaje WOLAJACY (walidacja w cm-agent, zero literalow
+  w galeziach wariantu B). Schemat Action: docs/product/masterprompty-czat/
+  OPENAPI_LACZNIK_WARIANT_B.yaml.
+- **Masterprompty v3** (X + LinkedIn): rytual startu = narzedzie stan_gry, rytual
+  konca = wyslij_raport_pracy; fallback = stary rytual (Notion + plik .md).
+- **JAWNE ODSTEPSTWO od "zero literalow sekretow w definicjach n8n":** wezly-narzedzia
+  MCP wykonuja sie pojedynczo (bez lancucha), wiec nie moga pobrac sekretu wezlem
+  Postgres jak HITL - sekret stoi literalem w path triggera + naglowku narzedzi
+  TEGO JEDNEGO dedykowanego workflow. Zrodlo prawdy = app_secrets (cm-agent
+  waliduje z DB); rotacja = UPDATE app_secrets + rerun skryptu z
+  LACZNIK_E2_SECRET=<nowy> (URL konektora sie zmienia - podmien w claude.ai);
+  saveDataSuccessExecution=none (tresci raportow nie leza w logach n8n).
+
 ## Wejscia-wyjscia i tabele
 
 - `engagement_log`: wpisy z raportu (status wg typu: sent/logged; idempotencja
@@ -79,8 +117,11 @@ STAN GRY: notion_worker._loop -> stan_gry.tick() (po kazdym drainie, <=60 s):
 - Przepustka n8n: `n8n-workflows/patches/hitl-kontekst-command-22072026.cjs`
   (deactivate+activate w skrypcie). Bez patcha /kontekst wpada do 'other' i ginie;
   wklejka RAPORTU dziala bez patcha (zwykly tekst).
-- Masterprompty czatowe: `docs/product/masterprompty-czat/` (aktualne: X_v2 +
-  LINKEDIN_AGS_v1; link i ID strony juz wpisane, rytual startu = KONEKTOR Notion).
+- Masterprompty czatowe: `docs/product/masterprompty-czat/` (aktualne: X_v3 +
+  LINKEDIN_AGS_v3 - rytualy przez narzedzia Lacznika, fallback Notion/plik;
+  starsze wersje zostaja jako historia).
+- Sekret Etapu 2: SQL z wyjscia skryptu tworzacego workflow (INSERT
+  lacznik_e2_secret do app_secrets) - wykonuje Tomasz przez SSH przy wdrozeniu.
 
 ## Punkty zaczepienia w kodzie
 
@@ -91,6 +132,8 @@ STAN GRY: notion_worker._loop -> stan_gry.tick() (po kazdym drainie, <=60 s):
 - `cm-agent/app/reports.py`: `kontekst_text(scope)`, `send_kontekst(chat_id, scope)`.
 - `cm-agent/app/sync/stan_gry.py`: `tick()`, `_signature()`; wpiecie w
   `cm-agent/app/sync/notion_worker.py` (`_loop`, po `_drain`).
+- `cm-agent/app/worker.py` (Etap 2): `_lacznik_guard`, `lacznik_stan`
+  (GET /lacznik/stan), `lacznik_raport` (POST /lacznik/raport).
 
 ## Kanony ktore go dotycza
 
@@ -125,3 +168,8 @@ STAN GRY: notion_worker._loop -> stan_gry.tick() (po kazdym drainie, <=60 s):
 - reports.kontekst_text importuje planner/sales/decisions LENIWIE (cykl importow:
   conversation -> reports).
 - `/set` NIE zna klucza stan_gry_page_id (allowlista n8n) - konfiguracja SQL-em.
+- MCP Trigger typeVersion 1 = transport SSE (POST na URL glowny dostaje 404
+  "did you mean DELETE"; SSE zyje na <url>/sse). Streamable HTTP wymaga
+  typeVersion 2 - zweryfikowane sonda initialize/tools-list 22/07 (PASS).
+- Narzedzia MCP nie moga czytac sekretow wezlem Postgres (wykonuja sie
+  pojedynczo) - stad jawne odstepstwo literalu w dedykowanym workflow (wyzej).

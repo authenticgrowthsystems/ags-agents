@@ -221,6 +221,21 @@ wiadomoscia; sales-HTML = no-op po merge INTAKE-UX). ZERO DDL. WDROZONE 22/07 w 
 fetch URL, kontrakt = PLIK .md RAPORT_PRACY_<kanal>_data_HHMM, obowiazek klasyfikacji
 autorow (tier tylko ze zweryfikowanego profilu; guard: nadany icp_tier = bez karty).
 
+**BE-LACZNIK-E2 (22/07 wieczor): ZBUDOWANY na galezi build/lacznik-e2 - workflow n8n
+LIVE + sonda MCP PASS; czeka: merge + rebuild cm-agent + SQL sekretu + konektor
+claude.ai + tap-testy a-d** (brief BRIEF_LACZNIK_ETAP2_22072026, raport:
+docs/cm/RAPORT_dla_BE_22072026_LACZNIK_E2_build.md). Zakres: NOWY workflow n8n
+"AGS Lacznik Chat Tools" (yxJUJmZpSUe0tw9K; MCP Server Trigger typeVersion 2
+streamable HTTP + narzedzia stan_gry / wyslij_raport_pracy + webhooki wariantu B
+chat-raport / stan-gry; HITL i Scheduler NIETKNIETE) + cienkie endpointy worker.py
+GET /lacznik/stan + POST /lacznik/raport (guard sekretem lacznik_e2_secret z
+app_secrets, czytanym z DB per request) + masterprompty czatowe v3 (X + LinkedIn,
+rytualy narzedziowe, fallback Notion/plik) + README podpiecia konektora + schemat
+OpenAPI wariantu B. ZERO DDL, zero LLM w n8n. Sonda 22/07: initialize + tools/list
+PASS (oba narzedzia widoczne); wariant B przelot PASS (czyste 404 cm-agenta przed
+rebuildem). Wersja n8n zweryfikowana EMPIRYCZNIE (mcpTrigger v2 dziala = instancja
+nowsza niz wymagane 1.88).
+
 RESEARCHER NAPRAWIONY 20/07 (merge 3fd3560): web_search padal od 28/06 przez domyslne
 dynamic filtering Anthropic w web_search_20260209 (15s->110s) - fix allowed_callers:['direct']
 + koniec polykania bledow (sources/worker/Normalize) + cost_usd z usage; zywy n8n oxwcD1i...
