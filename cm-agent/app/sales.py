@@ -185,10 +185,16 @@ def _find_pipeline(fragment):
 
 
 def _append_notes(row_id, note):
+    # 22/07 (feedback do podsumowania klienta): pojedynczy wpis przycinany do 600 znakow -
+    # bloby (caly research/strategia) zjadaly budzet 4000 i wypychaly historie (uciete
+    # "Sekwen"). Pelne tresci zyja w sales_knowledge/plikach - notatka to OS CZASU, nie magazyn.
+    clean = re.sub(r"\s+", " ", str(note or "")).strip()
+    if len(clean) > 600:
+        clean = clean[:597] + "..."
     db.execute(
         """UPDATE sales_pipeline
            SET notes = LEFT(COALESCE(notes,'') || %s, 4000), updated_at=NOW() WHERE id=%s""",
-        (f"\n[{datetime.datetime.now(WARSAW).strftime('%d/%m %H:%M')}] {note}", row_id))
+        (f"\n[{datetime.datetime.now(WARSAW).strftime('%d/%m %H:%M')}] {clean}", row_id))
 
 
 # ---------------- Telegram (przez conversation, jeden transport) ----------------
@@ -767,47 +773,75 @@ def pdf_text(blob):
 
 
 # ---------------- komendy deterministyczne (PRZED LLM, wzorzec _config_route) ----------------
-# ---------------- DZIENNIK KAPITANSKI (kanon Sales Manager 22/07; decyzja Managera P1) ----------------
+# ---------------- PODSUMOWANIE KLIENTA (kanon Sales Manager 22/07; decyzja Managera P1) ----------------
+# Feedback Tomasza 22/07 po tap-tescie: bez nazwy "dziennik kapitanski" w interfejsie
+# (wystarczy "podsumowanie"), pelna polszczyzna, KROTKIE wpisy osi czasu zamiast wklejonych
+# blobow (research renderowal sie jako wielkie naglowki, strategia ucieta w pol slowa).
+_NOTE_TS_SPLIT = re.compile(r"(?=\[\d{2}/\d{2} \d{2}:\d{2}\])")
+
+
+def _note_entries(notes):
+    """Notatki lejka -> lista krotkich wpisow osi czasu (markdown i biale znaki sprzatniete)."""
+    out = []
+    for chunk in _NOTE_TS_SPLIT.split(notes or ""):
+        t = re.sub(r"[#*_`>]+", "", chunk)
+        t = re.sub(r"\s+", " ", t).strip()
+        if t:
+            out.append(t)
+    return out
+
+
 def _captain_log_text(fragment):
-    """Chronologiczny, czytelny dla czlowieka zapis CALEJ pracy z klientem. Dziennik jest
-    WIDOKIEM na zrodla append-only (sales_pipeline.notes + engagement_log) - niczego nie
-    duplikuje. Cel kanonu: ratowanie kontaktu po miesiacach = przeczytanie dziennika.
-    Zwraca (tytul, tekst) albo (None, komunikat bledu)."""
+    """Podsumowanie klienta: esencja na gorze (etap, nastepny krok, obowiazujaca strategia,
+    ostatni ruch), potem zwarta os czasu i interakcje. WIDOK na zrodla append-only
+    (sales_pipeline.notes + engagement_log) - niczego nie duplikuje. Cel: ratowanie
+    kontaktu po miesiacach = przeczytanie tego jednego pliku."""
     row = _find_pipeline(fragment)
     if not row:
-        return None, f"Nie znajduje w lejku klienta \"{(fragment or '')[:60]}\"."
+        return None, f"Nie znajduję w lejku klienta \"{(fragment or '')[:60]}\"."
     name = row.get("prospect_name") or "(bez nazwy)"
-    head = [f"🧭 DZIENNIK KAPITANSKI: {name}"]
-    if row.get("prospect_url"):
-        head.append(f"Strona: {row['prospect_url']}")
+    entries = _note_entries(row.get("notes"))
+    strategy = next((e for e in reversed(entries) if "STRATEGIA OBOWIAZUJACA" in e.upper()
+                     or "STRATEGIA OBOWIĄZUJĄCA" in e.upper()), None)
     nf = row.get("next_followup_at")
-    head.append(f"Etap: {row.get('stage')} | nastepny krok: "
-                + (nf.astimezone(WARSAW).strftime("%d/%m %H:%M") if nf else "BRAK (ustaw!)"))
-    if row.get("research_job_id"):
-        head.append(f"Research job: {str(row['research_job_id'])[:8]}")
-    parts = ["\n".join(head), "--- KARTOTEKA (chronologicznie) ---"]
-    notes = "\n".join(ln.strip() for ln in (row.get("notes") or "").splitlines() if ln.strip())
-    parts.append(notes or "(pusta)")
+    head = [f"📋 PODSUMOWANIE KLIENTA: {name}"
+            + (f"  ({row['prospect_url']})" if row.get("prospect_url") else "")]
+    head.append("")
+    head.append("NAJWAŻNIEJSZE:")
+    head.append(f"• Etap lejka: {row.get('stage')} | następny krok: "
+                + (nf.astimezone(WARSAW).strftime("%d/%m %H:%M") if nf else "NIE USTAWIONY"))
+    if strategy:
+        head.append("• Strategia: " + strategy[:500])
+    if entries:
+        head.append("• Ostatni ruch: " + entries[-1][:220])
+    lines = ["\n".join(head), "OŚ CZASU:"]
+    if entries:
+        lines.append("\n".join("• " + (e if len(e) <= 220 else e[:217] + "...") for e in entries))
+    else:
+        lines.append("(pusto)")
     e_rows = db.fetchall(
-        """SELECT created_at, action_type, status, author_display,
-                  LEFT(COALESCE(NULLIF(response,''), content), 200) AS what
+        """SELECT created_at, action_type, status,
+                  LEFT(COALESCE(NULLIF(response,''), content), 300) AS what
            FROM engagement_log
            WHERE content ILIKE %s OR notes ILIKE %s OR author_display ILIKE %s
            ORDER BY created_at""",
         (f"%{name}%", f"%{name}%", f"%{name}%"))
-    parts.append("--- INTERAKCJE (chronologicznie) ---")
+    lines.append("INTERAKCJE:")
     if e_rows:
-        lines = []
+        il = []
         for e in e_rows:
             try:
                 stamp = e["created_at"].astimezone(WARSAW).strftime("%d/%m %H:%M")
             except Exception:
                 stamp = "??"
-            lines.append(f"[{stamp}] {e['action_type']} ({e['status']}): {(e['what'] or '').strip()}")
-        parts.append("\n".join(lines))
+            what = re.sub(r"\s+", " ", (e.get("what") or "")).strip()
+            il.append(f"• [{stamp}] {e['action_type']} ({e['status']}): "
+                      + (what if len(what) <= 160 else what[:157] + "..."))
+        lines.append("\n".join(il))
     else:
-        parts.append("(brak zapisanych interakcji)")
-    return name, "\n\n".join(parts)
+        lines.append("(brak zapisanych interakcji)")
+    lines.append("Pełne treści (research, oferty, maile): baza wiedzy sprzedażowa + docs/research/prospekci/.")
+    return name, "\n\n".join(lines)
 
 
 def _show_dziennik(chat_id, fragment):
@@ -817,8 +851,8 @@ def _show_dziennik(chat_id, fragment):
         return
     if len(text) > 3500:
         from . import matreview
-        matreview._tg_send_document(chat_id, f"dziennik_{re.sub(r'[^a-z0-9]+', '_', title.lower())[:40]}.md",
-                                    text, caption=f"🧭 Dziennik kapitanski: {title} (calosc w pliku)")
+        matreview._tg_send_document(chat_id, f"podsumowanie_{re.sub(r'[^a-z0-9]+', '_', title.lower())[:40]}.md",
+                                    text, caption=f"📋 Podsumowanie klienta: {title} (całość w pliku)")
     else:
         _tg_send(chat_id, text)
 

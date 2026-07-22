@@ -85,12 +85,17 @@ fallback ILIKE), outreach_sent (propozycja -> 'sent', follow-up +3 dni).
 - Wartosc przed cena; cennik od gory (premium pierwsze). TWARDA ZASADA WYKONANIA
   (paragon narzedzia albo sie nie stalo).
 
-## Dziennik kapitanski (22/07, kanon Sales Manager P1)
+## Podsumowanie klienta / dziennik kapitanski (22/07, kanon Sales Manager P1; v2 po tap-tescie)
 
 - `/dziennik <klient>` (route deterministyczny + przepustka n8n) i narzedzie
-  `dziennik_klienta`: chronologiczny WIDOK na kartoteke (sales_pipeline.notes)
-  + interakcje (engagement_log, match po nazwie prospekta). Dlugi dziennik
-  przychodzi jako plik .md. Zrodla append-only - dziennik niczego nie duplikuje.
+  `dziennik_klienta`: WIDOK na kartoteke (sales_pipeline.notes) + interakcje
+  (engagement_log, match po nazwie prospekta). Dlugi = plik .md. Zrodla append-only.
+- v2 (feedback Tomasza): naglowek "PODSUMOWANIE KLIENTA" (nie "dziennik kapitanski"),
+  pelna polszczyzna; sekcja NAJWAZNIEJSZE na gorze (etap, nastepny krok, OBOWIAZUJACA
+  STRATEGIA wyciagana z notatek, ostatni ruch); os czasu = krotkie wpisy <=220 znakow
+  ze zdjetym markdownem; interakcje <=160/linia; stopka wskazuje pelne tresci.
+- Higiena zapisu: `_append_notes` przycina pojedynczy wpis do 600 znakow - bloby
+  (caly research) wypychaly historie z limitu 4000 (ucieta strategia "Sekwen").
 - Kanon i decyzje Managera (progi 5/20, kolejnosc P1):
   docs/product/SALES_MANAGER_ARCHITEKTURA_22072026.md.
 
