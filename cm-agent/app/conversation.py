@@ -1919,8 +1919,82 @@ def _comment_vision_run(brand, channel, chat_id, insp_rows, supersede_eng_ids=No
 # Watek intencji jest OBIEKTEM w agent_decisions (context: insp_ids/contact_id/screening/
 # done_keys) - przyszly konektor (Slack/webapp, kanon SNAPSHOT) tylko inaczej go wyswietli.
 _INTENT_LABELS = {"comment": "Skomentuj", "dm": "Odpowiedz na DM",
-                  "intake": "Poznaj osobe (intake)", "save": "Tylko zapisz",
+                  "intake": "Poznaj osobe (intake)", "record": "Odnotuj w bazie (reakcje)",
+                  "save": "Tylko zapisz",
                   "all": "Wszystko po kolei", "done": "Nic wiecej - domknij"}
+
+# Uwaga Tomasza 22/07 ("zaktualizuj w bazie" + karta z pytaniem "co mam zrobic?"):
+# intencja podana SLOWAMI tuz przed/przy wrzutce = WYKONAC, nie pytac. Menu intencji
+# jest dla wrzutek BEZ intencji.
+_DIRECTIVE_PATTERNS = [
+    (re.compile(r"(?i)(zaktualizuj|zapisz|dopisz|wrzuc)\S*.{0,24}\bbaz"), "record"),
+    (re.compile(r"(?i)\bodnotuj\b"), "record"),
+    (re.compile(r"(?i)\bskomentuj\b"), "comment"),
+    (re.compile(r"(?i)\bodpisz\b|odpowiedz\S*.{0,12}\bdm\b"), "dm"),
+    (re.compile(r"(?i)\bpoznaj\b|\bintake\b|sklasyfikuj"), "intake"),
+    (re.compile(r"(?i)^\s*(tylko\s+)?zapisz\s*\.?\s*$"), "save"),
+]
+
+
+def _last_user_directive(chat_id, agent):
+    """Ostatnia wypowiedz uzytkownika w historii watku subagenta -> klucz intencji albo None."""
+    try:
+        hist = _load_history(chat_id, agent=agent)
+    except Exception:
+        return None
+    last = next((h for h in reversed(hist) if isinstance(h, dict) and h.get("role") == "user"), None)
+    if not last:
+        return None
+    c = last.get("content")
+    if isinstance(c, list):
+        text = " ".join(str(b.get("text") or "") for b in c if isinstance(b, dict))
+    else:
+        text = str(c or "")
+    text = text.strip()[:300]
+    if text.startswith("[GUZIK]") or text.startswith("[ZRZUT]"):
+        return None
+    for rx, key in _DIRECTIVE_PATTERNS:
+        if rx.search(text):
+            return key
+    return None
+
+
+def _record_reactions_run(brand, channel, chat_id, insp_rows, screening):
+    """Intencja 'Odnotuj w bazie': zrzut POWIADOMIEN (follow/like/repost) -> wpisy w
+    engagement_log per osoba+akcja i kontakt w CRM. Zero generacji, zero LLM."""
+    from . import crm
+    sc = screening or {}
+    persons = [p for p in (sc.get("persons") or [])
+               if isinstance(p, dict) and (p.get("author") or p.get("handle"))]
+    if not persons:
+        return "Nie rozpoznaje osob na zrzucie - nie mam czego odnotowac."
+    ch_label = {"x": "X", "linkedin": "LinkedIn"}.get(channel, channel)
+    saved, nowe = [], []
+    for p in persons:
+        who = (p.get("author") or p.get("handle") or "").strip()
+        handle = ("@" + str(p["handle"])) if p.get("handle") else who
+        try:
+            cid, is_new = crm.ensure_contact(handle, brand, channel)
+        except Exception:
+            traceback.print_exc()
+            cid, is_new = None, False
+        acts = [str(a) for a in (p.get("actions") or []) if a] or ["reakcja"]
+        for a in acts[:6]:
+            db.execute(
+                """INSERT INTO engagement_log (action_type, channel, agent, author_display,
+                                               content, status, contact_id, notes)
+                   VALUES (%s,%s,%s,%s,%s,'done',%s,%s)""",
+                (f"{channel}_{re.sub(r'[^a-z_]', '', a.lower())[:24] or 'reakcja'}", ch_label,
+                 f"{brand}:{channel}", who, (sc.get("summary") or "")[:300], cid,
+                 "zrodlo: zrzut powiadomien (odnotuj w bazie)"))
+        saved.append(f"{who}: {', '.join(acts)}")
+        if is_new:
+            nowe.append(who)
+    note = "⚙️ Odnotowane w bazie:\n" + "\n".join("• " + s for s in saved)
+    if nowe:
+        note += ("\n🆕 Nowe osoby (stub w CRM): " + ", ".join(nowe)
+                 + " - zrzut profilu da pelny wpis i tier.")
+    return note
 
 
 def _screen_shots(images, channel):
@@ -1939,8 +2013,13 @@ def _screen_shots(images, channel):
         '"has_post": true/false (widac cudzy post nadajacy sie do komentarza), '
         '"has_dm": true/false (widac PRYWATNA wiadomosc/konwersacje DM), '
         '"is_profile": true/false (widac strone profilu osoby: bio, liczby obserwujacych), '
-        '"proposal": "comment|dm|intake|save" (najsensowniejsza pierwsza akcja), '
+        '"has_notifications": true/false (widac POWIADOMIENIA: ktos zaczal obserwowac, '
+        'polubil, podal dalej - a nie tresc posta), '
+        '"proposal": "comment|dm|intake|record|save" (najsensowniejsza pierwsza akcja; '
+        'record = odnotuj reakcje w bazie, wlasciwe dla powiadomien), '
         '"why": "1 zdanie uzasadnienia propozycji"}\n'
+        'Kazda osoba w "persons" moze miec tez "actions": lista z '
+        '["follow","like","repost","reply"] gdy zrzut to powiadomienia.\n'
         "Jesli czegos nie widac - false/null, nie zgaduj."})
     try:
         resp = client().messages.create(model=model, max_tokens=500, thinking={"type": "disabled"},
@@ -1987,11 +2066,39 @@ def _intent_menu_open(brand, channel, chat_id, insp_rows):
                     f"obejmuje teraz {len(merged)} zrzutow). Tapnij tam intencje - nie otwieram drugiej karty.")
             _sub_record(chat_id, f"subagent:{brand}:{channel}", "[ZRZUT] kolejna wrzutka tej samej osoby", note)
             return note
+    # INTENCJA ZE SLOW (uwaga Tomasza 22/07): jesli tuz przed wrzutka padlo polecenie
+    # ("zaktualizuj w bazie", "skomentuj", "odpisz"...), wykonaj JE, bez karty pytajacej.
+    directive = _last_user_directive(chat_id, f"subagent:{brand}:{channel}")
+    if directive:
+        try:
+            note = None
+            if directive == "record":
+                note = _record_reactions_run(brand, channel, chat_id, insp_rows, sc)
+            elif directive == "comment":
+                note = _comment_vision_run(brand, channel, chat_id, insp_rows)
+            elif directive == "dm" and sc.get("has_dm"):
+                note = _dm_reply_run(brand, channel, chat_id, insp_rows)
+            elif directive == "intake" and contact_id:
+                note = _intake_run({"contact_id": contact_id, "is_new": is_new, "screening": sc,
+                                    "brand": brand, "channel": channel, "chat_id": chat_id},
+                                   insp_rows, brand, channel, chat_id)
+            elif directive == "save":
+                note = "📌 Zapisane w schowku - bez dalszych akcji."
+            if note is not None:
+                out = (f"🎯 Wykonuje intencje z Twoich slow ({_INTENT_LABELS.get(directive, directive)})"
+                       f" - bez karty pytajacej.\n\n{note}")
+                _sub_record(chat_id, f"subagent:{brand}:{channel}",
+                            "[ZRZUT] wrzutka z intencja podana slowami", out)
+                return out
+        except Exception:
+            traceback.print_exc()  # cokolwiek padnie - wracamy do karty intencji
     opts = []
     if sc.get("has_post"):
         opts.append({"key": "comment", "label": _INTENT_LABELS["comment"]})
     if sc.get("has_dm"):
         opts.append({"key": "dm", "label": _INTENT_LABELS["dm"]})
+    if sc.get("has_notifications") or (persons and not sc.get("has_post") and not sc.get("has_dm")):
+        opts.append({"key": "record", "label": _INTENT_LABELS["record"]})
     if primary:
         opts.append({"key": "intake", "label": _INTENT_LABELS["intake"]})
     if not opts:  # wizja niepewna - komentarz to podstawowa praca konta
@@ -2121,8 +2228,9 @@ def apply_intent_menu(row, key, chat):
         return
     seq = [key]
     if key == "all":
-        seq = [k for k in ("comment", "dm", "intake")
+        seq = [k for k in ("comment", "dm", "record", "intake")
                if (k == "comment" and sc.get("has_post")) or (k == "dm" and sc.get("has_dm"))
+               or (k == "record" and sc.get("has_notifications"))
                or (k == "intake" and ctx.get("contact_id"))] or ["comment"]
     receipts = []
     for step in seq:
@@ -2133,6 +2241,9 @@ def apply_intent_menu(row, key, chat):
             elif step == "dm":
                 note = _dm_reply_run(brand, channel, chat_id, insp_rows)
                 para = "✅ Watek DM domkniety: " + (note or "zrobione")
+            elif step == "record":
+                note = _record_reactions_run(brand, channel, chat_id, insp_rows, sc)
+                para = "✅ Watek BAZA domkniety: " + (note or "zrobione")
             elif step == "intake":
                 note = _intake_run(ctx, insp_rows, brand, channel, chat_id)
                 para = "✅ Watek INTAKE domkniety: " + (note or "zrobione")
@@ -2144,9 +2255,10 @@ def apply_intent_menu(row, key, chat):
         done.append(step)
         _tg("sendMessage", {"chat_id": chat_id, "text": para[:4000]})
         receipts.append(para)
-    remaining = [k for k in ("comment", "dm", "intake")
+    remaining = [k for k in ("comment", "dm", "record", "intake")
                  if k not in done
                  and ((k == "comment" and sc.get("has_post")) or (k == "dm" and sc.get("has_dm"))
+                      or (k == "record" and sc.get("has_notifications"))
                       or (k == "intake" and ctx.get("contact_id")))]
     if key != "all" and remaining:
         opts = [{"key": k, "label": _INTENT_LABELS[k]} for k in remaining] \

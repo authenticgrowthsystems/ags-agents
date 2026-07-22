@@ -130,6 +130,17 @@ propozycje (stara sciezka); 'odpowiedz na ten DM' = `subagent_reply_dm`
   NIEWYKONANA. Dlatego komendy configu ida deterministycznie przed LLM.
 - Paragon kazdej decyzji nowa wiadomoscia; jeden atomowy krok.
 
+## Intencja ze slow + akcja 'Odnotuj w bazie' (22/07, feedback po INTAKE-UX)
+
+- Wrzutka zrzutu z intencja podana SLOWAMI tuz przed ("zaktualizuj w bazie",
+  "skomentuj", "odpisz", "poznaj", "zapisz") = WYKONANIE od razu, bez karty
+  pytajacej (_last_user_directive czyta ostatnia wypowiedz z historii watku;
+  wpisy [GUZIK]/[ZRZUT] ignorowane). Karta intencji zostaje dla wrzutek BEZ intencji.
+- Nowa intencja 'record' (Odnotuj w bazie): zrzut POWIADOMIEN (follow/like/repost)
+  -> wpis engagement_log per osoba+akcja (action_type np. x_follow, status done)
+  + kontakt w CRM (stub dla nowych); wizja klasyfikuje has_notifications i
+  actions per osoba. Zero LLM przy zapisie.
+
 ## Znane pulapki
 
 - Klasa incydentow "Zrobione"/"Zapisane" bez wywolania narzedzia (19-20/07):
