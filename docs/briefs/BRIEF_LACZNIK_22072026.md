@@ -81,10 +81,20 @@ tap-testy a-d.
 
 ## 6. Zamkniecie: raport + komponent + STATUS tu.
 
-STATUS = ZBUDOWANY (22/07, galaz build/lacznik) - czeka: wdrozenie u integratora
-(rebuild cm-agenta + patch n8n hitl-kontekst-command-22072026.cjs + strona Notion
-"Stan gry AGS" + SQL stan_gry_page_id) + tap-testy DoD a-d + wsad masterpromptow
-Tomasza (scalimy z MASTERPROMPT_CZAT_X_v1.md, podbicie wersji).
+STATUS = DONE - LIVE, TAP-TESTY DoD 4/4 PASS (22/07 przedpoludnie).
+Wdrozone w tym samym oknie (BE-LACZNIK = integrator, jeden build): 2 rebuildy
+cm-agenta, patch n8n /kontekst (PUT 200, verify true), strona Notion "Stan gry AGS"
+(id 3a5c00c9..., Connections dodane, sync_registry 'stan_gry' -> drift check),
+masterprompty X_v2 + LINKEDIn_AGS_v1 scalone ze wsadem Tomasza (pelna polszczyzna).
+Tap-testy: a) raport 5 linii + duplikaty -> liczniki i "pominiete duplikaty: 5" PASS
+(przy okazji seed pipeline: Crystalee/Chris/Jay z tierami); b) /kontekst x zgodny
+z baza PASS (plik .md >4000); c) strona Notion zapelnia sie, callout z timestampem
+PASS; d) sesja czatowa (Sonnet, konektor Notion) -> plik RAPORT_PRACY_X_..._1140.md
+-> 28 komentarzy, 11 reakcji, 1 znana osoba, 2 obserwacje, 0 duplikatow + karta
+tieru @ZaraTechie PASS.
+Iteracje z tap-testow: stan gry przez KONEKTOR Notion z ID (fetch www = pustka),
+parser toleruje linie bez '- ', kontrakt = PLIK .md RAPORT_PRACY_<kanal>_data_HHMM
+(decyzja Tomasza; wklejka/czesci = fallback).
 Mini-porzadki 0.5: DONE (commit "Mini-porzadki po INTAKE-UX"; (a) okazalo sie no-op -
 sales juz szedl przez _send_rendered od merge INTAKE-UX B4).
 Raport: docs/cm/RAPORT_do_Managera_22072026_lacznik.md. Komponent: docs/komponenty/lacznik.md.
