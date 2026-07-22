@@ -273,6 +273,17 @@ Sprzedawcy; stopka syntezy ticka radzi "przelacz /agents" gdy Sprzedawca juz akt
 pusta sekcja HAK PERSONALIZACJI przy niskim confidence (lepiej jawne "brak haka");
 material_name = poczatek wklejki gdy brak podpowiedzi typu.
 
+AUDYT RAPORTOW 22/07 (rano; dowody sonda): raporty dzienne pokazaly OPUBLIKOWANE=0
+mimo zywych postow - przyczyny: (1) posty X 182/183 wyszly PRZED wgraniem ksiegi
+per-wiersz -> backfill SQL wykonany; (2) LinkedIn #194 opublikowany RECZNIE bez
+odhaczenia (usuniety z kolejki zamiast 'wklejone') -> backfill; (3) wiersze 242/261/262
+mialy sloty z 19/07 przy itemie ze slotem 25/07 19:00 (bomba mini-burstu) -> re-slot.
+POPRAWKI reports.py NA NASTEPNE DOTKNIECIE (razem z integracja Lacznika - on pracuje
+w reports.py): stopka metryk X przeterminowana ("wpisz recznie" - kolektor dziala!),
+PROFIL X ma sumowac wyswietlenia ze snapshotow (dzienny odczyt daje tylko followers),
+KOLEJKA ma flagowac wiersze ze slotem w przeszlosci. Kolektor: ALERT_RESOURCES 200->300
+(okno 29d obejmuje powodz 13-19/07, ~205 postow; koszt bedzie spadal do polowy sierpnia).
+
 NOWE 19/07 wieczor: (0) TWARDA BRAMKA DUPLIKACJI przy generacji: embedding canonicala vs content_memory OPUBLIKOWANYCH (pgvector juz jest) -> karta z ostrzezeniem podobienstwa; incydent: material 'Orkiestracja agentow' zdublowal teze posta X z 11/07 mimo listy ostatnich publikacji w prompcie planera (LLM zignorowal; wykryla to dopiero zewnetrzna bramka jakosci przegladarkowego CM). (i) deterministyczna sciezka komend konfiguracyjnych (regex route przed
 LLM) - INCYDENT: CM odpowiedzial "Zrobione" o zmianie okna BEZ wywolania target_update (DB
 niezmienione, brak paragonu ⚙️; naprawa recznym SQL-em). Test prawdy: zmiana configu bez
