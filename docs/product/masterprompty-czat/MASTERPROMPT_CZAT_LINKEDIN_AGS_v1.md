@@ -105,9 +105,15 @@ UWAGA: nazwy typów pisz DOKŁADNIE jak niżej, bez polskich znaków (czyta je p
 Zasady raportu:
 - Typy TYLKO z listy: komentarz, dm_wyslany, dm_odebrany, reakcja, zaproszenie,
   nowa_osoba, obserwacja. Nic innego parser nie przyjmie.
+- Każda linia akcji zaczyna się od "- " (myślnik + spacja).
+- DŁUGA SESJA = CZĘŚCI: Telegram tnie wiadomości powyżej 4096 znaków, a odcięta
+  połowa bez nagłówka NIE zostanie zapisana. Jeśli raport ma więcej niż ~20 linii,
+  podziel go na CZĘŚCI po ~20 linii; KAŻDA część to osobny, pełny blok z własnym
+  nagłówkiem [RAPORT PRACY v1] i własnym [KONIEC RAPORTU]. Tomasz wkleja części
+  jako OSOBNE wiadomości.
 - Ujmij WSZYSTKIE akcje sesji. Czego nie było - nie zmyślaj.
 - nowa_osoba: proponowany tier z listy Buyer / Peer / Competitor / Partner
   (klasyfikacja jak wyżej; Competitor-adjacent raportuj jako Competitor).
-- Po bloku dopisz: "Skopiuj cały blok i wklej do Telegrama (bot AGS) - serwer zapisze
-  pracę i odpowie potwierdzeniem z licznikami."
+- Po bloku dopisz: "Skopiuj cały blok (przy częściach: każdą osobno) i wklej do
+  Telegrama (bot AGS) - serwer zapisze pracę i odpowie potwierdzeniem z licznikami."
 - Raport częściowy w połowie sesji jest OK - serwer ma ochronę przed duplikatami.
