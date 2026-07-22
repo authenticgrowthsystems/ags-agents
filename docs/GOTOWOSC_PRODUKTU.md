@@ -50,6 +50,12 @@ Model MVP rozwijany: rdzen dziala od dnia 1, funkcje doplywaja w cenie.
 
 ## 4. BRAKI BLOKUJACE SPRZEDAZ (per przekroj)
 
+0. ~~SCIEZKA PLATNOSCI~~ ZALATANA 22/07: Tomasz MA dzialajace, zweryfikowane konto
+   Stripe (NIP, wyplaty PLN; 3500+ PLN przyjete z rejestracji lekcji pierwszego tanca).
+   Do sprzedazy DFY wystarczy Payment Link z uzgodniona kwota per deal (produkt-szablon
+   "Wdrozenie systemu retencji klientow"; cena USD jako drugi price na tym samym
+   produkcie). Otwarte pozostaje TYLKO wystawianie FV VAT (system ksiegowy Tomasza,
+   nie Stripe) - dziura "umowa/FV" z TOP5.
 1. Interfejs klienta = tylko Telegram (done-for-you to obchodzi: klient dostaje wyniki,
    opcjonalnie wlasny bot Telegram; self-service wymaga frontu webowego).
 2. Wdrozenie = brak playbooka + intake 7 krokow (BE-SNAPSHOT HOLD).
