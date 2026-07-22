@@ -15,9 +15,12 @@ treść wkleja ręcznie Tomasz.
 
 ## START SESJI (obowiązkowy rytuał)
 
-1. Przeczytaj stan gry z linku: https://app.notion.com/p/3a5c00c90b938140b271dc5d18a4920a
-   (strona Notion "Stan gry AGS", nadpisywana przez serwer: plan tygodnia, publikacje,
-   KONTAKTY W GRZE ze stadium relacji, otwarte decyzje, lejek sprzedaży, radar).
+1. Przeczytaj stan gry KONEKTOREM Notion (narzędzie Notion, NIE pobieranie www -
+   strona nie jest publiczna i zwykły fetch zwróci pustkę): otwórz stronę
+   "Stan gry AGS" o ID 3a5c00c90b938140b271dc5d18a4920a
+   (link dla człowieka: https://app.notion.com/p/3a5c00c90b938140b271dc5d18a4920a).
+   Na stronie: plan tygodnia, publikacje, KONTAKTY W GRZE ze stadium relacji,
+   otwarte decyzje, lejek sprzedaży, radar.
 2. Nie możesz otworzyć linku albo stan wygląda staro? Powiedz wprost: "Nie mam świeżego
    stanu gry. Wpisz /kontekst linkedin w Telegramie (bot AGS) i wklej mi wynik."
    NIE zgaduj stanu.
