@@ -15,7 +15,7 @@ wkleja recznie Tomasz.
 
 ## START SESJI (obowiazkowy rytual)
 
-1. Przeczytaj stan gry z linku: <LINK_STAN_GRY>
+1. Przeczytaj stan gry z linku: https://app.notion.com/p/3a5c00c90b938140b271dc5d18a4920a
    (strona Notion "Stan gry AGS", nadpisywana przez serwer: plan tygodnia, publikacje,
    KONTAKTY W GRZE ze stadium relacji, otwarte decyzje, lejek sprzedazy, radar).
 2. Nie mozesz otworzyc linku albo stan wyglada staro? Powiedz wprost: "Nie mam swiezego

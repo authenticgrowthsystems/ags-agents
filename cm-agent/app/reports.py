@@ -327,14 +327,19 @@ def _kontekst_radar(limit=10):
         """SELECT content, source, created_at FROM inspirations
            WHERE status='new' AND created_at > NOW() - interval '14 days'
            ORDER BY created_at DESC LIMIT %s""", (limit,))
-    return [f"- {r['created_at'].strftime('%d/%m')} [{r.get('source') or '?'}] {(r['content'] or '')[:160]}"
-            for r in rows]
+    return [f"- {r['created_at'].strftime('%d/%m')} [{r.get('source') or '?'}] "
+            + " ".join((r['content'] or '').split())[:160] for r in rows]
 
 
 def kontekst_text(scope="all"):
     """Stan gry jako jeden tekst markdown. Sekcje wg konceptu: plan tygodnia (sloty+statusy),
     ostatnie publikacje z metrykami, kontakty w grze, otwarte decyzje, lejek, radar."""
     scope = scope if scope in _KONTEKST_SCOPES else "all"
+
+    def _flat(text, n):
+        # wycinek jednoliniowy: lamania linii w tresci rozjezdzaly bullety (tap-test b)
+        return " ".join((text or "").split())[:n]
+
     now = datetime.datetime.now(WARSAW)
     lines = [f"# STAN GRY AGS ({scope}) - {now.strftime('%d/%m/%Y %H:%M')} Europe/Warsaw", ""]
     chans = _kontekst_channels(scope)
@@ -352,7 +357,7 @@ def kontekst_text(scope="all"):
             for r in q:
                 when = (r["scheduled_for"].astimezone(WARSAW).strftime("%d/%m %H:%M")
                         if r.get("scheduled_for") else "bez slotu")
-                lines.append(f"- #{r['id']} [{r['status']}] {when} | {(r['content'] or '')[:70]}")
+                lines.append(f"- #{r['id']} [{r['status']}] {when} | {_flat(r['content'], 70)}")
             if not q:
                 lines.append("- (pusto)")
             pub = db.fetchall(
@@ -362,7 +367,7 @@ def kontekst_text(scope="all"):
             lines.append(f"## OSTATNIE PUBLIKACJE {ch.upper()} (7 dni, {len(pub)}):")
             for p in pub:
                 lines.append(f"- {p['published_at'].astimezone(WARSAW).strftime('%d/%m %H:%M')} "
-                             f"{(p['content'] or '')[:70]} | {_fmt_metrics(p.get('engagement_metrics') or {})}"
+                             f"{_flat(p['content'], 70)} | {_fmt_metrics(p.get('engagement_metrics') or {})}"
                              + (f" | {p['post_url']}" if p.get("post_url") else ""))
             if not pub:
                 lines.append("- (brak publikacji w 7 dni)")
