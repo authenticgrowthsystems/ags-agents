@@ -43,6 +43,19 @@ JEDNEMU klientowi/prospektowi. Liczba opiekunow moze rownac sie liczbie klientow
 4. **Research-przed-wspolpraca jako bramka**: nowy klient bez kompletnej kartoteki
    researchowej = opiekun NIE zaczyna sprzedazy, tylko prosi o research.
 
-STATUS: KANON ZAPISANY 22/07; zawiadomienie Managera:
-docs/cm/ZAPYTANIE_do_Managera_22072026_sales_manager.md. Budowa poziomow L2/L3
-wg priorytetow Managera (sprzedaz reczna z Agentem L1 dziala i NIE czeka na to).
+## DECYZJE MANAGERA (22/07, odpowiedz na zapytanie) - CANONICAL
+
+- **P1 kolejnosc:** DZIENNIK KAPITANSKI PIERWSZY (maly, natychmiast uzyteczny przy
+  Adamietz) -> Stripe -> wysylka DFY Adamietz -> Gmail L2 -> rozdzial rol (po 3
+  klientach). Reszta poziomow po first close.
+- **P2 tryb:** Sprzedawca laczy role dopoki klientow < 5. Progi: 5 = przelacznik
+  trybow Manager/opiekun w kodzie; 20 = osobny agent Sales Manager w /agents +
+  opiekunowie jako sub-agenty.
+- **P3:** ten plik = source of truth architektury sprzedazowej (poziomy L1-L4).
+  Do Voice Bible dojdzie sekcja "Sales voice per opiekun" (glos RELACYJNY per klient,
+  NIE jeden wspolny cross-portfolio) - bump VB przy najblizszej iteracji (backlog).
+
+STATUS: DZIENNIK KAPITANSKI ZBUDOWANY 22/07 (sales.py: /dziennik <klient> +
+narzedzie dziennik_klienta; widok na append-only zrodla, dlugi dziennik = plik .md;
+przepustka n8n nalozona). Wchodzi na serwer z najblizszym rebuildem (integracja
+Lacznika). Nastepne wg P1: Stripe (decyzja D2 researchu) -> wysylka DFY.

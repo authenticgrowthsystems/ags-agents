@@ -405,7 +405,7 @@ _SALES_TOOLS = [TOOL_PROSPECT_RESEARCH, TOOL_PROSPECT_RESULTS, TOOL_DRAFT_OUTREA
                 TOOL_PIPELINE_VIEW, TOOL_PIPELINE_ADD, TOOL_PIPELINE_MOVE, TOOL_KNOWLEDGE_SEARCH,
                 TOOL_OUTREACH_SENT]
 # wyniki pokazywane Tomaszowi doslownie (dane); offer_for wraca TYLKO do modelu (kontekst rekomendacji)
-_VERBATIM = {"pipeline_view", "prospect_results", "sales_knowledge_search"}
+_VERBATIM = {"pipeline_view", "prospect_results", "sales_knowledge_search", "dziennik_klienta"}
 _MODEL_ONLY = {"offer_for"}
 
 
@@ -761,7 +761,76 @@ def pdf_text(blob):
 
 
 # ---------------- komendy deterministyczne (PRZED LLM, wzorzec _config_route) ----------------
+# ---------------- DZIENNIK KAPITANSKI (kanon Sales Manager 22/07; decyzja Managera P1) ----------------
+def _captain_log_text(fragment):
+    """Chronologiczny, czytelny dla czlowieka zapis CALEJ pracy z klientem. Dziennik jest
+    WIDOKIEM na zrodla append-only (sales_pipeline.notes + engagement_log) - niczego nie
+    duplikuje. Cel kanonu: ratowanie kontaktu po miesiacach = przeczytanie dziennika.
+    Zwraca (tytul, tekst) albo (None, komunikat bledu)."""
+    row = _find_pipeline(fragment)
+    if not row:
+        return None, f"Nie znajduje w lejku klienta \"{(fragment or '')[:60]}\"."
+    name = row.get("prospect_name") or "(bez nazwy)"
+    head = [f"🧭 DZIENNIK KAPITANSKI: {name}"]
+    if row.get("prospect_url"):
+        head.append(f"Strona: {row['prospect_url']}")
+    nf = row.get("next_followup_at")
+    head.append(f"Etap: {row.get('stage')} | nastepny krok: "
+                + (nf.astimezone(WARSAW).strftime("%d/%m %H:%M") if nf else "BRAK (ustaw!)"))
+    if row.get("research_job_id"):
+        head.append(f"Research job: {str(row['research_job_id'])[:8]}")
+    parts = ["\n".join(head), "--- KARTOTEKA (chronologicznie) ---"]
+    notes = "\n".join(ln.strip() for ln in (row.get("notes") or "").splitlines() if ln.strip())
+    parts.append(notes or "(pusta)")
+    e_rows = db.fetchall(
+        """SELECT created_at, action_type, status, author_display,
+                  LEFT(COALESCE(NULLIF(response,''), content), 200) AS what
+           FROM engagement_log
+           WHERE content ILIKE %s OR notes ILIKE %s OR author_display ILIKE %s
+           ORDER BY created_at""",
+        (f"%{name}%", f"%{name}%", f"%{name}%"))
+    parts.append("--- INTERAKCJE (chronologicznie) ---")
+    if e_rows:
+        lines = []
+        for e in e_rows:
+            try:
+                stamp = e["created_at"].astimezone(WARSAW).strftime("%d/%m %H:%M")
+            except Exception:
+                stamp = "??"
+            lines.append(f"[{stamp}] {e['action_type']} ({e['status']}): {(e['what'] or '').strip()}")
+        parts.append("\n".join(lines))
+    else:
+        parts.append("(brak zapisanych interakcji)")
+    return name, "\n\n".join(parts)
+
+
+def _show_dziennik(chat_id, fragment):
+    title, text = _captain_log_text(fragment)
+    if not title:
+        _tg_send(chat_id, text)
+        return
+    if len(text) > 3500:
+        from . import matreview
+        matreview._tg_send_document(chat_id, f"dziennik_{re.sub(r'[^a-z0-9]+', '_', title.lower())[:40]}.md",
+                                    text, caption=f"🧭 Dziennik kapitanski: {title} (calosc w pliku)")
+    else:
+        _tg_send(chat_id, text)
+
+
+TOOL_DZIENNIK = {
+    "name": "dziennik_klienta",
+    "description": ("Pokaz DZIENNIK KAPITANSKI klienta: chronologiczny zapis calej pracy "
+                    "(kartoteka lejka + wszystkie interakcje). Uzywaj gdy Tomasz pyta o historie "
+                    "klienta, przygotowuje sie do rozmowy albo chce uratowac kontakt."),
+    "input_schema": {"type": "object", "properties": {
+        "prospect_fragment": {"type": "string", "description": "Fragment nazwy/URL klienta z lejka."}},
+        "required": ["prospect_fragment"]},
+}
+_SALES_TOOLS.append(TOOL_DZIENNIK)  # definicja ponizej listy - dolaczamy tu, nie przy deklaracji
+
+
 _PROSPECT_RE = re.compile(r"^/prospect(?:@\w+)?\s+(.+)$", re.IGNORECASE | re.DOTALL)
+_DZIENNIK_RE = re.compile(r"^/dziennik(?:@\w+)?\s*(.*)$", re.IGNORECASE | re.DOTALL)
 _PIPELINE_RE = re.compile(r"^/pipeline(?:@\w+)?\s*$", re.IGNORECASE)
 _OFERTA_RE = re.compile(r"^/oferta(?:@\w+)?\s*(.*)$", re.IGNORECASE | re.DOTALL)
 _ADDMAT_RE = re.compile(r"^/add_sales_material(?:@\w+)?\s*(.*)$", re.IGNORECASE | re.DOTALL)
@@ -791,6 +860,15 @@ def try_command(chat_id, text, active):
         return True
     if _PIPELINE_RE.match(text):
         _tg_send(chat_id, pipeline_text())
+        return True
+    m = _DZIENNIK_RE.match(text)
+    if m:
+        arg = m.group(1).strip()
+        if not arg:
+            _tg_send(chat_id, "Uzycie: /dziennik <nazwa klienta z lejka> - pelny dziennik "
+                              "kapitanski (kartoteka + wszystkie interakcje chronologicznie).")
+        else:
+            _show_dziennik(chat_id, arg)
         return True
     m = _OFERTA_RE.match(text)
     if m:
@@ -835,6 +913,9 @@ def _dispatch(name, inp, chat_id):
         return _knowledge_search_text(str(inp.get("query") or ""))
     if name == "outreach_sent":
         return _outreach_sent(inp)
+    if name == "dziennik_klienta":
+        _, text = _captain_log_text(str(inp.get("prospect_fragment") or ""))
+        return text
     return "ok"
 
 

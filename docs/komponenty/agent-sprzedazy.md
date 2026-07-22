@@ -85,6 +85,15 @@ fallback ILIKE), outreach_sent (propozycja -> 'sent', follow-up +3 dni).
 - Wartosc przed cena; cennik od gory (premium pierwsze). TWARDA ZASADA WYKONANIA
   (paragon narzedzia albo sie nie stalo).
 
+## Dziennik kapitanski (22/07, kanon Sales Manager P1)
+
+- `/dziennik <klient>` (route deterministyczny + przepustka n8n) i narzedzie
+  `dziennik_klienta`: chronologiczny WIDOK na kartoteke (sales_pipeline.notes)
+  + interakcje (engagement_log, match po nazwie prospekta). Dlugi dziennik
+  przychodzi jako plik .md. Zrodla append-only - dziennik niczego nie duplikuje.
+- Kanon i decyzje Managera (progi 5/20, kolejnosc P1):
+  docs/product/SALES_MANAGER_ARCHITEKTURA_22072026.md.
+
 ## Znane pulapki
 
 - Wiersz channels 'sprzedaz' pojawia sie w menu ⚙️ Cele (n8n) - NIE wlaczac go jako celu
