@@ -304,21 +304,45 @@ def _kontekst_channels(scope):
     return [r["channel"] for r in rows]
 
 
-def _kontekst_contacts(limit=20):
+def _kontekst_contacts(limit=20, platform=None):
+    """Kontakty w grze. KANON WHO-IS-WHO (Tomasz 22/07): kontakt = JEDNA osoba,
+    handles = mapa tozsamosci per kanal ({"x": ..., "linkedin": ..., przyszle "instagram",
+    "youtube"} - nowy kanal to nowy klucz, zero DDL). platform filtruje po kluczu mapy
+    i pokazuje handle WLASCIWY dla platformy (fix 22/07: scope linkedin nie pokazywal
+    sekcji wcale, a scope all mieszal X-handle z kontaktami LinkedIn)."""
+    cond = "COALESCE(relationship_stage,'cold') NOT IN ('cold')"
+    params = []
+    if platform == "x":
+        cond += " AND (x_handle IS NOT NULL OR handles ? 'x')"
+    elif platform:
+        cond += " AND handles ? %s"
+        params.append(platform)
     rows = db.fetchall(
-        """SELECT name, x_handle, icp_tier, relationship_stage, last_interaction_date
-           FROM contacts WHERE COALESCE(relationship_stage,'cold') NOT IN ('cold')
-           ORDER BY last_interaction_date DESC NULLS LAST, updated_at DESC LIMIT %s""", (limit,))
+        f"""SELECT name, x_handle, handles, icp_tier, relationship_stage, last_interaction_date
+            FROM contacts WHERE {cond}
+            ORDER BY last_interaction_date DESC NULLS LAST, updated_at DESC LIMIT %s""",
+        (*params, limit))
     out = []
     for r in rows:
+        hs = r.get("handles") or {}
+        if platform:
+            h = (hs.get(platform) if isinstance(hs, dict) else None) \
+                or (r.get("x_handle") if platform == "x" else None)
+            htxt = f" (@{h})" if h else ""
+        else:
+            # scope all: pokaz WSZYSTKIE tozsamosci per kanal (WHO IS WHO)
+            pairs = []
+            if isinstance(hs, dict):
+                pairs = [f"{k}:@{v}" for k, v in sorted(hs.items()) if v]
+            if not pairs and r.get("x_handle"):
+                pairs = [f"x:@{r['x_handle']}"]
+            htxt = f" ({', '.join(pairs)})" if pairs else ""
         bits = [r.get("relationship_stage") or "?"]
         if r.get("icp_tier"):
             bits.append(r["icp_tier"])
         if r.get("last_interaction_date"):
             bits.append(f"ostatnio {r['last_interaction_date'].strftime('%d/%m')}")
-        out.append(f"- {r.get('name') or '(bez nazwy)'}"
-                   + (f" (@{r['x_handle']})" if r.get("x_handle") else "")
-                   + f" [{', '.join(bits)}]")
+        out.append(f"- {r.get('name') or '(bez nazwy)'}{htxt} [{', '.join(bits)}]")
     return out
 
 
@@ -372,11 +396,11 @@ def kontekst_text(scope="all"):
             if not pub:
                 lines.append("- (brak publikacji w 7 dni)")
             lines.append("")
-    if scope != "linkedin":
-        contacts = _kontekst_contacts()
-        lines.append(f"## KONTAKTY W GRZE (stadium != cold, {len(contacts)}):")
-        lines += contacts or ["- (zero kontaktow w grze)"]
-        lines.append("")
+    contacts = _kontekst_contacts(platform=(scope if scope in ("x", "linkedin") else None))
+    _lab = f" {scope.upper()}" if scope in ("x", "linkedin") else ""
+    lines.append(f"## KONTAKTY W GRZE{_lab} (stadium != cold, {len(contacts)}):")
+    lines += contacts or ["- (zero kontaktow w grze na tej platformie)"]
+    lines.append("")
     try:
         from . import decisions
         pend = decisions.pending_text()

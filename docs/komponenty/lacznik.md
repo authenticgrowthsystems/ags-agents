@@ -147,6 +147,17 @@ Transport, nie logika: parser, /kontekst, strona Notion i format raportu BEZ zmi
   22/07: masterprompt kaze dodac linie nowa_osoba dla KAZDEGO autora akcji spoza
   kontaktow w grze - backfill nie floduje kartami bazy #71).
 
+## Poprawki 22/07 wieczor (feedback z pierwszych zywych sesji E2)
+
+- /lacznik/stan: KONTAKTY W GRZE pokazywane dla KAZDEGO scope; scope x/linkedin
+  filtruje po handles jsonb rodziny platformy i pokazuje handle wlasciwy dla kanalu;
+  scope all pokazuje WSZYSTKIE tozsamosci per kanal (kanon WHO-IS-WHO: kontakt =
+  jedna osoba, handles = mapa per kanal, nowy kanal = nowy klucz, zero DDL).
+  Wczesniej: scope linkedin nie mial sekcji wcale, a all mieszal X-handle.
+- Masterprompt LinkedIn v3.1: REGULA ZAPROSZEN (przychodzace zawsze akceptujemy,
+  bez pytania; log linia `zaproszenie`) - stala regula operacyjna Tomasza, nie
+  obserwacja radaru.
+
 ## Znane pulapki
 
 - Notion API timeoutuje na duzych stronach (#71) - stan gry to JEDNA nadpisywana strona,
