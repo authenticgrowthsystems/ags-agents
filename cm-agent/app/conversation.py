@@ -1901,6 +1901,9 @@ def _comment_vision_run(brand, channel, chat_id, insp_rows, supersede_eng_ids=No
         return "💬 Propozycje komentarzy (z analizy zrzutu, per autor):\n\n" + out
     eng_ids = []
     for author, post_excerpt, comment in blocks:
+        # 22/07: wlasne konto nie dostaje propozycji komentarza do samego siebie
+        if _is_own_person(author, author, brand, channel):
+            continue
         eng_id = _send_author_proposal(chat_id, brand, channel, author, post_excerpt, comment)
         if eng_id:
             eng_ids.append(eng_id)
@@ -1937,26 +1940,53 @@ _DIRECTIVE_PATTERNS = [
 
 
 def _last_user_directive(chat_id, agent):
-    """Ostatnia wypowiedz uzytkownika w historii watku subagenta -> klucz intencji albo None."""
+    """Swieza (<=3 min) OSTATNIA wypowiedz uzytkownika -> klucz intencji albo None.
+    v2 22/07 (incydent "czy ja to dobrze skomentowalem?" -> system wykonal STARE
+    'skomentuj' z historii): (1) zrodlo = slad cm_last_user_txt ZE STEMPLEM CZASU
+    zapisywany w handle(), nie historia bez stempli; (2) PYTANIA nie sa dyrektywami -
+    pytanie dostaje odpowiedz partnera, nie wykonanie."""
+    st = _mrv_state("cm_last_user_txt")
+    if not st or str(st.get("chat_id")) != str(chat_id):
+        return None
     try:
-        hist = _load_history(chat_id, agent=agent)
+        age = (datetime.datetime.now(WARSAW)
+               - datetime.datetime.fromisoformat(st["ts"])).total_seconds()
     except Exception:
         return None
-    last = next((h for h in reversed(hist) if isinstance(h, dict) and h.get("role") == "user"), None)
-    if not last:
+    if age > 180:
         return None
-    c = last.get("content")
-    if isinstance(c, list):
-        text = " ".join(str(b.get("text") or "") for b in c if isinstance(b, dict))
-    else:
-        text = str(c or "")
-    text = text.strip()[:300]
-    if text.startswith("[GUZIK]") or text.startswith("[ZRZUT]"):
+    text = str(st.get("text") or "").strip()
+    low = text.lower()
+    if not text or text.startswith("["):
+        return None
+    if text.endswith("?") or low.startswith(("czy ", "jak ", "co ", "dlaczego", "kiedy", "ile ")):
         return None
     for rx, key in _DIRECTIVE_PATTERNS:
         if rx.search(text):
             return key
     return None
+
+
+_OWN_MARKERS = ("tomasz nawrocki",)  # display name wlasciciela na postach/kartach
+
+
+def _is_own_person(author, handle, brand, channel):
+    """Wlasne konto NIE jest prospektem: zero stubow CRM, komentarzy do siebie i intake'u
+    (incydent 22/07: 'Nowa osoba: @tomasz_ags' + propozycja komentarza do wlasnej
+    odpowiedzi). Zrodlo prawdy: channels.config.own_handle; twarde fallbacki nizej."""
+    try:
+        row = db.fetchone("SELECT config FROM channels WHERE brand_id=%s AND channel=%s",
+                          (brand, channel))
+        own = str(((row or {}).get("config") or {}).get("own_handle") or "").lower().lstrip("@")
+    except Exception:
+        own = ""
+    h = str(handle or "").lower().lstrip("@")
+    a = str(author or "").lower()
+    if own and (h == own or own in a.replace(" ", "_")):
+        return True
+    if h in ("tomasz_ags", "tomasznawrocki"):
+        return True
+    return any(m in a for m in _OWN_MARKERS)
 
 
 def _record_reactions_run(brand, channel, chat_id, insp_rows, screening):
@@ -2042,7 +2072,8 @@ def _intent_menu_open(brand, channel, chat_id, insp_rows):
         return "Nie moge pobrac obrazu z Telegrama - sprobuj wyslac zrzut jeszcze raz."
     sc = _screen_shots(images, channel) or {}
     persons = [p for p in (sc.get("persons") or [])
-               if isinstance(p, dict) and (p.get("author") or p.get("handle"))]
+               if isinstance(p, dict) and (p.get("author") or p.get("handle"))
+               and not _is_own_person(p.get("author"), p.get("handle"), brand, channel)]
     primary = persons[0] if persons else None
     contact_id, is_new = (None, False)
     if primary:
@@ -2963,6 +2994,14 @@ def handle(update):
         if not active:
             row = db.fetchone("SELECT active_agent FROM user_agent_state WHERE chat_id=%s", (chat_id,))
             active = (row or {}).get("active_agent") or "cm"
+        # 22/07 (skrot intencji v2): swiezy slad ostatniej wypowiedzi uzytkownika ze stemplem
+        # czasu - historia watku nie ma stempli i stara komenda potrafila odpalic sie przy
+        # nowej wrzutce. Zapis dla KAZDEJ wiadomosci tekstowej, przed routingiem.
+        try:
+            _mrv_state_set("cm_last_user_txt", {"chat_id": chat_id, "text": text[:300],
+                                                "ts": datetime.datetime.now(WARSAW).isoformat()})
+        except Exception:
+            pass
         # #86 (12/07): komendy /brands i /brand_* = deterministyczne, przed jakimkolwiek LLM
         from . import brands_ui
         _br = brands_ui.try_handle(chat_id, text)

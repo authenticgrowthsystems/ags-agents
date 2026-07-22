@@ -134,8 +134,15 @@ propozycje (stara sciezka); 'odpowiedz na ten DM' = `subagent_reply_dm`
 
 - Wrzutka zrzutu z intencja podana SLOWAMI tuz przed ("zaktualizuj w bazie",
   "skomentuj", "odpisz", "poznaj", "zapisz") = WYKONANIE od razu, bez karty
-  pytajacej (_last_user_directive czyta ostatnia wypowiedz z historii watku;
-  wpisy [GUZIK]/[ZRZUT] ignorowane). Karta intencji zostaje dla wrzutek BEZ intencji.
+  pytajacej. v2 (22/07, incydent "czy ja to dobrze skomentowalem?"): zrodlo =
+  slad cm_last_user_txt ZE STEMPLEM CZASU (zapis w handle() przy kazdej
+  wiadomosci), waznosc 3 min; PYTANIA ("czy/jak/co...?" albo koncowka "?")
+  NIGDY nie sa dyrektywami - dostaja odpowiedz partnera. Karta intencji
+  zostaje dla wrzutek BEZ swiezej intencji.
+- STRAZNIK WLASNEGO KONTA (22/07): osoby z wlasnym handle/nazwiskiem
+  (channels.config.own_handle + fallbacki tomasz_ags / "Tomasz Nawrocki")
+  sa ODFILTROWANE z intake'u, propozycji komentarzy i menu intencji -
+  system nie zaklada stubow CRM wlascicielowi i nie komentuje sam siebie.
 - Nowa intencja 'record' (Odnotuj w bazie): zrzut POWIADOMIEN (follow/like/repost)
   -> wpis engagement_log per osoba+akcja (action_type np. x_follow, status done)
   + kontakt w CRM (stub dla nowych); wizja klasyfikuje has_notifications i
