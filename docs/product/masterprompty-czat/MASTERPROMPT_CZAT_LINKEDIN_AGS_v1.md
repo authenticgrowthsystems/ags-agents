@@ -118,6 +118,12 @@ Zasady raportu:
 - Typy TYLKO z listy: komentarz, dm_wyslany, dm_odebrany, reakcja, zaproszenie,
   nowa_osoba, obserwacja. Nic innego parser nie przyjmie.
 - Każda linia akcji zaczyna się od "- " (myślnik + spacja).
+- KLASYFIKACJA OBOWIĄZKOWA: każdy autor, pod którym była JAKAKOLWIEK akcja
+  (komentarz, DM, reakcja, zaproszenie), a którego NIE widzisz w sekcji KONTAKTY
+  W GRZE stanu gry, dostaje w raporcie DODATKOWO linię `nowa_osoba` z bio-skrótem
+  i proponowanym tierem (spójne z regułą "klasyfikacja KAŻDEGO profilu PRZED
+  akcją"). Sama akcja to za mało - baza ma ZNAĆ człowieka, nie tylko fakt
+  kontaktu. Serwer sam deduplikuje znane osoby i nie pyta drugi raz o nadane tiery.
 - Ujmij WSZYSTKIE akcje sesji. Czego nie było - nie zmyślaj.
 - nowa_osoba: proponowany tier z listy Buyer / Peer / Competitor / Partner
   (klasyfikacja jak wyżej; Competitor-adjacent raportuj jako Competitor).

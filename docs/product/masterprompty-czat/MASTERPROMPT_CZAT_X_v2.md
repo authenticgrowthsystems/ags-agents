@@ -177,6 +177,12 @@ Zasady raportu:
 - Typy TYLKO z listy: komentarz, dm_wyslany, dm_odebrany, reakcja, zaproszenie,
   nowa_osoba, obserwacja. Nic innego parser nie przyjmie.
 - Każda linia akcji zaczyna się od "- " (myślnik + spacja).
+- KLASYFIKACJA OBOWIĄZKOWA: każdy autor, pod którym była JAKAKOLWIEK akcja
+  (komentarz, DM, reakcja), a którego NIE widzisz w sekcji KONTAKTY W GRZE stanu
+  gry, dostaje w raporcie DODATKOWO linię `nowa_osoba` z bio-skrótem (z profilu
+  lub kontekstu screenów) i proponowanym tierem. Sama akcja to za mało - baza ma
+  ZNAĆ człowieka, nie tylko fakt kontaktu. Serwer sam deduplikuje znane osoby
+  i nie pyta drugi raz o nadane tiery.
 - Ujmij WSZYSTKIE akcje sesji, także drobne reakcje. Czego nie było - nie zmyślaj.
 - nowa_osoba: tier z listy Buyer / Peer / Competitor / Partner.
 - QT raportuj jako 'komentarz' z dopiskiem "QT" w treści.
