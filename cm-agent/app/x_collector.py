@@ -44,7 +44,10 @@ API = "https://api.x.com/2"
 TWEET_FIELDS = "created_at,referenced_tweets,public_metrics,non_public_metrics,organic_metrics"
 WINDOW_DAYS = 29            # twarde 30 dni prywatnych metryk minus 1 dzien marginesu
 PAGE_SIZE = 100
-ALERT_RESOURCES = 200       # guardrail briefu: alert logbot powyzej
+ALERT_RESOURCES = 300       # guardrail: alert logbot powyzej. 22/07: podniesiony z 200 -
+                            # okno 29 dni obejmuje jeszcze powodz postow 13-19/07 (~205 szt.),
+                            # wiec 200 halasowalo CODZIENNIE przy normalnej pracy; koszt widac
+                            # w samym alercie ($0.001/zasob), 300 nadal lapie anomalie.
 HARD_STOP_RESOURCES = 500   # twardy stop paginacji (nie powinien nigdy zagrac przy ~150 postach)
 CHECK_INTERVAL_S = 600      # jak brand_tokens_pull: nie odpytuj channels czesciej niz co 10 min
 _last_check = [0.0]
