@@ -286,6 +286,16 @@ PROFIL X ma sumowac wyswietlenia ze snapshotow (dzienny odczyt daje tylko follow
 KOLEJKA ma flagowac wiersze ze slotem w przeszlosci. Kolektor: ALERT_RESOURCES 200->300
 (okno 29d obejmuje powodz 13-19/07, ~205 postow; koszt bedzie spadal do polowy sierpnia).
 
+KANON PARYTETU SUBAGENTOW (Tomasz 22/07 ~17:50): X i LinkedIn budowane ROWNOLEGLE,
+te same funkcje - luka u jednego = obowiazek uzupelnienia. Powiadomienia i metryki
+subagenci sprawdzaja SAMI; Tomasz dostaje tylko: pilne (bez niego nie pojdzie) albo
+meldunek wykonania. KOLEJKA PO STABILIZACJI (48h, rezim 22/07): (1) LACZNIK ETAP 2 -
+webhook z czatu przez konektor/akcje (koniec kopiowania raportow; sygnal skali PADL),
+(2) kolektor WZMIANEK X w modelu Owned Reads $0.001 (sonda cennika docs-first, potem
+build) = powiadomienia X bez Tomasza, (3) audyt parytetu jako staly punkt raportu
+tygodniowego. LinkedIn powiadomienia/metryki auto = mur zewnetrzny (brak API + App 2
+CMA) - jedyna droga to Etap 2 + CMA.
+
 NOWE 19/07 wieczor: (0) TWARDA BRAMKA DUPLIKACJI przy generacji: embedding canonicala vs content_memory OPUBLIKOWANYCH (pgvector juz jest) -> karta z ostrzezeniem podobienstwa; incydent: material 'Orkiestracja agentow' zdublowal teze posta X z 11/07 mimo listy ostatnich publikacji w prompcie planera (LLM zignorowal; wykryla to dopiero zewnetrzna bramka jakosci przegladarkowego CM). (i) deterministyczna sciezka komend konfiguracyjnych (regex route przed
 LLM) - INCYDENT: CM odpowiedzial "Zrobione" o zmianie okna BEZ wywolania target_update (DB
 niezmienione, brak paragonu ⚙️; naprawa recznym SQL-em). Test prawdy: zmiana configu bez
