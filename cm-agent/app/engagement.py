@@ -307,7 +307,12 @@ def _report_insert(action_type, channel, agent, content, response, notes, contac
 
 def _report_tier_card(contact_id, disp, bio, tier_raw, brand, channel):
     """JEDNA karta crm_tier per osoba/24h (mechanizm z INTAKE-UX B3, wzorzec
-    crm.process_profile_photo). Zwraca notke do potwierdzenia."""
+    crm.process_profile_photo). Zwraca notke do potwierdzenia.
+    22/07 (obowiazek klasyfikacji): kontakt z JUZ nadanym tierem nie dostaje karty -
+    backfill klasyfikacyjny nie moze flodowac kartami bazy #71 ani re-pytac o Buyerow."""
+    cur = db.fetchone("SELECT icp_tier FROM contacts WHERE id=%s::uuid", (str(contact_id),))
+    if (cur or {}).get("icp_tier"):
+        return f"{disp}: tier juz nadany ({cur['icp_tier']})"
     dup = db.fetchone(
         """SELECT id, status, answer FROM agent_decisions
            WHERE decision_type='crm_tier' AND context->>'contact_id'=%s

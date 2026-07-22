@@ -99,7 +99,10 @@ STAN GRY: notion_worker._loop -> stan_gry.tick() (po kazdym drainie, <=60 s):
 - REGULA PRAWDY: niezrozumiane linie raportu wracaja jawnie w potwierdzeniu; brak
   swiezego stanu gry = czat prosi o /kontekst zamiast zgadywac.
 - Slownictwo: w tekstach do Tomasza "potwierdzenie", nie "paragon" (feedback 22/07).
-- Decyzje guzikami: tier nowej osoby przez decisions.ask, 1 karta/24h.
+- Decyzje guzikami: tier nowej osoby przez decisions.ask, 1 karta/24h; kontakt
+  z JUZ nadanym icp_tier nie dostaje karty (ochrona przy obowiazku klasyfikacji
+  22/07: masterprompt kaze dodac linie nowa_osoba dla KAZDEGO autora akcji spoza
+  kontaktow w grze - backfill nie floduje kartami bazy #71).
 
 ## Znane pulapki
 
