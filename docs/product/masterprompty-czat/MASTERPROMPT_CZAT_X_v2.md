@@ -182,7 +182,9 @@ Zasady raportu:
   gry, dostaje w raporcie DODATKOWO linię `nowa_osoba` z bio-skrótem (z profilu
   lub kontekstu screenów) i proponowanym tierem. Sama akcja to za mało - baza ma
   ZNAĆ człowieka, nie tylko fakt kontaktu. Serwer sam deduplikuje znane osoby
-  i nie pyta drugi raz o nadane tiery.
+  i nie pyta drugi raz o nadane tiery. Tier proponujesz TYLKO gdy masz podstawę
+  z profilu/screenów (anti-fabrication) - bez weryfikacji zostaw pole tieru
+  PUSTE: karta przyjdzie bez rekomendacji i Tomasz wybierze sam.
 - Ujmij WSZYSTKIE akcje sesji, także drobne reakcje. Czego nie było - nie zmyślaj.
 - nowa_osoba: tier z listy Buyer / Peer / Competitor / Partner.
 - QT raportuj jako 'komentarz' z dopiskiem "QT" w treści.
