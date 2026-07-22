@@ -315,18 +315,35 @@ def _chan_label(brand_id, platform):
 
 def _dispatch_ack(item, handoff):
     """Prawdziwy meldunek W MOMENCIE delegacji: 'wyslane/zaplanowane/czeka recznie' - NIE 'opublikowal'.
-    Sukces potwierdza dopiero reconcile_publications po callbacku."""
+    Sukces potwierdza dopiero reconcile_publications po callbacku.
+    22/07 (uwaga Tomasza: 5 identycznych linijek przy serii wygladalo jak blad systemu):
+    wiersze grupowane per kanal, z liczba czesci i KONKRETNYMI slotami."""
     if not handoff:
         return f"⚠️ Nic do wyslania: {item['master_theme'][:80]} (brak wariantow w kolejce - sprawdz kanaly celu)."
     lines = [f"📤 CM wyslal do publikacji: {item['master_theme'][:90]}"]
+    groups = {}
+    order = []
     for h in handoff:
-        lab = _chan_label(item["brand_id"], h["platform"])
-        if h["mode"] == config.PUBLISH_POST_QUEUE:
-            lines.append(f"   • {lab}: zaplanowane (Scheduler opublikuje w slocie - potwierdze PO fakcie)")
-        elif h["mode"] == config.PUBLISH_WEBHOOK:
-            lines.append(f"   • {lab}: zlecone subagentowi (potwierdze po jego callbacku)")
+        k = (h["platform"], h["mode"])
+        if k not in groups:
+            groups[k] = []
+            order.append(k)
+        groups[k].append(h.get("queue_id"))
+    for (plat, mode) in order:
+        qids = [q for q in groups[(plat, mode)] if q]
+        lab = _chan_label(item["brand_id"], plat)
+        czesci = "" if len(qids) <= 1 else f" - SERIA {len(qids)} czesci"
+        if mode == config.PUBLISH_POST_QUEUE:
+            slots = db.fetchall(
+                """SELECT to_char(scheduled_for AT TIME ZONE 'Europe/Warsaw', 'DD/MM HH24:MI') AS s
+                   FROM post_queue WHERE id = ANY(%s) ORDER BY scheduled_for""", (qids,)) if qids else []
+            stxt = ", ".join(r["s"] for r in slots if r.get("s"))
+            lines.append(f"   • {lab}{czesci}: zaplanowane, Scheduler opublikuje w slotach: "
+                         f"{stxt[:300] or 'wg harmonogramu'} (potwierdze kazda publikacje)")
+        elif mode == config.PUBLISH_WEBHOOK:
+            lines.append(f"   • {lab}{czesci}: zlecone subagentowi (potwierdze po jego callbacku)")
         else:
-            lines.append(f"   • {lab}: gotowiec czeka na Twoje reczne wklejenie")
+            lines.append(f"   • {lab}{czesci}: gotowiec czeka na Twoje reczne wklejenie")
     return "\n".join(lines)
 
 
