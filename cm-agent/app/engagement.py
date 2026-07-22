@@ -278,17 +278,21 @@ def parse_work_report(text):
     entries, bad = [], []
     for raw in body.split("\n"):
         line = raw.strip()
-        if not line.startswith(("-", "•", "*")):
-            continue
-        line = line.lstrip("-•*").strip()
+        # tap-test d (22/07): agent czatowy potrafi wydrukowac linie BEZ '- ' na poczatku -
+        # myslnik jest mile widziany, ale decyduje pierwszy token (typ) przed '|'
+        dashed = line.startswith(("-", "•", "*"))
+        if dashed:
+            line = line.lstrip("-•*").strip()
         if not line:
             continue
         parts = [p.strip() for p in line.split("|")]
         typ = _LINE_TYPES.get(re.sub(r"\s+", " ", parts[0].lower()))
-        if not typ or (typ != "obserwacja" and len(parts) < 2):
+        if typ and (typ == "obserwacja" or len(parts) >= 2):
+            entries.append((typ, parts[1:], line))
+        elif dashed or "|" in line:
+            # linia, ktora MIALA byc akcja (myslnik albo separator pol) - jawnie do "niezrozumianych";
+            # zwykla proza bez '|' jest ignorowana po cichu (np. zdanie zamykajace agenta)
             bad.append(line)
-            continue
-        entries.append((typ, parts[1:], line))
     return {"channel": channel, "date": rdate, "entries": entries, "bad": bad}
 
 
