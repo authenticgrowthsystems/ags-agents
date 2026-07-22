@@ -66,11 +66,15 @@ Przypomnij jutro), nigdy auto-decyzja.
 - Adaptery n8n: Subagent X Publisher `G3nEIt5lIkiKemiK`, Subagent LinkedIn
   Publisher `Uv9TvUMI8MRSqCLz` (generyczny per cel: secret_prefix), Scheduler
   `x1jJEbcWAe3FnpCa` (co minute, OAuth1). Klucze WYLACZNIE z app_secrets.
-- MEDIA X (naprawa 21/07, patch scheduler-media-ledger-21072026.cjs): upload
-  = POST /2/media/upload z WSZYSTKIMI parametrami w multipart/form-data BODY
-  (kontrakt docs.x.com; parametry w query = INIT 400). STATUS = GET z query.
-  Naprawione w OBU workflow (wspolny kod). Do kolejki ida tylko wpisy media
-  z file_id (`channels._pub_media`) - propozycje wizualne zostaja na materiale.
+- MEDIA X (v3, 22/07, patch scheduler-media-v3-22072026.cjs; wczesniejsze proby:
+  query-params = 400 "not one of []", multipart na /2/media/upload = 400 "Missing
+  media field" bo to PROSTY upload): chunked idzie POD-SCIEZKAMI -
+  INIT POST /2/media/upload/initialize (JSON: media_type,total_bytes,media_category),
+  APPEND POST /2/media/upload/{id}/append (multipart: media+segment_index),
+  FINALIZE POST /2/media/upload/{id}/finalize (bez body), STATUS = GET z query.
+  Zweryfikowane per-endpoint w docs.x.com 22/07. Oba workflow (wspolny kod).
+  Do kolejki ida tylko wpisy media z file_id (`channels._pub_media`).
+  DOWOD LIVE: oczekiwany przy publikacji 185 (22/07 17:55).
 - KSIEGA (naprawa 21/07): Mark Published Schedulera per-wiersz robi UPDATE pq
   + INSERT published_posts + agent_messages RESPONSE + domyka content_items,
   gdy nie ma juz wierszy w locie. Bez tego CM/raporty klamaly "nic nie wyszlo"
