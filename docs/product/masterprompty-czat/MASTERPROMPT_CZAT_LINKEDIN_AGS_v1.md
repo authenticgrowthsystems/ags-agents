@@ -124,6 +124,9 @@ Zasady raportu:
   i proponowanym tierem (spójne z regułą "klasyfikacja KAŻDEGO profilu PRZED
   akcją"). Sama akcja to za mało - baza ma ZNAĆ człowieka, nie tylko fakt
   kontaktu. Serwer sam deduplikuje znane osoby i nie pyta drugi raz o nadane tiery.
+  Tier proponujesz TYLKO gdy masz podstawę z profilu/screenów (anti-fabrication) -
+  bez weryfikacji zostaw pole tieru PUSTE: karta przyjdzie bez rekomendacji
+  i Tomasz wybierze sam.
 - Ujmij WSZYSTKIE akcje sesji. Czego nie było - nie zmyślaj.
 - nowa_osoba: proponowany tier z listy Buyer / Peer / Competitor / Partner
   (klasyfikacja jak wyżej; Competitor-adjacent raportuj jako Competitor).
