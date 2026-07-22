@@ -20,6 +20,7 @@ w n8n - mozgi mieszkaja w kontenerach Python (cm-agent, ags-researcher).
 | Drift check cron | - | 03:00 (sync Notion) |
 | Backup | - | 03:30 |
 | Researcher - * (5 adapterow) | - | web_search / firecrawl / gemini_dr / openai_dr / manus |
+| AGS Lacznik Chat Tools | `yxJUJmZpSUe0tw9K` | MCP serwer narzedzi czatu (stan_gry, wyslij_raport_pracy) + webhooki wariantu B (chat-raport, stan-gry); szczegoly lacznik.md |
 
 ## HITL: struktura routingu
 

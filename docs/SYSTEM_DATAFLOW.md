@@ -61,7 +61,9 @@ NAUKA: agent_learning_log + decyzje guzikami (semi-auto
 
 Rownolegle: Researcher na zadanie (POST /request) + sobotni podklad
 "CM czyta swiat" pod reczny niedzielny artykul [researcher]; sync mirror
-DB->Notion [sync-notion]; caly transport i zasady zmian n8n [n8n-transport].
+DB->Notion [sync-notion]; caly transport i zasady zmian n8n [n8n-transport];
+Lacznik = praca reczna Tomasza w czacie na abonamencie <-> baza (RAPORT PRACY,
+stan gry; Etap 2 = narzedzia MCP w n8n, czat czyta i raportuje SAM) [lacznik].
 
 ## 3. Indeks komponentow (CZYTAJ ZAMIAST KODU)
 
@@ -80,6 +82,7 @@ DB->Notion [sync-notion]; caly transport i zasady zmian n8n [n8n-transport].
 | Sync Notion | [komponenty/sync-notion.md](komponenty/sync-notion.md) | mirror DB->Notion, sync_registry/page_map, drift check |
 | n8n transport | [komponenty/n8n-transport.md](komponenty/n8n-transport.md) | HITL galezie, publishery, crony, zasady PUT, patchery |
 | Agent Sprzedazy | [komponenty/agent-sprzedazy.md](komponenty/agent-sprzedazy.md) | /prospect research critical, outreach gotowce HITL, lejek sales_pipeline, sales_knowledge z embeddingami |
+| Lacznik | [komponenty/lacznik.md](komponenty/lacznik.md) | RAPORT PRACY (parser bez LLM), /kontekst, strona Notion Stan gry, masterprompty czatowe; Etap 2: narzedzia MCP stan_gry + wyslij_raport_pracy (workflow yxJUJmZpSUe0tw9K, endpointy /lacznik/*) |
 
 Schemat tabel: `docs/db/SCHEMA_ags_crd.md` (tabele bazowe + kazda zmiana DDL)
 + masterprompt sekcja 2b (slowniczek najwazniejszych tabel). Migracje:

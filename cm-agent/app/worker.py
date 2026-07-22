@@ -165,6 +165,54 @@ def message(body: dict, x_researcher_secret: str = Header(default="")):
     return {"accepted": True}
 
 
+# ------------- Lacznik Etap 2: narzedzia czatu na abonamencie (BRIEF_LACZNIK_ETAP2_22072026) -------------
+def _lacznik_guard(secret):
+    """Sekret lacznik_e2_secret czytany z app_secrets (SSOT sekretow; rotacja = UPDATE w DB,
+    bez rebuildu). Brak klucza w DB = endpointy zamkniete (brief pkt 2: NIE wystawiac bez sekretu)."""
+    row = db.fetchone("SELECT value FROM app_secrets WHERE key='lacznik_e2_secret'")
+    expected = ((row or {}).get("value") or "").strip()
+    if not expected or (secret or "").strip() != expected:
+        raise HTTPException(status_code=401, detail="unauthorized")
+
+
+@api.get("/lacznik/stan")
+def lacznik_stan(scope: str = "all", x_lacznik_secret: str = Header(default=""), secret: str = ""):
+    """Narzedzie stan_gry dla czatu na abonamencie (MCP w n8n / webhook wariantu B): stan gry
+    jako markdown, synchronicznie (zero LLM - czysty reports.kontekst_text). Zastepuje czytanie
+    Notion w rytuale startowym; strona Notion zostaje lustrem i fallbackiem. Sekret w naglowku
+    X-Lacznik-Secret albo w query ?secret= (webhook wariantu B)."""
+    _lacznik_guard(x_lacznik_secret or secret)
+    try:
+        return {"ok": True, "stan": reports.kontekst_text((scope or "all").strip().lower())}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:200]}")
+
+
+@api.post("/lacznik/raport")
+def lacznik_raport(body: dict, x_lacznik_secret: str = Header(default=""), secret: str = ""):
+    """Narzedzie wyslij_raport_pracy: blok [RAPORT PRACY v1] prosto z czatu -> ISTNIEJACY parser
+    (engagement.apply_work_report, idempotencja sync:<hash>) -> potwierdzenie z licznikami wraca
+    W ODPOWIEDZI HTTP (czat je streszcza Tomaszowi), a KOPIA idzie do Telegrama - ten sam slad,
+    co przy recznej wklejce. Synchronicznie: parser jest deterministyczny i szybki (zero LLM)."""
+    _lacznik_guard(x_lacznik_secret or secret)
+    raport = str(body.get("raport") or body.get("raport_md") or body.get("text") or "").strip()
+    if "[raport pracy" not in raport.lower():
+        raise HTTPException(status_code=400,
+                            detail="raport musi zawierac blok [RAPORT PRACY v1] (naglowek + linie akcji)")
+    kanal = str(body.get("kanal") or "").strip().lower()
+    active = f"subagent:AGS:{kanal}" if kanal else None
+    chat = hitl._admin_chat_id()
+    potwierdzenie = engagement.apply_work_report(chat, raport, active_agent=active)
+    if chat:
+        try:
+            conversation._reply(chat, "🔗 Lacznik (raport z czatu):\n" + potwierdzenie)
+        except Exception:
+            traceback.print_exc()
+    wake.set()
+    return {"ok": True, "potwierdzenie": potwierdzenie}
+
+
 def _brand_tokens_tick():
     """#84: lazy import (modul sync/ ma zaleznosci ladowane przy starcie notion_workera)."""
     from .sync import brand_tokens_pull

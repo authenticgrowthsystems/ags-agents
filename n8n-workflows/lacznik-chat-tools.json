@@ -1,0 +1,256 @@
+{
+  "name": "AGS Lacznik Chat Tools",
+  "nodes": [
+    {
+      "name": "MCP Lacznik",
+      "type": "@n8n/n8n-nodes-langchain.mcpTrigger",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "46df4cbd-aa86-48ce-88ca-ec639b1794ea",
+      "parameters": {
+        "path": "lacznik-<LACZNIK_E2_SECRET>"
+      }
+    },
+    {
+      "name": "stan_gry",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        -180,
+        260
+      ],
+      "parameters": {
+        "toolDescription": "Pobiera aktualny stan gry AGS z bazy serwera (plan tygodnia, kolejka, publikacje z metrykami, kontakty w grze, otwarte decyzje, lejek sprzedaży, radar). Wołaj NA STARCIE sesji pracy. Parametr scope: x, linkedin, sprzedaz albo all.",
+        "method": "GET",
+        "url": "http://cm-agent:8089/lacznik/stan",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "scope",
+              "value": "={{ $fromAI('scope', 'Zakres stanu gry: x, linkedin, sprzedaz albo all', 'string') }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Lacznik-Secret",
+              "value": "<LACZNIK_E2_SECRET>"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "wyslij_raport_pracy",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        180,
+        260
+      ],
+      "parameters": {
+        "toolDescription": "Wysyła blok [RAPORT PRACY v1] do systemu AGS (parser zapisuje komentarze, DM-y, reakcje, zaproszenia, nowe osoby i obserwacje; duplikaty pomija). Wołaj NA KONIEC sesji pracy z pełnym blokiem od [RAPORT PRACY v1] do [KONIEC RAPORTU]. Zwraca potwierdzenie z licznikami - streść je użytkownikowi.",
+        "method": "POST",
+        "url": "http://cm-agent:8089/lacznik/raport",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Lacznik-Secret",
+              "value": "<LACZNIK_E2_SECRET>"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ kanal: $fromAI('kanal', 'Kanal pracy: x, linkedin albo sprzedaz', 'string'), raport: $fromAI('raport_md', 'Pelny blok raportu od [RAPORT PRACY v1] do [KONIEC RAPORTU], markdown', 'string') }) }}",
+        "options": {}
+      }
+    },
+    {
+      "name": "Webhook Chat Raport",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        520
+      ],
+      "webhookId": "aee2e65b-c83d-4c6b-8eee-69dce87566d9",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chat-raport",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "name": "Forward Raport",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        520
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=http://cm-agent:8089/lacznik/raport?secret={{ encodeURIComponent($json.body.secret || '') }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ kanal: $json.body.kanal || '', raport: $json.body.raport || $json.body.raport_md || '' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Respond Raport",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        520
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      }
+    },
+    {
+      "name": "Webhook Stan Gry",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        720
+      ],
+      "webhookId": "27f483d7-3e46-41ac-a698-f238a3634faf",
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "stan-gry",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "name": "Forward Stan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        720
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=http://cm-agent:8089/lacznik/stan?scope={{ encodeURIComponent($json.query.scope || 'all') }}&secret={{ encodeURIComponent($json.query.secret || '') }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Respond Stan",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        720
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "stan_gry": {
+      "ai_tool": [
+        [
+          {
+            "node": "MCP Lacznik",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "wyslij_raport_pracy": {
+      "ai_tool": [
+        [
+          {
+            "node": "MCP Lacznik",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Chat Raport": {
+      "main": [
+        [
+          {
+            "node": "Forward Raport",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Forward Raport": {
+      "main": [
+        [
+          {
+            "node": "Respond Raport",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Stan Gry": {
+      "main": [
+        [
+          {
+            "node": "Forward Stan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Forward Stan": {
+      "main": [
+        [
+          {
+            "node": "Respond Stan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all",
+    "saveManualExecutions": false,
+    "timezone": "Europe/Warsaw",
+    "executionOrder": "v1"
+  }
+}

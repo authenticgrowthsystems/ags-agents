@@ -1,0 +1,75 @@
+# Wariant B Lacznika (Etap 2): schemat Action dla ChatGPT Custom GPT.
+# Import: konfiguracja GPT -> Actions -> paste schema. Sekret lacznik_e2_secret
+# wpisujesz w Instructions GPT-a (Action przekazuje go w body/query wg schematu).
+openapi: 3.1.0
+info:
+  title: AGS Lacznik (wariant B)
+  description: >-
+    Most miedzy czatem na abonamencie a serwerem AGS: wysylka bloku
+    [RAPORT PRACY v1] i odczyt stanu gry. Autoryzacja sekretem w polu
+    secret (wartosc z app_secrets, klucz lacznik_e2_secret).
+  version: 1.0.0
+servers:
+  - url: https://ivy147-20147.mikrus.cloud
+paths:
+  /webhook/chat-raport:
+    post:
+      operationId: wyslijRaportPracy
+      summary: Wysyla blok RAPORT PRACY v1 do systemu AGS (parser, idempotencja)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [secret, raport]
+              properties:
+                secret:
+                  type: string
+                  description: Sekret lacznik_e2_secret
+                kanal:
+                  type: string
+                  enum: [x, linkedin, sprzedaz]
+                  description: Kanal pracy (fallback, gdy naglowek raportu bez kanalu)
+                raport:
+                  type: string
+                  description: Pelny blok od [RAPORT PRACY v1] do [KONIEC RAPORTU]
+      responses:
+        "200":
+          description: Potwierdzenie z licznikami (albo blad z detail)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  potwierdzenie: { type: string }
+                  detail: { type: string }
+  /webhook/stan-gry:
+    get:
+      operationId: stanGry
+      summary: Pobiera aktualny stan gry AGS z bazy serwera
+      parameters:
+        - name: secret
+          in: query
+          required: true
+          schema: { type: string }
+          description: Sekret lacznik_e2_secret
+        - name: scope
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [x, linkedin, sprzedaz, all]
+            default: all
+      responses:
+        "200":
+          description: Stan gry jako markdown (albo blad z detail)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  stan: { type: string }
+                  detail: { type: string }
