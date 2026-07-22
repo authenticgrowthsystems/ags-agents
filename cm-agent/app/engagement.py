@@ -240,7 +240,10 @@ _LINE_TYPES = {"komentarz": "komentarz", "dm_wyslany": "dm_wyslany", "dm wyslany
                "nowa_osoba": "nowa_osoba", "nowa osoba": "nowa_osoba", "obserwacja": "obserwacja",
                # rozszerzenie 22/07 (wsad masterpromptow LinkedIn): zaproszenia do sieci
                "zaproszenie": "zaproszenie", "zaproszenie_wyslane": "zaproszenie",
-               "zaproszenie wyslane": "zaproszenie"}
+               "zaproszenie wyslane": "zaproszenie",
+               # aliasy z polskimi znakami - agent czatowy potrafi je napisac mimo instrukcji
+               "dm_wysłany": "dm_wyslany", "dm wysłany": "dm_wyslany",
+               "zaproszenie_wysłane": "zaproszenie", "zaproszenie wysłane": "zaproszenie"}
 _VALID_TIERS = {"buyer": "Buyer", "peer": "Peer", "competitor": "Competitor", "partner": "Partner"}
 
 
