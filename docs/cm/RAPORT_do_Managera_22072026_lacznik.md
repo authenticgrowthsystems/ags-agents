@@ -5,7 +5,21 @@ origin/claude/silly-blackwell-dfc32d 01bbeec - zawiera zamkniecie INTAKE-UX 94c0
 Brief: docs/briefs/BRIEF_LACZNIK_22072026.md. Koncept (zrodlo wymagan):
 docs/product/LACZNIK_SYNCHRONIZACYJNY_21072026.md (ZATWIERDZONY 21/07).
 
-## STAN: ZBUDOWANY - czeka wdrozenie (integrator) + tap-testy DoD
+## STAN: DONE - LIVE, TAP-TESTY DoD 4/4 PASS (22/07 przedpoludnie)
+
+Wdrozone w tym samym oknie (jeden build = BE pelnil role integratora): 2 rebuildy
+cm-agenta (/health ok), patch n8n /kontekst (verify true), strona Notion "Stan gry
+AGS" (Manager zalozyl, Tomasz dodal Connections, sync_registry 'stan_gry' pod drift
+checkiem), masterprompty scalone ze wsadem i przepisane pelna polszczyzna.
+Tap-testy: a) liczniki + "pominiete duplikaty: 5" + seed pipeline LinkedIn
+(Crystalee/Chris/Jay); b) /kontekst x zgodny z baza (plik .md); c) strona zapelnia
+sie z calloutem; d) sesja czatowa Sonnet z konektorem Notion -> plik
+RAPORT_PRACY_X_2026-07-22_1140.md -> 28 komentarzy, 11 reakcji, 1 znana osoba,
+2 obserwacje, 0 duplikatow, karta tieru @ZaraTechie.
+Iteracje z tapow: rytual startu przez KONEKTOR Notion z ID strony (fetch www zwraca
+pustke na stronie niepublicznej); parser toleruje linie bez '- '; KONTRAKT
+DOSTARCZENIA = plik .md RAPORT_PRACY_<kanal>_RRRR-MM-DD_HHMM.md (decyzja Tomasza,
+rozwiazuje ciecie 4096 i daje slad audytowy; wklejka/czesci = fallback).
 
 ## Commity
 
