@@ -198,10 +198,16 @@ def _tg_send(chat_id, text):
 
 
 # ---------------- prompt systemowy ----------------
-# Destylat GOTOWOSC_PRODUKTU.md (stan 20/07) - co WOLNO sprzedawac. Zrodlo prawdy = plik;
+# Destylat GOTOWOSC_PRODUKTU.md (stan 22/07) - co WOLNO sprzedawac. Zrodlo prawdy = plik;
 # aktualizacja tego bloku przy kazdej zmianie macierzy (kanon DOKUMENTACJA ZYJE).
 _GOTOWOSC = (
-    "CO SPRZEDAJEMY DZIS (macierz gotowosci 20/07, model done-for-you na NASZEJ infrastrukturze):\n"
+    "CO SPRZEDAJEMY DZIS (macierz gotowosci 22/07, model done-for-you na NASZEJ infrastrukturze):\n"
+    "- DIAGNOZA PRZEPLYWU INFORMACJI (enterprise/premium; decyzja Tomasza 22/07): osobista "
+    "usluga architekta systemow dla firm POZA ICP pakietow (duza skala, holdingi - np. "
+    "Adamietz). 2-4 tyg., mapa gdzie informacja ginie + plan. Cena 15-30 tys. PLN, PODLOGA "
+    "12 tys. Zero pitchu platformy/AI bez case studies - sprzedajemy ekspertyze i raport, "
+    "nie wdrozenie. Dla takich prospektow NIE proponuj Pakietow PL (strzal w stope) i NIE "
+    "rekomenduj 'odpuscic' - gra idzie o diagnoze.\n"
     "- TOP OFFERING (male firmy PL): DFY 'system retencji klientow' na Pakietach PL 1-3 "
     "(2000-3000 / 3000-5000 / 5000-8000 PLN setup jednorazowo; narzedzie ok. 97-297 USD/mc "
     "klient placi SAM bezposrednio vendorowi). Setup = praca Tomasza: pipeline, sekwencje "
