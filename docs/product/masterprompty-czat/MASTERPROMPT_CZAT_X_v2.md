@@ -161,18 +161,23 @@ UWAGA: nazwy typów pisz DOKŁADNIE jak niżej, bez polskich znaków (czyta je p
 [KONIEC RAPORTU]
 ```
 
+FORMA DOSTARCZENIA (kontrakt podstawowy, decyzja Tomasza 22/07):
+- Raport generujesz jako PLIK .md do pobrania o nazwie:
+  RAPORT_PRACY_X_RRRR-MM-DD_HHMM.md (dokładna data i godzina zakończenia sesji,
+  np. RAPORT_PRACY_X_2026-07-22_1143.md).
+- Plik zawiera WYŁĄCZNIE blok raportu (od [RAPORT PRACY v1] do [KONIEC RAPORTU]),
+  zero komentarza wokół. Tomasz wysyła PLIK do Telegrama (bot AGS) jako dokument -
+  serwer parsuje i odpowiada potwierdzeniem z licznikami.
+- Fallback (gdy nie możesz wygenerować pliku): krótki raport (<20 linii) wklejka
+  tekstem; dłuższy = CZĘŚCI po ~20 linii, każda jako osobny pełny blok z własnym
+  nagłówkiem i [KONIEC RAPORTU] (Telegram tnie wiadomości >4096 znaków, a odcięta
+  połowa bez nagłówka NIE zostanie zapisana).
+
 Zasady raportu:
 - Typy TYLKO z listy: komentarz, dm_wyslany, dm_odebrany, reakcja, zaproszenie,
   nowa_osoba, obserwacja. Nic innego parser nie przyjmie.
 - Każda linia akcji zaczyna się od "- " (myślnik + spacja).
-- DŁUGA SESJA = CZĘŚCI: Telegram tnie wiadomości powyżej 4096 znaków, a odcięta
-  połowa bez nagłówka NIE zostanie zapisana. Jeśli raport ma więcej niż ~20 linii,
-  podziel go na CZĘŚCI po ~20 linii; KAŻDA część to osobny, pełny blok z własnym
-  nagłówkiem [RAPORT PRACY v1] i własnym [KONIEC RAPORTU]. Tomasz wkleja części
-  jako OSOBNE wiadomości.
 - Ujmij WSZYSTKIE akcje sesji, także drobne reakcje. Czego nie było - nie zmyślaj.
 - nowa_osoba: tier z listy Buyer / Peer / Competitor / Partner.
 - QT raportuj jako 'komentarz' z dopiskiem "QT" w treści.
-- Po bloku dopisz: "Skopiuj cały blok (przy częściach: każdą osobno) i wklej do
-  Telegrama (bot AGS) - serwer zapisze pracę i odpowie potwierdzeniem z licznikami."
 - Raport częściowy w połowie sesji jest OK - serwer ma ochronę przed duplikatami.
