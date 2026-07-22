@@ -27,10 +27,14 @@ Przypomnij jutro), nigdy auto-decyzja.
   subagenta n8n -> publikacja NATYCHMIAST -> callback), `post_queue` (status
   'scheduled', bierze Scheduler n8n co minute WG SLOTU wiersza), `draft`
   (status 'held', recznie).
-- STAN PO INCYDENCIE 20/07: AGS/x = `post_queue` (Scheduler pilnuje slotow
-  i wgrywa media), AGS/linkedin = `draft` (gotowce reczne; Scheduler nie
-  publikuje LinkedIn). Tryb `webhook` NIE respektuje slotow post_queue -
-  uzywac tylko dla kanalow, gdzie natychmiastowa publikacja jest zamierzona.
+- STAN 22/07 (decyzja Tomasza "zatwierdzone ma isc samo"): AGS/x ORAZ
+  AGS/linkedin = `post_queue` - OBA kanaly publikuje Scheduler per slot wiersza.
+  Scheduler ma ROUTER platformy (Route Platform, if 2.2): x -> Publish To X,
+  inne -> Publish To LinkedIn (Scheduler) (kod 1:1 z Subagent LinkedIn Publisher
+  v2: registerUpload feedshare-image -> PUT -> ugcPosts; obrazy dzialaja) ->
+  Mark Published LI (ta sama ksiega per-wiersz) -> LI Confirm. Patch:
+  scheduler-linkedin-branch-22072026.cjs. Tryb `draft` (gotowce + 'wklejone <id>')
+  zostaje dostepny per kanal; `webhook` NIE respektuje slotow - nie uzywac.
 - Callback publikacji: post_queue 'published' + INSERT published_posts +
   agent_messages RESPONSE + potwierdzenie na kanal logowy (bot #2).
 
