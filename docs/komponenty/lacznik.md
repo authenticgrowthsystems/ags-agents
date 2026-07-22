@@ -64,6 +64,12 @@ STAN GRY: notion_worker._loop -> stan_gry.tick() (po kazdym drainie, <=60 s):
 - `brand_config` (AGS): `stan_gry_page_id` (id strony Notion - zaklada Tomasz),
   `stan_gry_state` ({"sig","ts"} - stan throttla, pisze tick).
 - `sync_mirror_state`: wiersz ('stan_gry','AGS') - block_ids + checksum renderu strony.
+- `sync_registry`: wiersz ('stan_gry', enabled, re_render) - TYLKO po to, zeby nocny
+  drift check (03:00) obejmowal strone (iteruje po registry); trigger enqueue dla
+  nieistniejacej tabeli nigdy nie strzeli, dispatch tej nazwy nie zobaczy.
+  Higiena strony: soft-clear (jeden aktualny render, stare bloki archiwizowane),
+  zapis tylko przy zmianie odcisku stanu, throttle 15 min, sufit 280 blokow
+  z jawnym uciecien, edycje reczne gina przy nastepnym renderze (alarm driftu).
 
 ## Konfiguracja
 
