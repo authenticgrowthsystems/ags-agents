@@ -175,10 +175,24 @@ def _decisions_since(brand_id, channel, hours):
 
 def _queue_upcoming(brand_id, channel, limit=10):
     return db.fetchall(
-        """SELECT id, status, content, scheduled_for FROM post_queue
-           WHERE brand=%s AND platform=%s AND status IN ('review','scheduled','queued','held')
-           ORDER BY scheduled_for NULLS LAST, id LIMIT %s""",
+        """SELECT pq.id, pq.status, pq.content, pq.scheduled_for, ci.status AS item_status
+           FROM post_queue pq LEFT JOIN content_items ci ON ci.id = pq.content_item_id
+           WHERE pq.brand=%s AND pq.platform=%s
+             AND pq.status IN ('review','scheduled','queued','held')
+           ORDER BY pq.scheduled_for NULLS LAST, pq.id LIMIT %s""",
         (brand_id, channel, limit))
+
+
+def _pq_label(r):
+    """Etykiety kolejki PO LUDZKU (23/07, konfuzja: '[review]' Tomasz czytal jako
+    'niezatwierdzone', a to czesci JUZ ZATWIERDZONYCH serii czekajace na dispatch.
+    Zatwierdzanie dzieje sie na poziomie MATERIALU - wiersz tylko czeka na swoja kolej)."""
+    st, it = r.get("status"), (r.get("item_status") or "")
+    if st == "review":
+        return "DO ZATWIERDZENIA" if it in ("needs_approval", "proposed", "draft", "brief") \
+            else "zatwierdzone, czeka na start"
+    return {"scheduled": "zaplanowane", "queued": "w kolejce", "held": "gotowiec reczny",
+            "dispatching": "w wysylce"}.get(st, st)
 
 
 def _fmt_metrics(m):
@@ -211,7 +225,7 @@ def daily_report(brand_id, channel):
     lines.append(f"\nKOLEJKA (najblizsze): {len(queue)}")
     for q in queue[:5]:
         when = q["scheduled_for"].astimezone(WARSAW).strftime("%d/%m %H:%M") if q.get("scheduled_for") else "brak slotu"
-        lines.append(f"- #{q['id']} [{q['status']}] {(q['content'] or '')[:50]} | {when}")
+        lines.append(f"- #{q['id']} [{_pq_label(q)}] {(q['content'] or '')[:50]} | {when}")
     text = "\n".join(lines)
     db.execute(
         """INSERT INTO subagent_daily_reports (brand_id, channel, report_date, published_count, engagement_metrics,
@@ -381,7 +395,7 @@ def kontekst_text(scope="all"):
             for r in q:
                 when = (r["scheduled_for"].astimezone(WARSAW).strftime("%d/%m %H:%M")
                         if r.get("scheduled_for") else "bez slotu")
-                lines.append(f"- #{r['id']} [{r['status']}] {when} | {_flat(r['content'], 70)}")
+                lines.append(f"- #{r['id']} [{_pq_label(r)}] {when} | {_flat(r['content'], 70)}")
             if not q:
                 lines.append("- (pusto)")
             pub = db.fetchall(

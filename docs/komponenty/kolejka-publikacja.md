@@ -116,6 +116,11 @@ Przypomnij jutro), nigdy auto-decyzja.
   w przyszlosci) - baza klamala. Adaptery po zmianie trybow NIEUZYWANE, ale
   callback per-row NIENAPRAWIONY (uzbrojona mina - backlog przed jakimkolwiek
   powrotem do trybu webhook).
+- ETYKIETY KOLEJKI PO LUDZKU (23/07, konfuzja "[review] = niezatwierdzone"):
+  raporty i kontekst pokazuja wiersz 'review' materialu ZATWIERDZONEGO jako
+  "zatwierdzone, czeka na start" (reports._pq_label; JOIN na content_items.status).
+  "DO ZATWIERDZENIA" widac tylko, gdy material realnie czeka na approve.
+  Zatwierdzanie dzieje sie NA MATERIALE, nie na wierszach kolejki.
 - 'held' to zamrazarka: po incydencie 13-19/07 wszystko zamrozone, sprzatniete
   wg dowodu 19-20/07 (sieroty pq bez materialu -> rejected; SQL wykonany,
   kontrola = 0). Nowe sieroty nie powstaja (fix matnav 'no').
