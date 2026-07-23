@@ -60,6 +60,13 @@ def send_approval(item, variants):
         canon = (item.get("canonical_body") or "").strip()
         lines.append("--- TRESC (cel bez aktywnego kanalu - publikacja RECZNA; pelna tresc: karty -> 📄) ---\n"
                      + (canon[:2800] if canon else "(tekst w produkcji)") + "\n")
+    # 23/07 (regula grafik, incydent #280): material celujacy w LinkedIn BEZ pliku graficznego
+    # dostaje ostrzezenie - mozesz dopiac wlasna 🎨/➕, inaczej automat dogeneruje przy wysylce.
+    _has_file = any(isinstance(m, dict) and m.get("file_id") for m in (item.get("media") or []))
+    _li_target = any(ch == "linkedin" for ch, _ in variants)
+    if _li_target and not _has_file:
+        lines.append("⚠ BEZ GRAFIKI (LinkedIn): dopnij wlasna guzikiem 🎨/➕ albo automat "
+                     "wygeneruje obraz przy wysylce.")
     # 22/07 (uwaga Tomasza 00:03): kopia PL do przegladu MUSI byc widoczna TU, gdzie zapada
     # decyzja - nie tylko na kartach przegladu. Material ma ja w media (kind='review_pl', T8).
     _rev = next((m.get("text") for m in (item.get("media") or [])

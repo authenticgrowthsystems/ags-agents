@@ -80,6 +80,15 @@ generate_image_prompt.
   promptu.
 - Kanon mediow multi-platforma (sekcja wyzej).
 
+## Regula grafik LinkedIn (23/07, incydent #280 bez grafiki)
+
+- Post LinkedIn bez pliku graficznego dostaje AUTO-generowany obraz przy DISPATCHU
+  (channels._ensure_li_graphic: prompt Sonnetem z tresci, gpt-image-2, upload na
+  Telegram jako podglad, dopiecie do wiersza kolejki i materialu). Porazka generacji
+  nie blokuje publikacji (post idzie tekstowo).
+- Karta zatwierdzenia ostrzega "BEZ GRAFIKI (LinkedIn)" gdy material celuje w
+  LinkedIn bez pliku - mozna dopiac wlasna 🎨/➕ przed zatwierdzeniem.
+
 ## Znane pulapki
 
 - media jsonb niesie TAKZE dup_warning i review_copy - kod czytajacy media
