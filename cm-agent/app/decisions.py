@@ -18,6 +18,7 @@ wychodzi samo). Semi-auto obejmuje decyzje OPERACYJNE (sloty, podmiany tematow, 
 import datetime
 import html as _html
 import json
+import re
 
 import httpx
 from psycopg.types.json import Jsonb
@@ -273,11 +274,50 @@ def _maybe_propose_transition(subagent_id, brand_id, decision_type, chat):
         recommendation="semi", context={"target_type": decision_type}, chat_id=chat)
 
 
+_TYP_PL = {
+    "crm_tier": "tier kontaktu",
+    "intent_menu": "co zrobic ze zrzutem",
+    "model_selection": "wybor modelu",
+    "critical_escalation": "zgoda na drogi research",
+    "mode_transition": "zmiana trybu agenta",
+    "cadence_gap": "luka w kadencji",
+}
+
+
+def _o_kogo_chodzi(question):
+    """Wyluskaj TEMAT decyzji z pytania. Sam numer nic nie znaczy, a pierwsze zdanie pytania
+    bywa zrzutem wizji ("CO WIDZE NA ZRZUCIE...") zamiast opisem sprawy. Dowod 24/07, slowa
+    Tomasza: "co to sa za otwarte decyzje, mi te numery nic nie mowia" (#6, #11, #13, #49)."""
+    q = re.sub(r"\s+", " ", str(question or "")).strip()
+    q = re.sub(r"^(🖼\s*)?CO WIDZE NA ZRZUCIE[^:]*:\s*", "", q, flags=re.IGNORECASE)
+    m = re.search(r"(?:dla|kontaktu|osoby|profilu?)\s+([A-ZŻŹĆĄŚĘŁÓŃ][\w.\-]*(?:\s+[A-ZŻŹĆĄŚĘŁÓŃ][\w.\-]*)?)", q)
+    if m:
+        return m.group(1)
+    m = re.search(r"@([\w.\-]+)", q)
+    if m:
+        return "@" + m.group(1)
+    return q[:60] or "(bez opisu)"
+
+
 def pending_text():
-    """Lista czekajacych decyzji (do /decyzje w rozmowie CM)."""
+    """Lista czekajacych decyzji (do /decyzje w rozmowie CM i do stanu gry Lacznika).
+
+    24/07: kazda linia mowi CZEGO dotyczy i OD KIEDY wisi. Sam numer plus uciety zrzut wizji
+    nie mowil nic ani Tomaszowi, ani czatowi po drugiej stronie Lacznika. Decyzje starsze niz
+    3 dni dostaja znacznik do sprzatniecia - wiszaca lista, ktorej nikt nie rozumie, przestaje
+    byc kolejka, a staje sie szumem."""
     rows = db.fetchall(
         "SELECT id, subagent_id, decision_type, question, created_at FROM agent_decisions "
         "WHERE status='pending' ORDER BY created_at LIMIT 20")
     if not rows:
         return "(zero czekajacych decyzji ustrukturyzowanych)"
-    return "\n".join(f"#{r['id']} [{r['decision_type']}] {r['subagent_id']}: {r['question'][:100]}" for r in rows)
+    teraz = datetime.datetime.now(datetime.timezone.utc)
+    out = []
+    for r in rows:
+        typ = _TYP_PL.get(r["decision_type"], r["decision_type"])
+        dni = (teraz - r["created_at"]).days if r.get("created_at") else 0
+        wiek = "dzis" if dni == 0 else ("wczoraj" if dni == 1 else f"{dni} dni")
+        stary = " ⚠️ do sprzatniecia" if dni >= 3 else ""
+        out.append(f"#{r['id']} {typ} | {_o_kogo_chodzi(r['question'])} | {r['subagent_id']} "
+                   f"| wisi {wiek}{stary}")
+    return "\n".join(out)
