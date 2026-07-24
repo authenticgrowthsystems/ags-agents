@@ -222,9 +222,47 @@ WYLACZNIE puste pola - to, co Tomasz wpisal recznie, jest nietykalne. Kontakt wi
 w `/pipeline` przy kazdym prospekcie, a jego brak jest oznaczony ⚠️ na etapach
 prospect/qualified.
 
-**Zostaje otwarte (osobny build):** dlaczego adapter firecrawl na zapytanie o konkretny
-podmiot zwraca arXiv. To wada kaskady zrodel Researchera, nie sprzedazy - patrz
-docs/komponenty/researcher.md.
+**ZAMKNIETE 24/07 wieczorem:** adapter firecrawl zwracal arXiv, bo wola endpoint
+`search/research/papers` (wyszukiwarka prac naukowych, nie crawler). Kaskada dostala
+natywne zrodlo `site`, wiec strone podmiotu czyta teraz KAZDY konsument Researchera,
+nie tylko sprzedaz - patrz docs/komponenty/researcher.md. Wizytowka w sprzedazy zostaje,
+bo pelni inna funkcje: wypelnia KOLUMNY lejka.
+
+## Adres prospekta: domena, nie archiwum autora (fix 24/07, dlug C3)
+
+`_znajdz_strone_w_researchu` dopasowywalo adres po slowie z nazwy prospekta i lapalo
+TAKZE strony-smieci tego samego serwisu. Dowod: Wroclawska Stepownia dostala w lejku
+`https://stepownia.pl/author/dudzikdariusz` - archiwum wpisow jednego czlowieka zamiast
+strony klubu. Teraz sciezki-smieci (`author|tag|category|feed|koszyk|polityka|page/N|
+wp-*`, pliki .pdf/.jpg) sa obcinane do korzenia domeny, adresy normalizowane bez
+koncowego ukosnika, a przy remisie wygrywa adres KROTSZY. Sensowna podstrona zostaje:
+jesli klub zyje pod `/wroclawska_stepownia/`, to jest jego wizytowka.
+
+## Osoba decyzyjna: instruktor to NIE decydent (24/07, dlug C2)
+
+`osoba_decyzyjna(tekst)` czyta ze strony pary ROLA + IMIE NAZWISKO, deterministycznie
+(zero modelu). Do kolumny `contact_person` trafia WYLACZNIE rola jawnie decyzyjna
+(wlasciciel, prezes, dyrektor, kierownik, zarzad, founder, owner, CEO). Instruktor,
+trener, choreograf, recepcja = kontakt POMOCNICZY: nazwisko idzie do notatek z jawna
+adnotacja "NIE potwierdzone, ze decyduje o zakupie". Powod: gotowiec zaczynajacy sie od
+zwrotu do przypadkowego trenera jest gorszy niz gotowiec bez nazwiska, a Tomasz nie
+mialby jak tego zauwazyc. Wpiete w trzy sciezki (wizytowka przed researchem, wizytowka
+przed gotowcem, wejscie na strone znaleziona w researchu).
+PULAPKA ZLAPANA WLASNYM TESTEM: `re.IGNORECASE` na calym wzorcu kasowal rozroznienie
+wielkosci liter i "Anna Kowalska prowadzi" wchodzilo jako imie i nazwisko. Role sa
+nieczule na wielkosc liter LOKALNIE, przez `(?i:...)`.
+
+## Sprzedawca widzi zrzuty ekranu (24/07, dlug C5)
+
+Wrzutka zdjecia szla w tor comment-radaru, wiec przy AKTYWNYM Sprzedawcy Tomasz wysylal
+strone prospekta albo mail od klienta, a agent nie widzial nic i odpowiadal z pamieci.
+Teraz `conversation.zrzut_dla_sprzedawcy` robi JEDNO wywolanie wizji z pytaniem
+sprzedazowym (co to jest, nazwa firmy, dane kontaktowe doslownie widoczne, fakty do
+rozmowy, sygnaly kupna) i wstawia opis do rozmowy jako tresc od Tomasza - agent moze go
+od razu zapisac w lejku wlasnymi narzedziami. Nie udalo sie pobrac zrzutu = agent mowi
+to wprost, nie zmysla (REGULA PRAWDY). Zero zmian w n8n (kanon: n8n to transport).
+
+Testy C2 i C3: `python cm-agent/tests/test_sales_prospekt.py` (13 przypadkow, bez bazy).
 
 ## Naglowek i stopka gotowca (24/07, feedback Tomasza)
 

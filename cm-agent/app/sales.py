@@ -642,12 +642,14 @@ def _prospect_research(inp):
     # a kaskada zrodel potrafi jej nie otworzyc (dowod: job 7411d0ba - z domeny klubu weszly
     # same tytuly, telefon ze strony glownej nie trafil do dowodow wcale).
     wiz = wizytowka(url) if url else {}
+    osoba_txt = _zapisz_osobe_ze_strony(row["id"], wiz.get("tekst") or "") if wiz.get("tekst") else None
     if wiz.get("tel") or wiz.get("mail"):
         _zapisz_kontakt(row["id"], mail=wiz.get("mail"), tel=wiz.get("tel"), ze_strony=True)
         _append_notes(row["id"], "wizytowka ze strony: " + ", ".join(
             x for x in [f"tel {wiz.get('tel')}" if wiz.get("tel") else "",
                         f"mail {wiz.get('mail')}" if wiz.get("mail") else "",
-                        f"podstron {len(wiz.get('strony') or [])}"] if x))
+                        f"podstron {len(wiz.get('strony') or [])}",
+                        osoba_txt or ""] if x))
     code, resp = _request_research(_research_query(name, url, hint, wiz.get("tekst")), tier, row["id"])
     job_id = (resp or {}).get("job_id")
     if code == 202 and job_id:
@@ -747,18 +749,47 @@ def _znajdz_strone_w_researchu(prospect_name, tekst):
     Agent ma wejsc na to, co znalazl, a nie odsylac czlowieka po dane.
 
     Kolejnosc: adres zawierajacy slowo z nazwy prospekta -> dowolny niesmieciowy -> profil
-    spolecznosciowy (ostatecznosc, lepszy niz nic)."""
+    spolecznosciowy (ostatecznosc, lepszy niz nic).
+
+    POPRAWKA 24/07 (dowod: Stepownia dostala w lejku https://stepownia.pl/author/dudzikdariusz):
+    dopasowanie po nazwie lapalo TAKZE strony-smieci tego samego serwisu (archiwum autora,
+    tag, kategoria, koszyk). Adres prospekta ma prowadzic do FIRMY, nie do archiwum wpisow
+    jednego czlowieka. Teraz: sciezki-smieci sa obcinane do korzenia domeny, a przy remisie
+    wygrywa adres KROTSZY (korzen bije podstrone). Sensowna podstrona zostaje - jesli klub
+    zyje pod https://stepownia.pl/wroclawska_stepownia/, to jest jego wizytowka."""
     slowa = [w.lower() for w in re.split(r"\W+", prospect_name or "") if len(w) > 4]
     zwykle, social = [], []
     for u in _URL_W_TEKSCIE.findall(tekst or ""):
-        u = u.rstrip(".,);]")
+        # jeden adres = jeden zapis: bez koncowego ukosnika, zeby 'stepownia.pl/' i
+        # 'stepownia.pl' nie konkurowaly ze soba jako dwa rozne kandydaty
+        u = u.rstrip(".,);]").rstrip("/")
         if _URL_SMIECI.search(u):
             continue
+        if _URL_SCIEZKA_SMIECI.search(u + "/"):
+            u = _korzen_url(u)          # archiwum/tag/koszyk -> zostaje sama domena
+            if not u:
+                continue
         (social if _URL_SOCIAL.search(u) else zwykle).append(u)
-    for u in zwykle:
-        if any(s in u.lower() for s in slowa):
-            return u
+    zwykle = list(dict.fromkeys(zwykle))
+    trafione = [u for u in zwykle if any(s in u.lower() for s in slowa)]
+    if trafione:
+        # korzen przed podstrona: najkrotszy adres, ktory dalej niesie nazwe prospekta
+        return sorted(trafione, key=len)[0]
     return (zwykle or social or [None])[0]
+
+
+# Sciezki, ktore NIE sa strona firmy, choc leza na jej domenie (archiwa, systemowe, zakupowe).
+_URL_SCIEZKA_SMIECI = re.compile(
+    r"/(author|tag|tags|category|kategoria|feed|rss|search|szukaj|login|logowanie|koszyk|cart|"
+    r"checkout|polityka|privacy|regulamin|cookies?|page/\d+|wp-(content|json|admin|includes))\b"
+    # rozszerzenie pliku sprawdzamy z wyprzedzeniem, bo wolajacy dokleja '/' do adresu
+    r"|\.(pdf|jpe?g|png|gif|webp|svg|docx?|xlsx?)(?=/|$)", re.IGNORECASE)
+
+
+def _korzen_url(u):
+    """'https://stepownia.pl/author/x?y=1' -> 'https://stepownia.pl'. Brak hosta = None."""
+    m = re.match(r"(https?://[^/\s?#]+)", (u or "").strip(), re.IGNORECASE)
+    return m.group(1) if m else None
 
 
 def _kandydaci_url(adres):
@@ -847,6 +878,60 @@ def wizytowka(url, max_podstron=3, limit_znakow=6000):
 _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 # telefon PL: opcjonalny +48, potem 9 cyfr w typowym grupowaniu. NIP-y (10 cyfr) i daty odpadaja.
 _PHONE_RE = re.compile(r"(?<![\d-])(?:\+48[\s-]?)?(?:\d{3}[\s-]?\d{3}[\s-]?\d{3})(?![\d-])")
+
+
+# ---- Osoba decyzyjna ze strony prospekta (24/07, dlug techniczny C2) --------------------
+# Ze strony klubu dalo sie juz zdjac podstrone instruktorow, ale INSTRUKTOR TO NIE DECYDENT.
+# Wpisanie przypadkowego trenera w 'contact_person' byloby gorsze niz puste pole: gotowiec
+# zaczynalby sie od zwrotu do osoby, ktora nie decyduje o zakupie, a Tomasz nie mialby jak
+# tego zauwazyc. Dlatego rola musi byc JAWNIE decyzyjna, inaczej nazwisko idzie tylko
+# do notatek jako kontakt pomocniczy.
+# UWAGA NA FLAGI (blad zlapany wlasnym testem 24/07): nazwisko poznajemy PO WIELKIEJ LITERZE,
+# wiec wzorzec osoby MUSI byc wrazliwy na wielkosc liter. Globalne re.IGNORECASE kasowalo to
+# rozroznienie i lapalo "Anna Kowalska prowadzi" jako imie i nazwisko. Role sa nieczule na
+# wielkosc liter LOKALNIE, przez (?i:...).
+_ROLE_DECYZYJNE = (r"wlascic\w*|właścic\w*|wspolwlascic\w*|współwłaścic\w*|prezes\w*|dyrektor\w*|"
+                   r"kierowni\w*|zarzad\w*|zarząd\w*|co-?founder|founder|owner|ceo|szef\w*")
+_ROLE_POMOCNICZE = r"instruktor\w*|trener\w*|nauczyciel\w*|prowadz\w*|choreograf\w*|recepcj\w*"
+_IMIE_NAZWISKO = r"[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]{2,}(?:\s+[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż-]{2,}){1,2}"
+_OSOBA_PRZY_ROLI = re.compile(
+    rf"(?:(?P<rola1>(?i:{_ROLE_DECYZYJNE}|{_ROLE_POMOCNICZE}))[\s:,\-]+(?P<osoba1>{_IMIE_NAZWISKO})"
+    rf"|(?P<osoba2>{_IMIE_NAZWISKO})[\s,\-]+(?:to\s+)?(?P<rola2>(?i:{_ROLE_DECYZYJNE}|{_ROLE_POMOCNICZE})))")
+_ROLA_DECYZYJNA_RE = re.compile(_ROLE_DECYZYJNE, re.IGNORECASE)
+
+
+def osoba_decyzyjna(tekst):
+    """Kto decyduje po stronie prospekta, wg TEGO CO STOI NA STRONIE (zero modelu).
+
+    Zwraca {'osoba', 'rola', 'decyzyjna': bool} albo None. decyzyjna=True TYLKO gdy rola
+    jest jawnie wlascicielska/zarzadcza. Instruktor, trener, recepcja = kontakt pomocniczy:
+    nazwisko warto miec, ale nie wolno go podac jako osoby decyzyjnej."""
+    najlepszy = None
+    for m in _OSOBA_PRZY_ROLI.finditer(tekst or ""):
+        rola = (m.group("rola1") or m.group("rola2") or "").strip()
+        osoba = (m.group("osoba1") or m.group("osoba2") or "").strip()
+        if not (rola and osoba):
+            continue
+        decyzyjna = bool(_ROLA_DECYZYJNA_RE.fullmatch(rola))
+        kandydat = {"osoba": osoba[:120], "rola": rola.lower()[:40], "decyzyjna": decyzyjna}
+        if decyzyjna:                      # pierwsza roli decyzyjna wygrywa i konczy szukanie
+            return kandydat
+        najlepszy = najlepszy or kandydat  # pomocniczy zapamietujemy, ale szukamy dalej
+    return najlepszy
+
+
+def _zapisz_osobe_ze_strony(row_id, tekst):
+    """Zapisz osobe decyzyjna do kolumny lejka; osobe pomocnicza tylko do notatek.
+    Zwraca krotki opis do paragonu albo None (REGULA PRAWDY: milczymy tylko, gdy nic nie ma)."""
+    kand = osoba_decyzyjna(tekst)
+    if not kand:
+        return None
+    if kand["decyzyjna"]:
+        _zapisz_kontakt(row_id, osoba=f"{kand['osoba']} ({kand['rola']})")
+        return f"osoba decyzyjna ze strony: {kand['osoba']} ({kand['rola']})"
+    _append_notes(row_id, f"kontakt pomocniczy ze strony: {kand['osoba']} ({kand['rola']}) - "
+                          f"NIE potwierdzone, ze decyduje o zakupie")
+    return f"kontakt pomocniczy: {kand['osoba']} ({kand['rola']}), decydent nieustalony"
 
 
 def _zapisz_kontakt(row_id, mail=None, tel=None, osoba=None, ze_strony=False):
@@ -1016,6 +1101,8 @@ def _draft_outreach(inp, chat_id):
     wzorce = _outreach_examples()
     # Strona prospekta jako zrodlo cytowalnych faktow do haka (i danych do naglowka).
     wiz = wizytowka(row.get("prospect_url")) if row.get("prospect_url") else {}
+    if wiz.get("tekst"):
+        _zapisz_osobe_ze_strony(row["id"], wiz["tekst"])  # decydent do kolumny, instruktor do notatek
     if wiz.get("mail") or wiz.get("tel"):  # swieze dane ze strony ida takze do bazy
         _zapisz_kontakt(row["id"], mail=wiz.get("mail"), tel=wiz.get("tel"), ze_strony=True)
     forms = {
@@ -1625,6 +1712,7 @@ def tick():
                         pipe["prospect_url"] = kandydat
                         _zapisz_kontakt(pipe["id"], mail=wiz2.get("mail"), tel=wiz2.get("tel"),
                                         ze_strony=True)
+                        _zapisz_osobe_ze_strony(pipe["id"], tekst_strony)
                         _append_notes(pipe["id"], f"agent sam wszedl na strone z researchu: {kandydat}"
                                       + (f", tel {wiz2.get('tel')}" if wiz2.get("tel") else "")
                                       + (f", mail {wiz2.get('mail')}" if wiz2.get("mail") else ""))

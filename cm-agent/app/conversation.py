@@ -2112,6 +2112,59 @@ def _screen_shots(images, channel):
         return None
 
 
+_ZRZUT_DO_SPRZEDAWCY_RE = re.compile(
+    r"\b(skomentuj|odpowiedz|komentarz|zobacz|spojrz|spójrz|co\s+widzisz|przeczytaj)\b.*"
+    r"\b(zrzut\w*|screen\w*|obraz\w*|ekran\w*|ostatni\w*)\b|^\s*(zrzut\w*|screen\w*)\s*$",
+    re.IGNORECASE)
+
+
+def zrzut_dla_sprzedawcy(chat_id=None):
+    """Zrzut ekranu OCZAMI SPRZEDAWCY (dlug techniczny C5, 24/07).
+
+    Wrzutka zdjecia szla w tor comment-radaru (propozycje komentarzy pod cudzym postem), wiec
+    przy AKTYWNYM Agencie Sprzedazy Tomasz wysylal strone prospekta albo mail od klienta,
+    a agent nie widzial nic i odpowiadal z pamieci. Tu robimy jedno tanie wywolanie wizji
+    z pytaniem SPRZEDAZOWYM (kto, jaka firma, jakie dane kontaktowe, jakie sygnaly kupna)
+    i wynik wchodzi do rozmowy jako tresc od Tomasza - agent moze go od razu zapisac
+    w lejku wlasnymi narzedziami.
+
+    Zwraca tekst do wstawienia w rozmowe albo None (wtedy wolajacy zostawia oryginalna
+    wiadomosc; REGULA PRAWDY: nie udajemy, ze cos widzielismy)."""
+    import base64
+    photo = db.fetchone(
+        """SELECT id, content, metadata FROM inspirations
+           WHERE metadata->'media'->>'file_id' IS NOT NULL ORDER BY created_at DESC LIMIT 1""")
+    if not photo:
+        return None
+    images = _fetch_images([photo])
+    if not images:
+        return None
+    model, tier, source = tasks.model_for("canonical")
+    content = [{"type": "image", "source": {"type": "base64", "media_type": mt,
+                                            "data": base64.b64encode(img).decode()}}
+               for img, mt in images]
+    content.append({"type": "text", "text":
+        "To zrzut ekranu wyslany przez Tomasza w rozmowie z Agentem Sprzedazy. Opisz go POD KATEM "
+        "SPRZEDAZY, po polsku, zwiezle:\n"
+        "1) co to jest (strona firmy / mail / wiadomosc / profil / oferta / faktura / panel),\n"
+        "2) NAZWA firmy albo osoby, jesli widoczna,\n"
+        "3) WSZYSTKIE dane kontaktowe, ktore widac doslownie (telefon, mail, adres www, adres),\n"
+        "4) fakty przydatne w rozmowie handlowej (oferta, ceny, zajecia, wydarzenia, terminy),\n"
+        "5) sygnaly kupna albo bolu (rekrutacja, nowa lokalizacja, skargi na kontakt, brak zapisow online).\n"
+        "Czego NIE WIDAC - pomijasz. Zero zgadywania, zero uzupelniania z wiedzy ogolnej."})
+    try:
+        resp = client().messages.create(model=model, max_tokens=700, thinking={"type": "disabled"},
+                                        messages=[{"role": "user", "content": content}])
+        tasks.log_task("sales_vision", tier, model, source, getattr(resp, "usage", None))
+        opis = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
+    except Exception:
+        traceback.print_exc()  # AP-306: cisza tutaj = agent "nie widzi" i nikt nie wie dlaczego
+        return None
+    return ("[ZRZUT EKRANU od Tomasza - to, co widac na obrazie]\n" + opis
+            + "\n\nOdnies sie do tego w rozmowie. Jesli sa tu dane prospekta (telefon, mail, osoba), "
+              "zapisz je w lejku swoimi narzedziami i powiedz, co zapisales.") if opis else None
+
+
 def _intent_menu_open(brand, channel, chat_id, insp_rows):
     """B2: JEDNA karta intencji po wrzutce. B3: ta sama osoba (match po handle/nazwie przez
     contacts) z OTWARTYM watkiem <24h = doklejka zrzutow do jego kontekstu, zero drugiej karty."""
@@ -3138,6 +3191,16 @@ def handle(update):
                 _reset_state(chat_id)
                 _reply(chat_id, "Anulowane.")
                 return
+            # C5 (24/07): wrzutka zrzutu przy AKTYWNYM Sprzedawcy nie idzie w tor komentarzy.
+            # Zrzut czytamy oczami sprzedazy i wstawiamy opis do rozmowy jako tresc od Tomasza.
+            if _ZRZUT_DO_SPRZEDAWCY_RE.search(text):
+                opis = zrzut_dla_sprzedawcy(chat_id)
+                if opis:
+                    text = opis
+                else:
+                    _reply(chat_id, "Nie widze zadnego zrzutu w schowku (albo nie udalo sie go "
+                                    "pobrac z Telegrama). Wyslij obraz jeszcze raz.")
+                    return
             sales.handle_chat(chat_id, text)
             return
         if active.startswith("subagent:"):
