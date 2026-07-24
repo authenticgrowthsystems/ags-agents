@@ -275,8 +275,15 @@ _RULES = (
     "researchu, NIE pisz outreachu - oznacz w lejku jako 'lost' z notatka 'konflikt interesow "
     "RDC' i powiedz Tomaszowi wprost.\n"
     "- NARZEDZIA NIE UJAWNIAMY: nazwa platformy (GHL i inne) NIGDY nie pada w komunikacji "
-    "sprzedazowej. Sprzedajemy REZULTAT: 'system retencji klientow', 'uszczelnienie sciezki "
-    "klienta', 'automatyzacja follow-up'.\n"
+    "sprzedazowej.\n"
+    # Paczka Managera 24/07 pkt 3 (blocker rozmowy z Piotrem/Adamietz): klient nie kupuje
+    # technologii, tylko wynik. Slowo "system AI" opisuje NASZ swiat, nie jego problem.
+    "- SLOWNICTWO PRODUKTU (auto-odrzut): w tekstach do klienta NIE uzywamy slow "
+    "'automatyzacje', 'workflows', 'systemy AI', 'integracje', 'AI systems', 'AI workflows', "
+    "'agents platform', 'custom AI'. Mowimy REZULTATEM w jego jezyku: 'utrzymuje Ci klientow, "
+    "ktorzy dzis odchodza' zamiast 'buduje Ci system AI'; 'nikt nie zostaje bez odpowiedzi' "
+    "zamiast 'wdrazamy automatyzacje'; 'zapisy same sie domykaja' zamiast 'integracja z CRM'. "
+    "Nazwa technologii moze paść dopiero, gdy klient SAM o nia zapyta.\n"
     "- REGULA PRAWDY: AGS jest przed pierwszym platnym klientem - ZERO zmyslonych case studies, "
     "liczb i referencji. Dowod spoleczny = wlasny zywy system AGS (build-in-public) i realne "
     "wdrozenia rodzinne (TNM, RDC) opisywane uczciwie.\n"
@@ -897,6 +904,20 @@ def _kontakt_prospekta(row, wiz=None):
     return osoba, mail, tel
 
 
+# Paczka Managera 24/07 pkt 3: slownictwo, ktore opisuje NASZ swiat zamiast problemu klienta.
+# Odmiany po polsku lapiemy rdzeniem (automatyzacj*, integracj*), angielskie doslownie.
+_ZAKAZANE_PRODUKTOWE = [
+    "automatyzacj", "workflow", "system ai", "systemy ai", "systemem ai", "integracj",
+    "ai system", "ai workflow", "agents platform", "custom ai",
+]
+
+
+def _zakazane_slownictwo(tekst):
+    """Zwraca liste zakazanych zwrotow produktowych znalezionych w tekscie do klienta."""
+    low = (tekst or "").lower()
+    return sorted({w for w in _ZAKAZANE_PRODUKTOWE if w in low})
+
+
 def _tylko_gotowiec(tekst, channel):
     """Odcina komentarz modelu sprzed tresci. Instrukcja "zwroc wylacznie tresc" nie wystarczyla:
     model poprzedzil mail wlasnym rozumowaniem o konflikcie RDC i haku (dowod: wklejka 24/07
@@ -1029,6 +1050,27 @@ def _draft_outreach(inp, chat_id):
         return "Nie wyszlo - sprobuj jeszcze raz (model nie zwrocil tresci)."
     draft = compliance.fix_dashes(draft)  # RULE 1 kanonu marki dziala TAKZE na tekstach do klienta
     draft = _tylko_gotowiec(draft, channel)
+    # AUTO-ODRZUT slownictwa produktowego (paczka Managera 24/07 pkt 3). Sama instrukcja w
+    # prompcie nie wystarcza - dzis model dwa razy zignorowal zakaz (fraza "15 minut", komentarz
+    # przed wklejka). Wiec: wykryj, popros o JEDNA poprawke, a gdy dalej jest - powiedz wprost.
+    zakazane = _zakazane_slownictwo(draft)
+    if zakazane:
+        try:
+            resp2 = client().messages.create(
+                model=model, max_tokens=1200, thinking={"type": "disabled"},
+                messages=[{"role": "user", "content":
+                           f"Ponizszy tekst do klienta uzywa slownictwa, ktore opisuje NASZ swiat "
+                           f"zamiast jego problemu: {', '.join(zakazane)}. Przepisz go tak, by "
+                           f"znaczyl to samo, ale mowil REZULTATEM (co klient przestanie tracic, "
+                           f"co zacznie sie dziac samo). Nie dodawaj oferty ani prosby o rozmowe. "
+                           f"Zwroc WYLACZNIE poprawiony tekst.\n\n{draft}"}])
+            poprawka = "".join(b.text for b in resp2.content if getattr(b, "type", "") == "text").strip()
+            tasks.log_task("sales_outreach", tier, model, source, getattr(resp2, "usage", None))
+            if poprawka:
+                draft = _tylko_gotowiec(compliance.fix_dashes(poprawka), channel)
+                zakazane = _zakazane_slownictwo(draft)
+        except Exception:
+            traceback.print_exc()
     # gotowiec: naglowek + CZYSTA WKLEJKA osobna wiadomoscia (kanon comment-radar)
     # Bramka tozsamosci: marker z podsumowania researchu zyje w notatkach lejka. Nie blokujemy
     # pisania (decyduje Tomasz), ale gotowiec ma jechac z ostrzezeniem, nie po cichu.
@@ -1042,6 +1084,10 @@ def _draft_outreach(inp, chat_id):
                     "wyslaniem.\n" if _stan == "niepotwierdzona"
                     else "⚠️ Podmiot potwierdzony dowodami, ale research zglosil zastrzezenie - "
                          "sprawdz je przed wyslaniem.\n" if _stan == "z zastrzezeniem" else "")
+    # Auto-odrzut nie zawsze domyka sprawe za pierwszym razem - wtedy Tomasz ma to WIDZIEC.
+    if zakazane:
+        _ostrzezenie += (f"⚠️ SLOWNICTWO PRODUKTOWE mimo poprawki: {', '.join(zakazane)} - "
+                         f"przeczytaj te fragmenty przed wyslaniem.\n")
     _tg_send(chat_id, _outreach_naglowek(row, channel, _ostrzezenie, wiz))
     _tg_send(chat_id, draft)
     _tg_send(chat_id, _outreach_stopka(row))
