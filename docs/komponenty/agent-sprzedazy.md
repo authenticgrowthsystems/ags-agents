@@ -127,12 +127,22 @@ fallback ILIKE), outreach_sent (propozycja -> 'sent', follow-up +3 dni).
   tanca nie identyfikuje podmiotu w skali swiata.
 - `/prospect <nazwa> <domena>`: ostatni token wygladajacy na adres jest traktowany jako
   STRONA, nie czesc nazwy (wczesniej doprecyzowanie wchodzilo do nazwy firmy).
-- **Bramka tozsamosci (kontrakt kodu, nie ozdoba):** `_summarize_research` musi zaczac
-  podsumowanie od linii `TOZSAMOSC: potwierdzona` albo `TOZSAMOSC: niepewna - <powod>`.
-  `tick()` to parsuje: przy "niepewna" karta NIE proponuje outreachu, tylko ponowne
-  zlecenie ze strona. Marker zyje dalej w notatkach lejka, wiec `_draft_outreach`
-  dokleja ostrzezenie nad gotowcem. Wysylka do niezweryfikowanej firmy kosztuje
-  wiarygodnosc, nie tokeny.
+- **Bramka tozsamosci - TRZY stany, bo to dwa rozne pytania.**
+  1. Czy research dotyczy TEJ firmy - liczone z DOWODOW przez `_identity_verdict`: domena
+     prospekta musi wystapic w `evidence_items.source_url` albo w tresci claims; prospekt
+     bez domeny - miasto z kartoteki musi wystapic w claims. Model tutaj nie glosuje.
+  2. Czy cos budzi watpliwosc - deklaracja modelu (`TOZSAMOSC: niepewna - <powod>` w
+     pierwszej linii podsumowania; prompt precyzuje, ze chodzi o PODMIOT, nie o kanal kontaktu).
+
+  Stany: `potwierdzona` (dowod + brak zastrzezen) -> karta proponuje outreach;
+  `z zastrzezeniem` (dowod jest, model marudzi) -> outreach dozwolony z prosba o weryfikacje
+  punktu, gotowiec z ⚠️; `niepotwierdzona` (BRAK dowodu) -> outreach zablokowany, karta zada
+  ponownego zlecenia ze strona, gotowiec z ⛔.
+  Marker `[TOZSAMOSC: <stan>]` zyje w notatkach lejka; `_draft_outreach` czyta OSTATNI.
+  **Dlaczego trzy, nie dwa:** wersja z prawem weta modelu zablokowala 2 poprawne prospekty
+  na 2 (La Cultura i STC - dowody potwierdzaly podmiot, model marudzil o kanal kontaktu).
+  Bramka blokujaca poprawne przypadki zostaje zignorowana i przestaje chronic przed
+  prawdziwym bledem tozsamosci.
 
 ## Znane pulapki
 

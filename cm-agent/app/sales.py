@@ -458,19 +458,25 @@ def _city_from_notes(pipe):
 
 
 def _identity_verdict(pipe, job_id, summary=""):
-    """Bramka tozsamosci LICZONA Z DOWODOW, nie z posluszenstwa modelu. Tap-test 24/07 pokazal,
-    ze model potrafi zignorowac kontrakt pierwszej linii, wiec bramka oparta na jego deklaracji
-    jest bramka tylko z nazwy. Reguly:
-    - prospekt z domena: domena musi wystapic w zrodlach researchu albo w tresci claims,
-    - prospekt bez domeny: miasto z kartoteki musi wystapic w claims,
-    - nie ma czym potwierdzic = niepotwierdzone (bezpieczna strona: outreach do zlej firmy
-      kosztuje wiarygodnosc, falszywy alarm kosztuje jedno spojrzenie Tomasza).
-    Jawne "TOZSAMOSC: niepewna" od modelu przewaza zawsze - widzial cos, czego my nie mierzymy."""
-    if re.search(r"TOZSAMOSC:\s*niepewn", summary or "", re.IGNORECASE):
-        return False, "model zglosil niepewnosc"
+    """Bramka tozsamosci: TRZY stany, bo to DWA rozne pytania.
+    (1) Czy research dotyczy TEJ firmy - liczone z DOWODOW (domena prospekta w zrodlach albo
+        claims; bez domeny: miasto z kartoteki w claims). Model tu nie glosuje: tap-test 24/07
+        pokazal, ze potrafi zignorowac kontrakt pierwszej linii.
+    (2) Czy cos budzi watpliwosc - deklaracja modelu ("TOZSAMOSC: niepewna - powod").
+
+    Pierwsza wersja dawala modelowi prawo weta i zablokowala 2 poprawne prospekty na 2
+    (La Cultura z Sosnowca i STC - w obu dowody potwierdzaly podmiot, a model marudzil o kanal
+    kontaktu). Bramka blokujaca poprawne przypadki zostanie zignorowana i przestanie chronic
+    przed prawdziwym Rhode Island, wiec zastrzezenie MODELU obniza stan do ostrzezenia,
+    a blokuje wylacznie BRAK DOWODU.
+
+    Zwraca (stan, powod), stan: 'potwierdzona' | 'z zastrzezeniem' | 'niepotwierdzona'."""
+    m = re.search(r"TOZSAMOSC:\s*niepewn\w*\s*[-:]?\s*(.{0,160})", summary or "", re.IGNORECASE)
+    zastrzezenie = re.sub(r"\s+", " ", m.group(1)).strip() if m else None
     if not job_id:
-        return False, "brak joba researchu"
+        return "niepotwierdzona", "brak joba researchu"
     host = re.sub(r"^https?://(www\.)?", "", (pipe or {}).get("prospect_url") or "").split("/")[0].strip()
+    dowod, opis = False, "kartoteka bez domeny i miasta"
     try:
         if host:
             r = db.fetchone(
@@ -480,17 +486,21 @@ def _identity_verdict(pipe, job_id, summary=""):
                         OR EXISTS (SELECT 1 FROM claims c
                                    WHERE c.job_id=%s AND c.claim_text ILIKE %s)) AS ok""",
                 (job_id, f"%{host}%", job_id, f"%{host}%"))
-            return bool((r or {}).get("ok")), f"domena {host}"
-        miasto = _city_from_notes(pipe)
-        if miasto:
-            r = db.fetchone(
-                "SELECT EXISTS (SELECT 1 FROM claims c WHERE c.job_id=%s AND c.claim_text ILIKE %s) AS ok",
-                (job_id, f"%{miasto}%"))
-            return bool((r or {}).get("ok")), f"miasto {miasto}"
+            dowod, opis = bool((r or {}).get("ok")), f"domena {host}"
+        else:
+            miasto = _city_from_notes(pipe)
+            if miasto:
+                r = db.fetchone(
+                    "SELECT EXISTS (SELECT 1 FROM claims c WHERE c.job_id=%s AND c.claim_text ILIKE %s) AS ok",
+                    (job_id, f"%{miasto}%"))
+                dowod, opis = bool((r or {}).get("ok")), f"miasto {miasto}"
     except Exception:
         traceback.print_exc()
-        return False, "sonda tozsamosci padla"
-    return False, "kartoteka bez domeny i miasta"
+        return "niepotwierdzona", "sonda tozsamosci padla"
+    if not dowod:
+        return "niepotwierdzona", (f"{opis} nie wystepuje w dowodach" if host or opis.startswith("miasto") else opis)
+    return ("z zastrzezeniem", zastrzezenie or "research zglosil watpliwosc") if zastrzezenie \
+        else ("potwierdzona", f"{opis} w dowodach")
 
 
 def _research_query(name, url, hint=None):
@@ -633,11 +643,15 @@ def _draft_outreach(inp, chat_id):
     # Bramka tozsamosci: marker z podsumowania researchu zyje w notatkach lejka. Nie blokujemy
     # pisania (decyduje Tomasz), ale gotowiec ma jechac z ostrzezeniem, nie po cichu.
     # Liczy sie OSTATNI marker - po ponownym researchu ze strona werdykt sie zmienia.
-    _markery = re.findall(r"TOZSAMOSC:\s*(potwierdzona|niepewna)", row.get("notes") or "", re.IGNORECASE)
-    watpliwa = bool(_markery) and _markery[-1].lower().startswith("niepewn")
+    _markery = re.findall(r"TOZSAMOSC:\s*(potwierdzona|z zastrzezeniem|niepotwierdzona|niepewna)",
+                          row.get("notes") or "", re.IGNORECASE)
+    _stan = _markery[-1].lower() if _markery else ""
+    _ostrzezenie = ("⛔ RESEARCH NIE POTWIERDZIL TOZSAMOSCI TEJ FIRMY - zweryfikuj adresata PRZED "
+                    "wyslaniem.\n" if _stan in ("niepotwierdzona", "niepewna")
+                    else "⚠️ Podmiot potwierdzony dowodami, ale research zglosil zastrzezenie - "
+                         "sprawdz je przed wyslaniem.\n" if _stan == "z zastrzezeniem" else "")
     _tg_send(chat_id, f"🧾 OUTREACH DO WYSLANIA RECZNIE - {channel} - {row['prospect_name'][:80]}\n"
-                      + ("⚠️ RESEARCH NIE POTWIERDZIL TOZSAMOSCI TEJ FIRMY - zweryfikuj adresata "
-                         "PRZED wyslaniem.\n" if watpliwa else "")
+                      + _ostrzezenie
                       + f"(ponizej czysta wklejka; NIC nie wysyla sie samo)")
     _tg_send(chat_id, draft)
     try:
@@ -1129,20 +1143,23 @@ def tick():
             summary = compliance.fix_dashes(_summarize_research(name, grounding))  # kanon marki: zero em dash
             # Bramka tozsamosci: przy niepotwierdzonym podmiocie nastepnym ruchem NIE jest outreach.
             # Wysylka do firmy, ktorej research nie potwierdzil, kosztuje wiarygodnosc, nie tokeny.
-            potwierdzona, powod = _identity_verdict(pipe, job_id, summary)
-            nastepny = (
-                f"✅ Tozsamosc potwierdzona ({powod} w dowodach). Nastepny ruch: przelacz /agents "
-                f"na Sprzedawce i powiedz np. 'napisz outreach do {name[:40]}'."
-                if potwierdzona else
-                f"⚠️ TOZSAMOSC NIEPOTWIERDZONA ({powod}). Nastepny ruch: NIE pisz outreachu. "
-                f"Podaj strone i zlec ponownie: /prospect {name[:40]} <adres strony>. Jesli firma "
-                f"nie ma strony, potwierdz ja telefonem albo profilem spolecznosciowym.")
+            stan, powod = _identity_verdict(pipe, job_id, summary)
+            if stan == "potwierdzona":
+                nastepny = (f"✅ Tozsamosc potwierdzona ({powod}). Nastepny ruch: przelacz /agents "
+                            f"na Sprzedawce i powiedz np. 'napisz outreach do {name[:40]}'.")
+            elif stan == "z zastrzezeniem":
+                nastepny = (f"⚠️ Podmiot potwierdzony dowodami ({powod[:150]}). Outreach mozesz "
+                            f"pisac, ale ZWERYFIKUJ ten punkt przed wyslaniem - najtaniej telefonem. "
+                            f"Nastepny ruch: 'napisz outreach do {name[:40]}'.")
+            else:
+                nastepny = (f"⛔ TOZSAMOSC NIEPOTWIERDZONA ({powod}). Nastepny ruch: NIE pisz "
+                            f"outreachu. Podaj strone i zlec ponownie: /prospect {name[:40]} "
+                            f"<adres strony>. Bez strony potwierdz firme telefonem albo profilem.")
             text = f"🔍 RESEARCH PROSPEKTA GOTOWY: {name}\n\n{summary}\n\n{nastepny}"
             if chat:
                 _tg_send(chat, text)
             if pipe:
                 # marker w notatkach niesie werdykt dalej (czyta go _draft_outreach)
-                stan = "potwierdzona" if potwierdzona else "niepewna"
                 _append_notes(pipe["id"], f"research gotowy [TOZSAMOSC: {stan}]:\n{summary[:1200]}")
         except Exception:
             traceback.print_exc()
@@ -1162,10 +1179,12 @@ def _summarize_research(name, grounding):
                        # nazwie (La Cultura z Sosnowca wrocila jako studio w Pawtucket RI).
                        # Pierwsza linia jest KONTRAKTEM dla kodu, nie ozdoba.
                        f"PIERWSZA LINIA MUSI brzmiec doslownie 'TOZSAMOSC: potwierdzona' albo "
-                       f"'TOZSAMOSC: niepewna - <powod>'. 'potwierdzona' TYLKO wtedy, gdy claims "
-                       f"wskazuja na TEN podmiot (zgodna domena, miasto, kraj). Rozbieznosc kraju "
-                       f"albo miasta, kilka podobnie nazwanych firm, brak potwierdzenia adresu = "
-                       f"'niepewna'.\n"
+                       f"'TOZSAMOSC: niepewna - <powod>'. Pytanie dotyczy PODMIOTU (czy claims "
+                       f"opisuja te firme: zgodna domena, miasto, kraj), NIE tego, ktory kanal "
+                       f"kontaktu jest wlasciwy - watpliwosci o kanal, mail czy profil zglaszaj "
+                       f"w sekcji HAK PERSONALIZACJI. 'niepewna' gdy rozbiezny kraj albo miasto, "
+                       f"kilka rownie prawdopodobnych firm o tej nazwie, albo brak potwierdzenia "
+                       f"adresu.\n"
                        f"Dalej sekcje: KIM SA (2-3 zdania) / SYGNALY KUPNA / PROBLEMY KTORE "
                        f"ROZWIAZUJEMY / HAK PERSONALIZACJI / REKOMENDOWANY TIER (od gory). Fakt "
                        f"bez zrodla w danych oznacz '(do weryfikacji)'. Zachowaj 2-3 linki.\n\n"
