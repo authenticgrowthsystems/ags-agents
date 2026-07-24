@@ -49,6 +49,47 @@ Dodatkowo: karty przegladu, przypomnienia i propozycje z luk kadencji CELOWO nie
 (kanon 24/07: badge = mowi agent, brak badge = system). To dobra zasada, ale w praktyce oznacza,
 ze 100% tego, co subagent robi dla Tomasza, dociera bez twarzy.
 
+## CZESC 2: SONDA W BAZIE (24/07 ~20:50) - co pokazaly dane
+
+**Punkt 1 powyzej jest BLEDNY i zostaje jako slad rozumowania.** `cm_work_mode` = **semi**,
+wiec odprawa poranna JEST wlaczona. Zalozylem wartosc domyslna z kodu zamiast sprawdzic
+zywa - dokladnie ten blad, przed ktorym ostrzega kanon DOCS-FIRST (diagnoza z dowodu, nie
+z hipotezy). Powody 2, 3 i 4 zostaja w mocy.
+
+Co pokazala sonda NAPRAWDE:
+
+**A. Aktywny agent to JEDEN SLOT na czat, i trzyma go Sprzedawca.**
+`user_agent_state`: jeden wiersz, `active_agent = subagent:AGS:sprzedaz`, ostatnia zmiana
+24/07 18:53. Skoro slot jest jeden, to rozmowa z subagentem X wymaga PORZUCENIA Sprzedawcy
+i pozniejszego powrotu. Przy dwoch aktywnych frontach (kampania sprzedazowa + content) wygrywa
+ten, ktory akurat pali sie bardziej - i tak subagenci contentu wypadaja z rytmu dnia.
+To jest strukturalny powod, mocniejszy niz brak zaproszenia do rozmowy.
+
+**B. Watki rozmow sa PUSTE.**
+`fsm_data->'histories'` nie ma ani jednego wpisu (zero wierszy w sondzie), przy 48 wpisach
+`CONVERSATION_SUMMARY` w `agent_logs` (ostatni 24/07 19:24) i 48 zadaniach `memory_summary`
+w ledgerze. Czyli mechanizm streszczania dziala i CZYSCI watki po TTL 30 min, a trwale
+zostaje tylko skrot. Skutek praktyczny: kazda rozmowa z subagentem zaczyna sie zimno,
+z podsumowania, a nie z watku. Przy rozmowie raz na kilka dni to znaczy: zawsze od zera.
+
+**C. Subagent nigdy o nic nie poprosil.**
+`agent_logs` z typem `CHANNEL_NEED`: **zero wpisow**. Sciezka "subagent zglasza potrzebe
+zasobu, CM przekazuje Tomaszowi" istnieje w kodzie od 06/07 i w produkcji nie odpalila sie
+ANI RAZU. Albo subagenci nigdy niczego nie potrzebuja (nieprawdopodobne przy braku metryk
+LinkedIna i limitach X), albo prompt nie sklania ich do proszenia. To pole do sprawdzenia
+osobno.
+
+**D. Rozmowy jednak sa, tylko nie z tymi agentami.**
+Ledger `cm_tasks` za 30 dni: `conversation` (CM) 149 wywolan, `subagent_chat` 118,
+`sales_chat` 69. Czyli subagenci ROZMAWIALI - tylko rozklad w czasie i per kanal jest
+nieznany (ledger nie trzyma identyfikatora agenta). Hipoteza do weryfikacji: 118 wywolan
+pochodzi z okresu testow 07-12/07, a nie z ostatniego tygodnia. Sonda rozstrzygajaca
+(agent_logs trzyma `agent_id` przy streszczeniach):
+
+```bash
+docker exec -i pg_n8n psql -U n8n -d ags_crd -c "SELECT agent_id, COUNT(*) AS streszczen, MAX(created_at) AS ostatnia_rozmowa FROM agent_logs WHERE log_type='CONVERSATION_SUMMARY' GROUP BY agent_id ORDER BY ostatnia_rozmowa DESC;"
+```
+
 ## Czego audyt NIE rozstrzyga bez bazy
 
 - czy `cm_work_mode` jest ustawiony (a wiec czy odprawa w ogole odpala),
@@ -84,20 +125,27 @@ SELECT log_type, COUNT(*) AS n, MAX(created_at) AS ostatnio
 SQL
 ```
 
-## Rekomendacja (do decyzji Tomasza, NIE wykonane)
+## Rekomendacja po sondzie (do decyzji Tomasza, NIE wykonane)
 
 Rezim stabilizacji mowi: na subagentach zero nowych funkcji bez decyzji. Dlatego audyt konczy
-sie propozycjami, nie kodem. Kolejnosc wg stosunku wartosci do ryzyka:
+sie propozycjami, nie kodem. Kolejnosc zmieniona po danych - najpierw to, co usuwa STRUKTURALNA
+przeszkode, potem to, co daje zaproszenie do rozmowy:
 
-1. **Sprawdzic i ustawic `cm_work_mode`** (jesli sonda pokaze `supervised`). Jedna linia SQL,
-   zero kodu - i odprawa poranna zaczyna istniec.
+1. **Adresowanie agenta bez przelaczania slotu** (usuwa przyczyne A). Prefiks w wiadomosci:
+   `x: ...`, `li: ...`, `cm: ...` idzie do wskazanego agenta i NIE zmienia aktywnego.
+   Sprzedawca zostaje w slocie przez cala kampanie, a content dostaje glos jednym slowem.
+   Zmiana w jednym miejscu (route w `conversation.handle`), zero DDL, odwracalna.
 2. **Meldunek dnia od KAZDEGO subagenta w glownym czacie, z badge'em** (zamiast albo obok
-   cichego raportu na bocie #2): trzy linie - co poszlo, co zarezonowalo, czego potrzebuje.
-   To zamienia raport w zaczepke do rozmowy.
+   cichego raportu na bocie #2): trzy linie - co poszlo, co zarezonowalo, czego potrzebuje,
+   plus guzik "Odpisz". To zamienia raport w zaczepke do rozmowy.
 3. **Prosba subagenta (CHANNEL_NEED) jako decyzja guzikami w glownym czacie**, nie linia
-   w cichym strumieniu. Mechanizm juz jest (`decisions.ask`), brakuje tylko przelaczenia toru.
-4. **Guzik "Odpisz subagentowi" pod jego meldunkiem**, ktory ustawia `active_agent` - zeby
-   rozmowa zaczynala sie jednym tapnieciem, a nie pamiecia o `/agents`.
+   w cichym strumieniu. Mechanizm juz jest (`decisions.ask`), brakuje przelaczenia toru.
+   Uwaga: najpierw sprawdzic, DLACZEGO ta sciezka nie odpalila sie ani razu (przyczyna C) -
+   przelaczanie toru, ktorym nic nie plynie, niczego nie naprawi.
+4. **Watek subagenta z dluzszym TTL albo wznawianie ze skrotu** (przyczyna B). Dzis 30 minut
+   ciszy kasuje watek, a rozmowa raz na kilka dni zawsze zaczyna sie zimno. Tanszy wariant:
+   przy pierwszej wiadomosci do subagenta wstrzykiwac ostatni `CONVERSATION_SUMMARY` jawnie
+   ("ostatnio rozmawialismy o...") zamiast pozwalac mu udawac, ze pamieta.
 
-Punkty 2-4 to zmiana INTERFEJSU, nie mozgu (kanon WARSTWY: interfejs jest wymienny), wiec sa
-odwracalne. Zadnego z nich nie robie bez Twojej decyzji.
+Punkty 1-4 to zmiana INTERFEJSU i PAMIECI, nie mozgu (kanon WARSTWY: interfejs jest wymienny),
+wiec sa odwracalne. Zadnego z nich nie robie bez Twojej decyzji.
