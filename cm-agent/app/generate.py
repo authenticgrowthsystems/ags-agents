@@ -435,10 +435,12 @@ def profile_from_image(images, channel):
         "operacyjnie na: Buyer (founder-led premium service, realna oferta i tarcie operacyjne, "
         "gotowy na wdrozenie), Peer (rowniesnik-tworca, wymiana, nie klient), Competitor (sprzedaje "
         "AI OS / frameworki / edukacje AI - sasiad kategorii), Partner (komplementarne uslugi, "
-        "potencjal wspolpracy). " + TRUTH_GUARD + " Jesli czegos nie widac - daj null, nie zgaduj.\n"
+        "potencjal wspolpracy), Inne (czlowiek spoza tych czterech kategorii - uzywaj, gdy zaden "
+        "opis nie pasuje, zamiast naciagac). " + TRUTH_GUARD
+        + " Jesli czegos nie widac - daj null, nie zgaduj.\n"
         "Odpowiedz WYLACZNIE poprawnym JSON (bez markdown):\n"
         '{"name": "imie i nazwisko jak wyswietlone", "handle": "handle bez @ albo null", '
-        '"bio": "skrot bio max 2 zdania", "proposed_tier": "Buyer|Peer|Competitor|Partner", '
+        '"bio": "skrot bio max 2 zdania", "proposed_tier": "Buyer|Peer|Competitor|Partner|Inne", '
         '"why": "1 zdanie uzasadnienia tieru"}'})
     resp = client().messages.create(
         model=model, max_tokens=400, thinking={"type": "disabled"},

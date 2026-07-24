@@ -189,5 +189,16 @@ check("brak propozycji tieru -> bez ingerencji", wolno is True and nota is None,
 wolno, nota = crm.fail_closed_note(None, "Competitor")
 check("brak kontaktu -> bez ingerencji", wolno is True and nota is None, (wolno, nota))
 
+
+# ---------------- pkt 4: piaty tier 'Inne' (decyzja Tomasza 24/07, DDL 031) ----------------
+print("\n[pkt 4] skala tierow:")
+check("piec wartosci w skali", crm.TIERS == ("Buyer", "Peer", "Competitor", "Partner", "Inne"), crm.TIERS)
+check("piec guzikow w karcie", len(crm.TIER_OPTIONS) == 5, crm.TIER_OPTIONS)
+check("guziki maja klucze male litery", all(o["key"] == o["label"].lower() for o in crm.TIER_OPTIONS))
+check("parser raportu zna 'Inne'", engagement._valid_tiers().get("inne") == "Inne")
+_stub_contact(2, _Data(), "dm")
+wolno, nota = crm.fail_closed_note(CID, "Inne")
+check("'Inne' + historia DM -> BRAK rekomendacji", wolno is False and nota, (wolno, nota))
+
 print("\n" + ("WSZYSTKIE TESTY PASS" if not FAILS else f"FAIL: {len(FAILS)} -> {FAILS}"))
 sys.exit(1 if FAILS else 0)

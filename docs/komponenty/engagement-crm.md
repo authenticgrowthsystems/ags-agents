@@ -50,8 +50,11 @@ cmt:ok (LEGACY, stare karty sprzed 21/07) -> status='approved' + task_queue 'com
   `relationship_stage` (skala ZATWIERDZONA guzikami 20/07: cold/commented/replied/dm/offer/
   client liniowo, tylko W PRZOD + 'ghosted' jako stan boczny; kolejny komentarz do ghosted
   ozywia relacje - bump traktuje ghosted jak cold),
-  `icp_tier` CHECK poszerzony o doktryne #71 (Buyer/Peer/Competitor/Partner) obok legacy
-  (Premium/Mid/Free/Watch/N/A). Stub: name, source='Comment', status='Cold', stage='cold'.
+  `icp_tier` CHECK poszerzony o doktryne #71 (Buyer/Peer/Competitor/Partner), od 24/07 takze
+  **Inne** (db/031, decyzja Tomasza guzikami: dodac piata wartosc, legacy Premium/Mid/Free/
+  Watch/N/A zostawic jako historie). Skala zyje w JEDNYM miejscu: `crm.TIERS` / `crm.TIER_OPTIONS`
+  (karty, parser raportu, zapis, prompt wizji profilu czerpia stamtad).
+  Stub: name, source='Comment', status='Cold', stage='cold'.
   Kolumna `who_is_who` JSONB (db/030, 24/07): kto jest kim PO STRONIE KLIENTA
   ({"role","influence_level","relationship_stage","source_of_data","notes"}). `handles`
   to tozsamosc per KANAL, `who_is_who` to pozycja czlowieka w ORGANIZACJI. Czyta ja

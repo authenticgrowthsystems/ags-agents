@@ -22,6 +22,13 @@ from . import db
 STAGES = ["cold", "commented", "replied", "dm", "offer", "client"]  # liniowy awans
 SIDE_STAGES = ["ghosted"]  # stany boczne w CHECK, poza kolejnoscia bump_stage
 
+# Skala ICP (doktryna #71) + 'Inne' od 24/07 (decyzja Tomasza guzikami, paczka #1 pkt 4:
+# dodac piata wartosc, legacy Premium/Mid/Free/Watch/N/A zostawic jako historie - twarde
+# sciecie CHECK wywalilo by 45 zywych wierszy). Jedno miejsce prawdy dla kart i zapisu.
+TIERS = ("Buyer", "Peer", "Competitor", "Partner", "Inne")
+TIER_KEYS = {t.lower(): t for t in TIERS}
+TIER_OPTIONS = [{"key": t.lower(), "label": t} for t in TIERS]
+
 _INTAKE_KEY = "crm_intake_pending"      # stan: czekamy na zrzut PROFILU (brand_config, wzorzec matreview)
 _INTAKE_TTL_MIN = 15
 
@@ -291,8 +298,7 @@ def process_profile_photo(intake, images):
     name = (prof.get("name") or "").strip()[:200]
     handle = norm_handle(prof.get("handle"))
     bio = (prof.get("bio") or "").strip()[:400]
-    tier = prof.get("proposed_tier") if prof.get("proposed_tier") in (
-        "Buyer", "Peer", "Competitor", "Partner") else None
+    tier = prof.get("proposed_tier") if prof.get("proposed_tier") in TIERS else None
     why = (prof.get("why") or "").strip()[:200]
     try:
         if name:
@@ -336,10 +342,8 @@ def process_profile_photo(intake, images):
             + (f"Propozycja modelu: {tier}" + (f" - {why}" if why else "") if tier
                else "Model nie mial pewnosci - wybierz tier.")
             + (f"\n{fc_note}" if fc_note else ""),
-            [{"key": "buyer", "label": "Buyer"}, {"key": "peer", "label": "Peer"},
-             {"key": "competitor", "label": "Competitor"}, {"key": "partner", "label": "Partner"}],
-            recommendation=({"Buyer": "buyer", "Peer": "peer", "Competitor": "competitor",
-                             "Partner": "partner"}.get(tier) if wolno else None),
+            list(TIER_OPTIONS),
+            recommendation=((tier or "").lower() if (wolno and tier in TIERS) else None),
             context={"contact_id": contact_id, "fail_closed": (not wolno)})
     return (f"🧬 Profil zapisany w CRM: {disp}" + (f" (@{handle})" if handle else "")
             + (f"\nBIO: {bio}" if bio else "") + f"\n{ask_note}")
@@ -347,7 +351,7 @@ def process_profile_photo(intake, images):
 
 def apply_tier(row, key, chat=None):
     """Akcja decyzji 'crm_tier' (decisions._apply_action): zapis icp_tier na kontakcie."""
-    tier = {"buyer": "Buyer", "peer": "Peer", "competitor": "Competitor", "partner": "Partner"}.get(key)
+    tier = TIER_KEYS.get((key or "").lower())
     contact_id = (row.get("context") or {}).get("contact_id")
     if not (tier and contact_id):
         return

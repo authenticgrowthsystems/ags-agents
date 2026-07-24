@@ -201,8 +201,9 @@ Zasady raportu:
   bez weryfikacji zostaw pole tieru PUSTE: karta przyjdzie bez rekomendacji
   i Tomasz wybierze sam.
 - Ujmij WSZYSTKIE akcje sesji. Czego nie było - nie zmyślaj.
-- nowa_osoba: proponowany tier z listy Buyer / Peer / Competitor / Partner
-  (klasyfikacja jak wyżej; Competitor-adjacent raportuj jako Competitor).
+- nowa_osoba: proponowany tier z listy Buyer / Peer / Competitor / Partner / Inne
+  (klasyfikacja jak wyżej; Competitor-adjacent raportuj jako Competitor; "Inne" =
+  człowiek spoza tych kategorii, używaj zamiast naciągania opisu do Peera).
 - WYKLUCZENIE Z LEJKA JEST FAIL-CLOSED: zanim zaproponujesz tier, który wyklucza
   osobę z lejka (Competitor, "poza ICP"), sprawdź historię DM z tą osobą. Jeżeli
   historii NIE MASZ w kontekście, a stan gry pokazuje ją jako kontakt w grze

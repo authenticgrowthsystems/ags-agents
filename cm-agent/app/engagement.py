@@ -248,7 +248,10 @@ _LINE_TYPES = {"komentarz": "komentarz", "dm_wyslany": "dm_wyslany", "dm wyslany
                "kpi_snapshot": "kpi_snapshot", "kpi snapshot": "kpi_snapshot", "kpi": "kpi_snapshot",
                "metryki": "kpi_snapshot", "metryki_kanalu": "kpi_snapshot",
                "metryki kanalu": "kpi_snapshot", "metryki kanału": "kpi_snapshot"}
-_VALID_TIERS = {"buyer": "Buyer", "peer": "Peer", "competitor": "Competitor", "partner": "Partner"}
+def _valid_tiers():
+    """Skala tierow trzymana w JEDNYM miejscu (crm.TIERS) - 24/07 doszedl 'Inne' (DDL 031)."""
+    from . import crm
+    return crm.TIER_KEYS
 
 # ---- pkt 1: liczby z panelu analitycznego (deterministycznie, zero LLM) ----
 # Czat na abonamencie widzi panel, ktorego serwer nie widzi (LinkedIn do czasu App 2 CMA,
@@ -414,9 +417,9 @@ def _report_tier_card(contact_id, disp, bio, tier_raw, brand, channel):
     if dup:
         return (f"karta tieru dla {disp} juz czeka" if dup["status"] == "pending"
                 else f"tier {disp} rozstrzygniety w ostatnich 24h ({dup.get('answer')})")
-    tier = _VALID_TIERS.get((tier_raw or "").strip().lower())
-    # pkt 7 paczki #1 (24/07): fail-closed przed wykluczeniem z lejka - patrz crm.fail_closed_note.
     from . import crm as _crm
+    tier = _valid_tiers().get((tier_raw or "").strip().lower())
+    # pkt 7 paczki #1 (24/07): fail-closed przed wykluczeniem z lejka - patrz crm.fail_closed_note.
     wolno, fc_note = _crm.fail_closed_note(contact_id, tier or tier_raw)
     decisions.ask(
         f"{brand}:{channel}", brand, "crm_tier",
@@ -424,10 +427,8 @@ def _report_tier_card(contact_id, disp, bio, tier_raw, brand, channel):
         + (f"NOTKA: {bio}\n" if bio else "")
         + (f"Propozycja z raportu: {tier}" if tier else "Raport bez propozycji tieru - wybierz.")
         + (f"\n{fc_note}" if fc_note else ""),
-        [{"key": "buyer", "label": "Buyer"}, {"key": "peer", "label": "Peer"},
-         {"key": "competitor", "label": "Competitor"}, {"key": "partner", "label": "Partner"}],
-        recommendation=({"Buyer": "buyer", "Peer": "peer", "Competitor": "competitor",
-                         "Partner": "partner"}.get(tier) if wolno else None),
+        list(_crm.TIER_OPTIONS),
+        recommendation=((tier or "").lower() if (wolno and tier) else None),
         context={"contact_id": str(contact_id), "fail_closed": (not wolno)})
     return (f"karta tieru dla {disp} ponizej (guziki)"
             + (" - bez rekomendacji, jest historia rozmow" if not wolno else ""))

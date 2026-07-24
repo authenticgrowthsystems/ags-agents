@@ -2,9 +2,9 @@
 
 ## Jednym zdaniem
 
-Paczka #1 jest zamknieta w 7 punktach na 8: kod i DDL 030 leza w repo, przetestowane lokalnie
-40 przypadkami bez dotykania produkcji; otwarty zostaje pkt 4 (tiery), bo jego zakres wywala
-45 zywych wierszy i to nie jest decyzja inzyniera.
+Paczka #1 jest zamknieta w calosci (8 na 8): kod, DDL 030 i DDL 031 leza w repo, przetestowane
+lokalnie 45 przypadkami bez dotykania produkcji; pkt 4 rozstrzygnal Tomasz guzikami tego samego
+wieczoru, a jedyne, co zostaje otwarte, to droga ZAPISU who_is_who - i to jest pytanie do Ciebie.
 
 ## Stan wejsciowy (dowod, nie zalozenie)
 
@@ -82,29 +82,49 @@ Wpiete w OBA miejsca, ktore proponuja tier (karta z raportu pracy i karta ze zrz
 AP-307 mowi, ze zmiana kontraktu obowiazuje kazdego zywego konsumenta w tym samym buildzie.
 Sprawdzone: to sa jedyne dwa takie miejsca, a icp_tier zapisuje sie w jednym.
 
+### pkt 4 - piaty tier "Inne" (decyzja Tomasza guzikami 24/07)
+
+Tomasz wybral wariant, ktory rekomendowalem: DODAC 'Inne' do listy, legacy zostawic jako
+historie. DDL 031 poszerza CHECK; 45 zywych wierszy (Watch 37, Premium 7, Mid 1) zostaje
+nietknietych. Migracja legacy pozostaje osobna decyzja i celowo NIE jest efektem ubocznym
+dokladania jednej wartosci.
+
+Przy okazji naprawilem dlug, ktory ta zmiana obnazyla: skala tierow byla przepisana
+w CZTERECH miejscach (dwie karty, prompt wizji profilu, mapa parsera raportu). Dodanie
+jednej wartosci wymagaloby czterech spojnych edycji, a przy piatym miejscu ktos by
+przeoczyl - to jest dokladnie klasa AP-307. Teraz zrodlem jest `crm.TIERS` / `crm.TIER_OPTIONS`,
+reszta czerpie stamtad.
+
+UWAGA WDROZENIOWA: 031 musi pojsc PRZED rebuildem tak samo jak 030 - po rebuildzie karta
+od razu oferuje 'Inne', a zapis tej wartosci bez poszerzonego CHECK skonczylby sie bledem bazy.
+
 ## Dowody
 
-`python cm-agent/tests/test_paczka1.py` - **40 przypadkow, wszystkie PASS**, stdlib only,
+`python cm-agent/tests/test_paczka1.py` - **45 przypadkow, wszystkie PASS**, stdlib only,
 bez bazy i bez serwera (wzorzec test_x_collector.py):
 - interpunkcja: 6 pozytywnych, 10 negatywnych (w tym tekst angielski i zbitki), 3 brzegowe,
 - parser KPI: aliasy, separatory tysiecy, okres domyslny, brak pola = None, nieczytelna liczba
   = pole puste, komentarz w tym samym raporcie dalej parsowany,
 - fail-closed: 7 przypadkow (tier wykluczajacy z historia i bez, tier neutralny, stadium offer
-  bez wpisow DM, brak kontaktu).
+  bez wpisow DM, brak kontaktu),
+- skala tierow: 5 przypadkow (piec wartosci, piec guzikow, klucze, parser zna 'Inne',
+  'Inne' + historia DM = brak rekomendacji).
 
 `python -m py_compile` na piatce zmienionych modulow - OK.
 
 ## Czego NIE zrobilem i dlaczego
 
-- **pkt 4 (piaty tier "Inne")** - twarde sciecie do 5 wartosci wywala 45 zywych wierszy
-  (Watch 37, Premium 7, Mid 1). Rekomendacja bez zmian: DODAC 'Inne', legacy zostawic jako
-  historie. To decyzja Tomasza, nie inzyniera - pytanie idzie do niego guzikami.
-- **Zapis who_is_who** - patrz wyzej, czeka na Twoja decyzje o zrodle.
-- **Wdrozenie** - DDL 030 i rebuild wykonuje Tomasz. Do tego czasu sekcja METRYKI KANALU jest
-  po prostu cicha (brak tabeli = pusta lista, nie awaria), a reszta zmian nie rusza produkcji.
+- **Zapis who_is_who** - kolumna i odczyt sa, drogi zapisu nie ma. Czeka na Twoja decyzje
+  (propozycja: linia `kto_jest_kim` w raporcie pracy, jeden dzien pracy).
+- **Migracja legacy tierow** (Watch/Premium/Mid -> Inne) - swiadomie NIE, zgodnie z decyzja
+  Tomasza. Informacja "ten kontakt przyszedl z bazy #71 jako Watch" ma wartosc historyczna.
+- **Wdrozenie** - DDL 030, DDL 031 i rebuild wykonuje Tomasz. Do tego czasu sekcja METRYKI
+  KANALU jest po prostu cicha (brak tabeli = pusta lista, nie awaria), a reszta zmian nie
+  rusza produkcji.
 
 ## Nastepny krok
 
-push -> `psql 030` PRZED rebuildem -> rebuild cm-agent -> tap-testy: (a) linia kpi_snapshot
-przez narzedzie Lacznika, (b) karta TNM/RDC z flaga interpunkcji, (c) karta tieru dla osoby
-z historia DM (ma przyjsc BEZ gwiazdki rekomendacji).
+push -> `psql 030` i `psql 031` PRZED rebuildem -> rebuild cm-agent -> tap-testy:
+(a) linia kpi_snapshot przez narzedzie Lacznika, (b) karta TNM/RDC z flaga interpunkcji,
+(c) karta tieru dla osoby z historia DM (ma przyjsc BEZ gwiazdki rekomendacji, z piatym
+guzikiem 'Inne').

@@ -47,7 +47,11 @@ ale lista slow jest szersza i dotyczy SPOSOBU mowienia o produkcie, nie tylko na
 Twarde sciecie do 5 wartosci (Buyer/Peer/Partner/Competitor/Inne) **wywalilo by 45 wierszy**
 na CHECK. Rekomendacja: DODAC 'Inne' do istniejacej listy i osobno zdecydowac, czy legacy
 (Watch/Premium/Mid/Free/N/A) migrujemy na nowa skale, czy zostawiamy jako historie.
-Decyzja nalezy do Tomasza/Managera - nie ruszam bez niej.
+**DECYZJA TOMASZA (guziki, 24/07): dodac 'Inne', legacy ZOSTAWIC. ZROBIONE** - DDL 031
+(CHECK poszerzony) + `crm.TIERS` jako jedno zrodlo skali dla kart, parsera raportu, zapisu
+i promptu wizji profilu (wczesniej lista byla przepisana w czterech miejscach - AP-307).
+Piaty guzik jest w kartach klasyfikacji, oba masterprompty czatowe znaja 'Inne'.
+Migracja legacy pozostaje otwarta i celowo NIE jest efektem ubocznym tej zmiany.
 
 ### 5. contacts.who_is_who JSONB
 **Status: KOLUMNA ZROBIONA 24/07 (DDL 030), ZAPIS DO DECYZJI MANAGERA.** ALTER TABLE
@@ -109,10 +113,12 @@ falszywy alarm w kazdej karcie skonczylby sie ignorowaniem flagi. 19 przypadkow 
 
 ## STAN NA 24/07 WIECZOR (po wykonaniu)
 
-7 z 8 punktow zamknietych: 3 (babfe03), 6 (sonda), 2, 8, 1, 5 (kolumna), 7.
-Zostaje **pkt 4** - czeka na decyzje Tomasza, bo twarde sciecie tierow wywala 45 zywych
-wierszy. Pkt 5 ma kolumne i odczyt, ale otwarta droge ZAPISU (propozycja: linia
-`kto_jest_kim` w raporcie pracy).
-NIE WDROZONE JESZCZE NA SERWER: DDL 030 + rebuild (paczka lezy w repo, kolejnosc:
-push -> psql 030 -> rebuild -> tap-testy). Do czasu psql sekcja METRYKI KANALU
+**8 z 8 punktow zamknietych:** 3 (babfe03), 6 (sonda), 2, 8, 1, 5 (kolumna + odczyt), 7,
+4 (po decyzji Tomasza guzikami).
+JEDNA rzecz zostaje otwarta w pkt 5: droga ZAPISU who_is_who (propozycja BE: linia
+`kto_jest_kim` w raporcie pracy) - pytanie do Managera.
+NIE WDROZONE JESZCZE NA SERWER: DDL 030 + DDL 031 + rebuild (paczka lezy w repo, kolejnosc:
+push -> psql 030 -> psql 031 -> rebuild -> tap-testy). Do czasu psql sekcja METRYKI KANALU
 w stanie gry jest cicha (brak tabeli = pusta lista, nie awaria) - to celowe.
+UWAGA KOLEJNOSCI: 031 przed rebuildem TAKZE, bo po rebuildzie karta klasyfikacji od razu
+oferuje 'Inne', a zapis tej wartosci bez poszerzonego CHECK skonczylby sie bledem bazy.

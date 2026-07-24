@@ -104,14 +104,17 @@ Triage per punkt: docs/briefs/PACZKA_1_MANAGER_24072026.md. Raport: docs/cm/RAPO
 - **pkt 7 ZROBIONY**: crm.dm_history + crm.fail_closed_note na engagement_log; tier wykluczajacy
   z lejka przy istniejacej historii rozmow traci REKOMENDACJE (a bez rekomendacji semi_autonomous
   NIE decyduje sam - crm_tier jest na semi od 22/07). Wpiete w oba miejsca proponujace tier.
-- **pkt 4 DALEJ CZEKA NA DECYZJE TOMASZA**: sciecie icp_tier do 5 wartosci wywali 45 zywych
-  wierszy (Watch 37, Premium 7, Mid 1). Rekomendacja: DODAC 'Inne', legacy zostawic.
+- **pkt 4 ZROBIONY** (decyzja Tomasza guzikami 24/07: dodac 'Inne', legacy zostawic): DDL 031
+  poszerza CHECK, skala zyje teraz w JEDNYM miejscu `crm.TIERS` (wczesniej przepisana
+  w czterech - karty x2, prompt wizji, mapa parsera; klasa AP-307).
 
-**WDROZENIE PACZKI (kolejnosc obowiazkowa):** push -> `psql db/030_kpi_whoiswho.sql` PRZED
-rebuildem -> rebuild cm-agent -> tap-testy: (a) linia kpi_snapshot narzedziem Lacznika,
-(b) karta TNM/RDC z flaga interpunkcji, (c) karta tieru dla osoby z historia DM = BEZ gwiazdki
-rekomendacji. Do czasu psql sekcja METRYKI KANALU jest cicha (brak tabeli = pusta lista).
-Dowod lokalny bez produkcji: `python cm-agent/tests/test_paczka1.py` - 40 przypadkow PASS.
+**WDROZENIE PACZKI (kolejnosc obowiazkowa):** push -> `psql db/030_kpi_whoiswho.sql`
++ `psql db/031_tier_inne.sql` PRZED rebuildem -> rebuild cm-agent -> tap-testy: (a) linia
+kpi_snapshot narzedziem Lacznika, (b) karta TNM/RDC z flaga interpunkcji, (c) karta tieru
+dla osoby z historia DM = BEZ gwiazdki rekomendacji, z piatym guzikiem 'Inne'.
+Do czasu psql sekcja METRYKI KANALU jest cicha (brak tabeli = pusta lista); 031 tak samo
+PRZED rebuildem, bo karta od razu zaoferuje 'Inne', a zapis bez CHECK to blad bazy.
+Dowod lokalny bez produkcji: `python cm-agent/tests/test_paczka1.py` - 45 przypadkow PASS.
 
 ### B. Otwarte decyzje Tomasza (nie kod - pytaj guzikami, nie zgaduj)
 1. Cache semantyczny Researchera: globalnie OFF czy plaster na fraze 'prospect research'.
@@ -119,7 +122,9 @@ Dowod lokalny bez produkcji: `python cm-agent/tests/test_paczka1.py` - 40 przypa
    grafike z materialu, wiec automat dotknalby czternastu.
 3. Poczta dla agenta: ODLOZONE 24/07 ("na razie wysylam recznie, ale zapytaj mnie o to pozniej")
    - docs/briefs/BRIEF_POCZTA_I_CRM_GHL_24072026.md ma trzy warianty i dwa ograniczenia prawne.
-4. Punkt 4 paczki (tiery, wyzej).
+4. ~~Punkt 4 paczki (tiery)~~ ROZSTRZYGNIETE 24/07: 'Inne' dodane, legacy zostaje (DDL 031).
+5. Zapis `who_is_who`: kto go wypelnia (SQL Tomasza czy nowa linia `kto_jest_kim`
+   w raporcie pracy) - pytanie postawione Managerowi w raporcie paczki #1.
 
 ### C. Dlug techniczny z dzisiaj (kolejnosc wg bolu)
 - **Kaskada Researchera nie czyta strony badanego podmiotu** - obejscie dziala TYLKO w sprzedazy

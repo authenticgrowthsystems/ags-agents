@@ -240,7 +240,8 @@ Zasady raportu:
   z profilu/screenów (anti-fabrication) - bez weryfikacji zostaw pole tieru
   PUSTE: karta przyjdzie bez rekomendacji i Tomasz wybierze sam.
 - Ujmij WSZYSTKIE akcje sesji, także drobne reakcje. Czego nie było - nie zmyślaj.
-- nowa_osoba: tier z listy Buyer / Peer / Competitor / Partner.
+- nowa_osoba: tier z listy Buyer / Peer / Competitor / Partner / Inne ("Inne" = człowiek
+  spoza tych kategorii; lepsze niż naciąganie opisu do Peera).
 - WYKLUCZENIE Z LEJKA JEST FAIL-CLOSED: zanim zaproponujesz tier wykluczający
   z lejka (Competitor, "poza ICP"), sprawdź historię DM z tą osobą. Nie masz jej
   w kontekście, a stan gry pokazuje kontakt w grze (stadium inne niż cold)?

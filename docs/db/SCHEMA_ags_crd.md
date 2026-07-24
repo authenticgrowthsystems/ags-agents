@@ -176,7 +176,7 @@ contacts - kolumny dodane/zmienione w 026:
 |---|---|---|
 | handles | JSONB NOT NULL default '{}' | jedna osoba, wiele kont: {"x": "handle", "linkedin": "slug"}; pas bezpieczenstwa IF NOT EXISTS (audyt 04/07 widzial ta kolumne) |
 | relationship_stage | VARCHAR(20) NOT NULL default 'cold' | CHECK (skala zatwierdzona guzikami 20/07): cold/commented/replied/dm/offer/client liniowo (bump TYLKO W PRZOD, crm.bump_stage) + 'ghosted' stan boczny (ozywienie = bump jak z cold) |
-| icp_tier | (istniejaca) | CHECK poszerzony: Buyer/Peer/Competitor/Partner (doktryna #71) + legacy Premium/Mid/Free/Watch/N/A (45 zywych wierszy) |
+| icp_tier | (istniejaca) | CHECK poszerzony: Buyer/Peer/Competitor/Partner (doktryna #71) + **Inne** (DDL 031, decyzja Tomasza 24/07) + legacy Premium/Mid/Free/Watch/N/A (45 zywych wierszy, zostawione jako historia - twarde sciecie skali wywaliloby je z CHECK). Skala w kodzie: `crm.TIERS` (jedno zrodlo dla kart, parsera raportu i zapisu) |
 
 engagement_log - kolumny dodane w 026:
 
