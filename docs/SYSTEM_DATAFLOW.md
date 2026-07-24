@@ -81,7 +81,7 @@ stan gry; Etap 2 = narzedzia MCP w n8n, czat czyta i raportuje SAM) [lacznik].
 | Grafika | [komponenty/grafika.md](komponenty/grafika.md) | gpt-image-2, prompt Sonneta, brand_tokens/visual_canon, kanon mediow |
 | Sync Notion | [komponenty/sync-notion.md](komponenty/sync-notion.md) | mirror DB->Notion, sync_registry/page_map, drift check |
 | n8n transport | [komponenty/n8n-transport.md](komponenty/n8n-transport.md) | HITL galezie, publishery, crony, zasady PUT, patchery |
-| Agent Sprzedazy | [komponenty/agent-sprzedazy.md](komponenty/agent-sprzedazy.md) | /prospect research critical, outreach gotowce HITL, lejek sales_pipeline, sales_knowledge z embeddingami |
+| Agent Sprzedazy | [komponenty/agent-sprzedazy.md](komponenty/agent-sprzedazy.md) | /prospect research **medium** (critical przez API zablokowany, kanon 20/07), wizytowka (agent sam wchodzi na strone prospekta), dane kontaktowe w kolumnach lejka (DDL 029), bramka tozsamosci trzystanowa, gotowiec HITL z naglowkiem i stopka, sales_knowledge z prog trafnosci 0.55 |
 | Lacznik | [komponenty/lacznik.md](komponenty/lacznik.md) | RAPORT PRACY (parser bez LLM), /kontekst, strona Notion Stan gry, masterprompty czatowe; Etap 2: narzedzia MCP stan_gry + wyslij_raport_pracy (workflow yxJUJmZpSUe0tw9K, endpointy /lacznik/*) |
 
 Schemat tabel: `docs/db/SCHEMA_ags_crd.md` (tabele bazowe + kazda zmiana DDL)
@@ -93,8 +93,14 @@ Schemat tabel: `docs/db/SCHEMA_ags_crd.md` (tabele bazowe + kazda zmiana DDL)
 - LIVE: caly przeplyw z sekcji 2 (multi-brand AGS/TNM/RDC active), kolektor X
   (od 20/07), dedup (skalibrowany), sync mirror v1 (brand_config +
   manager_daily_log).
-- AWARIA w naprawie: adapter web_search Researchera (fix na
-  build/researcher-fix, czeka rebuild - szczegoly researcher.md).
+- AWARIA web_search: ZAMKNIETA 20/07 (fix `allowed_callers:['direct']`, LIVE).
+- AWARIA "joby failed mimo wyniku": ZAMKNIETA 24/07 (dwa ksztalty opcji `label` vs
+  `option_label`; cache oddaje teraz takze claims) - researcher.md sekcja incydentu.
+- OTWARTE 24/07: kaskada Researchera NIE czyta strony badanego podmiotu (web_search zwraca
+  tytuly, firecrawl arXiv). Obejscie dziala TYLKO w sprzedazy (`sales.wizytowka`); kazdy inny
+  konsument dostaje tytuly zamiast tresci - szczegoly i dowody w researcher.md.
+- DDL: ostatni zaaplikowany **029** (dane kontaktowe prospekta w kolumnach lejka).
+  Nastepny wolny: 030 (paczka Managera pkt 1+5+7 - patrz docs/briefs/PACZKA_1_MANAGER_24072026.md).
 - LEGACY OFF: stary AGS X Agent (kolejka Notion, cron 14/18/22) wylaczony
   od 25/06 - opis w archiwum-dataflow.md sekcje B.
 - ZAMROZONE (nie odmrazac bez decyzji Tomasza): Agent Wizualny, App 2 CMA,
