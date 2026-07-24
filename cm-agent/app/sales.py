@@ -630,6 +630,13 @@ def _prospect_research(inp):
                    (str(job_id), row["id"]))
         _append_notes(row["id"], f"research zlecony (tier {tier}, job {str(job_id)[:8]})")
         eta = "kilka minut, ~1-2 PLN"
+        # REGULA PRAWDY: nieudane otwarcie strony ma byc WIDOCZNE w paragonie, nie domyslane
+        # z pustego wyniku (dowod 24/07: gola domena bez DNS = cicha pustka przez pol godziny).
+        if url and not (wiz or {}).get("tekst"):
+            eta += "; ⚠️ NIE udalo sie otworzyc strony prospekta - research bez niej"
+        elif (wiz or {}).get("tel") or (wiz or {}).get("mail"):
+            eta += (f"; ze strony: {wiz.get('tel') or 'brak tel'} / "
+                    f"{wiz.get('mail') or 'brak maila'} (zapisane w lejku)")
         return (f"🔍 Research zlecony: {name} (tier {tier}, {eta}). "
                 f"{'Nowy wpis w lejku. ' if created else ''}Wynik przyjdzie na Telegram "
                 f"i doklei sie do lejka - NIE czekaj w tej rozmowie.")
@@ -696,6 +703,24 @@ def _voice_for_outreach(brand):
 
 _WIZYTOWKA_PODSTRONY = re.compile(r"kontakt|contact|cennik|zapisy|grafik|instruktor|o-nas|about",
                                   re.IGNORECASE)
+
+
+def _kandydaci_url(adres):
+    """Warianty adresu do sprobowania. Powod (dowod 24/07): w lejku mamy
+    'klubsportowystandart.org', a ta GOLA domena nie ma wpisu DNS - odpowiada tylko
+    'www.klubsportowystandart.org'. Jeden wariant = 'No address associated with hostname'
+    i cicha pustka. Firmy zapisuja adres raz z www, raz bez, wiec probujemy oba, a takze
+    http, gdy https nie wstaje (male strony bywaja bez certyfikatu)."""
+    a = (adres or "").strip().rstrip("/")
+    if a.lower().startswith("http"):
+        return [a]
+    host = a.lstrip("/")
+    bez_www = host[4:] if host.lower().startswith("www.") else host
+    warianty = [f"https://www.{bez_www}", f"https://{bez_www}",
+                f"http://www.{bez_www}", f"http://{bez_www}"]
+    if host.lower().startswith("www."):  # zapisany z www - jego wariant probujemy pierwszy
+        warianty.insert(0, f"https://{host}")
+    return list(dict.fromkeys(warianty))
 _TAGI_RE = re.compile(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>|<[^>]+>")
 
 
@@ -713,15 +738,22 @@ def wizytowka(url, max_podstron=3, limit_znakow=6000):
     adres = (url or "").strip()
     if not adres:
         return out
-    if not adres.lower().startswith("http"):
-        adres = "https://" + adres
     naglowki = {"User-Agent": "Mozilla/5.0 (compatible; AGS-SalesAgent/1.0)"}
     kawalki = []
     try:
         with httpx.Client(timeout=15, follow_redirects=True, headers=naglowki) as klient:
-            r = klient.get(adres)
-            r.raise_for_status()
-            html = r.text
+            r, html = None, ""
+            for kandydat in _kandydaci_url(adres):
+                try:
+                    rr = klient.get(kandydat)
+                    rr.raise_for_status()
+                    r, html = rr, rr.text
+                    break
+                except Exception:
+                    continue
+            if r is None:
+                print(f"[sales] wizytowka: zaden wariant adresu nie odpowiedzial ({adres})", flush=True)
+                return out
             out["strony"].append(str(r.url))
             kawalki.append(_TAGI_RE.sub(" ", html))
             # podstrony, ktore u malych firm niosa kontakt i oferte (kontakt, cennik, grafik...)
