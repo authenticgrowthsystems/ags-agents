@@ -871,7 +871,11 @@ def _kontakt_prospekta(row, wiz=None):
     tel = (wiz or {}).get("tel") or row.get("contact_phone")
     if row.get("contact_id"):
         try:
-            c = db.fetchone("SELECT name FROM contacts WHERE contact_id=%s", (row["contact_id"],))
+            # AP-304 (moj blad z 24/07, wykryty sonda): kluczem contacts jest `id`, NIE
+            # `contact_id` - zapytanie lecialo wyjatkiem, wyjatek byl lapany, wiec osoba
+            # decyzyjna ZAWSZE wychodzila "nieustalona". Kolumny sprawdzamy PRZED, nie po.
+            c = db.fetchone("SELECT COALESCE(full_name, name) AS name FROM contacts WHERE id=%s",
+                            (row["contact_id"],))
             osoba = (c or {}).get("name")
         except Exception:
             traceback.print_exc()
