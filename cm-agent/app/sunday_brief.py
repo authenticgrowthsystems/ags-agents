@@ -137,7 +137,7 @@ def _synthesize(job_id, has_research):
         system=[_brand.voice_block(brand),  # 24/07: CALY glos (rdzen + Voice Bible), nie skrot
                 {"type": "text", "text":
                  f"Jestes Content Managerem marki {BRAND}. Redagujesz PODKLAD (nie gotowy artykul) pod "
-                 f"NIEDZIELNY artykul LinkedIn Tomasza - insight tygodnia ze swiata AI. Artykul finalnie "
+                 f"NIEDZIELNY artykul LinkedIn Tomasza - wniosek tygodnia ze swiata AI. Artykul finalnie "
                  f"pisze Tomasz recznie; Ty dajesz mu twardy material do wyboru.\n"
                  f"ZASADY TWARDE:\n"
                  f"- ZERO em-dash (kanon marki RULE 1): myslnik lub przebuduj zdanie.\n"

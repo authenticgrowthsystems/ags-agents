@@ -116,25 +116,44 @@ Do czasu psql sekcja METRYKI KANALU jest cicha (brak tabeli = pusta lista); 031 
 PRZED rebuildem, bo karta od razu zaoferuje 'Inne', a zapis bez CHECK to blad bazy.
 Dowod lokalny bez produkcji: `python cm-agent/tests/test_paczka1.py` - 45 przypadkow PASS.
 
-### B. Otwarte decyzje Tomasza (nie kod - pytaj guzikami, nie zgaduj)
-1. Cache semantyczny Researchera: globalnie OFF czy plaster na fraze 'prospect research'.
-2. Grafiki na X: wlaczyc `auto_image` (flaga gotowa, `/set`)? 31 postow tygodniowo, 17 juz ma
-   grafike z materialu, wiec automat dotknalby czternastu.
-3. Poczta dla agenta: ODLOZONE 24/07 ("na razie wysylam recznie, ale zapytaj mnie o to pozniej")
+### B. Decyzje - stan po mini-briefie Managera #1.2 (24/07 wieczor)
+1. ~~Cache semantyczny Researchera~~ ROZSTRZYGNIETE (P3): globalnie OFF, wdrozone w .env
+   + druga warstwa w kodzie (zapytania o podmiot omijaja cache po ADRESIE, nie po frazie).
+2. ~~Grafiki na X~~ ROZSTRZYGNIETE (P4): `auto_image` wlaczone dla X, parytet z LinkedIn.
+3. Poczta dla agenta: DALEJ ODLOZONE ("na razie wysylam recznie, ale zapytaj mnie pozniej")
    - docs/briefs/BRIEF_POCZTA_I_CRM_GHL_24072026.md ma trzy warianty i dwa ograniczenia prawne.
-4. ~~Punkt 4 paczki (tiery)~~ ROZSTRZYGNIETE 24/07: 'Inne' dodane, legacy zostaje (DDL 031).
-5. Zapis `who_is_who`: kto go wypelnia (SQL Tomasza czy nowa linia `kto_jest_kim`
-   w raporcie pracy) - pytanie postawione Managerowi w raporcie paczki #1.
+4. ~~Punkt 4 paczki (tiery)~~ ROZSTRZYGNIETE: 'Inne' dodane, legacy zostaje (DDL 031).
+5. **Zapis `who_is_who`: OTWARTE u Managera** - kolumna i odczyt sa, drogi zapisu nie ma.
+   Propozycja BE: linia `kto_jest_kim` w raporcie pracy (ten sam parser co `kpi_snapshot`).
+6. **Voice Bible v2.2 + Sekcja 21**: wsad po stronie Managera (deploy 26/07). Fix ucinania
+   glosu ZROBIONY W KODZIE (to byl bug loadera, nie tresci Biblii); SQL na nazwe flagi gotowy:
+   docs/ops/voice_bible_sekcja21_24072026.sql.
 
-### C. Dlug techniczny z dzisiaj (kolejnosc wg bolu)
-- **Kaskada Researchera nie czyta strony badanego podmiotu** - obejscie dziala TYLKO w sprzedazy
-  (sales.wizytowka), kazdy inny konsument dostaje tytuly zamiast tresci. docs/komponenty/researcher.md.
-- **Osoba decyzyjna**: mamy pobrana podstrone instruktorow, mozna z niej wyciagnac nazwisko
-  (instruktor to nie zawsze decydent - potrzebna regula).
-- **prospect_url wybiera podstrone** (Stepownia: /author/dudzikdariusz zamiast domeny glownej).
-- **Anglicyzmy w promptach wewnetrznych**: kilkadziesiat miejsc (follow-up, lead, deal, pipeline,
-  value prop). UWAGA: czesc to tokeny parsera - przeglad recznie, nie hurtem.
-- Sprzedawca nie widzi zrzutow ekranu (wrzutka trafia w routing zdjec, nie do sales.handle_chat).
+### C. Dlug techniczny z 24/07 - ZAMKNIETY tego samego wieczoru (commity 5e7be51, b00c3d8)
+- ~~Kaskada Researchera nie czyta strony podmiotu~~ **ZROBIONE**: natywne zrodlo `site`
+  (bez n8n, bez kosztu), pierwsze w kaskadzie, rusza tylko przy zapytaniu z adresem.
+  Twardy dowod przyczyny: adapter firecrawl wola endpoint prac naukowych, nie crawler.
+- ~~Osoba decyzyjna~~ **ZROBIONE**: `sales.osoba_decyzyjna` - do kolumny trafia tylko rola
+  jawnie decyzyjna, instruktor idzie do notatek z adnotacja "nie potwierdzone, ze decyduje".
+- ~~prospect_url wybiera podstrone~~ **ZROBIONE**: sciezki-smieci obcinane do korzenia domeny,
+  przy remisie wygrywa krotszy adres.
+- ~~Sprzedawca nie widzi zrzutow~~ **ZROBIONE**: `conversation.zrzut_dla_sprzedawcy` - wizja
+  z pytaniem sprzedazowym, opis wchodzi do rozmowy jako tresc od Tomasza. Zero zmian w n8n.
+- **Anglicyzmy w promptach**: poprawione teksty widoczne dla Tomasza i polskie instrukcje dla
+  modelu (follow-up -> nastepny kontakt, deal -> sprawa, lead -> zapytanie, insight -> wniosek).
+  NIE ruszone: nazwy narzedzi, kolumn i tokeny parsera - tam angielski jest czescia kontraktu.
+
+### C2. Z zycia 24/07 wieczorem (poza lista)
+- **"# X Adaptation" w tresci posta** (zrzut Tomasza z okna edycji X): straznik meta-naglowka
+  w channels.stage_variant (jedyne miejsce zapisu do post_queue) + SQL na wiersze sprzed
+  poprawki. Post z 19:58 zdazyl wyjsc z naglowkiem - w ksiedze publikacji nadal go ma.
+- **Glos ucinany w DZIEWIECIU miejscach** (zgloszenie Managera dotyczylo jednego): jeden wspolny
+  `brand.voice_block` = caly rdzen + cala Voice Bible, prompt-cache. docs/komponenty/glos-marki.md.
+- **Cichy except = blad projektowy** (P5 Managera): AP-306 rozszerzony, 17 miejsc uglosnionych,
+  2 zostawione cicho z uzasadnieniem, nowy test dymu importow.
+- **LEKCJA DNIA (kandydat na kanon):** trzy z tych bledow to jedna klasa - poprawka w JEDNYM
+  miejscu, gdy ta sama wada zyje w wielu (glos 9x, tier 4x, cichy except 19x). Zanim uznasz
+  poprawke za zrobiona, policz grepem, ile miejsc ma te sama wade.
 
 ### D. Kampania (to jest cel, reszta jest po to)
 - StandART: gotowiec WYSLANY 24/07. Oznacz "wyslalem" w bocie, zeby ustawil nastepny kontakt.

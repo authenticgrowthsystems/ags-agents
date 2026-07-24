@@ -253,13 +253,14 @@ _FRAMEWORKS = (
     "JAKIKOLWIEK markdown w tresci maila (czysty tekst!).\n"
     "- LinkedIn: zaproszenie <300 znakow BEZ pitchu; pitch dopiero w wiadomosci po akcepcie, "
     "value-first.\n"
-    "- Sekwencja follow-up: dzien 3 (nowy kat), dzien 7 (inny value prop), dzien 14 (break-up, "
-    "krotki). Agent PROPONUJE terminy, Tomasz wysyla.\n"
-    "PROSPECT RESEARCH: szukaj sygnalow kupna (zatrudnianie, wzrost, nowe uslugi, slaba "
-    "retencja/opinie, brak follow-upu po leadzie), problemow ktore rozwiazujemy (klienci nie "
-    "wracaja, leady gina, brak systemu poleceń) i haka personalizacji.\n"
-    "PIPELINE (higiena): KAZDY otwarty deal ma next step Z DATA; cisza >14 dni = follow-up "
-    "albo przenies do lost; pilnuj zeby rozmowa nie wisiala na jednej osobie; przy /pipeline "
+    "- Sekwencja przypomnien: dzien 3 (nowy kat), dzien 7 (inna obietnica wartosci), dzien 14 "
+    "(krotkie zamkniecie watku). Agent PROPONUJE terminy, Tomasz wysyla.\n"
+    "BADANIE PROSPEKTA: szukaj sygnalow kupna (zatrudnianie, wzrost, nowe uslugi, slabe "
+    "utrzymanie klientow i opinie, brak kontaktu zwrotnego po zapytaniu), problemow ktore "
+    "rozwiazujemy (klienci nie wracaja, zapytania gina, brak systemu polecen) i haka "
+    "personalizacji.\n"
+    "LEJEK (higiena): KAZDA otwarta sprawa ma nastepny krok Z DATA; cisza >14 dni = przypomnienie "
+    "albo przeniesienie do przegranych; pilnuj, zeby rozmowa nie wisiala na jednej osobie; przy /pipeline "
     "wskazuj co wymaga ruchu DZIS."
 )
 
@@ -349,7 +350,7 @@ def _system(chat_id):
     role = (
         f"Jestes AGENTEM SPRZEDAZY AGS (Authentic Growth Systems). Rozmawiasz na Telegramie z "
         f"Tomaszem, wlascicielem - jestes jego PARTNEREM STRATEGICZNYM w sprzedazy: masz wlasne "
-        f"zdanie, proponujesz kogo targetowac, jak, kiedy dosylac follow-up i kiedy domykac; "
+        f"zdanie, proponujesz do kogo uderzyc, jak, kiedy przypomniec sie i kiedy domykac; "
         f"zadajesz jedno trafne pytanie zamiast ankiet. {comm_guide()} "
         f"Priorytet operacyjny: PIERWSZA sprzedaz jak najszybciej - kazda rozmowa ma prowadzic "
         f"do nastepnego konkretnego ruchu w lejku.\n"
@@ -413,7 +414,7 @@ TOOL_DRAFT_OUTREACH = {
         "language": {"type": ["string", "null"], "enum": ["pl", "en", None],
                      "description": "Jezyk wiadomosci; default pl (rynek PL), en dla zagranicy."},
         "guidance": {"type": ["string", "null"],
-                     "description": "Wskazowki Tomasza / uzgodniony kat (hook, oferta, ton)."}},
+                     "description": "Wskazowki Tomasza / uzgodniony kat (hak, oferta, ton)."}},
         "required": ["prospect_fragment", "channel"]},
 }
 
@@ -430,20 +431,20 @@ TOOL_OFFER_FOR = {
 
 TOOL_PIPELINE_VIEW = {
     "name": "pipeline_view",
-    "description": "Pokaz aktualny lejek sprzedazy (otwarte pozycje, follow-upy, zaniedbania).",
+    "description": "Pokaz aktualny lejek sprzedazy (otwarte pozycje, zaplanowane kontakty, zaniedbania).",
     "input_schema": {"type": "object", "properties": {}},
 }
 
 TOOL_PIPELINE_ADD = {
     "name": "pipeline_add",
     "description": ("Dodaj prospekta do lejka RECZNIE (bez researchu). Uzywaj gdy Tomasz mowi "
-                    "'dodaj do lejka X' / 'mam leada Y'."),
+                    "'dodaj do lejka X' / 'mam nowy trop Y'."),
     "input_schema": {"type": "object", "properties": {
         "prospect_name": {"type": "string"},
         "url": {"type": ["string", "null"]},
         "stage": {"type": ["string", "null"], "enum": list(_STAGES) + [None],
                   "description": "Default prospect."},
-        "value": {"type": ["number", "null"], "description": "Szacowana wartosc dealu."},
+        "value": {"type": ["number", "null"], "description": "Szacowana wartosc wspolpracy (PLN)."},
         "currency": {"type": ["string", "null"], "description": "PLN albo USD; default PLN."},
         "note": {"type": ["string", "null"]}},
         "required": ["prospect_name"]},
@@ -451,8 +452,8 @@ TOOL_PIPELINE_ADD = {
 
 TOOL_PIPELINE_MOVE = {
     "name": "pipeline_move",
-    "description": ("Przesun prospekta w lejku / zaktualizuj deal (stage, wartosc, oferta, "
-                    "data follow-up, notatka). KAZDA zmiana stanu lejka idzie przez to narzedzie "
+    "description": ("Przesun prospekta w lejku / zaktualizuj sprawe (etap, wartosc, oferta, "
+                    "data nastepnego kontaktu, notatka). KAZDA zmiana stanu lejka idzie przez to narzedzie "
                     "(paragon). Stage: prospect->qualified->proposal->negotiation->won/lost."),
     "input_schema": {"type": "object", "properties": {
         "prospect_fragment": {"type": "string"},
@@ -470,7 +471,7 @@ TOOL_KNOWLEDGE_SEARCH = {
     "name": "sales_knowledge_search",
     "description": ("Przeszukaj SEMANTYCZNIE baze wiedzy sprzedazowej (ksiazki/techniki/case "
                     "studies Tomasza) pod konkretne pytanie: technika otwarcia, obiekcja cenowa, "
-                    "follow-up, negocjacje. Uzywaj PRZED pisaniem outreachu i przy doradztwie."),
+                    "przypomnienia o kontakcie, negocjacje. Uzywaj PRZED pisaniem gotowca i przy doradztwie."),
     "input_schema": {"type": "object", "properties": {
         "query": {"type": "string", "description": "Czego szukasz, konkretnie."}},
         "required": ["query"]},
@@ -479,7 +480,7 @@ TOOL_KNOWLEDGE_SEARCH = {
 TOOL_OUTREACH_SENT = {
     "name": "outreach_sent",
     "description": ("Odnotuj, ze Tomasz WYSLAL outreach do prospekta (mowi 'wyslalem', 'poszlo'). "
-                    "Oznacza propozycje jako wyslana i ustawia follow-up za 3 dni, jesli nie ma."),
+                    "Oznacza propozycje jako wyslana i ustawia nastepny kontakt za 3 dni, jesli go nie ma."),
     "input_schema": {"type": "object", "properties": {
         "prospect_fragment": {"type": "string"}},
         "required": ["prospect_fragment"]},
@@ -580,8 +581,8 @@ def _research_query(name, url, hint=None, ze_strony=None):
         "Ustal: 1) czym dokladnie jest ta firma/osoba (branza, skala, oferta, lokalizacja); "
         "2) SYGNALY KUPNA: zatrudnianie, wzrost, nowe uslugi/lokalizacje, aktywnosc "
         "marketingowa, opinie klientow (zwlaszcza skargi na kontakt/obsluge/brak odpowiedzi); "
-        "3) problemy, ktore rozwiazuje automatyzacja follow-up i system retencji klientow "
-        "(gubione leady, klienci nie wracaja, brak systemu opinii/polecen); "
+        "3) problemy, ktore rozwiazuje automatyczne przypominanie o kontakcie i system utrzymania "
+        "klientow (gubione zapytania, klienci nie wracaja, brak systemu opinii i polecen); "
         "4) hak personalizacji do pierwszego kontaktu (konkretny news, tresc, inicjatywa); "
         "5) kto decyduje i jak ich dosiegnac. Kazdy fakt z linkiem zrodla. "
         + (f"FAKTY ZDJETE BEZPOSREDNIO ZE STRONY PROSPEKTA (traktuj jako pewne, nie podwazaj "
@@ -1065,7 +1066,7 @@ def _outreach_stopka(row):
                                       f"jako wyslany)" if gotowce > 1 else "")
     nast = row.get("next_followup_at")
     return ("📊 Lejek: etap " + str(row.get("stage") or "?") + " | " + ktory
-            + (" | follow-up: " + nast.astimezone(WARSAW).strftime("%d/%m %H:%M") if nast else "")
+            + (" | nastepny kontakt: " + nast.astimezone(WARSAW).strftime("%d/%m %H:%M") if nast else "")
             + "\n⏭ Po wyslaniu napisz \"wyslalem\" - przesune etap i ustawie nastepny kontakt.")
 
 
@@ -1271,7 +1272,7 @@ def _pipeline_move(inp):
         except (ValueError, TypeError):
             return f"Nie rozumiem terminu \"{inp['next_followup_at']}\" - podaj ISO, np. 2026-07-23T10:00."
     if not sets and not inp.get("note"):
-        return "Nic do zmiany - podaj stage / oferte / wartosc / follow-up / notatke."
+        return "Nic do zmiany - podaj etap / oferte / wartosc / date nastepnego kontaktu / notatke."
     if sets:
         db.execute(f"UPDATE sales_pipeline SET {', '.join(sets)}, updated_at=NOW() WHERE id=%s",
                    (*params, row["id"]))
@@ -1297,7 +1298,7 @@ def _outreach_sent(inp):
     _append_notes(row["id"], "outreach WYSLANY przez Tomasza")
     return (f"✉️ Odnotowane: outreach do {row['prospect_name'][:70]} wyslany"
             + ("" if upd else " (nie znalazlem pasujacej propozycji - zapisalem sama notatke)")
-            + (". Follow-up ustawiony za 3 dni." if not row.get("next_followup_at") else "."))
+            + (". Nastepny kontakt ustawiony za 3 dni." if not row.get("next_followup_at") else "."))
 
 
 # ---------------- baza wiedzy ----------------
