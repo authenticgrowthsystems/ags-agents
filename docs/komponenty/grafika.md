@@ -89,6 +89,26 @@ generate_image_prompt.
 - Karta zatwierdzenia ostrzega "BEZ GRAFIKI (LinkedIn)" gdy material celuje w
   LinkedIn bez pliku - mozna dopiac wlasna 🎨/➕ przed zatwierdzeniem.
 
+## Jezyk napisow na grafice (fix 24/07)
+
+Objaw: material "Klasyfikacja kontaktu przed werdyktem" poszedl na AGS LinkedIn po angielsku,
+a plansza wyszla POLSKA (naglowek "Poza ICP to nie werdykt", polskie przyklady w tabeli).
+Polska grafika pod angielskim postem lamie separacje marek (AGS mowi po angielsku, polskie
+idzie na TNM).
+
+Przyczyna: generator promptu dostawal `master_theme` i tekst-matke (oba po polsku - tak
+powstaja materialy), a jezyka publikacji CELU nie widzial wcale. Tlumaczenie postu dzieje sie
+pozniej, przy wysylce, wiec grafika zostawala w jezyku surowca.
+
+Fix: `generate.jezyk_grafiki(brand_id, content_item_id)` czyta `channels.config.language_publish`
+celu materialu (fallback: AGS = en, pozostale marki = pl) i wstrzykuje do promptu twarde
+zdanie: WSZYSTKIE napisy widoczne na grafice (naglowek, etykiety, przyklady w tabelach,
+podpisy) MUSZA byc w tym jezyku, niezaleznie od jezyka tematu i tekstu-matki.
+
+**Wybor recznie:** guzik 🎨 Generuj przyjmuje wskazowke wlasciciela, ktora ma PRIORYTET nad
+domyslnym jezykiem - wystarczy dopisac "po polsku" albo "po angielsku". Parametr `jezyk=`
+w `generate_image_prompt` pozwala wymusic jezyk z kodu (np. przy wariantach per kanal).
+
 ## Znane pulapki
 
 - media jsonb niesie TAKZE dup_warning i review_copy - kod czytajacy media

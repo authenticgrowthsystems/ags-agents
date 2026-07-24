@@ -2,6 +2,7 @@
 the cached system block (brand.system_blocks), so the voice prefix is reused cheaply across calls."""
 import json
 import re
+import traceback
 
 import anthropic
 
@@ -239,12 +240,45 @@ def hint_wants_generated_graphic(hint):
     return bool(re.search(r"grafik|ilustracj|diagram|typograf|infografik|schemat|wykres|flowchart", h))
 
 
-def generate_image_prompt(brand, master_theme, canonical_body, hint, guidance=None, content_item_id=None):
+_JEZYK_NAZWA = {"en": "ANGIELSKU", "pl": "POLSKU", "de": "NIEMIECKU"}
+
+
+def jezyk_grafiki(brand_id, content_item_id=None):
+    """Jezyk NAPISOW NA GRAFICE = jezyk publikacji celu (channels.config.language_publish).
+
+    Dowod 24/07: material "Klasyfikacja kontaktu przed werdyktem" poszedl na AGS LinkedIn po
+    angielsku, a plansza wyszla POLSKA - generator dostaje master_theme i tekst-matke (oba po
+    polsku), a jezyka celu nie widzial wcale. Polska grafika pod angielskim postem lamie
+    separacje marek (kanon: AGS mowi po angielsku, polskie idzie na TNM).
+
+    Kolejnosc: jezyk celu materialu -> domyslny marki (AGS = en, pozostale = pl). Wskazowka
+    wlasciciela ("po polsku") i tak przewaza, bo idzie do promptu z priorytetem."""
+    try:
+        if content_item_id:
+            r = _db.fetchone(
+                """SELECT c.config->>'language_publish' AS jez
+                   FROM content_items ci
+                   JOIN channels c ON c.brand_id = ci.brand_id AND c.channel = ANY(ci.target_channels)
+                   WHERE ci.id = %s AND COALESCE(c.config->>'language_publish','') <> ''
+                   LIMIT 1""", (content_item_id,))
+            j = ((r or {}).get("jez") or "").strip().lower()[:2]
+            if j in _JEZYK_NAZWA:
+                return j
+    except Exception:
+        traceback.print_exc()
+    return "en" if (brand_id or "AGS") == "AGS" else "pl"
+
+
+def generate_image_prompt(brand, master_theme, canonical_body, hint, guidance=None, content_item_id=None,
+                          jezyk=None):
     """Feedback Tomasza 10/07: prompt graficzny ma byc BARDZO SZCZEGOLOWY, efekt premium, W BRANDZIE
-    (kolory, fonty, motywy z kanonu wizualnego). Sonnet pisze pelny prompt po angielsku."""
+    (kolory, fonty, motywy z kanonu wizualnego). Sonnet pisze pelny prompt po angielsku.
+    24/07: napisy NA grafice ida w jezyku publikacji celu, nie w jezyku tekstu-matki."""
     model, tier, source = tasks.model_for("image_prompt")
     guide = f"\n\nWSKAZOWKI WLASCICIELA (priorytet, zastosuj wprost): {guidance[:400]}" if guidance else ""
     brand_id = (brand or {}).get("brand_id") or "AGS"
+    jez = (jezyk or jezyk_grafiki(brand_id, content_item_id) or "en").lower()[:2]
+    jez_nazwa = _JEZYK_NAZWA.get(jez, "ANGIELSKU")
     resp = client().messages.create(
         # 19/07: 700 ucinalo prompt w polowie listy zakazow (Sonnet pisze ~400 slow mimo instrukcji
         # 150-250; guzik 📋 Prompt wysylal kikut konczacy sie "Strictly forbidden:") - zapas 1500
@@ -255,8 +289,11 @@ def generate_image_prompt(brand, master_theme, canonical_body, hint, guidance=No
                    "podanym nizej (dokladne hexy kolorow i proporcje z kanonu wpisz do promptu). Prompt "
                    "MUSI opisywac: dokladna kompozycje i uklad (co w centrum, co po bokach, ile wolnej "
                    "przestrzeni), palete WYLACZNIE z kanonu (z hexami), typografie zgodna z kanonem, "
-                   "DOKLADNY krotki tekst na grafice (naglowek max 6 slow - podaj go doslownie w "
-                   "cudzyslowie, generator ma go odwzorowac litera w litere), styl i motyw przewodni "
+                   f"DOKLADNY krotki tekst na grafice (naglowek max 6 slow - podaj go doslownie w "
+                   f"cudzyslowie, generator ma go odwzorowac litera w litere) PO {jez_nazwa}: "
+                   f"WSZYSTKIE napisy widoczne na grafice (naglowek, etykiety, przyklady w tabelach, "
+                   f"podpisy) MUSZA byc po {jez_nazwa}, niezaleznie od jezyka tematu i tekstu-matki "
+                   f"ponizej. Styl i motyw przewodni "
                    "z kanonu, format poziomy 3:2. ZAKAZY z kanonu wpisz do promptu, plus: no watermarks, "
                    "no lorem ipsum, no extra text beyond the specified headline. Zwroc WYLACZNIE prompt.\n\n"
                    f"KANON WIZUALNY MARKI:\n{_visual_canon(brand_id)}\n\n"
