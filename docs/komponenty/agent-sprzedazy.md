@@ -176,6 +176,13 @@ Dodatkowo `_ANTY_SZABLON` w prompcie systemowym gotowca. Powstal, bo zakazy w
 doslownie z PRZYKLADU w tych frameworkach. Sekcja nazywa oba mechanizmy (recytowanie
 ilustracji, pozorowana personalizacja) i konczy sie testem podmiany nazwy firmy.
 
+**Czas wydarzenia w haku (24/07, zlapane przez Tomasza):** gotowiec pisal "trzymam kciuki PRZED
+Mistrzostwami Europy w Klagenfurcie", a mistrzostwa juz sie odbyly (Tomasz byl tam jako sedzia).
+Wydarzenie w zlym czasie czyta sie jak automat i jest gorsze niz brak haka. Dwie warstwy:
+podsumowanie researchu MUSI podac date kazdego wydarzenia i napisac wprost "juz sie odbylo"
+albo "dopiero bedzie" wzgledem dzis (data wstrzykiwana do promptu), a `_ANTY_SZABLON` zabrania
+zgadywania czasu, gdy daty w materiale nie ma.
+
 **Wzorce wlasne:** `material_type='outreach_example'` w sales_knowledge (wrzutka przez
 `/add_sales_material` z podpowiedzia "wzorzec"). `_outreach_examples()` wkleja do 3
 ostatnich DOSLOWNIE do promptu - model pisze od zdan Tomasza, nie od teorii.

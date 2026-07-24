@@ -318,6 +318,12 @@ _ANTY_SZABLON = (
     "Mieszanie 'u Was' i 'z Panstwem' w jednym mailu czyta sie jak sklejka z szablonu.\n"
     "- Rytm: krotkie zdania, zero symetrycznych konstrukcji 'nie X, tylko Y' wiecej niz raz, zero "
     "wyliczen korzysci, zero slow 'rozwiazanie', 'proces', 'optymalizacja', 'usprawnienie'.\n"
+    # Dowod 24/07: hak brzmial "trzymam kciuki PRZED Mistrzostwami Europy", a mistrzostwa juz sie
+    # odbyly. Wydarzenie w zlym czasie jest gorsze niz brak haka - czyta sie jak automat.
+    "- CZAS WYDARZENIA: zanim uzyjesz wydarzenia jako haka, ustal, czy JUZ BYLO, czy dopiero "
+    "bedzie. Sprawdz date w materiale i porownaj z dzisiejsza. Gdy juz bylo - pytaj, jak poszlo. "
+    "Gdy dopiero bedzie - mozesz trzymac kciuki. Gdy daty NIE MA w materiale, nie zgaduj czasu: "
+    "napisz o wydarzeniu bez rozstrzygania, czy jest przed, czy po.\n"
     "- Test przed oddaniem tekstu: gdyby podmienic nazwe firmy na inna z tej samej branzy, czy "
     "mail dalej mialby sens? Jesli tak - jest za slaby, przepisz go."
 )
@@ -1557,7 +1563,13 @@ def _summarize_research(name, grounding):
                        f"adresu.\n"
                        f"Dalej sekcje: KIM SA (2-3 zdania) / SYGNALY KUPNA / PROBLEMY KTORE "
                        f"ROZWIAZUJEMY / HAK PERSONALIZACJI / REKOMENDOWANY TIER (od gory). Fakt "
-                       f"bez zrodla w danych oznacz '(do weryfikacji)'. Zachowaj 2-3 linki.\n\n"
+                       f"bez zrodla w danych oznacz '(do weryfikacji)'. Zachowaj 2-3 linki.\n"
+                       # Dowod 24/07: hak oparto o Mistrzostwa Europy, ktore juz sie odbyly -
+                       # gotowiec pisal "trzymam kciuki PRZED", a impreza byla za nami.
+                       f"Przy KAZDYM wydarzeniu w sekcji HAK podaj jego DATE i napisz wprost, "
+                       f"czy JUZ SIE ODBYLO, czy DOPIERO BEDZIE wzgledem dzisiaj "
+                       f"({datetime.datetime.now(WARSAW).strftime('%d/%m/%Y')}). Gdy daty nie ma "
+                       f"w danych, napisz 'data nieznana' - nie zgaduj czasu.\n\n"
                        f"CLAIMS Z RESEARCHU:\n{grounding[:5000]}"}])
         tasks.log_task("sales_research_summary", tier, model, source, getattr(resp, "usage", None))
         out = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
