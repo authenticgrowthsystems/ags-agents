@@ -1,4 +1,4 @@
-# MASTER PROMPT - AGS Agent Network (wersja 24/07/2026, stan na 23/07 ~23:00)
+# MASTER PROMPT - AGS Agent Network (wersja 24/07/2026, stan na 24/07 ~11:00)
 
 Wklej na starcie nowej sesji Cowork. Self-contained. **Zastępuje RESUME_MASTERPROMPT_19072026.md**
 (tamten = archiwum historii 19-22/07; tutaj jest STAN OBECNY, zgodnie z kanonem DOKUMENTACJA ŻYJE).
@@ -9,39 +9,44 @@ na końcu PIERWSZY RUCH. Czytaj do końca przed pierwszym działaniem.
 ---
 
 <otwarte_teraz priorytet="1">
-**AWARIA RESEARCHERA - NIEZAMKNIETA (stan 24/07 ~09:15).** Blokuje kampanie sprzedazowa
-(research prospektow = zero danych), wiec to pierwsze zadanie sesji.
+**AWARIA RESEARCHERA - ZAMKNIETA 24/07 ~10:50, zweryfikowana na zywo.** Sciezka research
+prospekta dziala; front sprzedazowy odblokowany. Commity: df7c60b, 7c31cd5, 361d3b0 (+ dzisiejszy
+z limitem podsumowania). Oba kontenery przebudowane, oba `{"status":"ok"}`.
 
-CO WIADOMO Z DOWODOW (sonda research_jobs 23-24/07):
-- Kazdy job prospektowy poza PIERWSZYM w paczce konczy sie status='failed', 0 s, 0 PLN,
-  0 claims, error_message: `sequence item 0: expected str instance, NoneType found`.
-- Jedyne udane joby: 72c36ef8 (105 s, 8 claims, 0.74 PLN) i 66c09089 (105 s, 8 claims,
-  1.23 PLN) - pelna sciezka researchu dziala.
-- Hipoteza (spojna z czasem 0 s): trafienie w cache -> `_callback` -> `join` po etykietach
-  opcji z cache -> None -> wyjatek PO `set_status(completed)` -> nadrzedny handler petli
-  nadpisywal status na 'failed'.
+PRZYCZYNA (kod + sonda bazy, nie hipoteza): opcje maja DWA ksztalty. Swieze z modelu niosa klucz
+`label`, wczytane z cache `option_label` (nazwa kolumny). `_callback` czytal tylko `label`,
+dostawal None i `join` wywracal meldunek PO `set_status(completed)`, a petla nadpisywala status
+na 'failed'. Sygnatura: kazdy job 'failed' mial 4 wiersze w `options` i czas 0-3 s (cache),
+kazdy 'completed' 86-121 s.
 
-CO JUZ ZROBIONE (commity da5a19c + e59e74d, w repo; **weryfikacja na zywo NIEUDANA - Tomasz
-zglasza "nadal sa bledy"**):
-1. `ags-researcher/app/worker.py:199` - join odporny na None/puste.
-2. Petla glowna NIE cofa statusu 'completed' na 'failed'.
-3. Cache SEMANTYCZNY wylaczony dla researchu prospektow (podobny prompt = INNA firma;
-  ryzyko podania cudzych danych jako research prospekta).
+CO NAPRAWIONE I POTWIERDZONE DOWODEM:
+1. Cache oddaje TAKZE claims (z linkami do evidence) i confidence - wczesniej job z cache byl
+   'completed' z zerem faktow, a karta prospekta mowila "job bez claims".
+2. Meldunek czyta `label` LUB `option_label`; payload cache niesie koszt i confidence.
+3. Zapytanie badawcze bierze `prospect_url` z lejka; przy braku domeny (9 z 12 prospektow ma
+   tylko gmail) dokleja miasto i kontakt z kartoteki. Dowod potrzeby: job 0602c6a7 - La Cultura
+   z Sosnowca zbadana jako Cultura Dance Arts w Pawtucket RI.
+4. BRAMKA TOZSAMOSCI liczona z DOWODOW (nie z deklaracji modelu - tap-test pokazal, ze model
+   potrafi zignorowac kontrakt pierwszej linii): domena prospekta musi wystapic w evidence albo
+   claims, a przy braku domeny miasto z kartoteki musi wystapic w claims. Brak potwierdzenia =
+   karta NIE proponuje outreachu, gotowiec jedzie z ostrzezeniem.
+5. Meldunek surowy Researchera milknie dla `sales-agent` (Sprzedawca wysyla wlasna karte).
+6. `compliance.fix_dashes` na podsumowaniu i gotowcu outreachu (sciezka sprzedazowa nigdy nie
+   przechodzila przez filtr em dash, a to teksty do KLIENTA).
+7. Skazone dane skasowane: 28 wierszy `options` z 7 jobow incydentu, kontrola = 0.
 
-PIERWSZY RUCH SESJI (w tej kolejnosci):
-1. Sprawdz, czy fixy sa NA SERWERZE: `cd ~/ags-agents && git log --oneline -3` (ma byc
-   e59e74d albo nowszy) oraz czy kontener zbudowany PO pullu. Wczesniej byl blad procesu:
-   rebuild poszedl PRZED pushem, wiec obraz nie mial poprawek.
-2. Wez PRAWDZIWY traceback (dotad diagnoza szla z error_message, nie ze stosu):
-   `docker logs --since 60m ags-researcher 2>&1 | tail -80`
-   Szukaj linii `File ".../app/....py", line N` bezposrednio nad TypeError. To wskaze
-   miejsce, ktorego sonda nie pokazala (kandydaci poza worker.py:199: synth.py:89 `lines`,
-   db.py:67 `cols`, cache.py:10 `_vec_literal` przy embeddingu z None).
-3. Dopiero po tracebacku popraw kod. Zaden fix bez stosu wywolan.
-4. Tap-test: JEDEN job prospektowy (`/prospect <nazwa>`), potem sonda:
-   status/sek/claims/cost. Oczekiwane: completed, ~90-110 s, claims > 0, cost > 0.
-5. Dopiero wtedy zlec trojke (StandART Ornontowice, La Cultura Sosnowiec,
-   STC Dance & More Dobrzykowice) i wroc do Sprzedawcy po gotowiec outreachu.
+DOWODY Z TAP-TESTOW: job 7411d0ba (StandART) completed, 108 s, 11 claims, 1.2456 PLN, zapytanie
+ze `strona:`; bramka na zywych danych - StandART przechodzi (domena w zrodlach), La Cultura
+zatrzymana, STC bez domeny przechodzi po miescie (zero falszywych alarmow); test negatywny
+na Telegramie 10:46 pokazal blokade zamiast zachety do outreachu.
+
+OTWARTE (decyzja Tomasza, nie kod): cache SEMANTYCZNY globalnie OFF
+(`SEMANTIC_CACHE_ENABLED=false` w `~/ags-agents/ags-researcher/.env`) czy zostawiamy plaster na
+fraze 'prospect research'. Bilans dotychczasowy plastra: 0 korzysci, 6 jobow z cudza firma.
+Kazdy NOWY szablon zapytania o podmiot omija plaster (AP-307).
+
+PIERWSZY RUCH SESJI: kampania szkol tanca - powtorz research trojki (StandART juz zrobiony
+24/07 10:00), potem gotowce outreachu. Adamietz: follow-up telefoniczny do Piotra.
 </otwarte_teraz>
 
 <rola>
@@ -255,6 +260,15 @@ Rzeczy, które już raz kosztowały dzień pracy. Sprawdź je ZANIM zaczniesz po
 
 - **AP-307 (najważniejszy):** zmiana kontraktu wymaga przełączenia i weryfikacji KAŻDEGO żywego
   konsumenta w tym samym buildzie. Symptom: nowy kod poprawny, ale omijany przez starą ścieżkę.
+- **Dwa kształty tego samego obiektu (24/07):** dane z modelu i dane z bazy mają inne nazwy pól
+  (`label` vs `option_label`). Kod czytający jedno źródło wywraca się na drugim. Przy każdej
+  ścieżce "z cache / z bazy" sprawdź nazwy kluczy, nie zakładaj symetrii.
+- **Bramka oparta na posłuszeństwie modelu to nie bramka (24/07):** model zignorował kontrakt
+  "pierwsza linia MUSI brzmieć...". Warunek bezpieczeństwa licz z DANYCH (domena w evidence,
+  miasto w claims), deklarację modelu traktuj tylko jako dodatkowy sygnał.
+- **Nazwa firmy nie jest identyfikatorem (24/07):** zapytanie badawcze o podmiot musi nieść
+  dyskryminator (domena albo miasto i kontakt), inaczej research opisze inną firmę o podobnej
+  nazwie, z drugiego kontynentu, i zrobi to z pełną pewnością siebie.
 - **Zaległe dane po naprawie:** po naprawieniu kanału wyjściowego przejrzyj wiersze
   wyprodukowane PRZED poprawką (23/07: 39 kopii tej samej grafiki w serii sprzed strażnika).
 - **Callback Subagent X Publisher** oznacza 'published' WSZYSTKIE wiersze materiału (WHERE

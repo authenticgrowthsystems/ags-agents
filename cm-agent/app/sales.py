@@ -1152,7 +1152,9 @@ def _summarize_research(name, grounding):
     try:
         model, tier, source = tasks.model_for("sales_research_summary")
         resp = client().messages.create(
-            model=model, max_tokens=800, thinking={"type": "disabled"},
+            # 800 obcinalo podsumowanie w polowie sekcji (dowod 24/07 10:46: karta La Cultury
+            # urwana na "HA" z HAK PERSONALIZACJI). Linia TOZSAMOSCI + linki zjadaja budzet.
+            model=model, max_tokens=1600, thinking={"type": "disabled"},
             messages=[{"role": "user", "content":
                        f"Podsumuj research prospekta \"{name}\" dla sprzedazy B2B (AGS: systemy "
                        f"retencji klientow i agenty AI). Po polsku, zwiezle, zero em dash.\n"
