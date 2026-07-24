@@ -208,6 +208,9 @@ sales_pipeline (lejek sprzedazowy, 1 wiersz = 1 prospekt/deal):
 | next_followup_at | TIMESTAMPTZ | higiena lejka: brak = ⚠️ w widoku; outreach_sent ustawia +3 dni |
 | research_job_id | TEXT | job Researchera (research_jobs.job_id) |
 | notes | TEXT | append z timestampem, LEFT 4000 (research, outreachy, ustalenia) |
+| contact_email / contact_phone | TEXT | **DDL 029**: dane kontaktowe podmiotu; wypelniane automatem (wizytowka ze strony + research), nadpisywane TYLKO gdy puste |
+| contact_person | TEXT | DDL 029: osoba decyzyjna, gdy research ja ustali |
+| site_checked_at | TIMESTAMPTZ | DDL 029: kiedy agent ostatnio zdjal strone prospekta |
 
 Indeksy: idx_sales_pipeline_stage, idx_sales_pipeline_followup (partial, otwarte).
 

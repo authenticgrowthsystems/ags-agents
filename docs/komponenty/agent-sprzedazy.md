@@ -206,6 +206,15 @@ o-nas|about`, zdejmuje znaczniki i wyciaga mail plus telefon. Wywolywana w dwoch
 Tap-test na zywej stronie 24/07: 4 pobrane strony, telefon 510-555-099, mail
 recepcja@..., 28 358 znakow tekstu. Cztery zapytania HTTP, zero kosztu modelu.
 
+**Dane ida do KOLUMN, nie do prozy (DDL 029, zgloszenie Tomasza "research ma tez
+automatycznie uzupelniac baze danych bo od tego jest"):** `sales_pipeline.contact_email`,
+`contact_phone`, `contact_person`, `site_checked_at`. Wypelniaja je dwa deterministyczne
+zrodla: `wizytowka()` (przy zleceniu researchu i przy pisaniu gotowca) oraz `tick()` po
+zakonczonym researchu (regex po claims i podsumowaniu). `_zapisz_kontakt` nadpisuje
+WYLACZNIE puste pola - to, co Tomasz wpisal recznie, jest nietykalne. Kontakt widac teraz
+w `/pipeline` przy kazdym prospekcie, a jego brak jest oznaczony ⚠️ na etapach
+prospect/qualified.
+
 **Zostaje otwarte (osobny build):** dlaczego adapter firecrawl na zapytanie o konkretny
 podmiot zwraca arXiv. To wada kaskady zrodel Researchera, nie sprzedazy - patrz
 docs/komponenty/researcher.md.

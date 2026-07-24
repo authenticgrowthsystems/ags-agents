@@ -139,7 +139,8 @@ def _knowledge_stats():
 
 def pipeline_text():
     rows = db.fetchall(
-        """SELECT prospect_name, stage, offer_tier, value, currency, next_followup_at, updated_at, notes
+        """SELECT prospect_name, stage, offer_tier, value, currency, next_followup_at, updated_at,
+                  notes, contact_email, contact_phone
            FROM sales_pipeline WHERE brand_id='AGS' AND stage NOT IN ('won','lost')
            ORDER BY array_position(ARRAY['negotiation','proposal','qualified','prospect']::text[], stage),
                     updated_at DESC LIMIT 30""")
@@ -167,6 +168,14 @@ def pipeline_text():
         stale = (now - r["updated_at"]).days if r.get("updated_at") else 0
         if stale >= 14:
             bits.append(f"⚠️ cisza {stale} dni")
+        # Kontakt widoczny w lejku (DDL 029): dane z wizytowki i researchu maja sluzyc TU,
+        # a nie tylko w naglowku gotowca - inaczej baza wie, a czlowiek nie.
+        kontakt = " ".join(x for x in [f"☎️{r.get('contact_phone')}" if r.get("contact_phone") else "",
+                                       f"✉️{r.get('contact_email')}" if r.get("contact_email") else ""] if x)
+        if kontakt:
+            bits.append(kontakt)
+        elif r["stage"] in ("prospect", "qualified"):
+            bits.append("⚠️ brak kontaktu")
         lines.append(f"{_STAGE_ICON.get(r['stage'], '•')} [{r['stage']}] {r['prospect_name'][:60]}"
                      + (" | " + ", ".join(bits) if bits else ""))
     lines.append(f"Zamkniete: won {closed.get('won', 0)} ({closed.get('won_value', 0):.0f}), "
@@ -609,6 +618,7 @@ def _prospect_research(inp):
     # same tytuly, telefon ze strony glownej nie trafil do dowodow wcale).
     wiz = wizytowka(url) if url else {}
     if wiz.get("tel") or wiz.get("mail"):
+        _zapisz_kontakt(row["id"], mail=wiz.get("mail"), tel=wiz.get("tel"), ze_strony=True)
         _append_notes(row["id"], "wizytowka ze strony: " + ", ".join(
             x for x in [f"tel {wiz.get('tel')}" if wiz.get("tel") else "",
                         f"mail {wiz.get('mail')}" if wiz.get("mail") else "",
@@ -751,6 +761,26 @@ _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 _PHONE_RE = re.compile(r"(?<![\d-])(?:\+48[\s-]?)?(?:\d{3}[\s-]?\d{3}[\s-]?\d{3})(?![\d-])")
 
 
+def _zapisz_kontakt(row_id, mail=None, tel=None, osoba=None, ze_strony=False):
+    """Dane kontaktowe do KOLUMN lejka (DDL 029), nie tylko do prozy w notatkach.
+
+    Zgloszenie Tomasza 24/07: "research ma tez automatycznie uzupelniac baze danych bo od tego
+    jest". Zasada: nadpisujemy TYLKO PUSTE pola (COALESCE) - dane wpisane recznie przez Tomasza
+    sa nietykalne, automat je uzupelnia, nigdy nie poprawia."""
+    try:
+        db.execute(
+            """UPDATE sales_pipeline
+               SET contact_email = COALESCE(NULLIF(contact_email,''), %s),
+                   contact_phone = COALESCE(NULLIF(contact_phone,''), %s),
+                   contact_person = COALESCE(NULLIF(contact_person,''), %s),
+                   site_checked_at = CASE WHEN %s THEN NOW() ELSE site_checked_at END,
+                   updated_at = NOW()
+               WHERE id=%s""",
+            (mail or None, tel or None, osoba or None, bool(ze_strony), row_id))
+    except Exception:
+        traceback.print_exc()
+
+
 def _kontakt_prospekta(row, wiz=None):
     """Dane do naglowka gotowca: kto i pod jakim adresem. Zrodla po kolei: kartoteka CRM
     (contacts), notatki lejka, claims z researchu. Deterministycznie, bez LLM - to ma byc
@@ -758,11 +788,12 @@ def _kontakt_prospekta(row, wiz=None):
 
     Czego NIE MA, mowimy wprost: research StandART 24/07 nie znalazl osoby decyzyjnej ani
     telefonu, wiec naglowek musi to pokazac zamiast udawac komplet."""
-    # Wizytowka ze strony ma PIERWSZENSTWO: to dane widoczne dla czlowieka, ktory wejdzie
-    # na strone, wiec nie moga byc gorsze niz to, co przypadkiem trafilo do notatek.
-    osoba = None
-    mail = (wiz or {}).get("mail")
-    tel = (wiz or {}).get("tel")
+    # Kolejnosc zrodel: swieza wizytowka ze strony -> KOLUMNY lejka (DDL 029) -> kartoteka
+    # -> notatki i claims. Kolumny sa tu wyzej niz proza, bo to one sa zrodlem dla innych
+    # konsumentow (widok lejka, dziennik klienta).
+    osoba = row.get("contact_person")
+    mail = (wiz or {}).get("mail") or row.get("contact_email")
+    tel = (wiz or {}).get("tel") or row.get("contact_phone")
     if row.get("contact_id"):
         try:
             c = db.fetchone("SELECT name FROM contacts WHERE contact_id=%s", (row["contact_id"],))
@@ -879,6 +910,8 @@ def _draft_outreach(inp, chat_id):
     wzorce = _outreach_examples()
     # Strona prospekta jako zrodlo cytowalnych faktow do haka (i danych do naglowka).
     wiz = wizytowka(row.get("prospect_url")) if row.get("prospect_url") else {}
+    if wiz.get("mail") or wiz.get("tel"):  # swieze dane ze strony ida takze do bazy
+        _zapisz_kontakt(row["id"], mail=wiz.get("mail"), tel=wiz.get("tel"), ze_strony=True)
     forms = {
         "email": "email sprzedazowy: linia 'TEMAT: ...' i po pustej linii tresc",
         "linkedin_dm": "wiadomosc LinkedIn (jesli to pierwszy kontakt: TAKZE zaproszenie <300 znakow bez pitchu, oznacz 'ZAPROSZENIE:' i 'WIADOMOSC PO AKCEPCIE:')",
@@ -1454,6 +1487,14 @@ def tick():
             if chat:
                 _tg_send(chat, text)
             if pipe:
+                # Research UZUPELNIA BAZE, nie tylko notatki (zgloszenie Tomasza 24/07: "od tego
+                # jest"). Deterministycznie: mail i telefon z claims i z podsumowania, zapisywane
+                # WYLACZNIE w puste kolumny (DDL 029).
+                _zrodlo = " ".join([grounding[:6000], summary[:4000]])
+                _m, _t = _EMAIL_RE.search(_zrodlo), _PHONE_RE.search(_zrodlo)
+                if _m or _t:
+                    _zapisz_kontakt(pipe["id"], mail=_m.group(0) if _m else None,
+                                    tel=_t.group(0).strip() if _t else None)
                 # Marker niesie werdykt dalej (czyta go _draft_outreach). Nazwa MUSI byc inna niz
                 # "TOZSAMOSC:", bo tak zaczyna sie pierwsza linia podsumowania pisana przez model -
                 # skan po samym "TOZSAMOSC:" trafial w tekst modelu zamiast w werdykt kodu.
