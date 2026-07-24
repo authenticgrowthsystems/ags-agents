@@ -196,7 +196,11 @@ def _callback(job, payload: dict):
     except Exception:
         traceback.print_exc()
     opts = payload.get("options") or []
-    labels = ", ".join([(o.get("label") if isinstance(o, dict) else getattr(o, "label", "")) for o in opts][:4])
+    # FIX 24/07 (incydent: joby prospektowe 'failed' z "sequence item 0: expected str
+    # instance, NoneType found"): opcja bez klucza 'label' dawala None w join i wywracala
+    # MELDUNEK juz PO zapisaniu wyniku (sciezka cache-hit). Filtrujemy puste, rzutujemy na str.
+    _labels = [(o.get("label") if isinstance(o, dict) else getattr(o, "label", "")) for o in opts]
+    labels = ", ".join(str(x) for x in _labels[:4] if x) or "bez etykiet"
     text = f"AGS Researcher: zadanie gotowe ({len(opts)} opcje: {labels}). koszt {payload.get('cost_pln', '?')} PLN, confidence {payload.get('overall_confidence', '?')}."
     # SLICE 3a-2: tier correction buttons, only for an auto-proposed tier that has a logged model_selection gate
     tier = payload.get("model_tier")
@@ -552,7 +556,17 @@ def loop():
             traceback.print_exc()
             if job:
                 try:
-                    db.set_status(job["job_id"], "failed", error_message=str(e)[:500], completed_at=_now())
+                    # FIX 24/07: NIE cofaj gotowego wyniku. Awaria PO zakonczeniu researchu
+                    # (crash meldunku przy cache-hit) oznaczala job jako 'failed' mimo
+                    # zapisanych opcji - agent widzial "padl", a dane byly w bazie.
+                    cur = (db.fetchone("SELECT status FROM research_jobs WHERE job_id=%s",
+                                       (job["job_id"],)) or {}).get("status")
+                    if cur == "completed":
+                        print(f"[researcher] job {job['job_id']} completed; blad PO wyniku: {e}",
+                              flush=True)
+                    else:
+                        db.set_status(job["job_id"], "failed", error_message=str(e)[:500],
+                                      completed_at=_now())
                 except Exception:
                     pass
             time.sleep(config.POLL_INTERVAL_S)

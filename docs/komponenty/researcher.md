@@ -78,6 +78,20 @@ ISO; retap = wyzerowanie klucza, ksztalt sprawdz w `sunday_brief._state_set`).
 - REGULA PRAWDY w konsumentach (fallback jawny, fakt bez zrodla =
   "(do weryfikacji)").
 
+## Incydent 24/07: joby "failed" mimo policzonego wyniku (cache-hit)
+
+- Objaw: 4 joby prospektowe Sprzedawcy status='failed', cost 0.00, czas ~0.4 s,
+  error_message "sequence item 0: expected str instance, NoneType found". Z kazdej paczki
+  zlecen konczyl sie TYLKO pierwszy (on szedl pelna sciezka ~90 s), reszta trafiala
+  w CACHE (prompty prospektowe roznia sie tylko nazwa firmy = podobienstwo ~1).
+- Przyczyna: `_callback` budowal etykiety `", ".join(...)` z opcji cache, ktore nie mialy
+  klucza 'label' -> None w join -> wyjatek PO `set_status(completed)`; nadrzedny handler
+  petli nadpisywal status na 'failed'. Wynik byl w bazie, agent widzial awarie.
+- Fix (24/07): join odporny na None/puste + petla NIE cofa statusu 'completed' na 'failed'
+  (blad meldunku != blad researchu). Wdrozenie: rebuild kontenera **ags-researcher**.
+- Wniosek ogolny: przy zlecaniu wielu podobnych researchow z rzedu spodziewaj sie cache-hitow;
+  to jest zaleta (0 PLN), pod warunkiem ze sciezka cache zwraca komplet danych.
+
 ## Znane pulapki
 
 - `claims.supporting_evidence` w ZYWEJ bazie = **text[]**, nie uuid[] (spec
