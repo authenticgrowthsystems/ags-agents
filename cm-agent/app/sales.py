@@ -507,7 +507,7 @@ def _city_from_notes(pipe):
     return m.group(1).strip() if m else None
 
 
-def _identity_verdict(pipe, job_id, summary=""):
+def _identity_verdict(pipe, job_id, summary="", tekst_strony=""):
     """Bramka tozsamosci: TRZY stany, bo to DWA rozne pytania.
     (1) Czy research dotyczy TEJ firmy - liczone z DOWODOW (domena prospekta w zrodlach albo
         claims; bez domeny: miasto z kartoteki w claims). Model tu nie glosuje: tap-test 24/07
@@ -537,6 +537,10 @@ def _identity_verdict(pipe, job_id, summary=""):
                                    WHERE c.job_id=%s AND c.claim_text ILIKE %s)) AS ok""",
                 (job_id, f"%{host}%", job_id, f"%{host}%"))
             dowod, opis = bool((r or {}).get("ok")), f"domena {host}"
+            # Strona pobrana przez agenta jest dowodem MOCNIEJSZYM niz evidence z wyszukiwarki:
+            # to tresc pod adresem prospekta, zdjeta w tej turze.
+            if not dowod and host.lower() in (tekst_strony or "").lower():
+                dowod, opis = True, f"domena {host} (strona pobrana przez agenta)"
         else:
             miasto = _city_from_notes(pipe)
             if miasto:
@@ -544,6 +548,8 @@ def _identity_verdict(pipe, job_id, summary=""):
                     "SELECT EXISTS (SELECT 1 FROM claims c WHERE c.job_id=%s AND c.claim_text ILIKE %s) AS ok",
                     (job_id, f"%{miasto}%"))
                 dowod, opis = bool((r or {}).get("ok")), f"miasto {miasto}"
+                if not dowod and miasto.lower() in (tekst_strony or "").lower():
+                    dowod, opis = True, f"miasto {miasto} (na stronie pobranej przez agenta)"
     except Exception:
         traceback.print_exc()
         return "niepotwierdzona", "sonda tozsamosci padla"
@@ -709,6 +715,37 @@ def _voice_for_outreach(brand):
 
 _WIZYTOWKA_PODSTRONY = re.compile(r"kontakt|contact|cennik|zapisy|grafik|instruktor|o-nas|about",
                                   re.IGNORECASE)
+
+
+_URL_W_TEKSCIE = re.compile(r"https?://[^\s\)\]\|,>\"']+", re.IGNORECASE)
+# Adresy, ktore NIE sa strona prospekta: przekierowania wyszukiwarek, agregatory, nauka.
+_URL_SMIECI = re.compile(r"vertexaisearch|googleusercontent|google\.com/url|arxiv\.org|"
+                         r"wikipedia|youtube\.com|pomagam\.pl|aleo\.com|panoramafirm|targeo|"
+                         r"rejestr\.io|krs-online|linkedin\.com/pulse", re.IGNORECASE)
+_URL_SOCIAL = re.compile(r"facebook\.com|instagram\.com|linkedin\.com|tiktok\.com", re.IGNORECASE)
+
+
+def _znajdz_strone_w_researchu(prospect_name, tekst):
+    """Wylow adres STRONY PROSPEKTA z wynikow researchu.
+
+    Powod (dowod 24/07, Stepownia): research SAM podal w sekcji HAK adres
+    https://stepownia.pl/wroclawska_stepownia/ i profil FB, po czym orzekl "tozsamosc
+    niepotwierdzona, podaj strone" - poprosil Tomasza o rzecz, ktora mial przed nosem.
+    Agent ma wejsc na to, co znalazl, a nie odsylac czlowieka po dane.
+
+    Kolejnosc: adres zawierajacy slowo z nazwy prospekta -> dowolny niesmieciowy -> profil
+    spolecznosciowy (ostatecznosc, lepszy niz nic)."""
+    slowa = [w.lower() for w in re.split(r"\W+", prospect_name or "") if len(w) > 4]
+    zwykle, social = [], []
+    for u in _URL_W_TEKSCIE.findall(tekst or ""):
+        u = u.rstrip(".,);]")
+        if _URL_SMIECI.search(u):
+            continue
+        (social if _URL_SOCIAL.search(u) else zwykle).append(u)
+    for u in zwykle:
+        if any(s in u.lower() for s in slowa):
+            return u
+    return (zwykle or social or [None])[0]
 
 
 def _kandydaci_url(adres):
@@ -1507,9 +1544,29 @@ def tick():
                                    f"albo zlec ponownie.")
                 continue
             summary = compliance.fix_dashes(_summarize_research(name, grounding))  # kanon marki: zero em dash
+            # SAMODZIELNA WERYFIKACJA (24/07, frustracja Tomasza przy Stepowni): research podal
+            # w swoim wlasnym tekscie adres strony prospekta i profil FB, po czym agent orzekl
+            # "tozsamosc niepotwierdzona, podaj strone". Prosil czlowieka o rzecz, ktora mial
+            # przed nosem. Teraz: gdy w lejku nie ma adresu, agent wylawia go z researchu,
+            # WCHODZI na niego i dopiero potem orzeka.
+            tekst_strony = ""
+            if pipe and not (pipe.get("prospect_url") or "").strip():
+                kandydat = _znajdz_strone_w_researchu(name, f"{grounding}\n{summary}")
+                if kandydat:
+                    wiz2 = wizytowka(kandydat)
+                    tekst_strony = wiz2.get("tekst") or ""
+                    if tekst_strony:
+                        db.execute("UPDATE sales_pipeline SET prospect_url=%s, updated_at=NOW() "
+                                   "WHERE id=%s AND COALESCE(prospect_url,'')=''", (kandydat, pipe["id"]))
+                        pipe["prospect_url"] = kandydat
+                        _zapisz_kontakt(pipe["id"], mail=wiz2.get("mail"), tel=wiz2.get("tel"),
+                                        ze_strony=True)
+                        _append_notes(pipe["id"], f"agent sam wszedl na strone z researchu: {kandydat}"
+                                      + (f", tel {wiz2.get('tel')}" if wiz2.get("tel") else "")
+                                      + (f", mail {wiz2.get('mail')}" if wiz2.get("mail") else ""))
             # Bramka tozsamosci: przy niepotwierdzonym podmiocie nastepnym ruchem NIE jest outreach.
             # Wysylka do firmy, ktorej research nie potwierdzil, kosztuje wiarygodnosc, nie tokeny.
-            stan, powod = _identity_verdict(pipe, job_id, summary)
+            stan, powod = _identity_verdict(pipe, job_id, summary, tekst_strony)
             if stan == "potwierdzona":
                 nastepny = (f"✅ Tozsamosc potwierdzona ({powod}). Nastepny ruch: przelacz /agents "
                             f"na Sprzedawce i powiedz np. 'napisz outreach do {name[:40]}'.")

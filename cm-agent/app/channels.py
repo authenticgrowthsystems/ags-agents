@@ -116,11 +116,32 @@ def _delegate(item, row):
         pass  # sub-agent unreachable; row stays 'dispatching', retriable
 
 
+def _auto_obraz_wlaczony(brand_id, platform):
+    """Czy ten kanal sam dorabia grafike przy dispatchu (channels.config.auto_image).
+
+    24/07 (parytet subagentow, zgloszenie Tomasza po poscie X bez grafiki): mechanizm byl wpiety
+    NA SZTYWNO tylko dla LinkedIna. Teraz jest wspolny i sterowany flaga, wiec wlaczenie X to
+    `/set` zamiast rebuildu. Domyslnie: linkedin TAK (regula 23/07, 1 post dziennie), pozostale
+    NIE - X publikuje ~31 postow tygodniowo i kazdy obraz to koszt, wiec to ma byc swiadoma
+    decyzja, nie efekt uboczny."""
+    try:
+        r = db.fetchone("SELECT config->>'auto_image' AS flaga FROM channels "
+                        "WHERE brand_id=%s AND channel=%s LIMIT 1", (brand_id or "AGS", platform))
+        flaga = ((r or {}).get("flaga") or "").strip().lower()
+        if flaga in ("true", "1", "tak", "on"):
+            return True
+        if flaga in ("false", "0", "nie", "off"):
+            return False
+    except Exception:
+        pass
+    return platform == "linkedin"
+
+
 def _ensure_li_graphic(item, r):
-    """REGULA Tomasza 23/07 (#280 wyszedl na LinkedIn bez grafiki): post LinkedIn bez pliku
-    graficznego dostaje AUTO-generowany obraz przy dispatchu, PRZED publikacja (LinkedIn =
-    1 post/dzien, grafika zawsze podnosi dwell). Porazka generacji NIE blokuje publikacji -
-    post idzie tekstowo, slad w logu. Obraz laduje tez na Telegramie (podglad) i materiale."""
+    """REGULA Tomasza 23/07 (#280 wyszedl na LinkedIn bez grafiki): post bez pliku graficznego
+    dostaje AUTO-generowany obraz przy dispatchu, PRZED publikacja. Porazka generacji NIE blokuje
+    publikacji - post idzie tekstowo, slad w logu. Obraz laduje tez na Telegramie (podglad)
+    i materiale. Od 24/07 dotyczy KAZDEGO kanalu z flaga auto_image (parytet subagentow)."""
     import json as _json
     import traceback as _tb
     media = r.get("media") or []
@@ -142,7 +163,7 @@ def _ensure_li_graphic(item, r):
                 brand, item.get("master_theme"), r.get("content") or item.get("canonical_body"),
                 hint, content_item_id=item["id"])
         except Exception:
-            prompt = (f"Professional social media graphic for a LinkedIn post. Theme: "
+            prompt = (f"Professional social media graphic for a {r.get('platform') or 'social'} post. Theme: "
                       f"{(item.get('master_theme') or '')[:300]}. Clean, modern tech aesthetic, "
                       f"high contrast, no watermarks, no real faces, no fake event photos.")
         png = generate.generate_image(prompt)
@@ -189,8 +210,10 @@ def dispatch_item(item):
         if mode == config.PUBLISH_WEBHOOK and r.get("adapter_path"):
             _delegate(item, r)
         elif mode == config.PUBLISH_POST_QUEUE:
-            if r["platform"] == "linkedin":
-                _ensure_li_graphic(item, r)  # regula 23/07: LinkedIn bez pliku = auto-obraz
+            # 24/07 parytet: nie "if linkedin", tylko flaga auto_image per kanal (domyslnie
+            # linkedin=tak, reszta=nie). Wlaczenie X nie wymaga zmiany kodu.
+            if _auto_obraz_wlaczony(item.get("brand_id"), r["platform"]):
+                _ensure_li_graphic(item, r)
             db.execute("UPDATE post_queue SET status='scheduled', scheduled_for=COALESCE(scheduled_for, NOW()) WHERE id=%s", (r["id"],))
         else:
             db.execute("UPDATE post_queue SET status='held' WHERE id=%s", (r["id"],))
