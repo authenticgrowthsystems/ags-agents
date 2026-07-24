@@ -215,7 +215,7 @@ sales_knowledge (baza wiedzy sprzedazowej Tomasza; dokument -> kawalki):
 
 | kolumna | typ | uwagi |
 |---|---|---|
-| material_type | VARCHAR(20) CHECK | book/technique/case_study/framework/script/recording/other |
+| material_type | VARCHAR(20) CHECK | book/technique/case_study/framework/script/recording/**outreach_example** (DDL 028)/other |
 | material_name, chunk_no | TEXT, INT | jeden dokument = wiele kawalkow (~2000 znakow, max 40) |
 | content_excerpt | TEXT | tresc kawalka |
 | embedding | vector(1536) | OpenAI text-embedding-3-small (jak published_posts); NULL = fallback ILIKE |
