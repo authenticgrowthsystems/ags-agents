@@ -77,28 +77,41 @@ TRZY MOJE REGRESJE Z TEGO DNIA (klasa bledu wazniejsza niz sam blad):
 3. Tap-test na wartosci, ktorej NIE MA w bazie (adres z `www`, w lejku gola domena bez DNS).
    **Testuj wartoscia, ktora system faktycznie posiada.**
 
-## ZALEGLOSCI DO DOCISNIECIA (stan 24/07 ~20:00, decyzja Tomasza: "docisnac wszystko")
+## ZALEGLOSCI DO DOCISNIECIA (stan 24/07 pozno wieczorem, decyzja Tomasza: "docisnac wszystko")
 
-**PIERWSZY RUCH: potwierdz, ze serwer stoi na `a50c927`** (`cd ~/ags-agents && git log --oneline -1`
-+ `/health`). Ostatni rebuild cm-agent byl zlecany, ale niepotwierdzony w rozmowie.
+**PIERWSZY RUCH ZROBIONY 24/07:** serwer stoi na `a50c927` - potwierdzone DOWODEM bez SSH:
+zywy stan gry z konektora Lacznika zawiera etykiete `⚠️ BRAK nastepnego kroku`, ktora weszla
+do kodu dopiero w tym commicie (`git log -S`). Metoda do zapamietania: wersje kontenera
+da sie ustalic po STRINGU, ktory ten kontener wypisuje.
 
-### A. Paczka #1 Managera (docs/briefs/PACZKA_1_MANAGER_24072026.md - CZYTAJ, ma triage per punkt)
+### A. Paczka #1 Managera - 7 z 8 ZAMKNIETE (commit **ed75412** na sb-work, CZEKA push + wdrozenie)
+Triage per punkt: docs/briefs/PACZKA_1_MANAGER_24072026.md. Raport: docs/cm/RAPORT_do_Managera_25072026_paczka1.md.
 - **pkt 3 ZROBIONY** (blocker Piotr/Adamietz): auto-odrzut slownictwa produktowego, commit babfe03.
 - **pkt 6 ZROBIONY**: piapiasilva = **Pia Silva**, boutique branding, "Badass Your Brand";
   contacts.id 896d2232-0aa9-4ae7-914f-2e79fbf2fc2b, tier Buyer, etap commented, ostatnia
   interakcja 22/07. Szukac po NAZWISKU, nie po handle.
-- **pkt 2** (najtansze): sekcja "Weryfikacja tozsamosci cross-platform" w
-  docs/product/masterprompty-czat/MASTERPROMPT_CZAT_LINKEDIN_AGS_v3.md -> v1.1: zrzut profilu X
-  (bio + link w bio) zamiast web_search. Dowod produkcyjny 24/07 w raporcie sesji.
-- **pkt 8**: heurystyka interpunkcji PL (przecinek przed ze/zeby/ktory/gdy/jesli/bo) jako FLAGA
-  w matreview dla brand_id IN ('tnm','rdc'). Miejsce: compliance.py obok polish_pl.
-- **pkt 1 + 5 + 7 = JEDEN DDL 030** (psql PRZED rebuildem): tabela channel_kpi_snapshots +
-  sync_registry (pkt 1), contacts.who_is_who JSONB (pkt 5, sprawdzone - kolumny NIE MA),
-  regula fail-closed przed tier='out_of_icp' (pkt 7; UWAGA: contacts NIE MA kolumny dm_history,
-  historia DM zyje w engagement_log per contact_id - albo oprzec regule na engagement_log,
-  albo dopisac kolumne w tym samym DDL).
-- **pkt 4 CZEKA NA DECYZJE TOMASZA**: sciecie icp_tier do 5 wartosci wywali 45 zywych wierszy
-  (Watch 37, Premium 7, Mid 1). Rekomendacja: DODAC 'Inne' do istniejacej listy, legacy zostawic.
+- **pkt 2 ZROBIONY**: sekcja "Weryfikacja tozsamosci cross-platform" w OBU masterpromptach
+  czatowych (LinkedIn v3.2, X v3.1 - parytet): zrzut profilu zamiast web_search, werdykt
+  trzema stanami jak bramka tozsamosci Sprzedawcy. **Tomasz musi wkleic pliki do projektu
+  czatowego ponownie** - inaczej czat pracuje na starej wersji.
+- **pkt 8 ZROBIONY**: compliance.pl_comma_flags + linia ⚠️ INTERPUNKCJA w karcie materialu
+  dla TNM/RDC (max 3 fragmenty, z pelnej tresci, zero LLM).
+- **pkt 1 ZROBIONY**: linia raportu `kpi_snapshot` -> channel_kpi_snapshots (DDL 030, okresy
+  dzien/7d/28d/90d, UPSERT z COALESCE) + odczyt sekcja METRYKI KANALU w stanie gry.
+- **pkt 5 CZESCIOWO**: kolumna contacts.who_is_who + odczyt w crm.relation_context SA.
+  OTWARTE: kto ZAPISUJE (propozycja BE: linia `kto_jest_kim` w raporcie pracy) - pytanie
+  do Managera w raporcie.
+- **pkt 7 ZROBIONY**: crm.dm_history + crm.fail_closed_note na engagement_log; tier wykluczajacy
+  z lejka przy istniejacej historii rozmow traci REKOMENDACJE (a bez rekomendacji semi_autonomous
+  NIE decyduje sam - crm_tier jest na semi od 22/07). Wpiete w oba miejsca proponujace tier.
+- **pkt 4 DALEJ CZEKA NA DECYZJE TOMASZA**: sciecie icp_tier do 5 wartosci wywali 45 zywych
+  wierszy (Watch 37, Premium 7, Mid 1). Rekomendacja: DODAC 'Inne', legacy zostawic.
+
+**WDROZENIE PACZKI (kolejnosc obowiazkowa):** push -> `psql db/030_kpi_whoiswho.sql` PRZED
+rebuildem -> rebuild cm-agent -> tap-testy: (a) linia kpi_snapshot narzedziem Lacznika,
+(b) karta TNM/RDC z flaga interpunkcji, (c) karta tieru dla osoby z historia DM = BEZ gwiazdki
+rekomendacji. Do czasu psql sekcja METRYKI KANALU jest cicha (brak tabeli = pusta lista).
+Dowod lokalny bez produkcji: `python cm-agent/tests/test_paczka1.py` - 40 przypadkow PASS.
 
 ### B. Otwarte decyzje Tomasza (nie kod - pytaj guzikami, nie zgaduj)
 1. Cache semantyczny Researchera: globalnie OFF czy plaster na fraze 'prospect research'.
@@ -222,8 +235,9 @@ Reguły obowiązują W CAŁEJ sesji, przy każdym zadaniu (nie tylko przy pierws
 - **cm-agent** (FastAPI, Mikrus:8089, docker): endpointy `/health /metrics /message /matnav
   /plannav /cmt /decnav /docmsg /metrics/xlsx /wake /request /plan /reports/{kind}
   /lacznik/stan /lacznik/raport`.
-- **Baza:** PostgreSQL `ags_crd` w kontenerze `pg_n8n`. Następny wolny DDL: **028**
-  (027 sales_agent wykonany).
+- **Baza:** PostgreSQL `ags_crd` w kontenerze `pg_n8n`. Wykonane: do **029**.
+  **030 NAPISANY, CZEKA NA psql** (channel_kpi_snapshots + contacts.who_is_who + indeks DM).
+  Następny wolny DDL: **031**.
 - **n8n (transport):** HITL `U5pUZjy2yAhR1sWg` (router wiadomości, komend i guzików;
   przepustka Detect Update Type ma /karty /schowek /decyzje /brand* /prospect /oferta
   /pipeline /add_sales_material /dziennik /kontekst + .pdf<=8MB) | AGS Scheduler
