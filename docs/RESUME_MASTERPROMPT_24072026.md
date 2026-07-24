@@ -1,4 +1,4 @@
-# MASTER PROMPT - AGS Agent Network (wersja 24/07/2026, stan na 24/07 ~11:00)
+# MASTER PROMPT - AGS Agent Network (wersja 24/07/2026, stan na 24/07 ~15:40)
 
 Wklej na starcie nowej sesji Cowork. Self-contained. **Zastępuje RESUME_MASTERPROMPT_19072026.md**
 (tamten = archiwum historii 19-22/07; tutaj jest STAN OBECNY, zgodnie z kanonem DOKUMENTACJA ŻYJE).
@@ -49,8 +49,37 @@ OTWARTE (decyzja Tomasza, nie kod): cache SEMANTYCZNY globalnie OFF
 fraze 'prospect research'. Bilans dotychczasowy plastra: 0 korzysci, 6 jobow z cudza firma.
 Kazdy NOWY szablon zapytania o podmiot omija plaster (AP-307).
 
-PIERWSZY RUCH SESJI: kampania szkol tanca - powtorz research trojki (StandART juz zrobiony
-24/07 10:00), potem gotowce outreachu. Adamietz: follow-up telefoniczny do Piotra.
+**SCIEZKA SPRZEDAZY PRZEROBIONA PO POLUDNIU 24/07** (raport:
+docs/cm/RAPORT_do_Managera_24072026_sciezka_sprzedazy.md). Skrot tego, co dziala inaczej:
+- Sprzedawca SAM wchodzi na strone prospekta (`sales.wizytowka`) przed researchem i przed
+  gotowcem: strona glowna + do 3 podstron (kontakt/cennik/zapisy/grafik/instruktorzy),
+  regexem mail i telefon. Powod: kaskada Researchera przyniosla z domeny klubu SAME TYTULY,
+  a firecrawl osiem linkow z arXiv o prospectingu (docs/komponenty/researcher.md - OTWARTE).
+- Dane kontaktowe ida do KOLUMN lejka (DDL 029: contact_email, contact_phone, contact_person,
+  site_checked_at), nadpisywane tylko gdy puste. Widoczne w /pipeline.
+- Glos: do gotowca idzie CALY voice_dna_core + CALA Voice Bible (bylo: 2000 z 22 168 znakow),
+  prog trafnosci bazy wiedzy 0.55, sekcja anty-szablonowa, wzorce z wiadomosci Tomasza
+  (`material_type='outreach_example'`).
+- Gotowiec: naglowek (osoba, mail, telefon, strona, ostrzezenie tozsamosci) + czysta wklejka
+  (kontrakt `---GOTOWIEC---`, kod tnie komentarz modelu) + stopka (etap, ktory to kontakt).
+- Bramka tozsamosci: trzy stany, blokuje wylacznie BRAK DOWODU.
+- UI jednego bota: badge "kto mowi", log-bot i powtorki przypomnien wyciszone.
+
+DOWOD SKUTECZNOSCI (ten sam prospekt tego samego dnia): rano "brak danych kontaktowych,
+brak sygnalow kupna, tozsamosc niepewna" -> po poludniu telefon i mail w kolumnach, tozsamosc
+POTWIERDZONA, hak = kampania klubu na Mistrzostwa Europy w breakingu, mail otwiera sie od
+"trzymam kciuki za Wiktorie, Emilie, Patryka i Piotrka".
+
+TRZY MOJE REGRESJE Z TEGO DNIA (klasa bledu wazniejsza niz sam blad):
+1. `Decimal` w payloadzie meldunku - cichy `except` zamienil awarie w cisze; sanityzacja
+   payloadu + eskalacja zamiast milczenia.
+2. Nowy `material_type` w kodzie bez DDL (AP-304 recydywa).
+3. Tap-test na wartosci, ktorej NIE MA w bazie (adres z `www`, w lejku gola domena bez DNS).
+   **Testuj wartoscia, ktora system faktycznie posiada.**
+
+PIERWSZY RUCH SESJI: kampania szkol tanca - wyslij gotowiec do StandART (czeka u Tomasza,
+sprawdz tylko, czy imiona ze zbiorki to trenerzy), potem La Cultura i STC ta sama sciezka.
+Adamietz: follow-up telefoniczny do Piotra.
 </otwarte_teraz>
 
 <rola>
