@@ -7,6 +7,11 @@ class MasterPromptBuilder:
         fn = getattr(self, f"build_for_{source}", None)
         return fn(query, complexity, context) if fn else {"query": query}
 
+    def build_for_site(self, q, c, ctx):
+        """Zrodlo natywne: bierze ADRES z zapytania ('strona: <url>' albo goly link)."""
+        from . import site
+        return {"url": site.extract_url(q), "max_pages": site.MAX_PAGES}
+
     def build_for_web_search(self, q, c, ctx):
         return {"query": q, "max_results": 5}
 

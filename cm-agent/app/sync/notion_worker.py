@@ -25,7 +25,7 @@ def _log(msg):
         with open(LOG_PATH, "a", encoding="utf-8") as f:
             f.write(line + "\n")
     except Exception:
-        pass
+        traceback.print_exc()  # AP-306: zapis do pliku logu
 
 
 def _claim(conn):
@@ -97,7 +97,7 @@ def _loop():
             for _ in gen:
                 break  # jedno obudzenie starcza - drain zbiera wszystko
         except Exception:
-            pass
+            pass  # cisza uzasadniona: timeout nasluchu to NORMALNY przebieg petli, nie awaria
         _drain(conn)
         # LACZNIK 22/07: strona "Stan gry AGS" (throttle 15 min w module; blad = log, nie crash)
         try:

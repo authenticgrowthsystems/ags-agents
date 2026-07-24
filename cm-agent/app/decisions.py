@@ -15,6 +15,7 @@ informacyjny - Tomasz widzi kazda auto-decyzje i moze cofnac tryb (/decyzje -> m
 UWAGA KANON: to NIE dotyczy zatwierdzania TRESCI do publikacji (niezatwierdzone NIGDY nie
 wychodzi samo). Semi-auto obejmuje decyzje OPERACYJNE (sloty, podmiany tematow, modele itd.).
 """
+import traceback
 import datetime
 import html as _html
 import json
@@ -95,7 +96,7 @@ def _learn(subagent_id, brand_id, question, answer_label, accepted, notes):
             (subagent_id, brand_id or "AGS", question[:2000], answer_label[:2000],
              "accepted" if accepted else "replaced", notes))
     except Exception:
-        pass
+        traceback.print_exc()  # AP-306: to jest PETLA NAUKI - cichy blad zatrzymuje uczenie sie agenta
 
 
 def ask(subagent_id, brand_id, decision_type, question, options, recommendation=None,

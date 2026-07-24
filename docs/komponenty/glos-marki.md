@@ -1,0 +1,77 @@
+# Komponent: GLOS MARKI (voice_dna_core + Voice Bible w promptach)
+
+**STATUS GOTOWOSCI: LIVE, po naprawie ucinania 24/07 (czeka rebuild cm-agent)** (macierz: docs/GOTOWOSC_PRODUKTU.md; aktualizuj przy kazdej zmianie zachowania)
+
+## Co robi
+
+Dostarcza modelowi GLOS Tomasza przy KAZDYM pisaniu tekstu: rdzen osobisty
+(`voice_dna_core` - destylat 20 wywiadow) plus pelna `voice_bible` (~22 tys. znakow).
+Zrodlem prawdy jest `brand_config` (kanon SSOT #71), nie plik w repo.
+
+Jeden brand = jeden glos; nakladki marek (AGS/TNM/RDC) siedza w tresci Voice Bible,
+nie w kodzie (kanon: glos RDC = TNM = AGS, bo to ten sam czlowiek).
+
+## BUG NAPRAWIONY 24/07: glos szedl UCIETY (zgloszenie Managera)
+
+Objaw: teksty lamaly zasady, ktore w Voice Bible stoja wprost (m.in. zakazane
+slownictwo, rytm zdan), mimo ze kanon v2.1 obowiazuje od 06/07.
+
+Przyczyna z kodu: DZIEWIEC miejsc wysylalo model do pisania z `voice_bible[:1200]`,
+`[:1500]`, `[:2500]` albo `[:3000]` z 22 168 znakow. Wycinek to naglowek pliku
+i pozycjonowanie - a wiec model dostawal polecenie "pisz tym glosem" BEZ zasad
+pisania. Polecenie bez pokrycia. `voice_dna_core` nie wchodzil w ogole poza
+sciezka sprzedazowa.
+
+Naprawa: JEDNO wspolne zrodlo bloku glosu.
+
+- `brand.voice_text(brand)` - caly rdzen + cala Voice Bible.
+- `brand.voice_block(brand)` - ten sam tekst jako blok `system` oznaczony
+  `cache_control: ephemeral` (prompt-cache; blok jest bajtowo staly, wiec
+  powtorne wywolania placa 10% za wejscie).
+- `brand.system_blocks(brand)` (glowna generacja) korzysta z tego samego bloku.
+
+Wszystkie dziewiec miejsc uzywa teraz `voice_block`. Wyciek sekcji po slowach
+kluczowych zostal sprawdzony i ODRZUCONY juz przy sciezce sprzedazowej: z 37
+naglowkow zywej Voice Bible dopasowaly sie dwa, a listy zakazanego slownictwa
+maja naglowki po angielsku, wiec wypadlyby. Cichy dobor sekcji to ta sama klasa
+bledu, co ucinanie.
+
+## Wejscia-wyjscia i tabele
+
+- `brand_config` (per brand): `voice_bible` (wersjonowana bumpem, UNIQUE
+  (brand_id, config_key)), `voice_dna_core`, `banned_vocab`, `style_learned`.
+- `brand_strategy`: audytorium i filary do bloku roli.
+- `content_items.voice_hash` - md5 Voice Bible uzytej przy generacji (audyt
+  i odtwarzalnosc: po zmianie glosu wiadomo, ktore teksty powstaly na starym).
+
+## Punkty zaczepienia w kodzie
+
+- `cm-agent/app/brand.py`: `load_brand` (czyta takze `voice_dna_core`),
+  `voice_text`, `voice_block`, `system_blocks`.
+- Konsumenci bloku glosu: `generate` (canonical, warianty, komentarz z wizji),
+  `conversation` (propozycje komentarzy, odpowiedzi na DM), `planner` (plan
+  tygodnia, inny kat), `matreview` (inny kat z karty), `proactive` (propozycje
+  do luk kadencji), `sunday_brief` (podklad niedzielny).
+- Sciezka sprzedazowa ma wlasny sklad glosu (`sales._voice_for_outreach`), bo
+  dokłada wzorce z wiadomosci Tomasza (`sales_knowledge.material_type =
+  'outreach_example'`) - ta sama zasada calosci, inne zrodla.
+- Test: `cm-agent/tests/test_import_smoke.py` sprawdza, ze blok glosu niesie
+  CALA Voice Bible i CALY rdzen oraz ma wlaczony prompt-cache.
+
+## Kanony ktore go dotycza
+
+- Glos = jeden DNA + nakladki marek (12/07).
+- SSOT w bazie, nie w pliku (#71); zmiana glosu = UPDATE z bumpem wersji,
+  nigdy nowy wiersz.
+- Nie tnij glosu, zeby oszczedzic tokeny. Od tego jest prompt-cache. Ciecie
+  oszczedza grosze i kosztuje marke.
+
+## Znane pulapki
+
+- Voice Bible w bloku `system` MUSI byc bajtowo stabilna, inaczej prompt-cache
+  nie trafia. Doklejanie do niej zmiennych rzeczy (data, stan kolejki) kasuje
+  oszczednosc - zmienne ida do wiadomosci uzytkownika, nie do bloku glosu.
+- `brand_config` ma UNIQUE (brand_id, config_key): nowa wersja to UPDATE
+  + `version+1`, a nie INSERT (AP-304 recydywa z 12/07).
+- Marka bez `voice_bible` = generacja bez glosu. `/brand_config <marka>`
+  pokazuje to wprost ("BRAK").

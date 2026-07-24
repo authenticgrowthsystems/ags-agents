@@ -59,6 +59,15 @@ Przypomnij jutro), nigdy auto-decyzja.
   `channels.config.language_publish`; gdy kanal 'en' a tekst wyglada po polsku
   (`compliance.looks_polish`) -> `generate.translate_text` na EN. Karta HITL
   pokazuje dokladnie to, co wyjdzie na kanal.
+- STRAZNIK META-NAGLOWKA (24/07, zgloszenie Tomasza ze zrzutu z X): przed zapisem
+  do kolejki `compliance.strip_meta_header` zdejmuje z czubka tekstu meta-linie
+  modelu - naglowek `# X Adaptation`, etykiete `LinkedIn:`, zapowiedz `Oto wersja:`
+  i oplotki ```. Objaw: post #195 wyszedl na X z linia "# X Adaptation"; ani X, ani
+  LinkedIn nie renderuja markdown, wiec to nie formatowanie, tylko smiec widoczny
+  dla klienta. Ciecie jest zachowawcze (max 3 linie, tylko wzorce meta, hasztag NIE
+  jest naglowkiem - po '#' musi stac spacja) i dziala TAKZE na kazdej czesci serii.
+  Testy: `cm-agent/tests/test_meta_naglowek.py`. Sprzatanie wierszy sprzed poprawki:
+  `docs/ops/meta_naglowki_kolejki_24072026.sql`.
 - `[ARTYKUL]` = gotowiec do wklejki recznej (API X/LinkedIn nie publikuje
   artykulow z naszego tieru).
 

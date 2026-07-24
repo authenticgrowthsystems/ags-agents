@@ -2,6 +2,8 @@
 publish per the channel's publish_mode. New channel = a registry row + (for webhook mode) a sub-agent adapter;
 the CM core does not change. Sub-agents (e.g. x-agent) receive a delegate call on the async connector contract
 and publish + report back via post_queue + agent_messages."""
+import traceback
+
 import httpx
 
 from . import db, config
@@ -54,6 +56,16 @@ def stage_variant(item, channel_row, variant_text):
     kazdy z KOLEJNYM wolnym slotem siatki dnia - samodzielne posty, nie nitka, nie kloc."""
     import json
     from . import slots as _slots
+    # STRAZNIK META-NAGLOWKA 24/07 (zgloszenie Tomasza ze zrzutu z X: post wyszedl z linia
+    # "# X Adaptation" - wiersz kolejki #195). Model opisuje CO robi, a opis szedl do kolejki
+    # doslownie; ani X, ani LinkedIn nie renderuja markdown, wiec to nie formatowanie, tylko
+    # smiec widoczny dla klienta. To JEDYNE miejsce zapisu do post_queue, wiec straznik stoi
+    # tutaj - kazda przyszla sciezka dostanie go za darmo (lekcja AP-307).
+    from . import compliance as _c
+    try:
+        variant_text = _c.strip_meta_header(variant_text)
+    except Exception:
+        traceback.print_exc()  # higiena tekstu nie blokuje stagingu, ale NIE milczy (AP-306)
     # STRAZNIK JEZYKA 20/07 (incydent: polskie warianty trafily do kolejki kanalow EN i wyszly
     # po polsku na LinkedIn/X). Jezyk kanalu = channels.config.language_publish; wariant w zlym
     # jezyku tlumaczymy PRZED zapisem do kolejki, zeby karta HITL pokazywala to, co wyjdzie.
@@ -64,7 +76,9 @@ def stage_variant(item, channel_row, variant_text):
             variant_text = _gen.translate_text(
                 variant_text, "en", content_item_id=item.get("id")) or variant_text
     except Exception:
-        pass  # tlumaczenie nie moze zablokowac stagingu; PL zlapie wtedy karta HITL
+        # AP-306: tlumaczenie nie blokuje stagingu, ale cicha awaria = polski tekst
+        # w kanale angielskim (incydent 20/07). Karta HITL to zlapie, log mowi DLACZEGO.
+        traceback.print_exc()
     if channel_row["channel"] == "x" and ("===POST===" in (variant_text or "")
                                           or len(variant_text or "") > 600):
         # STRAZNIK 19/07 (Tomasz: 'napraw tak, zeby nie trzeba bylo wracac'): dlugi wariant X
@@ -76,6 +90,7 @@ def stage_variant(item, channel_row, variant_text):
             parts = _split_paragraphs(variant_text)
         ids = []
         for i, part in enumerate(parts):
+            part = _c.strip_meta_header(part)  # kazda czesc serii bywa wlasnym "# Post 2"
             # kazda czesc = KOLEJNY wolny slot (bez dziedziczenia slotu materialu - czesc 1
             # ladowala po czesciach 2-4, gdy material mial stary slot w przyszlosci)
             try:
@@ -113,7 +128,8 @@ def _delegate(item, row):
                          "media": row.get("media") or []},
                    headers={"X-Researcher-Secret": config.RESEARCHER_WEBHOOK_SECRET}, timeout=25)
     except Exception:
-        pass  # sub-agent unreachable; row stays 'dispatching', retriable
+        # AP-306: wiersz zostaje 'dispatching' i jest ponawialny, ale powod ma byc w logu
+        traceback.print_exc()
 
 
 def _auto_obraz_wlaczony(brand_id, platform):
@@ -133,7 +149,7 @@ def _auto_obraz_wlaczony(brand_id, platform):
         if flaga in ("false", "0", "nie", "off"):
             return False
     except Exception:
-        pass
+        traceback.print_exc()  # AP-306: brak flagi to decyzja, blad odczytu to awaria - musi byc w logu
     return platform == "linkedin"
 
 

@@ -6,11 +6,13 @@
 (B) Semi-auto zaczepki CM (kanon 10, brand_config cm_work_mode='semi'|'auto'): poranna odprawa -
     jedna wiadomosc: co czeka na decyzje (karty/intake/plan) + guzik przegladu.
 Anty-spam: max 1 zgloszenie luki per kanal/dzien, max 1 odprawa/dzien (stan w brand_config)."""
+import traceback
 import datetime
 import json
 from zoneinfo import ZoneInfo
 
 from . import db, tasks, content_memory
+from . import brand as _brand
 from .matreview import _state_get, _state_set, send_intake_buttons, pending_items
 
 WARSAW = ZoneInfo("Europe/Warsaw")
@@ -92,7 +94,7 @@ def _ledger_gap(channel, day, missing):
                 (sub, cm, json.dumps({"kind": "cadence_gap", "channel": channel,
                                       "day": day.isoformat(), "missing": missing})))
     except Exception:
-        pass
+        traceback.print_exc()  # AP-306: odczyt ledgera luk
 
 
 def _propose_for_gap(brand_id, channel, day, missing):
@@ -120,7 +122,8 @@ def _propose_for_gap(brand_id, channel, day, missing):
     n = min(missing, PROPOSALS_PER_GAP)
     resp = client().messages.create(
         model=model, max_tokens=600, thinking={"type": "disabled"},
-        system=[{"type": "text", "text": f"Jestes CM marki {brand_id}. Glos marki (skrot):\n{brand['voice_bible'][:1500]}"}],
+        system=[{"type": "text", "text": f"Jestes CM marki {brand_id}."},
+                _brand.voice_block(brand)],  # 24/07: CALY glos (rdzen + Voice Bible), nie wycinek
         tools=[PROPOSE_TOOL], tool_choice={"type": "tool", "name": "emit_themes"},
         messages=[{"role": "user", "content":
                    f"Subagent kanalu {channel} zglasza luke w kadencji: {day.strftime('%A %d/%m')} brakuje "
@@ -260,7 +263,7 @@ def _log_channel_need(brand_id, channel, topic, proposal, reply):
              json.dumps({"topic": topic, "cm_reply": (reply or "")[:400], "channel": channel},
                         ensure_ascii=False)))
     except Exception:
-        pass
+        traceback.print_exc()  # AP-306: prosba subagenta MA nie ginac - cisza lamie cel tej funkcji
 
 
 def handle_agent_requests(brand_id="AGS"):

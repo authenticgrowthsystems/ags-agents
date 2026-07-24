@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 from psycopg.types.json import Jsonb
 
 from . import db, config, logbot
+from . import brand as _brand
 
 WARSAW = ZoneInfo("Europe/Warsaw")
 REMIND_START = (21, 30)   # niedziela: start okna przypomnien
@@ -73,7 +74,7 @@ def log_learning(subagent_id, brand_id, content_item_id, proposed, final, correc
             (str(subagent_id)[:100], str(brand_id)[:50], content_item_id,
              (proposed or "")[:6000], (final or None), correction_type, (notes or None)))
     except Exception:
-        pass
+        traceback.print_exc()  # AP-306: petla nauki (agent_learning_log) nie moze gasnac po cichu
 
 
 def _admin_chat():
@@ -874,7 +875,7 @@ def apply_edit(new_text, wake_event=None):
              _Jsonb({"content_item_id": str(iid), "before": old[:4000], "after": new[:4000],
                      "rules": rules})))
     except Exception:
-        pass
+        traceback.print_exc()  # AP-306: zapis edycji Tomasza
     db.execute("UPDATE content_items SET canonical_body=%s, updated_at=NOW() WHERE id=%s", (new, iid))
     db.execute("DELETE FROM post_queue WHERE content_item_id=%s AND status='review'", (iid,))
     item["canonical_body"] = new
@@ -955,7 +956,7 @@ def apply_angle_guidance(text, wake_event=None):
         model, tier, source = tasks.model_for("plan_angle")
         resp = client().messages.create(
             model=model, max_tokens=400, thinking={"type": "disabled"},
-            system=[{"type": "text", "text": f"Glos marki (skrot):\n{brand['voice_bible'][:1500]}"}],
+            system=[_brand.voice_block(brand)],  # 24/07: CALY glos (rdzen + Voice Bible), nie wycinek
             messages=[{"role": "user", "content":
                        f"Przeformuluj temat-matke posta wg WSKAZOWEK wlasciciela (jego kat jest "
                        f"nadrzedny; wymagania tresci wpisz do tematu, bo temat = prompt generatora). "
@@ -1030,7 +1031,7 @@ def sunday_guard():
                  f"najblizszy slot: {pick['master_theme'][:70]}",
                  Jsonb({"content_item_id": str(pick["id"]), "trigger": "sunday_2300_fallback"})))
         except Exception:
-            pass
+            traceback.print_exc()  # AP-306: straznik niedzielny
         logbot.send(f"⚠️ NIEDZIELA 23:00: paczka bez przegladu ({n} materialow). Zatwierdzilem sam material "
                     f"na najblizszy slot: {pick['master_theme'][:80]}. Reszta czeka na Twoja decyzje.")
         _state_set("cm_sunday_fallback", {"date": today, "picked": str(pick["id"])})

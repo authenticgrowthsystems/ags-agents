@@ -19,6 +19,7 @@ import uuid
 from zoneinfo import ZoneInfo
 
 from . import db, tasks, research, content_memory
+from . import brand as _brand
 from .matreview import _state_get, _state_set
 
 WARSAW = ZoneInfo("Europe/Warsaw")
@@ -133,11 +134,11 @@ def _synthesize(job_id, has_research):
     model, tier, source = tasks.model_for("sunday_synth")   # domyslnie sonnet
     resp = client().messages.create(
         model=model, max_tokens=1600, thinking={"type": "disabled"},
-        system=[{"type": "text", "text":
+        system=[_brand.voice_block(brand),  # 24/07: CALY glos (rdzen + Voice Bible), nie skrot
+                {"type": "text", "text":
                  f"Jestes Content Managerem marki {BRAND}. Redagujesz PODKLAD (nie gotowy artykul) pod "
                  f"NIEDZIELNY artykul LinkedIn Tomasza - insight tygodnia ze swiata AI. Artykul finalnie "
                  f"pisze Tomasz recznie; Ty dajesz mu twardy material do wyboru.\n"
-                 f"Glos marki (skrot):\n{brand['voice_bible'][:1200]}\n\n"
                  f"ZASADY TWARDE:\n"
                  f"- ZERO em-dash (kanon marki RULE 1): myslnik lub przebuduj zdanie.\n"
                  f"- REGULA PRAWDY: kazdy fakt/liczba MUSI miec pokrycie w dostarczonym materiale i link "

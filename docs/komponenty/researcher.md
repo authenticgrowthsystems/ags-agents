@@ -19,7 +19,8 @@ Bezpiecznik: poll agent_messages REQUEST co 30s (droga dla agentow piszacych
   prosto do DB + przegapione dzwonki)
 ```
 
-Kaskada (5 zrodel LIVE): low=[web_search]; medium=+firecrawl+gemini_dr;
+Kaskada (6 zrodel LIVE): **site** (natywne, bez kosztu, tylko gdy zapytanie niesie adres);
+low=+web_search; medium=+firecrawl+gemini_dr;
 critical=+openai_dr+manus (~18 PLN/query). Router klasyfikuje query; 'critical'
 wymaga slowa kluczowego (piln/krytyczn/urgent/critical/high-stakes). Twarde
 stopy budzetu: 50/100/1500 PLN. Adaptery = workflowy n8n "Researcher - *"
@@ -63,8 +64,11 @@ ISO; retap = wyzerowanie klucza, ksztalt sprawdz w `sunday_brief._state_set`).
 ## Punkty zaczepienia w kodzie
 
 - `ags-researcher/app/`: `worker.py` (petla + FastAPI /request /health
-  /metrics), `sources.py` (SourceClient -> webhooki n8n), `router`, `cache`,
-  `budget`, `synth`, `failure`. Adaptery: `n8n-workflows/researcher/`.
+  /metrics), `sources.py` (SourceClient -> webhooki n8n + zrodla natywne),
+  **`site.py`** (24/07: pobranie strony podmiotu, `extract_url`,
+  `zapytanie_o_podmiot`, `pobierz`, `run`), `router`, `cache`, `budget`,
+  `synth`, `failure`. Adaptery: `n8n-workflows/researcher/`.
+- Testy lokalne: `ags-researcher/tests/test_site.py` (stdlib, stub httpx, zero sieci).
 - `cm-agent/app/research.py`: `request_research`, `job_status`,
   `claims_with_sources`, `grounding_with_sources`, `_clean_url`,
   `ingest_research_responses`.
@@ -125,7 +129,31 @@ ISO; retap = wyzerowanie klucza, ksztalt sprawdz w `sunday_brief._state_set`).
   Detekcja po frazie 'prospect research' to plaster - kazdy nowy szablon zapytania o podmiot
   (inny agent, inne brzmienie) omija ja i kontaminacja wraca (AP-307).
 
-## OTWARTE: kaskada nie czyta strony badanego podmiotu (24/07, dowod z jobu 7411d0ba)
+## ZAMKNIETE 24/07 wieczorem: kaskada CZYTA strone badanego podmiotu (zrodlo `site`)
+
+Dodane natywne zrodlo `site` (`ags-researcher/app/site.py`): pobiera strone podmiotu SAMO,
+w Pythonie, bez n8n, bez klucza i bez kosztu. Stoi PIERWSZE w kaskadzie na kazdym poziomie
+i uruchamia sie WYLACZNIE wtedy, gdy zapytanie niesie adres (`strona: <url>` albo goly link) -
+pytania tematyczne nie tworza nawet wiersza w `research_runs` (`router.sources(level, query)`).
+
+Jak dziala: warianty adresu (www/bez, https/http - gola domena prospekta bywa bez wpisu DNS),
+strona glowna + do 3 podstron pasujacych do `kontakt|cennik|zapisy|grafik|instruktor|o-nas|about`,
+usuniecie znacznikow HTML, a nastepnie DWA rodzaje dowodow:
+1. **wyciag kontaktowy** (mail, telefon, NIP) jako PIERWSZY dowod - krotki, wiec zawsze miesci
+   sie w limicie 1200 znakow na dowod, ktory synteza tnie. Bez tego numer z naglowka gubil sie
+   w dlugim tekscie strony.
+2. **tresc strony w kawalkach** po ~1100 znakow, z adresem w tresci dowodu.
+Kazdy dowod ma `authority = 1.0` i `source_name = 'site'`, a prompt syntezy mowi wprost:
+dane z wlasnej strony podmiotu sa PEWNE, nie wolno przy nich pisac "brak danych kontaktowych".
+Bledy nie wywracaja joba: brak adresu = `skipped`, strona nie odpowiada = `empty` z powodem.
+
+Testy (stdlib, zero sieci): `python ags-researcher/tests/test_site.py` - 26 przypadkow.
+Obejscie w sprzedazy (`sales.wizytowka`) ZOSTAJE: ono wypelnia KOLUMNY lejka (DDL 029), a to
+inna funkcja niz dowody dla syntezy. Roznica wzgledem `firecrawl`: tamten adapter wola
+`api.firecrawl.dev/v2/search/research/papers`, czyli wyszukiwarke prac naukowych - stad arXiv
+w wynikach o klubie tanecznym. To NIE jest crawler zadanego adresu i nigdy nim nie byl.
+
+### Historia problemu (dowod z jobu 7411d0ba)
 
 Research prospekta (medium, 3 zrodla, 52 dowody, 1,24 PLN) orzekl "brak danych kontaktowych",
 a na stronie glownej klubu stoi telefon. Sonda pokazala, ze to wada POBIERANIA, nie syntezy:
@@ -139,9 +167,18 @@ a na stronie glownej klubu stoi telefon. Sonda pokazala, ze to wada POBIERANIA, 
 
 Wniosek: dla zapytan o KONKRETNY PODMIOT kaskada musi miec krok "pobierz strone tego
 podmiotu" (adres jest w zapytaniu jako `strona:`), a nie tylko wyszukiwanie tematyczne.
-Do czasu naprawy Agent Sprzedazy obchodzi to sam (`sales.wizytowka` - patrz
-docs/komponenty/agent-sprzedazy.md); obejscie NIE zastepuje naprawy, bo dotyczy tylko
-sprzedazy - kazdy inny konsument Researchera dostaje dalej tytuly zamiast tresci.
+WYKONANE 24/07 wieczorem - patrz sekcja wyzej (zrodlo `site`).
+
+## Cache semantyczny: GLOBALNIE OFF (decyzja Managera P3, 24/07)
+
+Bilans plastra na fraze 'prospect research': 0 korzysci, 6 jobow z danymi cudzej firmy.
+Decyzja: `SEMANTIC_CACHE_ENABLED=false` w `~/ags-agents/ags-researcher/.env` (restart
+kontenera). Cache EXACT (ten sam tekst zapytania = ten sam podmiot) dziala dalej.
+
+Druga warstwa w kodzie, na wypadek ponownego wlaczenia: `site.zapytanie_o_podmiot(query)`
+odsiewa z cache semantycznego KAZDE pytanie o konkretny podmiot - po ADRESIE w zapytaniu,
+nie po frazie. Fraza byla plastrem, ktory omijal kazdy nowy szablon zapytania (AP-307);
+adres niesie kazde pytanie o firme, niezaleznie od tego, ktory agent je uloży.
 
 ## Znane pulapki
 

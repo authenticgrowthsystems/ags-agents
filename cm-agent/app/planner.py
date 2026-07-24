@@ -12,6 +12,7 @@ from psycopg.types.json import Jsonb
 
 from . import db, config, tasks, content_memory
 from .brand import load_brand
+from . import brand as _brand
 from .generate import client
 
 WARSAW = ZoneInfo("Europe/Warsaw")
@@ -266,7 +267,8 @@ def build_plan(brand_id="AGS", days=7, force=False):
     resp = client().messages.create(
         model=model, max_tokens=4096,
         thinking={"type": "disabled"},
-        system=[{"type": "text", "text": f"Jestes planerem tresci marki {brand_id}. Glos marki:\n{brand['voice_bible'][:3000]}"}],
+        system=[{"type": "text", "text": f"Jestes planerem tresci marki {brand_id}."},
+                _brand.voice_block(brand)],  # 24/07: CALY glos (rdzen + Voice Bible), nie wycinek
         tools=[PLAN_TOOL], tool_choice={"type": "tool", "name": "emit_plan"},
         messages=[{"role": "user", "content": msg}],
     )
@@ -417,7 +419,7 @@ def _reangle_theme(item_id, brand_id="AGS"):
     model, tier, source = tasks.model_for("plan_angle")
     resp = client().messages.create(
         model=model, max_tokens=300, thinking={"type": "disabled"},
-        system=[{"type": "text", "text": f"Glos marki (skrot):\n{brand['voice_bible'][:1500]}"}],
+        system=[_brand.voice_block(brand)],  # 24/07: CALY glos (rdzen + Voice Bible), nie wycinek
         messages=[{"role": "user", "content":
                    f"Przeformuluj temat posta na INNY, swiezy kat (ta sama esencja, inna perspektywa). "
                    f"Zachowaj ewentualny prefiks [ARTYKUL]. Zwroc TYLKO nowy temat.\n\n{row['master_theme']}"}])

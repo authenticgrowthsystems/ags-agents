@@ -13,6 +13,9 @@ Potem 4 opcje: description, pros[], cons[], supporting_claims (id z Twoich claim
 Tresc: konwergencja (co potwierdzaja wszystkie zrodla) plus dywergencja (gdzie sie roznia).
 Bez em-dashy (przecinek, dywiz, dwukropek). Liczby jako kotwice. Cytuj zrodla po evidence_id.
 overall_confidence 0-1. Jesli mniej niz 2 zrodla daly evidence, ustaw overall_confidence <= 0.5.
+Dowody ze zrodla 'site' pochodza z WLASNEJ STRONY badanego podmiotu (pobrane bezposrednio),
+wiec dane kontaktowe, oferta i lokalizacja z nich sa PEWNE: nie podwazaj ich i nigdy nie pisz
+"brak danych kontaktowych", jesli stoja w takim dowodzie.
 Zwroc wynik WYLACZNIE przez narzedzie emit_research_output."""
 
 _TOOL = {

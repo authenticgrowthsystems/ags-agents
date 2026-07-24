@@ -14,7 +14,7 @@ import uvicorn
 from fastapi import FastAPI, Header, HTTPException
 from psycopg.types.json import Jsonb
 
-from . import config, db
+from . import config, db, site
 from .budget import BudgetGovernor, BudgetExceeded
 from .cache import CacheLayer, _vec_literal
 from .failure import FailureHandler
@@ -168,7 +168,7 @@ def _admin_chat_id():
             arr = json.loads(r["config_value"])
             return str(arr[0]) if arr else None
     except Exception:
-        pass
+        traceback.print_exc()  # AP-306: bez chat_id NIE MA zadnego powiadomienia - najgorsza cisza w systemie
     return None
 
 
@@ -390,10 +390,15 @@ def process_job(job):
     # tylko nazwa firmy (podobienstwo > progu 0.92), wiec "trafienie" oznaczaloby podanie
     # danych o INNEJ firmie jako research prospekta. Exact (ten sam tekst = ta sama firma)
     # zostaje. Dowod: joby StandART/La Cultura/STC wracaly z cache w 0 s, zero claims.
-    _prospekt = "prospect research" in (query or "").lower()[:120]
-    emb = None if _prospekt else embed(query)
+    # 24/07 (decyzja Managera P3): cache semantyczny jest globalnie WYLACZONY
+    # (SEMANTIC_CACHE_ENABLED=false). Ten warunek zostaje jako druga warstwa: gdyby ktos
+    # kiedys wlaczyl cache z powrotem, zapytania o KONKRETNY PODMIOT i tak go omijaja.
+    # Wykrywanie po adresie w zapytaniu, nie po frazie 'prospect research' - fraza byla
+    # plastrem, ktory omijal kazdy nowy szablon (AP-307).
+    _podmiot = site.zapytanie_o_podmiot(query)
+    emb = None if _podmiot else embed(query)
     hit = cache.get_exact(query, model_tier=tier) or (
-        None if _prospekt else cache.get_semantic(emb, model_tier=tier))
+        None if _podmiot else cache.get_semantic(emb, model_tier=tier))
     if hit:
         _persist_options(job_id, hit["options"])
         # FIX 24/07 (druga warstwa): kopiuj TAKZE claims zrodlowego joba. Bez tego job z cache
@@ -421,7 +426,7 @@ def process_job(job):
     #    (run rows created up front, evidence/cost persisted after join in deterministic source order) so the
     #    psycopg pool is never contended by worker threads.
     db.set_status(job_id, "dispatched")
-    srcs = router.sources(level)
+    srcs = router.sources(level, query)
     payloads = {s: prompts.build(s, query, level) for s in srcs}
     runs = {}
     for s in srcs:
@@ -625,7 +630,7 @@ def loop():
                         db.set_status(job["job_id"], "failed", error_message=str(e)[:500],
                                       completed_at=_now())
                 except Exception:
-                    pass
+                    traceback.print_exc()  # AP-306: obsluga bledu po wyniku - jesli i ona padnie, chcemy to zobaczyc
             time.sleep(config.POLL_INTERVAL_S)
 
 

@@ -1,5 +1,6 @@
 """Researcher integration: commission research via its /request webhook (event-driven, the contract built
 28/06), and ingest the RESPONSE from agent_messages. CM is capped to <=medium by the critical-restriction."""
+import traceback
 import httpx
 
 from . import config, db
@@ -40,7 +41,7 @@ def ingest_research_responses():
                     flipped.append(str(corr))
             db.execute("UPDATE agent_messages SET status='read', read_at=NOW() WHERE message_id=%s", (r["message_id"],))
         except Exception:
-            pass
+            traceback.print_exc()  # AP-306: ingest wynikow researchu - cisza gubi gotowy, zaplacony wynik
     return flipped
 
 

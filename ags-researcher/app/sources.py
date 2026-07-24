@@ -5,7 +5,7 @@ import time
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from . import config
+from . import config, site
 
 
 class SourceClient:
@@ -24,6 +24,13 @@ class SourceClient:
 
     def run(self, source: str, job_id, run_id, payload: dict) -> dict:
         """Returns {status, evidence:[...], cost_usd?, provider_job_id?}."""
+        if source in config.NATIVE_SOURCES:
+            # 'site' (24/07): pobranie strony podmiotu robimy sami - zero n8n, zero klucza,
+            # zero kosztu. Kontrakt wyniku identyczny jak u adapterow webhookowych.
+            try:
+                return site.run(payload)
+            except Exception as e:  # zrodlo nigdy nie wywraca joba
+                return {"status": "error", "evidence": [], "error": f"site: {e}"}
         path = config.ADAPTER_PATHS.get(source)
         if not path:
             return {"status": "skipped", "evidence": []}

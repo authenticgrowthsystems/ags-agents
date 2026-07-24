@@ -9,6 +9,7 @@ import anthropic
 from . import config, tasks
 from . import db as _db
 from .brand import system_blocks
+from . import brand as _brand
 
 _client = None
 
@@ -415,7 +416,7 @@ def comment_from_image(images, brand, channel, lang="en"):
     content.append({"type": "text", "text": prompt})
     resp = client().messages.create(
         model=model, max_tokens=1500, thinking={"type": "disabled"},
-        system=[{"type": "text", "text": f"Glos marki:\n{brand['voice_bible'][:2500]}"}],
+        system=[_brand.voice_block(brand)],  # 24/07: CALY glos (rdzen + Voice Bible), nie wycinek
         messages=[{"role": "user", "content": content}])
     tasks.log_task("comment_vision", tier, model, source, getattr(resp, "usage", None))
     return _text(resp)
@@ -488,7 +489,7 @@ def _x_guide(brand_id, content_item_id=None):
         if bool(cfg.get("thread_enabled")) or followers >= 1000:
             return CHANNEL_GUIDE["x"]
     except Exception:
-        pass
+        traceback.print_exc()  # AP-306: przewodnik kanalu X
     return _X_SERIES_GUIDE
 
 

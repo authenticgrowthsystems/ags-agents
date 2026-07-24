@@ -13,6 +13,7 @@ Komendy:
   /brand_config NAZWA     - podglad kompletnosci: voice_bible / visual/tokens / cele / execution_mode
   /brand_export NAZWA     - pelny config marki jako JSON (plik .json na Telegram)
 """
+import traceback
 import json
 import re
 
@@ -141,7 +142,7 @@ def _export(chat_id, name):
         tokens = db.fetchone("SELECT tokens FROM brand_tokens WHERE brand_id=%s", (name,))
         data["brand_tokens"] = (tokens or {}).get("tokens")
     except Exception:
-        pass
+        traceback.print_exc()  # AP-306: odczyt tokenow moze nie wyjsc, ale nie po cichu
     payload = json.dumps(data, ensure_ascii=False, indent=2, default=str)
     ok = matreview._tg_send_document(chat_id, f"brand_{name}.json", payload,
                                      caption=f"📦 Eksport marki {name} (config + glos + cele + tokeny) - "

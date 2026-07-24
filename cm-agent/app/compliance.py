@@ -1,6 +1,7 @@
 """Brand canon enforcement: deterministic em/en-dash removal (Rule 1) always, a Haiku redraft when
 banned vocabulary is present, plus (06/07, feedback Tomasza) a PURE-POLISH pass for Polish texts:
 poprawna odmiana i skladnia, zero kalk z angielskiego (doktryna jezykowa: 'test mamy')."""
+import traceback
 import re
 
 from psycopg.types.json import Jsonb
@@ -63,6 +64,9 @@ def _rewrite(prompt, text, content_item_id, task_name="compliance"):
         out = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
         return out or text
     except Exception:
+        # AP-306: filtr moze nie zadzialac, ale nie moze zniknac bez sladu - inaczej tekst
+        # wychodzi NIEPOPRAWIONY i nikt sie o tym nie dowiaduje
+        traceback.print_exc()
         return text
 
 
@@ -79,6 +83,50 @@ def polish_pl(text, content_item_id=None):
         "Test: czy moja mama by to zrozumiala i uznala za naturalne? NIE zmieniaj sensu, tonu ani "
         "dlugosci. Zero em dashes. Zwroc WYLACZNIE poprawiony tekst.",
         text, content_item_id, task_name="polish_pl"))
+
+
+# ---- Straznik meta-naglowka wariantu (24/07, zgloszenie Tomasza ze zrzutu z X) -----------
+# Objaw: post na X wyszedl z linia "# X Adaptation" na poczatku (wiersz kolejki #195).
+# Przyczyna: model opisuje CO robi ("# X Adaptation", "Oto wersja na LinkedIn:"), a wariant
+# szedl do kolejki doslownie. Ani X, ani LinkedIn nie renderuja markdown, wiec naglowek
+# nie jest formatowaniem - jest smieciem widocznym dla klienta.
+# Zasada: tniemy TYLKO linie, ktore sa META (naglowek/etykieta/zapowiedz), nigdy tresci.
+# Hasztag NIE jest naglowkiem - '#' musi miec po sobie spacje ('# X Adaptation' vs '#AI').
+_META_SLOWA = (r"adaptation|adaptacj\w*|wersj\w*|version|wariant\w*|draft|szkic|post|tweet|"
+               r"thread|nitka|artyku\w*|linkedin|twitter|\bx\b")
+_META_NAGLOWEK = re.compile(rf"^\s*#{{1,6}}\s+(?=.{{0,60}}$).*(?:{_META_SLOWA}).*$",
+                            re.IGNORECASE)
+_META_ETYKIETA = re.compile(rf"^\s*(?:\*\*)?(?:{_META_SLOWA})[^:\n]{{0,30}}:\s*(?:\*\*)?$",
+                            re.IGNORECASE)
+_META_ZAPOWIEDZ = re.compile(r"^\s*(?:oto|ponizej|poniżej|here'?s|here is|below)\b[^\n]{0,90}:\s*$",
+                             re.IGNORECASE)
+_FENCE = re.compile(r"^\s*```[a-z]*\s*$", re.IGNORECASE)
+
+
+def strip_meta_header(text, max_linii=3):
+    """Zdejmij z poczatku tekstu meta-linie modelu (naglowek 'X Adaptation', etykieta
+    'LinkedIn:', zapowiedz 'Oto wersja:') oraz oplotki ```. Zwraca tekst gotowy do publikacji.
+    Ciecie jest zachowawcze: maksymalnie kilka pierwszych linii i tylko gdy pasuja do wzorca."""
+    t = (text or "").replace("\r\n", "\n")
+    if not t.strip():
+        return text
+    linie = t.split("\n")
+    zdjete = 0
+    while linie and zdjete < max_linii:
+        pierwsza = linie[0]
+        if not pierwsza.strip():          # puste linie na czubku nie licza sie do limitu
+            linie.pop(0)
+            continue
+        if (_META_NAGLOWEK.match(pierwsza) or _META_ETYKIETA.match(pierwsza)
+                or _META_ZAPOWIEDZ.match(pierwsza) or _FENCE.match(pierwsza)):
+            linie.pop(0)
+            zdjete += 1
+            continue
+        break
+    while linie and _FENCE.match(linie[-1] or ""):   # domykajaca oplotka ```
+        linie.pop()
+    wynik = "\n".join(linie).strip()
+    return wynik or (text or "").strip()
 
 
 # ---- Heurystyka interpunkcji PL (paczka #1 Managera pkt 8, 24/07) ----------------------
@@ -147,7 +195,7 @@ def check_re_intro_line(text, channel, content_item_id=None):
                  Jsonb({"channel": channel,
                         "content_item_id": str(content_item_id) if content_item_id else None})))
     except Exception:
-        pass
+        traceback.print_exc()  # AP-306: kontrola Re-Intro ma prawo nie zablokowac, nie ma prawa zniknac
 
 
 def enforce(brand, text, content_item_id=None, channel=None):

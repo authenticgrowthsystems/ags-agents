@@ -103,7 +103,7 @@ def _pricing_text():
             if f:
                 feats = " | " + json.dumps(f, ensure_ascii=False)[:220]
         except Exception:
-            pass
+            traceback.print_exc()  # AP-306: skladanie cennika
         lines.append(f"- {r['tier_name']}: {r.get('price') or '?'} {r.get('currency') or ''}"
                      f" ({r.get('meta_status')}){feats}")
     return "\n".join(lines)

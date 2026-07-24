@@ -111,17 +111,24 @@ PARTIAL_CONFIDENCE_CAP = _f("PARTIAL_CONFIDENCE_CAP", 0.5)
 # --- source routing policy (cost cascade) ---
 # Aspirational full cascade. active_sources() filters this to DEPLOYED_ADAPTERS, so a tier may
 # name a source whose adapter is not built yet without the worker ever calling it.
+# 'site' (24/07) = NATYWNE pobranie strony badanego podmiotu, bez n8n i bez kosztu. Stoi PIERWSZE
+# na kazdym poziomie, bo pierwszym zrodlem prawdy o podmiocie jest jego wlasna strona. Uruchamia
+# sie WYLACZNIE wtedy, gdy zapytanie niesie adres (router je odsiewa) - pytania tematyczne
+# nie placa za nic dodatkowego. Dowod potrzeby: job 7411d0ba (telefon na stronie glownej,
+# a research orzekl "brak danych kontaktowych").
 SOURCE_POLICY = {
-    "low": ["web_search"],
-    "medium": ["web_search", "firecrawl", "gemini_dr"],
-    "high": ["web_search", "firecrawl", "gemini_dr", "openai_dr"],
-    "critical": ["web_search", "firecrawl", "gemini_dr", "openai_dr", "manus"],
+    "low": ["site", "web_search"],
+    "medium": ["site", "web_search", "firecrawl", "gemini_dr"],
+    "high": ["site", "web_search", "firecrawl", "gemini_dr", "openai_dr"],
+    "critical": ["site", "web_search", "firecrawl", "gemini_dr", "openai_dr", "manus"],
 }
 # Adapters actually deployed + active in n8n right now. active_sources() routes ONLY to these.
 # openai_dr LIVE 27/06 (START XmwNyZEGqe89plcy + STATUS FlkyrFad8U7CE4iS). manus LIVE 27/06
 # (START eKD2tgXHrreWkGfN + STATUS iDNBK5Xdan44Mugd; task.create -> task.detail+listMessages,
 # agent_profile lite). Both async start+poll, fire at the critical tier (DR + Manus together).
-DEPLOYED_ADAPTERS = {"web_search", "firecrawl", "gemini_dr", "openai_dr", "manus"}
+DEPLOYED_ADAPTERS = {"site", "web_search", "firecrawl", "gemini_dr", "openai_dr", "manus"}
+# Zrodla obslugiwane NATYWNIE w Pythonie (bez webhooka n8n, bez klucza, bez kosztu).
+NATIVE_SOURCES = {"site"}
 
 # n8n source-adapter webhook paths (Python orchestrator calls these)
 ADAPTER_PATHS = {

@@ -57,7 +57,7 @@ def tick():
             if (now - last).total_seconds() < THROTTLE_MIN * 60:
                 return
         except (TypeError, ValueError):
-            pass
+            pass  # cisza uzasadniona: brak/zly znacznik czasu = traktujemy jak brak throttla
         sig = _signature()
         if sig and sig == st.get("sig"):
             return

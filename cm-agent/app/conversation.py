@@ -17,6 +17,7 @@ from psycopg.types.json import Jsonb
 from . import db, config, tasks, content_memory, reports
 from . import planner
 from .brand import load_brand
+from . import brand as _brand
 from .generate import client
 
 wake_event = None  # injected by worker.main(); a new material wakes the state-machine loop
@@ -1587,7 +1588,7 @@ def _sub_comment(inp, brand, channel):
     author = (inp.get("author") or "").strip()
     resp = client().messages.create(
         model=model, max_tokens=700, thinking={"type": "disabled"},
-        system=[{"type": "text", "text": f"Glos marki:\n{brand_data['voice_bible'][:2500]}"}],
+        system=[_brand.voice_block(brand_data)],  # 24/07: CALY glos (rdzen + Voice Bible), nie wycinek
         messages=[{"role": "user", "content":
                    f"Zaproponuj DOKLADNIE 3 rozne komentarze pod ponizszy cudzy post na {channel}"
                    f"{(' (autor: ' + author + ')') if author else ''}. Doktryna comment-first: "
@@ -1804,7 +1805,7 @@ def handle_cmt(payload, wake_event=None):
             model, tier, source = tasks.model_for("canonical")
             resp = client().messages.create(
                 model=model, max_tokens=700, thinking={"type": "disabled"},
-                system=[{"type": "text", "text": f"Glos marki:\n{brand_data['voice_bible'][:2500]}"}],
+                system=[_brand.voice_block(brand_data)],  # 24/07: CALY glos (rdzen + Voice Bible), nie wycinek
                 messages=[{"role": "user", "content":
                            (f"Zaproponuj 1 odpowiedz na PRYWATNA wiadomosc (DM) na {channel or 'x'}"
                             if prop_kind == "dm" else
@@ -2241,7 +2242,7 @@ def _dm_reply_run(brand, channel, chat_id, insp_rows):
         "STRESZCZENIE: <1-2 zdania po polsku co napisal>\nODPOWIEDZ: <tekst do wyslania w JEZYKU>"})
     resp = client().messages.create(
         model=model, max_tokens=800, thinking={"type": "disabled"},
-        system=[{"type": "text", "text": f"Glos marki:\n{brand_data['voice_bible'][:2500]}"}],
+        system=[_brand.voice_block(brand_data)],  # 24/07: CALY glos (rdzen + Voice Bible), nie wycinek
         messages=[{"role": "user", "content": content}])
     tasks.log_task("dm_reply", tier, model, source, getattr(resp, "usage", None))
     out = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
@@ -2533,7 +2534,7 @@ def _log_autonomous(brand, channel, rationale, context=None):
         db.execute("INSERT INTO agent_logs (agent_id, log_type, rationale, context) VALUES (%s,'AUTONOMOUS_DECISION',%s,%s)",
                    (f"{brand}:{channel}", rationale, Jsonb(context or {})))
     except Exception:
-        pass
+        traceback.print_exc()  # AP-306: log decyzji autonomicznej - cisza tutaj kasuje slad decyzji
 
 
 def _sub_queue(brand, channel, limit=15):
@@ -3061,7 +3062,7 @@ def handle(update):
             _mrv_state_set("cm_last_user_txt", {"chat_id": chat_id, "text": text[:300],
                                                 "ts": datetime.datetime.now(WARSAW).isoformat()})
         except Exception:
-            pass
+            traceback.print_exc()  # AP-306: zapis stanu rozmowy
         # #86 (12/07): komendy /brands i /brand_* = deterministyczne, przed jakimkolwiek LLM
         from . import brands_ui
         _br = brands_ui.try_handle(chat_id, text)
