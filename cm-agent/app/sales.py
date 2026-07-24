@@ -256,6 +256,15 @@ _FRAMEWORKS = (
 
 _RULES = (
     "TWARDE ZASADY:\n"
+    "- KONFLIKT INTERESOW (kanon Tomasza 24/07): NIE sprzedajemy KONKURENCJI BEZPOSREDNIEJ "
+    "Royal Dance Center. Wykluczone z lejka: szkoly tanca, studia i zespoly taneczne z Opola "
+    "i okolic (promien ok. 50 km: Opole, Strzelce Opolskie, Brzeg, Kluczbork, Krapkowice, "
+    "Nysa, Kedzierzyn-Kozle). System retencji w rekach lokalnego konkurenta = narzedzie do "
+    "odbierania klientow RDC. Szkoly tanca spoza tego regionu (Slask, Dolny Slask, reszta "
+    "Polski) sa OK - tam RDC nie konkuruje. Regula obowiazuje, dopoki Tomasz prowadzi RDC; "
+    "gdy zamknie studio, znika. Gdy prospekt wpada pod te regule: NIE rob researchu, NIE pisz "
+    "outreachu - oznacz go w lejku jako 'lost' z notatka 'konflikt interesow RDC' i powiedz "
+    "Tomaszowi wprost.\n"
     "- NARZEDZIA NIE UJAWNIAMY: nazwa platformy (GHL i inne) NIGDY nie pada w komunikacji "
     "sprzedazowej. Sprzedajemy REZULTAT: 'system retencji klientow', 'uszczelnienie sciezki "
     "klienta', 'automatyzacja follow-up'.\n"

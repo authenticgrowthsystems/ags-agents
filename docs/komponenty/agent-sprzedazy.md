@@ -85,6 +85,17 @@ fallback ILIKE), outreach_sent (propozycja -> 'sent', follow-up +3 dni).
 - Wartosc przed cena; cennik od gory (premium pierwsze). TWARDA ZASADA WYKONANIA
   (paragon narzedzia albo sie nie stalo).
 
+## Wykluczenie: konflikt interesow RDC (kanon 24/07)
+
+- Sprzedawca NIE prowadzi prospektow bedacych KONKURENCJA BEZPOSREDNIA Royal Dance Center:
+  szkoly/studia/zespoly taneczne z Opola i okolic (~50 km: Opole, Strzelce Opolskie, Brzeg,
+  Kluczbork, Krapkowice, Nysa, Kedzierzyn-Kozle). Powod: system retencji u lokalnego
+  konkurenta = narzedzie do odbierania klientow RDC.
+- Szkoly tanca SPOZA regionu (Slask, Dolny Slask, reszta PL) sa w ICP - tam nie ma konfliktu.
+- Prospekt pod regula: bez researchu i outreachu, stage 'lost' + notatka "konflikt interesow
+  RDC", jawny komunikat do Tomasza. Regula wygasa, gdy Tomasz zamknie studio.
+- Zapis w prompcie: sales._RULES (pierwsza zasada).
+
 ## Podsumowanie klienta / dziennik kapitanski (22/07, kanon Sales Manager P1; v2 po tap-tescie)
 
 - `/dziennik <klient>` (route deterministyczny + przepustka n8n) i narzedzie
