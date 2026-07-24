@@ -180,6 +180,36 @@ ilustracji, pozorowana personalizacja) i konczy sie testem podmiany nazwy firmy.
 `/add_sales_material` z podpowiedzia "wzorzec"). `_outreach_examples()` wkleja do 3
 ostatnich DOSLOWNIE do promptu - model pisze od zdan Tomasza, nie od teorii.
 
+## Wizytowka: agent sam wchodzi na strone prospekta (24/07, zgloszenie Tomasza)
+
+Zgloszenie: "wszedlem na strone i od razu widze kontakt telefoniczny i wiem kto tam uczy -
+tak nie mozemy pracowac". Research kosztowal 1,24 PLN i orzekl "brak danych kontaktowych".
+
+**Sonda jobu 7411d0ba (dowod, nie hipoteza):**
+- `web_search` zwrocil z domeny klubu PIEC wynikow, ale same TYTULY po 22-52 znaki
+  ("Klub Sportowy StandART - Instruktorzy"). Zero tresci strony.
+- `firecrawl` (adapter od pobierania stron) nie tknal domeny klubu ANI RAZU - osiem wynikow
+  z arXiv i blogow o "prospectingu AI", z artefaktem prefiksu `arxiv.org/abs/`.
+- Najdluzszy dowod w calym jobie: praca naukowa, 1073 znaki.
+- Regex telefonu po CALEJ tresci dowodow: 0 trafien.
+
+Synteza byla wiec uczciwa (napisala, czego nie ma w dowodach) - pobieranie bylo puste.
+
+**Fix (deterministyczny, bez modelu):** `wizytowka(url)` w sales.py pobiera strone glowna
+prospekta i do 3 podstron pasujacych do `kontakt|contact|cennik|zapisy|grafik|instruktor|
+o-nas|about`, zdejmuje znaczniki i wyciaga mail plus telefon. Wywolywana w dwoch miejscach:
+- `_prospect_research` PRZED zleceniem researchu: fakty ida do zapytania jako PEWNE
+  ("nie podwazaj i nie pisz, ze ich brak") i do notatek lejka,
+- `_draft_outreach`: tekst strony ladzie w promptcie jako pierwsze zrodlo haka, a mail
+  i telefon maja PIERWSZENSTWO w naglowku gotowca.
+
+Tap-test na zywej stronie 24/07: 4 pobrane strony, telefon 510-555-099, mail
+recepcja@..., 28 358 znakow tekstu. Cztery zapytania HTTP, zero kosztu modelu.
+
+**Zostaje otwarte (osobny build):** dlaczego adapter firecrawl na zapytanie o konkretny
+podmiot zwraca arXiv. To wada kaskady zrodel Researchera, nie sprzedazy - patrz
+docs/komponenty/researcher.md.
+
 ## Naglowek i stopka gotowca (24/07, feedback Tomasza)
 
 Gotowiec idzie TRZEMA wiadomosciami, zeby dalo sie go zrewidowac bez otwierania bazy:

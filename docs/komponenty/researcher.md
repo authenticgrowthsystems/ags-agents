@@ -117,6 +117,24 @@ ISO; retap = wyzerowanie klucza, ksztalt sprawdz w `sunday_brief._state_set`).
   Detekcja po frazie 'prospect research' to plaster - kazdy nowy szablon zapytania o podmiot
   (inny agent, inne brzmienie) omija ja i kontaminacja wraca (AP-307).
 
+## OTWARTE: kaskada nie czyta strony badanego podmiotu (24/07, dowod z jobu 7411d0ba)
+
+Research prospekta (medium, 3 zrodla, 52 dowody, 1,24 PLN) orzekl "brak danych kontaktowych",
+a na stronie glownej klubu stoi telefon. Sonda pokazala, ze to wada POBIERANIA, nie syntezy:
+
+- `web_search`: 5 wynikow z domeny podmiotu, wszystkie to TYTULY po 22-52 znaki, zero tresci.
+- `firecrawl` (adapter od pobierania stron): ani jednego trafienia w domene podmiotu; osiem
+  wynikow z arXiv i blogow o "prospectingu AI", z artefaktem prefiksu `arxiv.org/abs/`
+  (ten sam, ktory tnie `_clean_url` w cm-agent). Adapter zachowuje sie jak wyszukiwarka
+  akademicka, nie jak crawler zadanego adresu.
+- Najdluzszy dowod calego jobu: praca naukowa (1073 znaki).
+
+Wniosek: dla zapytan o KONKRETNY PODMIOT kaskada musi miec krok "pobierz strone tego
+podmiotu" (adres jest w zapytaniu jako `strona:`), a nie tylko wyszukiwanie tematyczne.
+Do czasu naprawy Agent Sprzedazy obchodzi to sam (`sales.wizytowka` - patrz
+docs/komponenty/agent-sprzedazy.md); obejscie NIE zastepuje naprawy, bo dotyczy tylko
+sprzedazy - kazdy inny konsument Researchera dostaje dalej tytuly zamiast tresci.
+
 ## Znane pulapki
 
 - `claims.supporting_evidence` w ZYWEJ bazie = **text[]**, nie uuid[] (spec

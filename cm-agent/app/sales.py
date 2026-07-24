@@ -538,7 +538,7 @@ def _identity_verdict(pipe, job_id, summary=""):
         else ("potwierdzona", f"{opis} w dowodach")
 
 
-def _research_query(name, url, hint=None):
+def _research_query(name, url, hint=None, ze_strony=None):
     return (
         f"Prospect research dla sprzedazy B2B (AGS - systemy retencji klientow i agenty AI "
         f"dla malych firm): {name}" + (f", strona: {url}" if url else "")
@@ -550,9 +550,11 @@ def _research_query(name, url, hint=None):
         "(gubione leady, klienci nie wracaja, brak systemu opinii/polecen); "
         "4) hak personalizacji do pierwszego kontaktu (konkretny news, tresc, inicjatywa); "
         "5) kto decyduje i jak ich dosiegnac. Kazdy fakt z linkiem zrodla. "
+        + (f"FAKTY ZDJETE BEZPOSREDNIO ZE STRONY PROSPEKTA (traktuj jako pewne, nie podwazaj "
+           f"i nie pisz, ze ich brak): {re.sub(chr(10), ' ', ze_strony)[:900]} " if ze_strony else "")
         # REGULA PRAWDY 24/07: podmiot o podobnej nazwie w innym kraju wrocil jako "ten" prospekt.
-        "TOZSAMOSC: potwierdz, ze badany podmiot to TEN podmiot (zgodnosc domeny, miasta, kraju). "
-        "Jesli pewnosci nie ma, napisz to wprost w pierwszym claimie zamiast zgadywac.")
+        + "TOZSAMOSC: potwierdz, ze badany podmiot to TEN podmiot (zgodnosc domeny, miasta, kraju). "
+          "Jesli pewnosci nie ma, napisz to wprost w pierwszym claimie zamiast zgadywac.")
 
 
 # GOTCHA (docs/komponenty/researcher.md): payload.model_tier = NAZWA MODELU (haiku/sonnet/
@@ -602,7 +604,16 @@ def _prospect_research(inp):
         db.execute("UPDATE sales_pipeline SET prospect_url=%s, updated_at=NOW() WHERE id=%s",
                    (url, row["id"]))
     hint = None if url else _identity_hint(row)  # bez domeny jedziemy na miescie i kontakcie
-    code, resp = _request_research(_research_query(name, url, hint), tier, row["id"])
+    # Wizytowka PRZED zleceniem researchu: wlasna strona prospekta to pierwsze zrodlo prawdy,
+    # a kaskada zrodel potrafi jej nie otworzyc (dowod: job 7411d0ba - z domeny klubu weszly
+    # same tytuly, telefon ze strony glownej nie trafil do dowodow wcale).
+    wiz = wizytowka(url) if url else {}
+    if wiz.get("tel") or wiz.get("mail"):
+        _append_notes(row["id"], "wizytowka ze strony: " + ", ".join(
+            x for x in [f"tel {wiz.get('tel')}" if wiz.get("tel") else "",
+                        f"mail {wiz.get('mail')}" if wiz.get("mail") else "",
+                        f"podstron {len(wiz.get('strony') or [])}"] if x))
+    code, resp = _request_research(_research_query(name, url, hint, wiz.get("tekst")), tier, row["id"])
     job_id = (resp or {}).get("job_id")
     if code == 202 and job_id:
         db.execute("UPDATE sales_pipeline SET research_job_id=%s, updated_at=NOW() WHERE id=%s",
@@ -673,19 +684,85 @@ def _voice_for_outreach(brand):
     return "\n\n".join(parts)[:_VOICE_MAX]
 
 
+_WIZYTOWKA_PODSTRONY = re.compile(r"kontakt|contact|cennik|zapisy|grafik|instruktor|o-nas|about",
+                                  re.IGNORECASE)
+_TAGI_RE = re.compile(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>|<[^>]+>")
+
+
+def wizytowka(url, max_podstron=3, limit_znakow=6000):
+    """Wejscie na STRONE PROSPEKTA i zdjecie z niej tekstu - deterministycznie, bez modelu.
+
+    Powod (24/07, zgloszenie Tomasza): research prospekta orzekl "brak danych kontaktowych",
+    a numer telefonu stoi na stronie glownej. Sonda jobu 7411d0ba pokazala dlaczego: web_search
+    zwrocil z domeny klubu SAME TYTULY (22-52 znaki), a adapter firecrawl przyniosl osiem
+    linkow z arXiv o prospectingu AI i ani jednej strony klubu. Synteza byla uczciwa, pobieranie
+    bylo puste. Pierwsze zrodlo prawdy o firmie to jej wlasna strona, wiec bierzemy ja sami.
+
+    Zwraca {'tekst', 'mail', 'tel', 'strony'}; kazdy blad = pusty wynik, nigdy wyjatek w gore."""
+    out = {"tekst": "", "mail": None, "tel": None, "strony": []}
+    adres = (url or "").strip()
+    if not adres:
+        return out
+    if not adres.lower().startswith("http"):
+        adres = "https://" + adres
+    naglowki = {"User-Agent": "Mozilla/5.0 (compatible; AGS-SalesAgent/1.0)"}
+    kawalki = []
+    try:
+        with httpx.Client(timeout=15, follow_redirects=True, headers=naglowki) as klient:
+            r = klient.get(adres)
+            r.raise_for_status()
+            html = r.text
+            out["strony"].append(str(r.url))
+            kawalki.append(_TAGI_RE.sub(" ", html))
+            # podstrony, ktore u malych firm niosa kontakt i oferte (kontakt, cennik, grafik...)
+            linki, widziane = [], {str(r.url).rstrip("/")}
+            for m in re.finditer(r'href=["\']([^"\'#]+)["\']', html, re.IGNORECASE):
+                href = m.group(1)
+                if not _WIZYTOWKA_PODSTRONY.search(href):
+                    continue
+                pelny = href if href.lower().startswith("http") else str(r.url).rstrip("/") + "/" + href.lstrip("/")
+                if pelny.rstrip("/") in widziane:
+                    continue
+                widziane.add(pelny.rstrip("/"))
+                linki.append(pelny)
+                if len(linki) >= max_podstron:
+                    break
+            for link in linki:
+                try:
+                    rr = klient.get(link)
+                    if rr.status_code == 200:
+                        out["strony"].append(link)
+                        kawalki.append(_TAGI_RE.sub(" ", rr.text))
+                except Exception:
+                    continue
+    except Exception:
+        traceback.print_exc()
+        return out
+    tekst = re.sub(r"\s+", " ", " ".join(kawalki)).strip()
+    out["tekst"] = tekst[:limit_znakow]
+    m, t = _EMAIL_RE.search(tekst), _PHONE_RE.search(tekst)
+    out["mail"] = m.group(0) if m else None
+    out["tel"] = t.group(0).strip() if t else None
+    return out
+
+
 _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 # telefon PL: opcjonalny +48, potem 9 cyfr w typowym grupowaniu. NIP-y (10 cyfr) i daty odpadaja.
 _PHONE_RE = re.compile(r"(?<![\d-])(?:\+48[\s-]?)?(?:\d{3}[\s-]?\d{3}[\s-]?\d{3})(?![\d-])")
 
 
-def _kontakt_prospekta(row):
+def _kontakt_prospekta(row, wiz=None):
     """Dane do naglowka gotowca: kto i pod jakim adresem. Zrodla po kolei: kartoteka CRM
     (contacts), notatki lejka, claims z researchu. Deterministycznie, bez LLM - to ma byc
     dowod do zrewidowania w dwie sekundy, nie kolejna generacja.
 
     Czego NIE MA, mowimy wprost: research StandART 24/07 nie znalazl osoby decyzyjnej ani
     telefonu, wiec naglowek musi to pokazac zamiast udawac komplet."""
-    osoba, mail, tel = None, None, None
+    # Wizytowka ze strony ma PIERWSZENSTWO: to dane widoczne dla czlowieka, ktory wejdzie
+    # na strone, wiec nie moga byc gorsze niz to, co przypadkiem trafilo do notatek.
+    osoba = None
+    mail = (wiz or {}).get("mail")
+    tel = (wiz or {}).get("tel")
     if row.get("contact_id"):
         try:
             c = db.fetchone("SELECT name FROM contacts WHERE contact_id=%s", (row["contact_id"],))
@@ -728,9 +805,9 @@ def _tylko_gotowiec(tekst, channel):
     return t
 
 
-def _outreach_naglowek(row, channel, ostrzezenie=""):
+def _outreach_naglowek(row, channel, ostrzezenie="", wiz=None):
     """Naglowek gotowca: do kogo to leci i czym to zweryfikowac."""
-    osoba, mail, tel = _kontakt_prospekta(row)
+    osoba, mail, tel = _kontakt_prospekta(row, wiz)
     linie = [f"🧾 OUTREACH DO WYSLANIA RECZNIE - {channel} - {row['prospect_name'][:80]}",
              f"👤 Osoba decyzyjna: {osoba or '(nieustalona - research jej nie znalazl)'}",
              f"✉️ Mail: {mail or '(brak w danych)'}    ☎️ Telefon: {tel or '(brak w danych)'}"]
@@ -800,6 +877,8 @@ def _draft_outreach(inp, chat_id):
     knowledge = _knowledge_search_text(f"outreach {row['prospect_name']} {inp.get('guidance') or ''}",
                                        top_n=3, quiet=True, min_similarity=_KNOWLEDGE_MIN_SIM)
     wzorce = _outreach_examples()
+    # Strona prospekta jako zrodlo cytowalnych faktow do haka (i danych do naglowka).
+    wiz = wizytowka(row.get("prospect_url")) if row.get("prospect_url") else {}
     forms = {
         "email": "email sprzedazowy: linia 'TEMAT: ...' i po pustej linii tresc",
         "linkedin_dm": "wiadomosc LinkedIn (jesli to pierwszy kontakt: TAKZE zaproszenie <300 znakow bez pitchu, oznacz 'ZAPROSZENIE:' i 'WIADOMOSC PO AKCEPCIE:')",
@@ -819,6 +898,8 @@ def _draft_outreach(inp, chat_id):
                    f"{'polsku' if lang == 'pl' else 'angielsku'} do prospekta: "
                    f"{row['prospect_name']}" + (f" ({row['prospect_url']})" if row.get("prospect_url") else "") + ".\n"
                    + (f"WSKAZOWKI TOMASZA: {inp['guidance']}\n" if inp.get("guidance") else "")
+                   + (f"\nSTRONA PROSPEKTA (tekst zdjety bezposrednio - fakty PEWNE, hak bierz "
+                      f"stad w pierwszej kolejnosci):\n{wiz['tekst'][:2500]}\n" if wiz.get("tekst") else "")
                    + (f"\nRESEARCH (fakty z linkami - hak personalizacji STAD):\n{grounding[:3000]}\n"
                       if grounding else "\nBRAK researchu - personalizuj tylko tym, co pewne z nazwy/kontekstu; ZERO zmyslonych faktow.\n")
                    + (f"\nTECHNIKI Z BAZY WIEDZY (trafne dla tego przypadku):\n{knowledge[:1500]}\n"
@@ -849,7 +930,7 @@ def _draft_outreach(inp, chat_id):
                     "wyslaniem.\n" if _stan == "niepotwierdzona"
                     else "⚠️ Podmiot potwierdzony dowodami, ale research zglosil zastrzezenie - "
                          "sprawdz je przed wyslaniem.\n" if _stan == "z zastrzezeniem" else "")
-    _tg_send(chat_id, _outreach_naglowek(row, channel, _ostrzezenie))
+    _tg_send(chat_id, _outreach_naglowek(row, channel, _ostrzezenie, wiz))
     _tg_send(chat_id, draft)
     _tg_send(chat_id, _outreach_stopka(row))
     try:
