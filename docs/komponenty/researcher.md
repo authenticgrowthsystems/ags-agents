@@ -107,6 +107,11 @@ ISO; retap = wyzerowanie klucza, ksztalt sprawdz w `sunday_brief._state_set`).
   zrodlowego joba), a `_callback` czyta `label` LUB `option_label`. Wczesniej job z cache byl
   'completed' z zerem faktow i Sprzedawca pokazywal "job bez claims" - research formalnie
   gotowy, praktycznie bezuzyteczny. Dowod objawu: job 4c391774 (StandART, 24/07 09:01).
+- MELDUNEK SUROWY (Telegram z `_callback`): NIE idzie, gdy zleceniodawca to `sales-agent` -
+  Sprzedawca wysyla wlasna karte prospekta, wiec Tomasz dostawal dwie wiadomosci, a pierwsza
+  nie mowila nawet, ktorej firmy dotyczy (trzy zlecenia = trzy nierozroznialne meldunki).
+  Dla pozostalych zleceniodawcow meldunek niesie teraz poczatek zapytania. RESPONSE do
+  `agent_messages` leci ZAWSZE (to on budzi konsumenta) - milknie tylko powiadomienie.
 - Wniosek ogolny: cache semantyczny ma sens dla pytan TEMATYCZNYCH, nie dla zapytan o KONKRETNY
   PODMIOT. Przy nowych klasach zapytan sprawdz, czy podobienstwo tekstu = podobienstwo tresci.
   Detekcja po frazie 'prospect research' to plaster - kazdy nowy szablon zapytania o podmiot

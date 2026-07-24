@@ -121,6 +121,18 @@ fallback ILIKE), outreach_sent (propozycja -> 'sent', follow-up +3 dni).
   "nie mam pewnosci" w pierwszym claimie zamiast zgadywania. Skutek uboczny: tekst
   zapytania sie zmienil, wiec exact cache wczesniejszych jobow nie trafia (kazdy
   prospekt liczy sie od nowa, ~1-2 PLN).
+- **Prospekt bez domeny** (9 z 12 w lejku ma tylko gmail): `_identity_hint` bierze
+  pierwsza linie notatek (miasto + kontakt, np. "Szkola tanca, Dobrzykowice. Kontakt:
+  ...@gmail.com") i wkleja ja do zapytania jako "dane z kartoteki". Sama nazwa szkoly
+  tanca nie identyfikuje podmiotu w skali swiata.
+- `/prospect <nazwa> <domena>`: ostatni token wygladajacy na adres jest traktowany jako
+  STRONA, nie czesc nazwy (wczesniej doprecyzowanie wchodzilo do nazwy firmy).
+- **Bramka tozsamosci (kontrakt kodu, nie ozdoba):** `_summarize_research` musi zaczac
+  podsumowanie od linii `TOZSAMOSC: potwierdzona` albo `TOZSAMOSC: niepewna - <powod>`.
+  `tick()` to parsuje: przy "niepewna" karta NIE proponuje outreachu, tylko ponowne
+  zlecenie ze strona. Marker zyje dalej w notatkach lejka, wiec `_draft_outreach`
+  dokleja ostrzezenie nad gotowcem. Wysylka do niezweryfikowanej firmy kosztuje
+  wiarygodnosc, nie tokeny.
 
 ## Znane pulapki
 

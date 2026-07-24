@@ -442,10 +442,20 @@ def _ensure_pipeline(name, url=None, source="conversation"):
     return row, True
 
 
-def _research_query(name, url):
+def _identity_hint(row):
+    """Dyskryminator tozsamosci dla prospekta BEZ domeny (9 z 12 w lejku ma tylko gmail).
+    Pierwsza linia notatek niesie miasto i kontakt ("Szkola tanca, Dobrzykowice. Kontakt: ...") -
+    bez tego zapytaniem jest sama nazwa i research trafia w podmiot z innego kraju."""
+    head = re.split(r"\n\[", (row or {}).get("notes") or "", maxsplit=1)[0]
+    head = re.sub(r"\s+", " ", head).strip()
+    return head[:200] or None
+
+
+def _research_query(name, url, hint=None):
     return (
         f"Prospect research dla sprzedazy B2B (AGS - systemy retencji klientow i agenty AI "
-        f"dla malych firm): {name}" + (f", strona: {url}" if url else "") + ". "
+        f"dla malych firm): {name}" + (f", strona: {url}" if url else "")
+        + (f", dane z kartoteki: {hint}" if hint and not url else "") + ". "
         "Ustal: 1) czym dokladnie jest ta firma/osoba (branza, skala, oferta, lokalizacja); "
         "2) SYGNALY KUPNA: zatrudnianie, wzrost, nowe uslugi/lokalizacje, aktywnosc "
         "marketingowa, opinie klientow (zwlaszcza skargi na kontakt/obsluge/brak odpowiedzi); "
@@ -483,6 +493,14 @@ def _prospect_research(inp):
     url = (inp.get("url") or "").strip() or None
     if not url and re.match(r"^https?://", name, re.IGNORECASE):
         url, name = name, re.sub(r"^https?://(www\.)?", "", name).split("/")[0]
+    # "/prospect <nazwa> <domena>" - ostatni token wygladajacy na adres to STRONA, nie czesc nazwy.
+    # Bez tego doprecyzowanie tozsamosci przez Tomasza wchodzilo do nazwy firmy i nic nie dawalo.
+    if not url:
+        m = re.search(r"\s((?:https?://)?[\w-]+(?:\.[\w-]+)+(?:/\S*)?)$", name)
+        if m:
+            url, name = m.group(1), name[: m.start()].strip()
+        elif re.fullmatch(r"(?:https?://)?[\w-]+(?:\.[\w-]+)+(?:/\S*)?", name):
+            url = name
     # kanon kosztowy 20/07: default medium (~1-2 PLN); critical przez API zablokowany
     tier = inp.get("tier") or "medium"
     if tier == "critical":
@@ -496,7 +514,8 @@ def _prospect_research(inp):
     if url and not row.get("prospect_url"):
         db.execute("UPDATE sales_pipeline SET prospect_url=%s, updated_at=NOW() WHERE id=%s",
                    (url, row["id"]))
-    code, resp = _request_research(_research_query(name, url), tier, row["id"])
+    hint = None if url else _identity_hint(row)  # bez domeny jedziemy na miescie i kontakcie
+    code, resp = _request_research(_research_query(name, url, hint), tier, row["id"])
     job_id = (resp or {}).get("job_id")
     if code == 202 and job_id:
         db.execute("UPDATE sales_pipeline SET research_job_id=%s, updated_at=NOW() WHERE id=%s",
@@ -568,8 +587,13 @@ def _draft_outreach(inp, chat_id):
     if not draft:
         return "Nie wyszlo - sprobuj jeszcze raz (model nie zwrocil tresci)."
     # gotowiec: naglowek + CZYSTA WKLEJKA osobna wiadomoscia (kanon comment-radar)
+    # Bramka tozsamosci: marker z podsumowania researchu zyje w notatkach lejka. Nie blokujemy
+    # pisania (decyduje Tomasz), ale gotowiec ma jechac z ostrzezeniem, nie po cichu.
+    watpliwa = "tozsamosc: niepewn" in (row.get("notes") or "").lower()
     _tg_send(chat_id, f"🧾 OUTREACH DO WYSLANIA RECZNIE - {channel} - {row['prospect_name'][:80]}\n"
-                      f"(ponizej czysta wklejka; NIC nie wysyla sie samo)")
+                      + ("⚠️ RESEARCH NIE POTWIERDZIL TOZSAMOSCI TEJ FIRMY - zweryfikuj adresata "
+                         "PRZED wyslaniem.\n" if watpliwa else "")
+                      + f"(ponizej czysta wklejka; NIC nie wysyla sie samo)")
     _tg_send(chat_id, draft)
     try:
         db.execute(
@@ -1058,9 +1082,17 @@ def tick():
                                    f"albo zlec ponownie.")
                 continue
             summary = _summarize_research(name, grounding)
-            text = (f"🔍 RESEARCH PROSPEKTA GOTOWY: {name}\n\n{summary}\n\n"
-                    f"Nastepny ruch: przelacz /agents na Sprzedawce i powiedz np. "
-                    f"'napisz outreach do {name[:40]}'.")
+            # Bramka tozsamosci: przy niepewnym podmiocie nastepnym ruchem NIE jest outreach.
+            # Wysylka do firmy, ktorej research nie potwierdzil, kosztuje wiarygodnosc, nie tokeny.
+            niepewna = bool(re.match(r"\s*TOZSAMOSC:\s*niepewn", summary, re.IGNORECASE))
+            nastepny = (
+                f"⚠️ TOZSAMOSC NIEPOTWIERDZONA. Nastepny ruch: NIE pisz outreachu. Podaj strone "
+                f"i zlec ponownie: /prospect {name[:40]} <adres strony>. Jesli firma nie ma "
+                f"strony, potwierdz ja telefonem albo profilem spolecznosciowym."
+                if niepewna else
+                f"Nastepny ruch: przelacz /agents na Sprzedawce i powiedz np. "
+                f"'napisz outreach do {name[:40]}'.")
+            text = f"🔍 RESEARCH PROSPEKTA GOTOWY: {name}\n\n{summary}\n\n{nastepny}"
             if chat:
                 _tg_send(chat, text)
             if pipe:
@@ -1076,10 +1108,18 @@ def _summarize_research(name, grounding):
             model=model, max_tokens=800, thinking={"type": "disabled"},
             messages=[{"role": "user", "content":
                        f"Podsumuj research prospekta \"{name}\" dla sprzedazy B2B (AGS: systemy "
-                       f"retencji klientow i agenty AI). Po polsku, zwiezle, zero em dash. Sekcje: "
-                       f"KIM SA (2-3 zdania) / SYGNALY KUPNA / PROBLEMY KTORE ROZWIAZUJEMY / "
-                       f"HAK PERSONALIZACJI / REKOMENDOWANY TIER (od gory). Fakt bez zrodla w "
-                       f"danych oznacz '(do weryfikacji)'. Zachowaj 2-3 najwazniejsze linki.\n\n"
+                       f"retencji klientow i agenty AI). Po polsku, zwiezle, zero em dash.\n"
+                       # BRAMKA TOZSAMOSCI (24/07): research potrafi opisac inna firme o podobnej
+                       # nazwie (La Cultura z Sosnowca wrocila jako studio w Pawtucket RI).
+                       # Pierwsza linia jest KONTRAKTEM dla kodu, nie ozdoba.
+                       f"PIERWSZA LINIA MUSI brzmiec doslownie 'TOZSAMOSC: potwierdzona' albo "
+                       f"'TOZSAMOSC: niepewna - <powod>'. 'potwierdzona' TYLKO wtedy, gdy claims "
+                       f"wskazuja na TEN podmiot (zgodna domena, miasto, kraj). Rozbieznosc kraju "
+                       f"albo miasta, kilka podobnie nazwanych firm, brak potwierdzenia adresu = "
+                       f"'niepewna'.\n"
+                       f"Dalej sekcje: KIM SA (2-3 zdania) / SYGNALY KUPNA / PROBLEMY KTORE "
+                       f"ROZWIAZUJEMY / HAK PERSONALIZACJI / REKOMENDOWANY TIER (od gory). Fakt "
+                       f"bez zrodla w danych oznacz '(do weryfikacji)'. Zachowaj 2-3 linki.\n\n"
                        f"CLAIMS Z RESEARCHU:\n{grounding[:5000]}"}])
         tasks.log_task("sales_research_summary", tier, model, source, getattr(resp, "usage", None))
         out = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()

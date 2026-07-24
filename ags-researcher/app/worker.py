@@ -184,6 +184,19 @@ def _telegram(text, reply_markup=None):
         traceback.print_exc()
 
 
+def _agent_name(rid):
+    """agent_id -> agent_name (None gdy brak/nieznany). Uzywane do decyzji, czy meldunek surowy
+    ma isc na Telegram: agenci raportujacy sami nie potrzebuja drugiej wiadomosci."""
+    if not rid:
+        return None
+    try:
+        r = db.fetchone("SELECT agent_name FROM agent_registry WHERE agent_id=%s", (rid,))
+        return (r or {}).get("agent_name")
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
 def _callback(job, payload: dict):
     """Write RESPONSE to agent_messages + Telegram notify (ingress/callback in-Python per refinement).
     Result is already durable in research_jobs/claims/options regardless."""
@@ -196,15 +209,21 @@ def _callback(job, payload: dict):
     except Exception:
         traceback.print_exc()
     opts = payload.get("options") or []
-    # FIX 24/07 (incydent: joby prospektowe 'failed' z "sequence item 0: expected str
-    # instance, NoneType found"): opcja bez klucza 'label' dawala None w join i wywracala
-    # MELDUNEK juz PO zapisaniu wyniku (sciezka cache-hit). Filtrujemy puste, rzutujemy na str.
-    # opcje z cache przychodza z bazy (klucz 'option_label'), swieze z modelu (klucz 'label') -
-    # to bylo ZRODLO awarii 24/07: None w join wywracalo meldunek juz PO zapisaniu wyniku.
+    # ZRODLO awarii 24/07 ("sequence item 0: expected str instance, NoneType found"): opcje maja
+    # dwa ksztalty - swieze z modelu klucz 'label', z cache klucz 'option_label' (nazwa kolumny).
+    # Czytanie tylko 'label' dawalo None w join i wywracalo MELDUNEK juz PO zapisaniu wyniku.
     _labels = [((o.get("label") or o.get("option_label")) if isinstance(o, dict)
                 else getattr(o, "label", "")) for o in opts]
     labels = ", ".join(str(x) for x in _labels[:4] if x) or "bez etykiet"
-    text = f"AGS Researcher: zadanie gotowe ({len(opts)} opcje: {labels}). koszt {payload.get('cost_pln', '?')} PLN, confidence {payload.get('overall_confidence', '?')}."
+    # Meldunek surowy jest DLA CZLOWIEKA. Agent, ktory raportuje sam (Sprzedawca wysyla pelna
+    # karte prospekta), dostawal przez to dwie wiadomosci, a ta pierwsza nie mowila nawet, ktorej
+    # firmy dotyczy - przy trojce zlecen szly trzy nierozroznialne meldunki. Milczymy dla niego.
+    if _agent_name(job.get("requesting_agent_id")) == "sales-agent":
+        return
+    czego = (job.get("query_text") or "").strip().replace("\n", " ")[:70]
+    text = (f"AGS Researcher: zadanie gotowe ({len(opts)} opcje: {labels}). "
+            f"koszt {payload.get('cost_pln', '?')} PLN, confidence {payload.get('overall_confidence', '?')}."
+            + (f"\nZapytanie: {czego}..." if czego else ""))
     # SLICE 3a-2: tier correction buttons, only for an auto-proposed tier that has a logged model_selection gate
     tier = payload.get("model_tier")
     gate_id = payload.get("gate_id")
