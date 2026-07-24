@@ -1,4 +1,10 @@
-# MASTER PROMPT - AGS Agent Network, KONTYNUACJA (19/07/2026)
+# [ARCHIWUM 19-22/07] MASTER PROMPT - AGS Agent Network (19/07/2026)
+
+> **NIE UZYWAJ TEGO PLIKU JAKO PROMPTU STARTOWEGO.**
+> Aktualna wersja: **docs/RESUME_MASTERPROMPT_24072026.md** (stan systemu, kanony, miny,
+> pierwszy ruch). Ten plik zostaje jako ARCHIWUM historii 19-22/07 (plan dnia 19/07, kolejka
+> budowniczych, przebieg integracji) - czytaj go tylko, gdy szukasz KONTEKSTU HISTORYCZNEGO
+> konkretnej decyzji.
 
 Wklej na starcie nowej sesji. Self-contained. Zastepuje RESUME_MASTERPROMPT_09072026.md.
 
