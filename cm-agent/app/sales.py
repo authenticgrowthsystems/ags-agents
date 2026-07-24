@@ -710,6 +710,24 @@ def _kontakt_prospekta(row):
     return osoba, mail, tel
 
 
+def _tylko_gotowiec(tekst, channel):
+    """Odcina komentarz modelu sprzed tresci. Instrukcja "zwroc wylacznie tresc" nie wystarczyla:
+    model poprzedzil mail wlasnym rozumowaniem o konflikcie RDC i haku (dowod: wklejka 24/07
+    14:03). Czysta wklejka ma byc czysta, wiec tniemy deterministycznie:
+    1) po znaczniku ---GOTOWIEC--- (kontrakt formatu w prompcie),
+    2) awaryjnie dla maila: od linii TEMAT:,
+    3) gdy nie ma ani jednego, zostawiamy caly tekst (lepiej za duzo niz pusto)."""
+    t = (tekst or "").strip()
+    m = re.search(r"^-{2,}\s*GOTOWIEC\s*-{2,}\s*$", t, re.MULTILINE | re.IGNORECASE)
+    if m:
+        return t[m.end():].strip()
+    if channel == "email":
+        m = re.search(r"^TEMAT:", t, re.MULTILINE)
+        if m and m.start() > 0:
+            return t[m.start():].strip()
+    return t
+
+
 def _outreach_naglowek(row, channel, ostrzezenie=""):
     """Naglowek gotowca: do kogo to leci i czym to zweryfikowac."""
     osoba, mail, tel = _kontakt_prospekta(row)
@@ -737,9 +755,15 @@ def _outreach_stopka(row):
     except Exception:
         traceback.print_exc()
         r = None
-    wczesniejsze = int((r or {}).get("wszystkie") or 0)
+    # Liczy sie WYSYLKA, nie liczba gotowcow. Pierwsza wersja mowila "kolejny kontakt
+    # (0 wyslanych wczesniej)" - zdanie, ktore przeczy samo sobie (dowod: stopka 24/07 14:03).
+    gotowce = int((r or {}).get("wszystkie") or 0)
     wyslane = int((r or {}).get("wyslane") or 0)
-    ktory = "PIERWSZY kontakt" if wczesniejsze <= 1 else f"kolejny kontakt ({wyslane} wyslanych wczesniej)"
+    if wyslane:
+        ktory = f"kolejny kontakt ({wyslane} wyslanych wczesniej)"
+    else:
+        ktory = "PIERWSZY kontakt" + (f" (gotowcow w kolejce: {gotowce}, zaden nie oznaczony "
+                                      f"jako wyslany)" if gotowce > 1 else "")
     nast = row.get("next_followup_at")
     return ("📊 Lejek: etap " + str(row.get("stage") or "?") + " | " + ktory
             + (" | follow-up: " + nast.astimezone(WARSAW).strftime("%d/%m %H:%M") if nast else "")
@@ -802,13 +826,16 @@ def _draft_outreach(inp, chat_id):
                                         "Pisz z frameworkow i researchu; NIE nadrabiaj ogolnikami.\n")
                    + f"\nNOTATKI LEJKA: {(row.get('notes') or '')[:600]}\n\n"
                    "Zanim napiszesz: wybierz JEDEN konkret z researchu, ktory bedzie hakiem, i "
-                   "sprawdz, czy da sie go zacytowac. Potem napisz tekst.\n"
-                   "Zwroc WYLACZNIE gotowa tresc do wyslania (zero komentarza, zero markdown)."}])
+                   "sprawdz, czy da sie go zacytowac. To rozumowanie zostaw dla siebie.\n"
+                   "FORMAT ODPOWIEDZI: pierwsza linia to doslownie ---GOTOWIEC---, a pod nia "
+                   "WYLACZNIE tresc do wyslania (zero komentarza, zero uzasadnien, zero markdown). "
+                   "Nic przed ta linia."}])
     tasks.log_task("sales_outreach", tier, model, source, getattr(resp, "usage", None))
     draft = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
     if not draft:
         return "Nie wyszlo - sprobuj jeszcze raz (model nie zwrocil tresci)."
     draft = compliance.fix_dashes(draft)  # RULE 1 kanonu marki dziala TAKZE na tekstach do klienta
+    draft = _tylko_gotowiec(draft, channel)
     # gotowiec: naglowek + CZYSTA WKLEJKA osobna wiadomoscia (kanon comment-radar)
     # Bramka tozsamosci: marker z podsumowania researchu zyje w notatkach lejka. Nie blokujemy
     # pisania (decyduje Tomasz), ale gotowiec ma jechac z ostrzezeniem, nie po cichu.

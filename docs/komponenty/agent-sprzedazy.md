@@ -189,7 +189,11 @@ Gotowiec idzie TRZEMA wiadomosciami, zeby dalo sie go zrewidowac bez otwierania 
    `contact_id`), notatek lejka i claims researchu - regexem, bez LLM. Czego nie ma, jest
    napisane wprost ("(nieustalona - research jej nie znalazl)"), bo pusty naglowek klamie
    mniej niz zgadniety. Regex telefonu odrzuca NIP i REGON (zweryfikowane na probkach).
-2. **Czysta wklejka** - sam tekst, bez ozdobnikow, do skopiowania.
+2. **Czysta wklejka** - sam tekst, do skopiowania. Instrukcja "zwroc wylacznie tresc" NIE
+   wystarczyla: model poprzedzil mail wlasnym rozumowaniem o konflikcie RDC i o wyborze haka
+   (dowod 24/07 14:03). Dlatego kontrakt formatu (`---GOTOWIEC---` w pierwszej linii) plus
+   deterministyczne ciecie `_tylko_gotowiec`: po znaczniku, awaryjnie dla maila od linii
+   `TEMAT:`, a gdy nie ma ani jednego - caly tekst (lepiej za duzo niz pusto).
 3. **Stopka** (`_outreach_stopka`): etap lejka, ktory to kontakt (pierwszy czy kolejny - liczone
    z engagement_log, nie z pamieci modelu), termin follow-upu i instrukcja "napisz wyslalem".
 
