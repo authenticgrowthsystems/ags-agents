@@ -53,4 +53,30 @@ class CacheLayer:
                FROM options WHERE job_id=%s ORDER BY rank_order""",
             (job_id,),
         )
-        return {"job_id": str(job_id), "cached": True, "options": opts} if opts else None
+        if not opts:
+            return None
+        # FIX 24/07: cache oddawal SAME OPCJE, bez faktow. Konsumenci (Sprzedawca /prospect,
+        # podklad CM) czytaja CLAIMS z linkami zrodel, wiec job z cache wygladal na gotowy,
+        # a karta prospekta mowila "job bez claims". Dowod: job 4c391774 (StandART, 24/07 09:01).
+        claims = db.fetchall(
+            """SELECT claim_text, supporting_evidence, confidence, conflict_flag
+               FROM claims WHERE job_id=%s ORDER BY confidence DESC NULLS LAST""",
+            (job_id,),
+        )
+        src = db.fetchone("SELECT confidence_score FROM research_jobs WHERE job_id=%s", (job_id,))
+        return {
+            "job_id": str(job_id),
+            "cached": True,
+            "options": opts,
+            # ksztalt zgodny z _persist_claims w workerze (klucz 'text', nie 'claim_text')
+            "claims": [
+                {
+                    "text": c.get("claim_text"),
+                    "supporting_evidence": c.get("supporting_evidence") or [],
+                    "confidence": c.get("confidence"),
+                    "conflict_flag": bool(c.get("conflict_flag")),
+                }
+                for c in claims
+            ],
+            "confidence": (src or {}).get("confidence_score"),
+        }

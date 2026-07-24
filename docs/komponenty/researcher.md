@@ -84,9 +84,12 @@ ISO; retap = wyzerowanie klucza, ksztalt sprawdz w `sunday_brief._state_set`).
   error_message "sequence item 0: expected str instance, NoneType found". Z kazdej paczki
   zlecen konczyl sie TYLKO pierwszy (on szedl pelna sciezka ~90 s), reszta trafiala
   w CACHE (prompty prospektowe roznia sie tylko nazwa firmy = podobienstwo ~1).
-- Przyczyna: `_callback` budowal etykiety `", ".join(...)` z opcji cache, ktore nie mialy
-  klucza 'label' -> None w join -> wyjatek PO `set_status(completed)`; nadrzedny handler
-  petli nadpisywal status na 'failed'. Wynik byl w bazie, agent widzial awarie.
+- Przyczyna (POTWIERDZONA z kodu i bazy 24/07): opcje maja DWA ksztalty. Swieze z modelu
+  niosa klucz `label` (pydantic ResearchOption), a wczytane z cache przez `CacheLayer._load`
+  klucz `option_label` (nazwa kolumny). `_callback` czytal tylko `label`, wiec dla KAZDEJ
+  opcji z cache dostawal None i `", ".join(...)` wywracalo meldunek PO `set_status(completed)`;
+  nadrzedny handler petli nadpisywal status na 'failed'. Dowod w bazie: kazdy job 'failed'
+  mial 4 wiersze w `options` i czas ~0-3 s (sciezka cache), a kazdy 'completed' 86-121 s.
 - Fix (24/07): join odporny na None/puste + petla NIE cofa statusu 'completed' na 'failed'
   (blad meldunku != blad researchu). Wdrozenie: rebuild kontenera **ags-researcher**.
 - DRUGA WARSTWA FIXU (wazniejsza): dla RESEARCHU PROSPEKTA cache SEMANTYCZNY jest wylaczony.
@@ -94,8 +97,20 @@ ISO; retap = wyzerowanie klucza, ksztalt sprawdz w `sunday_brief._state_set`).
   i "trafienie" oznaczaloby podanie danych o INNEJ firmie jako research prospekta. Detekcja:
   'prospect research' w pierwszych 120 znakach query. Exact cache (ten sam tekst = ta sama
   firma) dziala dalej.
+- SKALA KONTAMINACJI (sonda 24/07, dowod w opisach opcji): 6 jobow dostalo wynik CUDZEJ firmy.
+  23/07 18:57 - STC (8516342d), La Cultura (d5565b9a) i StandART (26f65169) dostaly opcje
+  Scorpion Dance Team ("oboz Biala 2024"); 24/07 08:44-08:54 - La Cultura (63dee554, dbb72a60)
+  i STC (e80741b1) dostaly opcje StandART (@klubsportowystandart). Claims sie NIE kopiowaly,
+  wiec skazone dane nie weszly do outreachu (konsumenci czytaja claims) - skazone sa wylacznie
+  wiersze `options` tych jobow. Do skasowania recznie (SQL w raporcie 24/07).
+- TRZECIA WARSTWA FIXU (24/07 po sondzie): cache-hit kopiuje TAKZE `claims` (+ confidence
+  zrodlowego joba), a `_callback` czyta `label` LUB `option_label`. Wczesniej job z cache byl
+  'completed' z zerem faktow i Sprzedawca pokazywal "job bez claims" - research formalnie
+  gotowy, praktycznie bezuzyteczny. Dowod objawu: job 4c391774 (StandART, 24/07 09:01).
 - Wniosek ogolny: cache semantyczny ma sens dla pytan TEMATYCZNYCH, nie dla zapytan o KONKRETNY
   PODMIOT. Przy nowych klasach zapytan sprawdz, czy podobienstwo tekstu = podobienstwo tresci.
+  Detekcja po frazie 'prospect research' to plaster - kazdy nowy szablon zapytania o podmiot
+  (inny agent, inne brzmienie) omija ja i kontaminacja wraca (AP-307).
 
 ## Znane pulapki
 

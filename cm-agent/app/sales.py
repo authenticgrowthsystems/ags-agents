@@ -452,7 +452,10 @@ def _research_query(name, url):
         "3) problemy, ktore rozwiazuje automatyzacja follow-up i system retencji klientow "
         "(gubione leady, klienci nie wracaja, brak systemu opinii/polecen); "
         "4) hak personalizacji do pierwszego kontaktu (konkretny news, tresc, inicjatywa); "
-        "5) kto decyduje i jak ich dosiegnac. Kazdy fakt z linkiem zrodla.")
+        "5) kto decyduje i jak ich dosiegnac. Kazdy fakt z linkiem zrodla. "
+        # REGULA PRAWDY 24/07: podmiot o podobnej nazwie w innym kraju wrocil jako "ten" prospekt.
+        "TOZSAMOSC: potwierdz, ze badany podmiot to TEN podmiot (zgodnosc domeny, miasta, kraju). "
+        "Jesli pewnosci nie ma, napisz to wprost w pierwszym claimie zamiast zgadywac.")
 
 
 # GOTCHA (docs/komponenty/researcher.md): payload.model_tier = NAZWA MODELU (haiku/sonnet/
@@ -485,6 +488,14 @@ def _prospect_research(inp):
     if tier == "critical":
         tier = "medium"
     row, created = _ensure_pipeline(name, url, source="research")
+    # FIX 24/07: powtorne zlecenie (np. "/prospect La Cultura") nie mialo URL w wiadomosci, wiec
+    # zapytanie szlo BEZ adresu i Researcher trafial w inny podmiot o podobnej nazwie. Dowod: job
+    # 0602c6a7 - "Dance Company La Cultura" (Sosnowiec, lacultura.pl) zbadany jako Cultura Dance
+    # Arts w Pawtucket RI. Adres z lejka jest twardym identyfikatorem - bierz go zawsze.
+    url = url or (row.get("prospect_url") or None)
+    if url and not row.get("prospect_url"):
+        db.execute("UPDATE sales_pipeline SET prospect_url=%s, updated_at=NOW() WHERE id=%s",
+                   (url, row["id"]))
     code, resp = _request_research(_research_query(name, url), tier, row["id"])
     job_id = (resp or {}).get("job_id")
     if code == 202 and job_id:

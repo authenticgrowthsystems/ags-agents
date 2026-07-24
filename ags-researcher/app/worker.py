@@ -199,7 +199,10 @@ def _callback(job, payload: dict):
     # FIX 24/07 (incydent: joby prospektowe 'failed' z "sequence item 0: expected str
     # instance, NoneType found"): opcja bez klucza 'label' dawala None w join i wywracala
     # MELDUNEK juz PO zapisaniu wyniku (sciezka cache-hit). Filtrujemy puste, rzutujemy na str.
-    _labels = [(o.get("label") if isinstance(o, dict) else getattr(o, "label", "")) for o in opts]
+    # opcje z cache przychodza z bazy (klucz 'option_label'), swieze z modelu (klucz 'label') -
+    # to bylo ZRODLO awarii 24/07: None w join wywracalo meldunek juz PO zapisaniu wyniku.
+    _labels = [((o.get("label") or o.get("option_label")) if isinstance(o, dict)
+                else getattr(o, "label", "")) for o in opts]
     labels = ", ".join(str(x) for x in _labels[:4] if x) or "bez etykiet"
     text = f"AGS Researcher: zadanie gotowe ({len(opts)} opcje: {labels}). koszt {payload.get('cost_pln', '?')} PLN, confidence {payload.get('overall_confidence', '?')}."
     # SLICE 3a-2: tier correction buttons, only for an auto-proposed tier that has a logged model_selection gate
@@ -352,8 +355,15 @@ def process_job(job):
         None if _prospekt else cache.get_semantic(emb, model_tier=tier))
     if hit:
         _persist_options(job_id, hit["options"])
-        db.set_status(job_id, "completed", completed_at=_now(), cost_pln=0)
-        _callback(job, {"cached": True, "options": hit["options"]})
+        # FIX 24/07 (druga warstwa): kopiuj TAKZE claims zrodlowego joba. Bez tego job z cache
+        # konczyl sie 'completed' z zerem faktow, a Sprzedawca pokazywal "job bez claims" -
+        # research byl formalnie gotowy i praktycznie bezuzyteczny. supporting_evidence wskazuje
+        # na wiersze evidence_items joba zrodlowego (nadal istnieja), wiec linki sie rozwiazuja.
+        _persist_claims(job_id, hit.get("claims") or [])
+        db.set_status(job_id, "completed", completed_at=_now(), cost_pln=0,
+                      confidence_score=hit.get("confidence"))
+        _callback(job, {"cached": True, "options": hit["options"],
+                        "overall_confidence": hit.get("confidence"), "cost_pln": 0})
         return "cache_hit"
 
     # 2) budget hard stops

@@ -110,6 +110,18 @@ fallback ILIKE), outreach_sent (propozycja -> 'sent', follow-up +3 dni).
 - Kanon i decyzje Managera (progi 5/20, kolejnosc P1):
   docs/product/SALES_MANAGER_ARCHITEKTURA_22072026.md.
 
+## Tozsamosc prospekta w zapytaniu badawczym (fix 24/07)
+
+- `_prospect_research` bierze URL z LEJKA, gdy wiadomosc go nie niesie (`url or
+  row['prospect_url']`), i dopisuje nowy adres do wiersza, jesli go tam brakowalo.
+  Bez tego powtorne `/prospect <nazwa>` szlo bez `strona:` i Researcher badal inny
+  podmiot o podobnej nazwie. Dowod: job 0602c6a7 - "Dance Company La Cultura"
+  (Sosnowiec, lacultura.pl) wrocil jako Cultura Dance Arts w Pawtucket RI.
+- `_research_query` zada POTWIERDZENIA TOZSAMOSCI (domena, miasto, kraj) i jawnego
+  "nie mam pewnosci" w pierwszym claimie zamiast zgadywania. Skutek uboczny: tekst
+  zapytania sie zmienil, wiec exact cache wczesniejszych jobow nie trafia (kazdy
+  prospekt liczy sie od nowa, ~1-2 PLN).
+
 ## Znane pulapki
 
 - Wiersz channels 'sprzedaz' pojawia sie w menu ⚙️ Cele (n8n) - NIE wlaczac go jako celu
