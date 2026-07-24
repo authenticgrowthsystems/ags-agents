@@ -87,11 +87,13 @@ fallback ILIKE), outreach_sent (propozycja -> 'sent', follow-up +3 dni).
 
 ## Wykluczenie: konflikt interesow RDC (kanon 24/07)
 
-- Sprzedawca NIE prowadzi prospektow bedacych KONKURENCJA BEZPOSREDNIA Royal Dance Center:
-  szkoly/studia/zespoly taneczne z Opola i okolic (~50 km: Opole, Strzelce Opolskie, Brzeg,
-  Kluczbork, Krapkowice, Nysa, Kedzierzyn-Kozle). Powod: system retencji u lokalnego
-  konkurenta = narzedzie do odbierania klientow RDC.
-- Szkoly tanca SPOZA regionu (Slask, Dolny Slask, reszta PL) sa w ICP - tam nie ma konfliktu.
+- **Kryterium jest JEDNO (doprecyzowanie Tomasza 24/07): miasto OPOLE.** Sprzedawca nie
+  prowadzi szkol, studiow i zespolow tanecznych z Opola. Reszta wojewodztwa opolskiego,
+  caly Slask, Dolny Slask i reszta Polski sa w ICP.
+- Poprzednia wersja miala DWA kryteria naraz (lista miast + promien 50 km) i zdanie "Slask
+  jest OK". Sprzedawca w jednej turze orzekl najpierw, ze Ornontowice sa poza strefa, a
+  potem, ze sie lapia - i zablokowal gotowy outreach (dowod: sesja 24/07 13:29). Regula z
+  dwoma kryteriami nie jest regula. Nie licz odleglosci.
 - Prospekt pod regula: bez researchu i outreachu, stage 'lost' + notatka "konflikt interesow
   RDC", jawny komunikat do Tomasza. Regula wygasa, gdy Tomasz zamknie studio.
 - Zapis w prompcie: sales._RULES (pierwsza zasada).

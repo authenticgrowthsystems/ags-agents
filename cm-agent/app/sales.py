@@ -256,15 +256,15 @@ _FRAMEWORKS = (
 
 _RULES = (
     "TWARDE ZASADY:\n"
-    "- KONFLIKT INTERESOW (kanon Tomasza 24/07): NIE sprzedajemy KONKURENCJI BEZPOSREDNIEJ "
-    "Royal Dance Center. Wykluczone z lejka: szkoly tanca, studia i zespoly taneczne z Opola "
-    "i okolic (promien ok. 50 km: Opole, Strzelce Opolskie, Brzeg, Kluczbork, Krapkowice, "
-    "Nysa, Kedzierzyn-Kozle). System retencji w rekach lokalnego konkurenta = narzedzie do "
-    "odbierania klientow RDC. Szkoly tanca spoza tego regionu (Slask, Dolny Slask, reszta "
-    "Polski) sa OK - tam RDC nie konkuruje. Regula obowiazuje, dopoki Tomasz prowadzi RDC; "
-    "gdy zamknie studio, znika. Gdy prospekt wpada pod te regule: NIE rob researchu, NIE pisz "
-    "outreachu - oznacz go w lejku jako 'lost' z notatka 'konflikt interesow RDC' i powiedz "
-    "Tomaszowi wprost.\n"
+    "- KONFLIKT INTERESOW (kanon Tomasza, doprecyzowany 24/07 - JEDNO kryterium, bez promieni): "
+    "NIE sprzedajemy szkolom tanca, studiom i zespolom tanecznym z MIASTA OPOLE. Tylko Opole. "
+    "Reszta wojewodztwa opolskiego, caly Slask, Dolny Slask i reszta Polski sa w ICP - tam "
+    "Royal Dance Center nie rekrutuje uczestnikow. Nie licz odleglosci i nie rozszerzaj reguly "
+    "na sasiednie miejscowosci: jesli adres prospekta to nie Opole, piszesz normalnie. Powod "
+    "reguly: system retencji w rekach konkurenta z tego samego miasta = narzedzie do odbierania "
+    "klientow RDC. Regula obowiazuje, dopoki Tomasz prowadzi RDC. Prospekt z Opola: NIE rob "
+    "researchu, NIE pisz outreachu - oznacz w lejku jako 'lost' z notatka 'konflikt interesow "
+    "RDC' i powiedz Tomaszowi wprost.\n"
     "- NARZEDZIA NIE UJAWNIAMY: nazwa platformy (GHL i inne) NIGDY nie pada w komunikacji "
     "sprzedazowej. Sprzedajemy REZULTAT: 'system retencji klientow', 'uszczelnienie sciezki "
     "klienta', 'automatyzacja follow-up'.\n"
@@ -299,8 +299,14 @@ _ANTY_SZABLON = (
     "- Hak MUSI byc weryfikowalny w researchu: konkretna inicjatywa, wydarzenie, oferta, zapis "
     "ze strony. Bez takiego konkretu napisz krotszy, uczciwie ogolny tekst - nie udawaj "
     "personalizacji ogolnikiem.\n"
-    "- CTA formuluj jako pytanie o RZECZ, nie o kalendarz: pytaj o to, jak dzis obslugują u nich "
-    "konkretny proces. Pytanie o czas dopiero, gdy jest po co sie spotkac.\n"
+    "- CTA formuluj jako pytanie o RZECZ, nie o kalendarz: pytaj o to, jak dzis obsluguja u nich "
+    "konkretny proces. W PIERWSZEJ wiadomosci NIE proponujesz spotkania w zadnej formie - zaden "
+    "'15 minut', 'krotka rozmowa', 'call', 'zamienie kilka slow', zadna liczba minut ani "
+    "propozycja terminu. Rozmowa jest do zaproponowania dopiero, gdy odpisza (dowod 24/07: model "
+    "przeredagowal zakazane '15 minut' zamiast je porzucic - liczy sie INTENCJA zakazu).\n"
+    "- JEDEN rejestr w calym tekscie. Po polsku do firmy: konsekwentnie 'Panstwo' albo "
+    "konsekwentnie 'Pan/Pani' z nazwiskiem, gdy research wskazuje jedna osobe decyzyjna. "
+    "Mieszanie 'u Was' i 'z Panstwem' w jednym mailu czyta sie jak sklejka z szablonu.\n"
     "- Rytm: krotkie zdania, zero symetrycznych konstrukcji 'nie X, tylko Y' wiecej niz raz, zero "
     "wyliczen korzysci, zero slow 'rozwiazanie', 'proces', 'optymalizacja', 'usprawnienie'.\n"
     "- Test przed oddaniem tekstu: gdyby podmienic nazwe firmy na inna z tej samej branzy, czy "
@@ -1157,7 +1163,12 @@ def _dispatch(name, inp, chat_id):
     if name == "pipeline_move":
         return _pipeline_move(inp)
     if name == "sales_knowledge_search":
-        return _knowledge_search_text(str(inp.get("query") or ""))
+        # Prog obowiazuje TAKZE tutaj: w rozmowie o StandART narzedzie zwracalo materialy
+        # o Adamietzu z podobienstwem 0.40-0.48 (dowod 24/07 13:29) i model musial je odsiewac
+        # sam. Ponizej progu mowimy wprost, ze bazie brakuje materialu.
+        out = _knowledge_search_text(str(inp.get("query") or ""), min_similarity=_KNOWLEDGE_MIN_SIM)
+        return out or ("Baza wiedzy nie ma materialu trafnego dla tego pytania (prog "
+                       f"{_KNOWLEDGE_MIN_SIM}). Nie nadrabiaj ogolnikami - powiedz to wprost.")
     if name == "outreach_sent":
         return _outreach_sent(inp)
     if name == "dziennik_klienta":
