@@ -40,6 +40,26 @@ i wdrozone; lejek sprzedazowy ma teraz bramke tozsamosci, bo research potrafil o
 - Meldunek surowy Researchera milknie dla `sales-agent` (Sprzedawca wysyla wlasna karte);
   RESPONSE do agent_messages leci zawsze.
 
+## Weryfikacja koncowa (24/07 11:37-11:38, wszystkie trzy stany bramki na zywo)
+
+| Prospekt | Job | Werdykt kodu | Co zobaczyl Tomasz |
+|---|---|---|---|
+| Klub Sportowy StandART | 7411d0ba | potwierdzona | ✅ domena w dowodach, zgoda na outreach |
+| Dance Company La Cultura | 7eb1bc20 | z zastrzezeniem | ⚠️ podmiot potwierdzony, zweryfikuj kanal kontaktu |
+| STC Dance & More | 2ea27f98 | z zastrzezeniem | ⚠️ dwa adresy i druga marka na tym samym mailu |
+| La Cultura (stary job z Rhode Island) | 0602c6a7 | niepotwierdzona | ⛔ outreach zablokowany |
+
+Trojka po naprawie: dwa joby rownolegle, oba pelne (120 s / 11 claims i 130 s / 13 claims),
+ZERO wzmianek o cudzej firmie, podsumowania kompletne do sekcji REKOMENDOWANY TIER.
+La Cultura wraca teraz jako firma z Sosnowca (Mateusz Wrobel, NIP 6443464894) zamiast
+studia w Pawtucket RI.
+
+Po drodze zlapane i naprawione dwa bledy WLASNE, oba z dowodu, nie z przeczucia:
+1. Bramka z prawem weta modelu blokowala 2 poprawne prospekty na 2 (stad trzy stany).
+2. Werdykt kodu byl czytany tym samym wzorcem, ktorym model pisze pierwsza linie
+   podsumowania - gotowiec dostawalby ⛔ mimo werdyktu "z zastrzezeniem". Marker kodu ma
+   teraz wlasna nazwe `[WERDYKT TOZSAMOSCI: <stan>]`.
+
 ## Co zostaje na stole
 
 - **Decyzja Tomasza:** cache semantyczny globalnie OFF czy plaster na fraze 'prospect research'.

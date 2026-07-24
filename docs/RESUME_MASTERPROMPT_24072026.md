@@ -26,10 +26,14 @@ CO NAPRAWIONE I POTWIERDZONE DOWODEM:
 3. Zapytanie badawcze bierze `prospect_url` z lejka; przy braku domeny (9 z 12 prospektow ma
    tylko gmail) dokleja miasto i kontakt z kartoteki. Dowod potrzeby: job 0602c6a7 - La Cultura
    z Sosnowca zbadana jako Cultura Dance Arts w Pawtucket RI.
-4. BRAMKA TOZSAMOSCI liczona z DOWODOW (nie z deklaracji modelu - tap-test pokazal, ze model
-   potrafi zignorowac kontrakt pierwszej linii): domena prospekta musi wystapic w evidence albo
-   claims, a przy braku domeny miasto z kartoteki musi wystapic w claims. Brak potwierdzenia =
-   karta NIE proponuje outreachu, gotowiec jedzie z ostrzezeniem.
+4. BRAMKA TOZSAMOSCI - TRZY stany, bo to dwa rozne pytania. Czy to TA firma liczy DOWOD (domena
+   prospekta w evidence albo claims; bez domeny - miasto z kartoteki w claims). Czy cos budzi
+   watpliwosc zglasza model. Stany: `potwierdzona` (outreach), `z zastrzezeniem` (outreach +
+   weryfikacja punktu, najtaniej telefonem), `niepotwierdzona` = BRAK DOWODU (outreach
+   zablokowany). Wersja z prawem weta modelu zablokowala 2 poprawne prospekty na 2, a bramka
+   blokujaca poprawne przypadki zostaje zignorowana i przestaje chronic. Werdykt kodu ma wlasna
+   nazwe w notatkach: `[WERDYKT TOZSAMOSCI: <stan>]` - skan po samym "TOZSAMOSC:" trafial
+   w pierwsza linie podsumowania pisana przez model.
 5. Meldunek surowy Researchera milknie dla `sales-agent` (Sprzedawca wysyla wlasna karte).
 6. `compliance.fix_dashes` na podsumowaniu i gotowcu outreachu (sciezka sprzedazowa nigdy nie
    przechodzila przez filtr em dash, a to teksty do KLIENTA).
