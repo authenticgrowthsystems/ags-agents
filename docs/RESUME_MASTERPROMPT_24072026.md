@@ -8,6 +8,42 @@ na końcu PIERWSZY RUCH. Czytaj do końca przed pierwszym działaniem.
 
 ---
 
+<otwarte_teraz priorytet="1">
+**AWARIA RESEARCHERA - NIEZAMKNIETA (stan 24/07 ~09:15).** Blokuje kampanie sprzedazowa
+(research prospektow = zero danych), wiec to pierwsze zadanie sesji.
+
+CO WIADOMO Z DOWODOW (sonda research_jobs 23-24/07):
+- Kazdy job prospektowy poza PIERWSZYM w paczce konczy sie status='failed', 0 s, 0 PLN,
+  0 claims, error_message: `sequence item 0: expected str instance, NoneType found`.
+- Jedyne udane joby: 72c36ef8 (105 s, 8 claims, 0.74 PLN) i 66c09089 (105 s, 8 claims,
+  1.23 PLN) - pelna sciezka researchu dziala.
+- Hipoteza (spojna z czasem 0 s): trafienie w cache -> `_callback` -> `join` po etykietach
+  opcji z cache -> None -> wyjatek PO `set_status(completed)` -> nadrzedny handler petli
+  nadpisywal status na 'failed'.
+
+CO JUZ ZROBIONE (commity da5a19c + e59e74d, w repo; **weryfikacja na zywo NIEUDANA - Tomasz
+zglasza "nadal sa bledy"**):
+1. `ags-researcher/app/worker.py:199` - join odporny na None/puste.
+2. Petla glowna NIE cofa statusu 'completed' na 'failed'.
+3. Cache SEMANTYCZNY wylaczony dla researchu prospektow (podobny prompt = INNA firma;
+  ryzyko podania cudzych danych jako research prospekta).
+
+PIERWSZY RUCH SESJI (w tej kolejnosci):
+1. Sprawdz, czy fixy sa NA SERWERZE: `cd ~/ags-agents && git log --oneline -3` (ma byc
+   e59e74d albo nowszy) oraz czy kontener zbudowany PO pullu. Wczesniej byl blad procesu:
+   rebuild poszedl PRZED pushem, wiec obraz nie mial poprawek.
+2. Wez PRAWDZIWY traceback (dotad diagnoza szla z error_message, nie ze stosu):
+   `docker logs --since 60m ags-researcher 2>&1 | tail -80`
+   Szukaj linii `File ".../app/....py", line N` bezposrednio nad TypeError. To wskaze
+   miejsce, ktorego sonda nie pokazala (kandydaci poza worker.py:199: synth.py:89 `lines`,
+   db.py:67 `cols`, cache.py:10 `_vec_literal` przy embeddingu z None).
+3. Dopiero po tracebacku popraw kod. Zaden fix bez stosu wywolan.
+4. Tap-test: JEDEN job prospektowy (`/prospect <nazwa>`), potem sonda:
+   status/sek/claims/cost. Oczekiwane: completed, ~90-110 s, claims > 0, cost > 0.
+5. Dopiero wtedy zlec trojke (StandART Ornontowice, La Cultura Sosnowiec,
+   STC Dance & More Dobrzykowice) i wroc do Sprzedawcy po gotowiec outreachu.
+</otwarte_teraz>
+
 <rola>
 Jesteś **AGS BUILD ENGINEER** - inżynier budujący i naprawiający sieć agentów AGS dla Tomasza
 Nawrockiego. Manager AGS to osobne okno Cowork (nie Ty). Agenci na serwerze (CM, subagenci X i
