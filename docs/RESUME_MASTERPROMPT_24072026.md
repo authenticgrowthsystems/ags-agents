@@ -1,4 +1,4 @@
-# MASTER PROMPT - AGS Agent Network (wersja 24/07/2026, stan na 24/07 ~15:40)
+# MASTER PROMPT - AGS Agent Network (wersja 24/07/2026, stan na 24/07 ~20:00)
 
 Wklej na starcie nowej sesji Cowork. Self-contained. **Zastępuje RESUME_MASTERPROMPT_19072026.md**
 (tamten = archiwum historii 19-22/07; tutaj jest STAN OBECNY, zgodnie z kanonem DOKUMENTACJA ŻYJE).
@@ -77,9 +77,52 @@ TRZY MOJE REGRESJE Z TEGO DNIA (klasa bledu wazniejsza niz sam blad):
 3. Tap-test na wartosci, ktorej NIE MA w bazie (adres z `www`, w lejku gola domena bez DNS).
    **Testuj wartoscia, ktora system faktycznie posiada.**
 
-PIERWSZY RUCH SESJI: kampania szkol tanca - wyslij gotowiec do StandART (czeka u Tomasza,
-sprawdz tylko, czy imiona ze zbiorki to trenerzy), potem La Cultura i STC ta sama sciezka.
-Adamietz: follow-up telefoniczny do Piotra.
+## ZALEGLOSCI DO DOCISNIECIA (stan 24/07 ~20:00, decyzja Tomasza: "docisnac wszystko")
+
+**PIERWSZY RUCH: potwierdz, ze serwer stoi na `a50c927`** (`cd ~/ags-agents && git log --oneline -1`
++ `/health`). Ostatni rebuild cm-agent byl zlecany, ale niepotwierdzony w rozmowie.
+
+### A. Paczka #1 Managera (docs/briefs/PACZKA_1_MANAGER_24072026.md - CZYTAJ, ma triage per punkt)
+- **pkt 3 ZROBIONY** (blocker Piotr/Adamietz): auto-odrzut slownictwa produktowego, commit babfe03.
+- **pkt 6 ZROBIONY**: piapiasilva = **Pia Silva**, boutique branding, "Badass Your Brand";
+  contacts.id 896d2232-0aa9-4ae7-914f-2e79fbf2fc2b, tier Buyer, etap commented, ostatnia
+  interakcja 22/07. Szukac po NAZWISKU, nie po handle.
+- **pkt 2** (najtansze): sekcja "Weryfikacja tozsamosci cross-platform" w
+  docs/product/masterprompty-czat/MASTERPROMPT_CZAT_LINKEDIN_AGS_v3.md -> v1.1: zrzut profilu X
+  (bio + link w bio) zamiast web_search. Dowod produkcyjny 24/07 w raporcie sesji.
+- **pkt 8**: heurystyka interpunkcji PL (przecinek przed ze/zeby/ktory/gdy/jesli/bo) jako FLAGA
+  w matreview dla brand_id IN ('tnm','rdc'). Miejsce: compliance.py obok polish_pl.
+- **pkt 1 + 5 + 7 = JEDEN DDL 030** (psql PRZED rebuildem): tabela channel_kpi_snapshots +
+  sync_registry (pkt 1), contacts.who_is_who JSONB (pkt 5, sprawdzone - kolumny NIE MA),
+  regula fail-closed przed tier='out_of_icp' (pkt 7; UWAGA: contacts NIE MA kolumny dm_history,
+  historia DM zyje w engagement_log per contact_id - albo oprzec regule na engagement_log,
+  albo dopisac kolumne w tym samym DDL).
+- **pkt 4 CZEKA NA DECYZJE TOMASZA**: sciecie icp_tier do 5 wartosci wywali 45 zywych wierszy
+  (Watch 37, Premium 7, Mid 1). Rekomendacja: DODAC 'Inne' do istniejacej listy, legacy zostawic.
+
+### B. Otwarte decyzje Tomasza (nie kod - pytaj guzikami, nie zgaduj)
+1. Cache semantyczny Researchera: globalnie OFF czy plaster na fraze 'prospect research'.
+2. Grafiki na X: wlaczyc `auto_image` (flaga gotowa, `/set`)? 31 postow tygodniowo, 17 juz ma
+   grafike z materialu, wiec automat dotknalby czternastu.
+3. Poczta dla agenta: ODLOZONE 24/07 ("na razie wysylam recznie, ale zapytaj mnie o to pozniej")
+   - docs/briefs/BRIEF_POCZTA_I_CRM_GHL_24072026.md ma trzy warianty i dwa ograniczenia prawne.
+4. Punkt 4 paczki (tiery, wyzej).
+
+### C. Dlug techniczny z dzisiaj (kolejnosc wg bolu)
+- **Kaskada Researchera nie czyta strony badanego podmiotu** - obejscie dziala TYLKO w sprzedazy
+  (sales.wizytowka), kazdy inny konsument dostaje tytuly zamiast tresci. docs/komponenty/researcher.md.
+- **Osoba decyzyjna**: mamy pobrana podstrone instruktorow, mozna z niej wyciagnac nazwisko
+  (instruktor to nie zawsze decydent - potrzebna regula).
+- **prospect_url wybiera podstrone** (Stepownia: /author/dudzikdariusz zamiast domeny glownej).
+- **Anglicyzmy w promptach wewnetrznych**: kilkadziesiat miejsc (follow-up, lead, deal, pipeline,
+  value prop). UWAGA: czesc to tokeny parsera - przeglad recznie, nie hurtem.
+- Sprzedawca nie widzi zrzutow ekranu (wrzutka trafia w routing zdjec, nie do sales.handle_chat).
+
+### D. Kampania (to jest cel, reszta jest po to)
+- StandART: gotowiec WYSLANY 24/07. Oznacz "wyslalem" w bocie, zeby ustawil nastepny kontakt.
+- Stepownia: research potwierdzony (tel 501 130 016, Dariusz Dudzik) - zostal gotowiec.
+- La Cultura i STC: research gotowy z 24/07, zostaly gotowce.
+- Adamietz: follow-up telefoniczny do Piotra (najwiekszy deal w lejku).
 </otwarte_teraz>
 
 <rola>
