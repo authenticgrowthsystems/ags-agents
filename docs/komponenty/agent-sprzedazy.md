@@ -138,7 +138,11 @@ fallback ILIKE), outreach_sent (propozycja -> 'sent', follow-up +3 dni).
   `z zastrzezeniem` (dowod jest, model marudzi) -> outreach dozwolony z prosba o weryfikacje
   punktu, gotowiec z ⚠️; `niepotwierdzona` (BRAK dowodu) -> outreach zablokowany, karta zada
   ponownego zlecenia ze strona, gotowiec z ⛔.
-  Marker `[TOZSAMOSC: <stan>]` zyje w notatkach lejka; `_draft_outreach` czyta OSTATNI.
+  Marker `[WERDYKT TOZSAMOSCI: <stan>]` zyje w notatkach lejka; `_draft_outreach` czyta OSTATNI.
+  Nazwa markera MUSI byc inna niz "TOZSAMOSC:", bo tak zaczyna sie pierwsza linia podsumowania
+  pisana przez model - skan po samym slowie trafial w tekst modelu zamiast w werdykt kodu
+  (dowod 24/07 11:18: notatka La Cultury miala ciag "niepotwierdzona -> niepewna ->
+  z zastrzezeniem -> niepewna", gdzie co druga pozycja pochodzila od modelu).
   **Dlaczego trzy, nie dwa:** wersja z prawem weta modelu zablokowala 2 poprawne prospekty
   na 2 (La Cultura i STC - dowody potwierdzaly podmiot, model marudzil o kanal kontaktu).
   Bramka blokujaca poprawne przypadki zostaje zignorowana i przestaje chronic przed

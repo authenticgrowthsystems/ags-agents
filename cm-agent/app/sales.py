@@ -643,11 +643,13 @@ def _draft_outreach(inp, chat_id):
     # Bramka tozsamosci: marker z podsumowania researchu zyje w notatkach lejka. Nie blokujemy
     # pisania (decyduje Tomasz), ale gotowiec ma jechac z ostrzezeniem, nie po cichu.
     # Liczy sie OSTATNI marker - po ponownym researchu ze strona werdykt sie zmienia.
-    _markery = re.findall(r"TOZSAMOSC:\s*(potwierdzona|z zastrzezeniem|niepotwierdzona|niepewna)",
+    # Skan po WERDYKCIE kodu, nie po slowie "TOZSAMOSC" - to drugie pisze tez model w pierwszej
+    # linii podsumowania (dowod 24/07 11:18: ostatnim trafieniem byl tekst modelu, nie werdykt).
+    _markery = re.findall(r"\[WERDYKT TOZSAMOSCI:\s*(potwierdzona|z zastrzezeniem|niepotwierdzona)\]",
                           row.get("notes") or "", re.IGNORECASE)
     _stan = _markery[-1].lower() if _markery else ""
     _ostrzezenie = ("⛔ RESEARCH NIE POTWIERDZIL TOZSAMOSCI TEJ FIRMY - zweryfikuj adresata PRZED "
-                    "wyslaniem.\n" if _stan in ("niepotwierdzona", "niepewna")
+                    "wyslaniem.\n" if _stan == "niepotwierdzona"
                     else "⚠️ Podmiot potwierdzony dowodami, ale research zglosil zastrzezenie - "
                          "sprawdz je przed wyslaniem.\n" if _stan == "z zastrzezeniem" else "")
     _tg_send(chat_id, f"🧾 OUTREACH DO WYSLANIA RECZNIE - {channel} - {row['prospect_name'][:80]}\n"
@@ -1159,8 +1161,10 @@ def tick():
             if chat:
                 _tg_send(chat, text)
             if pipe:
-                # marker w notatkach niesie werdykt dalej (czyta go _draft_outreach)
-                _append_notes(pipe["id"], f"research gotowy [TOZSAMOSC: {stan}]:\n{summary[:1200]}")
+                # Marker niesie werdykt dalej (czyta go _draft_outreach). Nazwa MUSI byc inna niz
+                # "TOZSAMOSC:", bo tak zaczyna sie pierwsza linia podsumowania pisana przez model -
+                # skan po samym "TOZSAMOSC:" trafial w tekst modelu zamiast w werdykt kodu.
+                _append_notes(pipe["id"], f"research gotowy [WERDYKT TOZSAMOSCI: {stan}]:\n{summary[:1200]}")
         except Exception:
             traceback.print_exc()
 
