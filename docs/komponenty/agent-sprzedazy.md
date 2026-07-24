@@ -246,6 +246,24 @@ Gotowiec idzie TRZEMA wiadomosciami, zeby dalo sie go zrewidowac bez otwierania 
 Docelowo dane kontaktowe maja przyjsc z CRM zamiast z regexa - brief:
 `docs/briefs/BRIEF_POCZTA_I_CRM_GHL_24072026.md`.
 
+## Czysta polszczyzna (sugestia Tomasza 24/07)
+
+"Wszelkie zangielszczenia nie powinny miec tu miejsca". Filtr `compliance.polish_pl` istnieje
+od 06/07, ale sciezka sprzedazowa NIGDY przez niego nie przechodzila - ta sama luka co
+z filtrem em dash. Teraz:
+
+- gotowiec `lang='pl'` przechodzi przez `compliance.polish_pl` PO auto-odrzucie slownictwa
+  produktowego (kolejnosc ma znaczenie: najpierw sens, potem jezyk),
+- `_RULES` niesie liste podmian: follow-up -> przypomnienie / kontakt zwrotny, lead ->
+  zapytanie, case study -> przyklad wdrozenia, onboarding -> wdrozenie, deadline -> termin,
+  feedback -> informacja zwrotna, insight -> wniosek; test mamy jako kryterium,
+- etykiety, ktore Tomasz widzi codziennie, poszly na polski: "nastepny kontakt" zamiast
+  "follow-up", "BRAK nastepnego kroku" zamiast "BRAK next-step".
+
+**OTWARTE (przeglad na osobno):** wewnetrzne prompty i opisy narzedzi nadal uzywaja
+"follow-up", "lead", "deal", "pipeline", "value prop", "targetowac". Nie ruszam ich hurtem
+w koncowce dnia, bo to kilkadziesiat miejsc i czesc z nich to tokeny, po ktorych parsuje kod.
+
 ## Znane pulapki
 
 - Wiersz channels 'sprzedaz' pojawia sie w menu ⚙️ Cele (n8n) - NIE wlaczac go jako celu

@@ -162,9 +162,9 @@ def pipeline_text():
         if r.get("next_followup_at"):
             fu = r["next_followup_at"]
             late = " ⚠️ PO TERMINIE" if fu < now else ""
-            bits.append(f"follow-up: {fu.astimezone(WARSAW).strftime('%d/%m %H:%M')}{late}")
+            bits.append(f"nastepny kontakt: {fu.astimezone(WARSAW).strftime('%d/%m %H:%M')}{late}")
         else:
-            bits.append("⚠️ BRAK next-step")
+            bits.append("⚠️ BRAK nastepnego kroku")
         stale = (now - r["updated_at"]).days if r.get("updated_at") else 0
         if stale >= 14:
             bits.append(f"⚠️ cisza {stale} dni")
@@ -284,6 +284,12 @@ _RULES = (
     "ktorzy dzis odchodza' zamiast 'buduje Ci system AI'; 'nikt nie zostaje bez odpowiedzi' "
     "zamiast 'wdrazamy automatyzacje'; 'zapisy same sie domykaja' zamiast 'integracja z CRM'. "
     "Nazwa technologii moze paść dopiero, gdy klient SAM o nia zapyta.\n"
+    # Sugestia Tomasza 24/07: "wszelkie zangielszczenia nie powinny miec tu miejsca".
+    "- CZYSTA POLSZCZYZNA w tekstach PL: zero anglicyzmow i kalk. 'follow-up' to "
+    "'przypomnienie' albo 'kontakt zwrotny'; 'lead' to 'zapytanie'; 'case study' to 'przyklad "
+    "wdrozenia'; 'onboarding' to 'wdrozenie'; 'deadline' to 'termin'; 'feedback' to 'informacja "
+    "zwrotna'; 'insight' to 'wniosek'. Test mamy: czy moja mama uznalaby to zdanie za naturalne "
+    "po polsku. Angielski zostaje w tekstach EN, gdzie jest u siebie.\n"
     "- REGULA PRAWDY: AGS jest przed pierwszym platnym klientem - ZERO zmyslonych case studies, "
     "liczb i referencji. Dowod spoleczny = wlasny zywy system AGS (build-in-public) i realne "
     "wdrozenia rodzinne (TNM, RDC) opisywane uczciwie.\n"
@@ -975,7 +981,7 @@ def _outreach_stopka(row):
     nast = row.get("next_followup_at")
     return ("📊 Lejek: etap " + str(row.get("stage") or "?") + " | " + ktory
             + (" | follow-up: " + nast.astimezone(WARSAW).strftime("%d/%m %H:%M") if nast else "")
-            + "\n⏭ Po wyslaniu napisz \"wyslalem\" - przesune etap i ustawie follow-up.")
+            + "\n⏭ Po wyslaniu napisz \"wyslalem\" - przesune etap i ustawie nastepny kontakt.")
 
 
 def _outreach_examples(limit=3):
@@ -1069,6 +1075,14 @@ def _draft_outreach(inp, chat_id):
             if poprawka:
                 draft = _tylko_gotowiec(compliance.fix_dashes(poprawka), channel)
                 zakazane = _zakazane_slownictwo(draft)
+        except Exception:
+            traceback.print_exc()
+    # CZYSTA POLSZCZYZNA (sugestia Tomasza 24/07: "wszelkie zangielszczenia nie powinny miec tu
+    # miejsca"). Filtr istnieje od 06/07, ale sciezka sprzedazowa nigdy przez niego nie szla -
+    # ta sama luka co z em dash. Tekst do polskiego klienta ma brzmiec po polsku.
+    if lang == "pl":
+        try:
+            draft = _tylko_gotowiec(compliance.polish_pl(draft), channel)
         except Exception:
             traceback.print_exc()
     # gotowiec: naglowek + CZYSTA WKLEJKA osobna wiadomoscia (kanon comment-radar)
@@ -1166,7 +1180,7 @@ def _pipeline_move(inp):
                 fu = fu.replace(tzinfo=WARSAW)
             sets.append("next_followup_at=%s")
             params.append(fu)
-            bits.append(f"follow-up: {fu.astimezone(WARSAW).strftime('%d/%m %H:%M')}")
+            bits.append(f"nastepny kontakt: {fu.astimezone(WARSAW).strftime('%d/%m %H:%M')}")
         except (ValueError, TypeError):
             return f"Nie rozumiem terminu \"{inp['next_followup_at']}\" - podaj ISO, np. 2026-07-23T10:00."
     if not sets and not inp.get("note"):
