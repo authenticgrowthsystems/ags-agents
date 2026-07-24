@@ -282,6 +282,31 @@ _RULES = (
     "zlecilem', jesli nie masz wyniku narzedzia."
 )
 
+# Sekcja powstala z ZYWEGO dowodu (gotowiec StandART 24/07 11:44): model otworzyl mail od "widze,
+# ze...", czyli od frazy wprost zakazanej w frameworkach, i zamknal go CTA przepisanym doslownie
+# z PRZYKLADU w tych frameworkach. Zakaz w liscie nie wystarczyl - potrzebny jest osobny blok,
+# ktory nazywa te dwa mechanizmy: recytowanie ilustracji i pozorowana personalizacja.
+_ANTY_SZABLON = (
+    "ZAKAZ SZABLONU (najwazniejsze dla jakosci tekstu):\n"
+    "- Przyklady w powyzszych frameworkach to ILUSTRACJE MECHANIZMU, nie tekst do przepisania. "
+    "Jesli Twoje zdanie da sie znalezc w instrukcji, ktora czytasz - napisz je od nowa.\n"
+    "- Zakazane otwarcia: 'widze, ze', 'zauwazylem, ze', 'trafilem na', 'pisze, poniewaz', "
+    "'mam nadzieje, ze'. Nie opisuj adresatowi jego wlasnej firmy - on wie, czym sie zajmuje. "
+    "Wchodzisz od OBSERWACJI albo PYTANIA, ktore ma sens tylko wobec NIEGO.\n"
+    "- Zakazane zwroty sprzedazowe: 'pomagamy firmom/klubom/szkolom X robic Y', 'nie chodzi o "
+    "gorsza oferte, tylko o brak systemu', 'chetnie pokaze, jak to wyglada w praktyce', "
+    "'masz 15 minut w tym tygodniu'. Kazde z nich pasuje do dowolnej firmy, wiec nie znaczy nic.\n"
+    "- Hak MUSI byc weryfikowalny w researchu: konkretna inicjatywa, wydarzenie, oferta, zapis "
+    "ze strony. Bez takiego konkretu napisz krotszy, uczciwie ogolny tekst - nie udawaj "
+    "personalizacji ogolnikiem.\n"
+    "- CTA formuluj jako pytanie o RZECZ, nie o kalendarz: pytaj o to, jak dzis obslugują u nich "
+    "konkretny proces. Pytanie o czas dopiero, gdy jest po co sie spotkac.\n"
+    "- Rytm: krotkie zdania, zero symetrycznych konstrukcji 'nie X, tylko Y' wiecej niz raz, zero "
+    "wyliczen korzysci, zero slow 'rozwiazanie', 'proces', 'optymalizacja', 'usprawnienie'.\n"
+    "- Test przed oddaniem tekstu: gdyby podmienic nazwe firmy na inna z tej samej branzy, czy "
+    "mail dalej mialby sens? Jesli tak - jest za slaby, przepisz go."
+)
+
 
 def _system(chat_id):
     from .conversation import comm_guide, _memory_text
@@ -303,8 +328,12 @@ def _system(chat_id):
         f"{_FRAMEWORKS}\n\n"
         f"LEJEK (zywy stan):\n{pipeline_text()}\n\n"
         f"BAZA WIEDZY SPRZEDAZOWEJ: {_knowledge_stats()}\n\n"
-        f"GLOS MARKI (Voice Bible - outreach MUSI byc w tym glosie):\n"
-        f"{(brand.get('voice_bible') or '')[:2500]}\n\n"
+        # Wczesniej szlo tu voice_bible[:2500] z 22 tys. znakow razem z poleceniem "outreach MUSI
+        # byc w tym glosie" - polecenie bez pokrycia, bo zasad pisania w tym oknie nie ma. Rdzen
+        # glosu jest krotki i wchodzi w calosci; pelna Voice Bible dostaje narzedzie draft_outreach.
+        f"RDZEN GLOSU (pelny):\n{_voice_dna_core()}\n"
+        f"Pelna Voice Bible wchodzi automatycznie do narzedzia draft_outreach. W rozmowie NIE "
+        f"parafrazuj jej z pamieci - gotowce pisz narzedziem.\n\n"
         f"PAMIEC WCZESNIEJSZYCH ROZMOW (skroty wygaslych watkow):\n{_memory_text(AGENT_KEY)}"
     )
     return [{"type": "text", "text": role}]
@@ -600,6 +629,60 @@ def _prospect_results(inp):
 # ---------------- outreach (gotowiec HITL) ----------------
 _ENG_CHANNEL = {"email": "Other", "linkedin_dm": "LinkedIn", "x_dm": "X"}
 
+# Prog trafnosci bazy wiedzy dla tekstow do klienta. Kalibracja 24/07 z zywego korpusu:
+# materialy o Adamietzu wracaly na zapytanie o szkole tanca z podobienstwem 0.40-0.45.
+_KNOWLEDGE_MIN_SIM = 0.55
+_VOICE_MAX = 30000  # gorna granica wsadu glosu w znakach (~8 tys. tokenow, kilka groszy na gotowiec)
+
+
+def _voice_dna_core():
+    """Osobisty rdzen glosu Tomasza (destylat 20 wywiadow, brand_config.voice_dna_core, ~4,5 tys.
+    znakow). Do 24/07 sciezka sprzedazowa NIE czytala go w ogole - brala tylko voice_bible."""
+    try:
+        r = db.fetchone("SELECT config_value FROM brand_config WHERE brand_id=%s "
+                        "AND config_key='voice_dna_core' LIMIT 1", (BRAND,))
+        return (r or {}).get("config_value") or ""
+    except Exception:
+        traceback.print_exc()
+        return ""
+
+
+def _voice_for_outreach(brand):
+    """Glos do tekstow sprzedazowych: CALY voice_dna_core (osobisty rdzen z 20 wywiadow) + CALA
+    voice_bible. Wczesniej szlo `voice_bible[:2000]` z 22 168 znakow, czyli naglowek pliku i
+    pozycjonowanie - zasad pisania model nie widzial NIGDY (dowod: gotowiec StandART 24/07).
+
+    Probowalem wybierac sekcje po slowach kluczowych i sonda to obalila: z 37 naglowkow zywej
+    Voice Bible dopasowaly sie dwa, a listy zakazanego slownictwa (4.1-4.5) i regula em-dash
+    maja naglowki po angielsku, wiec wypadlyby. To ta sama klasa bledu co pierwotna: ciche
+    gubienie zasad. Wsad kosztuje kilka groszy na gotowiec i jest tego wart - to tekst do
+    klienta, nie log."""
+    parts = []
+    rdzen = _voice_dna_core()
+    if rdzen:
+        parts.append("RDZEN GLOSU TOMASZA (voice_dna_core):\n" + rdzen)
+    bible = ((brand or {}).get("voice_bible") or "").strip()
+    if bible:
+        parts.append("VOICE BIBLE:\n" + bible)
+    return "\n\n".join(parts)[:_VOICE_MAX]
+
+
+def _outreach_examples(limit=3):
+    """Wiadomosci, ktore Tomasz NAPRAWDE wyslal (material_type='outreach_example', wrzucane przez
+    /add_sales_material z podpowiedzia 'wzorzec'). Model pisze OD NICH, nie od teorii - to jest
+    roznica miedzy tekstem poprawnym a tekstem Tomasza."""
+    try:
+        rows = db.fetchall(
+            """SELECT material_name, content_excerpt FROM sales_knowledge
+               WHERE brand_id='AGS' AND material_type='outreach_example'
+               ORDER BY added_at DESC LIMIT %s""", (limit,))
+    except Exception:
+        traceback.print_exc()
+        return ""
+    return "\n\n".join(
+        f"--- wzorzec: {(r['material_name'] or '')[:60]} ---\n{(r['content_excerpt'] or '')[:1200]}"
+        for r in rows or [])
+
 
 def _draft_outreach(inp, chat_id):
     row = _find_pipeline(inp.get("prospect_fragment"))
@@ -612,7 +695,8 @@ def _draft_outreach(inp, chat_id):
     grounding = research.grounding_with_sources(row["research_job_id"], limit=10) \
         if row.get("research_job_id") else ""
     knowledge = _knowledge_search_text(f"outreach {row['prospect_name']} {inp.get('guidance') or ''}",
-                                       top_n=3, quiet=True)
+                                       top_n=3, quiet=True, min_similarity=_KNOWLEDGE_MIN_SIM)
+    wzorce = _outreach_examples()
     forms = {
         "email": "email sprzedazowy: linia 'TEMAT: ...' i po pustej linii tresc",
         "linkedin_dm": "wiadomosc LinkedIn (jesli to pierwszy kontakt: TAKZE zaproszenie <300 znakow bez pitchu, oznacz 'ZAPROSZENIE:' i 'WIADOMOSC PO AKCEPCIE:')",
@@ -623,7 +707,10 @@ def _draft_outreach(inp, chat_id):
         model=model, max_tokens=1200, thinking={"type": "disabled"},
         system=[{"type": "text", "text":
                  f"Piszesz outreach w imieniu Tomasza Nawrockiego (AGS).\n{_RULES}\n\n"
-                 f"{_FRAMEWORKS}\n\nGLOS MARKI:\n{(brand.get('voice_bible') or '')[:2000]}"}],
+                 f"{_FRAMEWORKS}\n\n{_ANTY_SZABLON}\n\n{_voice_for_outreach(brand)}"
+                 + (f"\n\nTAK PISZE TOMASZ - wzorce z wiadomosci, ktore NAPRAWDE wyslal. Rytm, "
+                    f"dlugosc zdan i sposob wchodzenia w temat bierz STAD, nie z teorii:\n{wzorce}"
+                    if wzorce else "")}],
         messages=[{"role": "user", "content":
                    f"Napisz {forms.get(channel, channel)} po "
                    f"{'polsku' if lang == 'pl' else 'angielsku'} do prospekta: "
@@ -631,8 +718,12 @@ def _draft_outreach(inp, chat_id):
                    + (f"WSKAZOWKI TOMASZA: {inp['guidance']}\n" if inp.get("guidance") else "")
                    + (f"\nRESEARCH (fakty z linkami - hak personalizacji STAD):\n{grounding[:3000]}\n"
                       if grounding else "\nBRAK researchu - personalizuj tylko tym, co pewne z nazwy/kontekstu; ZERO zmyslonych faktow.\n")
-                   + (f"\nTECHNIKI Z BAZY WIEDZY:\n{knowledge[:1500]}\n" if knowledge else "")
+                   + (f"\nTECHNIKI Z BAZY WIEDZY (trafne dla tego przypadku):\n{knowledge[:1500]}\n"
+                      if knowledge else "\nBAZA WIEDZY: brak materialu trafnego dla tego prospekta. "
+                                        "Pisz z frameworkow i researchu; NIE nadrabiaj ogolnikami.\n")
                    + f"\nNOTATKI LEJKA: {(row.get('notes') or '')[:600]}\n\n"
+                   "Zanim napiszesz: wybierz JEDEN konkret z researchu, ktory bedzie hakiem, i "
+                   "sprawdz, czy da sie go zacytowac. Potem napisz tekst.\n"
                    "Zwroc WYLACZNIE gotowa tresc do wyslania (zero komentarza, zero markdown)."}])
     tasks.log_task("sales_outreach", tier, model, source, getattr(resp, "usage", None))
     draft = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
@@ -765,7 +856,11 @@ def _outreach_sent(inp):
 
 
 # ---------------- baza wiedzy ----------------
-def _knowledge_search_text(query, top_n=5, quiet=False):
+def _knowledge_search_text(query, top_n=5, quiet=False, min_similarity=None):
+    """min_similarity: prog dla tekstow do KLIENTA. Baza ma dzis 3 materialy (same Adamietz), wiec
+    najblizszy sasiad ZAWSZE cos zwraca - do promptu o szkole tanca wchodzily raporty o holdingu
+    budowlanym z podobienstwem 0.40-0.45 jako "techniki" (dowod: gotowiec StandART 24/07 11:44).
+    Lepiej nie podac nic niz podac cudzy case: model ma wtedy jawna luke, nie falszywy kontekst."""
     v = content_memory.embed(query)
     rows = []
     if v:
@@ -775,6 +870,11 @@ def _knowledge_search_text(query, top_n=5, quiet=False):
                FROM sales_knowledge WHERE brand_id='AGS' AND embedding IS NOT NULL
                ORDER BY embedding <=> %s::vector LIMIT %s""",
             (content_memory._vec_literal(v), content_memory._vec_literal(v), top_n))
+        if min_similarity is not None:
+            rows = [r for r in rows if r.get("similarity") is not None
+                    and float(r["similarity"]) >= min_similarity]
+    if min_similarity is not None and not rows:
+        return ""  # fallback ILIKE nie ma wyniku podobienstwa, wiec przy progu go nie uzywamy
     if not rows:  # fallback bez embeddingow (brak klucza OpenAI / baza swieza)
         words = [w for w in re.split(r"\W+", query) if len(w) > 3][:4]
         if words:
@@ -794,7 +894,9 @@ def _knowledge_search_text(query, top_n=5, quiet=False):
     return "\n\n".join(out)
 
 
-_TYPE_HINTS = (("book", ("ksiazk", "book")), ("technique", ("technik", "technique")),
+_TYPE_HINTS = (("outreach_example", ("wzorzec", "moj mail", "moja wiadomosc", "tak pisze",
+                                     "przyklad outreach", "wyslalem")),
+               ("book", ("ksiazk", "book")), ("technique", ("technik", "technique")),
                ("case_study", ("case", "studium")), ("framework", ("framework", "model")),
                ("script", ("skrypt", "script")), ("recording", ("nagran", "recording", "transkrypc")))
 

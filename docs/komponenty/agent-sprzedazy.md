@@ -148,6 +148,36 @@ fallback ILIKE), outreach_sent (propozycja -> 'sent', follow-up +3 dni).
   Bramka blokujaca poprawne przypadki zostaje zignorowana i przestaje chronic przed
   prawdziwym bledem tozsamosci.
 
+## Glos w tekstach do klienta (fix 24/07, po zywym gotowcu)
+
+Objaw: gotowiec dla StandART brzmial jak folder reklamowy - otwarcie "widze, ze...",
+zwrot "pomagamy klubom i szkolom tanecznym", CTA "masz 15 minut w tym tygodniu".
+Trzy przyczyny, wszystkie z sondy, nie z wrazenia:
+
+1. **Voice Bible obcieta do 9%.** Do promptu szlo `voice_bible[:2000]` z 22 168 znakow,
+   czyli naglowek pliku i pozycjonowanie. Zasad pisania (sekcje 3-6: przymiotniki glosu,
+   banned vocab 4.1-4.5, em-dash, format) model nie widzial NIGDY.
+   Teraz `_voice_for_outreach` podaje CALY rdzen + CALA Voice Bible (cap `_VOICE_MAX`
+   30 tys. znakow). Prob wybierania sekcji po slowach kluczowych ODRZUCONY sonda:
+   z 37 naglowkow zywej Voice Bible dopasowaly sie dwa, a listy zakazanego slownictwa
+   i regula em-dash maja naglowki po angielsku - wypadlyby. To ta sama klasa bledu.
+2. **voice_dna_core nie byl czytany wcale.** 4471 znakow destylatu z 20 wywiadow
+   osobistych lezalo w brand_config, a sciezka sprzedazowa brala tylko voice_bible.
+   `_voice_dna_core()` wchodzi teraz i do gotowca, i do promptu rozmowy (w calosci).
+3. **Baza wiedzy podsuwala cudzy case.** Sa 3 materialy (same Adamietz) i najblizszy
+   sasiad zawsze cos zwracal - do maila o szkole tanca wchodzily raporty o holdingu
+   budowlanym z podobienstwem 0.40-0.45 jako "techniki". `_KNOWLEDGE_MIN_SIM` = 0.55
+   i brak fallbacku ILIKE dla tekstow do klienta: lepiej jawna luka niz falszywy kontekst.
+
+Dodatkowo `_ANTY_SZABLON` w prompcie systemowym gotowca. Powstal, bo zakazy w
+`_FRAMEWORKS` nie wystarczyly: model otworzyl mail fraza wprost zakazana i przepisal CTA
+doslownie z PRZYKLADU w tych frameworkach. Sekcja nazywa oba mechanizmy (recytowanie
+ilustracji, pozorowana personalizacja) i konczy sie testem podmiany nazwy firmy.
+
+**Wzorce wlasne:** `material_type='outreach_example'` w sales_knowledge (wrzutka przez
+`/add_sales_material` z podpowiedzia "wzorzec"). `_outreach_examples()` wkleja do 3
+ostatnich DOSLOWNIE do promptu - model pisze od zdan Tomasza, nie od teorii.
+
 ## Znane pulapki
 
 - Wiersz channels 'sprzedaz' pojawia sie w menu ⚙️ Cele (n8n) - NIE wlaczac go jako celu
