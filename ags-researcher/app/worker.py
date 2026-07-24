@@ -2,6 +2,7 @@
 Orchestration loop lives here (Python), not in n8n. n8n owns the source adapters + ingress + callback.
 Also serves /health (container healthcheck) and /metrics."""
 import datetime
+import decimal
 import json
 import threading
 import time
@@ -184,6 +185,25 @@ def _telegram(text, reply_markup=None):
         traceback.print_exc()
 
 
+def _json_safe(obj):
+    """Payload meldunku MUSI dac sie zserializowac. Wiersze z bazy przynosza typy, ktorych
+    json nie zna (NUMERIC -> Decimal, TIMESTAMPTZ -> datetime, UUID). Jeden taki obiekt
+    wywracal caly INSERT do agent_messages, wyjatek byl polykany i job konczyl sie 'completed'
+    bez powiadomienia kogokolwiek (dowod 24/07: joby 91d8b597 i b55a9f58 - 0 meldunkow).
+    Zamiast liczyc na dyscypline w kazdym miejscu, sanityzujemy caly payload przed zapisem."""
+    if isinstance(obj, dict):
+        return {str(k): _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    if isinstance(obj, decimal.Decimal):
+        return float(obj)
+    if isinstance(obj, (datetime.datetime, datetime.date)):
+        return obj.isoformat()
+    if obj is None or isinstance(obj, (str, int, float, bool)):
+        return obj
+    return str(obj)
+
+
 def _agent_name(rid):
     """agent_id -> agent_name (None gdy brak/nieznany). Uzywane do decyzji, czy meldunek surowy
     ma isc na Telegram: agenci raportujacy sami nie potrzebuja drugiej wiadomosci."""
@@ -204,10 +224,12 @@ def _callback(job, payload: dict):
         db.execute(
             """INSERT INTO agent_messages (from_agent_id, to_agent_id, message_type, payload, status, correlation_id)
                VALUES ((SELECT agent_id FROM agent_registry WHERE agent_name='researcher'), %s, 'response', %s, 'unread', %s)""",
-            (job.get("requesting_agent_id"), Jsonb(payload), job.get("callback_url")),
+            (job.get("requesting_agent_id"), Jsonb(_json_safe(payload)), job.get("callback_url")),
         )
     except Exception:
+        # Cichy blad tutaj = job gotowy, o ktorym nikt sie nie dowie. Meldujemy go glosno.
         traceback.print_exc()
+        _escalate(f"callback nie zapisal sie do agent_messages dla joba {job.get('job_id')}")
     opts = payload.get("options") or []
     # ZRODLO awarii 24/07 ("sequence item 0: expected str instance, NoneType found"): opcje maja
     # dwa ksztalty - swieze z modelu klucz 'label', z cache klucz 'option_label' (nazwa kolumny).

@@ -64,6 +64,11 @@ class CacheLayer:
             (job_id,),
         )
         src = db.fetchone("SELECT confidence_score FROM research_jobs WHERE job_id=%s", (job_id,))
+        # confidence_score to NUMERIC -> Decimal w Pythonie, a Decimal NIE serializuje sie do JSON.
+        # Trafialo do payloadu meldunku i wywracalo INSERT do agent_messages (cicho, bo wyjatek
+        # byl polykany) - job konczyl sie 'completed', a nikt sie o tym nie dowiadywal.
+        # Dowod: joby 91d8b597 i b55a9f58 z 24/07 (0 s, 11 claims, ZERO meldunkow).
+        _conf = (src or {}).get("confidence_score")
         return {
             "job_id": str(job_id),
             "cached": True,
@@ -78,5 +83,5 @@ class CacheLayer:
                 }
                 for c in claims
             ],
-            "confidence": (src or {}).get("confidence_score"),
+            "confidence": float(_conf) if _conf is not None else None,
         }

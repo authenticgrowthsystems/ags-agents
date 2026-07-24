@@ -107,6 +107,14 @@ ISO; retap = wyzerowanie klucza, ksztalt sprawdz w `sunday_brief._state_set`).
   zrodlowego joba), a `_callback` czyta `label` LUB `option_label`. Wczesniej job z cache byl
   'completed' z zerem faktow i Sprzedawca pokazywal "job bez claims" - research formalnie
   gotowy, praktycznie bezuzyteczny. Dowod objawu: job 4c391774 (StandART, 24/07 09:01).
+- REGRESJA 24/07 (wprowadzona i naprawiona tego samego dnia): do payloadu meldunku wszedl
+  `overall_confidence` czytany z `research_jobs.confidence_score` (NUMERIC), czyli `Decimal`.
+  `Decimal` nie serializuje sie do JSON, wiec INSERT do `agent_messages` leci wyjatkiem,
+  wyjatek byl POLYKANY, a job konczyl sie `completed` bez powiadomienia kogokolwiek.
+  Dowod: joby 91d8b597 i b55a9f58 (0 s, 11 claims, ZERO meldunkow). Fix dwuwarstwowy:
+  `_json_safe()` sanityzuje CALY payload (Decimal -> float, daty -> ISO, reszta -> str),
+  a nieudany zapis meldunku eskaluje zamiast milczec. **Lekcja: cichy `except` na sciezce
+  powiadamiania zamienia awarie w niewidzialna cisze.**
 - MELDUNEK SUROWY (Telegram z `_callback`): NIE idzie, gdy zleceniodawca to `sales-agent` -
   Sprzedawca wysyla wlasna karte prospekta, wiec Tomasz dostawal dwie wiadomosci, a pierwsza
   nie mowila nawet, ktorej firmy dotyczy (trzy zlecenia = trzy nierozroznialne meldunki).
