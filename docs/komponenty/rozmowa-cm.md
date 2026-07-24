@@ -148,6 +148,28 @@ propozycje (stara sciezka); 'odpowiedz na ten DM' = `subagent_reply_dm`
   + kontakt w CRM (stub dla nowych); wizja klasyfikuje has_notifications i
   actions per osoba. Zero LLM przy zapisie.
 
+## Kto mowi + priorytet powiadomien (UI 24/07)
+
+Decyzja Tomasza 24/07: **zostajemy przy jednym bocie**, osobne interfejsy telegramowe dla
+wszystkich agentow budujemy docelowo, gdy mozg bedzie gotowy (kanon WARSTWY: interfejs jest
+wymienny, wiec to zmiana odwracalna). Do tego czasu jeden bot udaje wielu agentow
+przelacznikiem `/agents`, wiec interfejs musi mowic, kto odpowiada.
+
+- **Badge agenta** (`conversation._agent_badge`): kazda odpowiedz W ROZMOWIE zaczyna sie od
+  znacznika (🗂 CM, 💼 Sprzedaz, 🐦 X, 🔗 LinkedIn, 💡 Idea Bot). Po przerwie dluzszej niz
+  2 h badge jest rozszerzony o "(aktywny; /agents aby zmienic)" - wtedy najlatwiej napisac
+  do agenta zostawionego aktywnym wczoraj.
+- Kontekst badge'a ustawia `handle()`; jest zwiazany z CZATEM i wygasa po 120 s (`_CTX_TTL_S`).
+  Watki HTTP sa wspoldzielone, wiec bez tego karta wyslana z innego endpointu odziedziczylaby
+  naglowek cudzej rozmowy.
+- Komunikaty TLA (karty, raporty, przypomnienia) badge'a NIE dostaja - maja wlasne naglowki.
+  Celowe rozroznienie: badge = mowi do Ciebie agent, brak badge = system.
+- **Ciche powiadomienia:** log-bot (#2) wysyla domyslnie z `disable_notification` - to strumien
+  do czytania, nie do wybudzania (`logbot.send(text, silent=False)` gdy ma zawibrowac).
+  Niedzielne przypomnienie o materialach wybudza TYLKO za pierwszym razem danego dnia;
+  powtorki co 15 min ida cicho. Dwadziescia wibracji tej samej prosby uczy ignorowac bota,
+  a wtedy przestaje dzialac takze przy rzeczy pilnej.
+
 ## Znane pulapki
 
 - Klasa incydentow "Zrobione"/"Zapisane" bez wywolania narzedzia (19-20/07):

@@ -120,9 +120,57 @@ def _send_rendered(chat_id, text, message_id=None):
     return _tg("sendMessage", payload)
 
 
+# ---------------- kto mowi (UI 24/07, decyzja Tomasza: jeden bot, wyrazniejszy interfejs) ----------------
+# Docelowo kazdy agent dostanie WLASNEGO bota (kanon WARSTWY: interfejs jest wymienny) - do tego
+# czasu jeden bot udaje wielu agentow przelacznikiem /agents. Bez oznaczenia nie widac, kto
+# odpowiada, i latwo napisac do zlego agenta. Kontekst ustawia handle() na czas jednej wiadomosci.
+_ctx = {}  # {chat_id: (agent, verbose, monotonic_ts)} - kontekst JEDNEJ obslugiwanej wiadomosci
+_CTX_TTL_S = 120
+
+_AGENT_BADGES = {
+    "cm": "🗂 CM",
+    "idea": "💡 Idea Bot",
+    "subagent:AGS:sprzedaz": "💼 Sprzedaz",
+    "subagent:AGS:x": "🐦 X",
+    "subagent:AGS:linkedin": "🔗 LinkedIn",
+}
+
+
+def set_agent_ctx(chat_id, agent, verbose=False):
+    _ctx[int(chat_id)] = (agent or "", bool(verbose), time.monotonic())
+
+
+def clear_agent_ctx(chat_id):
+    _ctx.pop(int(chat_id), None)
+
+
+def _agent_badge(chat_id):
+    """Naglowek 'kto mowi' dla odpowiedzi W ROZMOWIE. Komunikaty tla (karty, raporty,
+    przypomnienia) maja wlasne naglowki i kontekstu nie widza - to celowe rozroznienie:
+    badge = mowi do Ciebie agent, brak badge = system.
+
+    Kontekst jest zwiazany z CZATEM i wygasa po _CTX_TTL_S: watki HTTP sa wspoldzielone, wiec
+    karta wyslana z innego endpointu nie moze odziedziczyc naglowka poprzedniej rozmowy."""
+    try:
+        agent, verbose, ts = _ctx.get(int(chat_id)) or ("", False, 0.0)
+    except Exception:
+        return ""
+    if not agent or (time.monotonic() - ts) > _CTX_TTL_S:
+        return ""
+    label = _AGENT_BADGES.get(agent)
+    if not label and agent.startswith("subagent:"):
+        label = "🤖 " + agent.split(":")[-1]
+    if not label:
+        return ""
+    return f"{label} (aktywny; /agents aby zmienic)\n" if verbose else f"{label}\n"
+
+
 def _reply(chat_id, text, placeholder_id=None):
     """Send a reply; the first chunk edits the '⏳' placeholder when we have one (live-stream pattern)."""
     parts = _split(text)
+    badge = _agent_badge(chat_id)
+    if badge and parts:
+        parts[0] = badge + parts[0]
     if placeholder_id:
         _send_rendered(chat_id, parts[0], message_id=placeholder_id)
         parts = parts[1:]
@@ -2991,9 +3039,21 @@ def handle(update):
         if not text or _seen(update.get("update_id")):
             return
         active = str(update.get("active_agent") or "").strip()
+        row = db.fetchone("SELECT active_agent, updated_at FROM user_agent_state WHERE chat_id=%s",
+                          (chat_id,))
         if not active:
-            row = db.fetchone("SELECT active_agent FROM user_agent_state WHERE chat_id=%s", (chat_id,))
             active = (row or {}).get("active_agent") or "cm"
+        # Badge "kto mowi" na czas tej wiadomosci. Wersja rozszerzona (z podpowiedzia /agents),
+        # gdy wracasz do rozmowy po dluzszej przerwie - wtedy najlatwiej napisac do agenta,
+        # ktorego zostawiles aktywnym wczoraj.
+        _ost = (row or {}).get("updated_at")
+        _przerwa = True
+        try:
+            if _ost:
+                _przerwa = (datetime.datetime.now(datetime.timezone.utc) - _ost).total_seconds() > 7200
+        except Exception:
+            _przerwa = False
+        set_agent_ctx(chat_id, active, verbose=_przerwa)
         # 22/07 (skrot intencji v2): swiezy slad ostatniej wypowiedzi uzytkownika ze stemplem
         # czasu - historia watku nie ma stempli i stara komenda potrafila odpalic sie przy
         # nowej wrzutce. Zapis dla KAZDEJ wiadomosci tekstowej, przed routingiem.

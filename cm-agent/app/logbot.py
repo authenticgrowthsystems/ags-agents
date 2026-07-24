@@ -18,15 +18,21 @@ def _admin_chat_id():
     return None
 
 
-def send(text):
-    """Fire-and-forget log line to bot #2. Returns True if sent."""
+def send(text, silent=True):
+    """Fire-and-forget log line to bot #2. Returns True if sent.
+
+    silent=True DOMYSLNIE (UI 24/07, decyzja Tomasza o jednym bocie + wyrazniejszym interfejsie):
+    to jest strumien LOGU - raporty dzienne, meldunki publikacji, kontrola driftu o 03:00.
+    Ma byc do przeczytania, nie do wybudzania; rzeczy pilne ida glownym botem. Wywolaj
+    z silent=False, gdy wpis logu ma zawibrowac (awaria wymagajaca reakcji teraz)."""
     tok = config.LOG_BOT_TOKEN
     chat = _admin_chat_id()
     if not tok or not chat:
         return False
     try:
         httpx.post(f"https://api.telegram.org/bot{tok}/sendMessage",
-                   json={"chat_id": chat, "text": text[:4096], "disable_web_page_preview": True},
+                   json={"chat_id": chat, "text": text[:4096], "disable_web_page_preview": True,
+                         "disable_notification": bool(silent)},
                    timeout=15)
         return True
     except Exception:

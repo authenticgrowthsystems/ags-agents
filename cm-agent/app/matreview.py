@@ -990,10 +990,14 @@ def sunday_guard():
             chat = _admin_chat()
             if chat:
                 kb = {"inline_keyboard": [[{"text": f"🔍 Przegladaj ({n})", "callback_data": "matnav:first:-"}]]}
+                # UI 24/07: PIERWSZE przypomnienie dnia wybudza, powtorki (co 15 min do 23:00)
+                # przychodza cicho. Dwadziescia wibracji tej samej prosby uczy ignorowac bota,
+                # a wtedy przestaje dzialac takze wtedy, gdy naprawde cos pilnego.
                 _tg("sendMessage", {"chat_id": chat,
                                     "text": f"⏰ Sprawdz i zatwierdz: {n} materialow czeka na decyzje. "
                                             f"O {FALLBACK_AT[0]}:00 wybiore material na poniedzialek sam.",
-                                    "reply_markup": kb})
+                                    "reply_markup": kb,
+                                    "disable_notification": last is not None})
             _state_set("cm_sunday_remind", {"date": today, "last": now.isoformat()})
         return
 
