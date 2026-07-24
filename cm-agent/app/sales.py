@@ -24,7 +24,7 @@ import traceback
 
 import httpx
 
-from . import db, config, tasks, research, content_memory
+from . import db, config, tasks, research, content_memory, compliance
 from .brand import load_brand
 from .generate import client
 from zoneinfo import ZoneInfo
@@ -451,6 +451,48 @@ def _identity_hint(row):
     return head[:200] or None
 
 
+def _city_from_notes(pipe):
+    """Miasto z pierwszej linii kartoteki ("Szkola tanca, Dobrzykowice. Kontakt: ...")."""
+    m = re.match(r"[^,]{0,60},\s*([^.,;]{3,40})", _identity_hint(pipe) or "")
+    return m.group(1).strip() if m else None
+
+
+def _identity_verdict(pipe, job_id, summary=""):
+    """Bramka tozsamosci LICZONA Z DOWODOW, nie z posluszenstwa modelu. Tap-test 24/07 pokazal,
+    ze model potrafi zignorowac kontrakt pierwszej linii, wiec bramka oparta na jego deklaracji
+    jest bramka tylko z nazwy. Reguly:
+    - prospekt z domena: domena musi wystapic w zrodlach researchu albo w tresci claims,
+    - prospekt bez domeny: miasto z kartoteki musi wystapic w claims,
+    - nie ma czym potwierdzic = niepotwierdzone (bezpieczna strona: outreach do zlej firmy
+      kosztuje wiarygodnosc, falszywy alarm kosztuje jedno spojrzenie Tomasza).
+    Jawne "TOZSAMOSC: niepewna" od modelu przewaza zawsze - widzial cos, czego my nie mierzymy."""
+    if re.search(r"TOZSAMOSC:\s*niepewn", summary or "", re.IGNORECASE):
+        return False, "model zglosil niepewnosc"
+    if not job_id:
+        return False, "brak joba researchu"
+    host = re.sub(r"^https?://(www\.)?", "", (pipe or {}).get("prospect_url") or "").split("/")[0].strip()
+    try:
+        if host:
+            r = db.fetchone(
+                """SELECT (EXISTS (SELECT 1 FROM evidence_items e
+                                   JOIN research_runs rr ON rr.run_id = e.run_id
+                                   WHERE rr.job_id=%s AND e.source_url ILIKE %s)
+                        OR EXISTS (SELECT 1 FROM claims c
+                                   WHERE c.job_id=%s AND c.claim_text ILIKE %s)) AS ok""",
+                (job_id, f"%{host}%", job_id, f"%{host}%"))
+            return bool((r or {}).get("ok")), f"domena {host}"
+        miasto = _city_from_notes(pipe)
+        if miasto:
+            r = db.fetchone(
+                "SELECT EXISTS (SELECT 1 FROM claims c WHERE c.job_id=%s AND c.claim_text ILIKE %s) AS ok",
+                (job_id, f"%{miasto}%"))
+            return bool((r or {}).get("ok")), f"miasto {miasto}"
+    except Exception:
+        traceback.print_exc()
+        return False, "sonda tozsamosci padla"
+    return False, "kartoteka bez domeny i miasta"
+
+
 def _research_query(name, url, hint=None):
     return (
         f"Prospect research dla sprzedazy B2B (AGS - systemy retencji klientow i agenty AI "
@@ -586,10 +628,13 @@ def _draft_outreach(inp, chat_id):
     draft = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
     if not draft:
         return "Nie wyszlo - sprobuj jeszcze raz (model nie zwrocil tresci)."
+    draft = compliance.fix_dashes(draft)  # RULE 1 kanonu marki dziala TAKZE na tekstach do klienta
     # gotowiec: naglowek + CZYSTA WKLEJKA osobna wiadomoscia (kanon comment-radar)
     # Bramka tozsamosci: marker z podsumowania researchu zyje w notatkach lejka. Nie blokujemy
     # pisania (decyduje Tomasz), ale gotowiec ma jechac z ostrzezeniem, nie po cichu.
-    watpliwa = "tozsamosc: niepewn" in (row.get("notes") or "").lower()
+    # Liczy sie OSTATNI marker - po ponownym researchu ze strona werdykt sie zmienia.
+    _markery = re.findall(r"TOZSAMOSC:\s*(potwierdzona|niepewna)", row.get("notes") or "", re.IGNORECASE)
+    watpliwa = bool(_markery) and _markery[-1].lower().startswith("niepewn")
     _tg_send(chat_id, f"🧾 OUTREACH DO WYSLANIA RECZNIE - {channel} - {row['prospect_name'][:80]}\n"
                       + ("⚠️ RESEARCH NIE POTWIERDZIL TOZSAMOSCI TEJ FIRMY - zweryfikuj adresata "
                          "PRZED wyslaniem.\n" if watpliwa else "")
@@ -1081,22 +1126,24 @@ def tick():
                                    f"claims (job {str(job_id)[:8] if job_id else '?'}). Sprawdz job "
                                    f"albo zlec ponownie.")
                 continue
-            summary = _summarize_research(name, grounding)
-            # Bramka tozsamosci: przy niepewnym podmiocie nastepnym ruchem NIE jest outreach.
+            summary = compliance.fix_dashes(_summarize_research(name, grounding))  # kanon marki: zero em dash
+            # Bramka tozsamosci: przy niepotwierdzonym podmiocie nastepnym ruchem NIE jest outreach.
             # Wysylka do firmy, ktorej research nie potwierdzil, kosztuje wiarygodnosc, nie tokeny.
-            niepewna = bool(re.match(r"\s*TOZSAMOSC:\s*niepewn", summary, re.IGNORECASE))
+            potwierdzona, powod = _identity_verdict(pipe, job_id, summary)
             nastepny = (
-                f"⚠️ TOZSAMOSC NIEPOTWIERDZONA. Nastepny ruch: NIE pisz outreachu. Podaj strone "
-                f"i zlec ponownie: /prospect {name[:40]} <adres strony>. Jesli firma nie ma "
-                f"strony, potwierdz ja telefonem albo profilem spolecznosciowym."
-                if niepewna else
-                f"Nastepny ruch: przelacz /agents na Sprzedawce i powiedz np. "
-                f"'napisz outreach do {name[:40]}'.")
+                f"✅ Tozsamosc potwierdzona ({powod} w dowodach). Nastepny ruch: przelacz /agents "
+                f"na Sprzedawce i powiedz np. 'napisz outreach do {name[:40]}'."
+                if potwierdzona else
+                f"⚠️ TOZSAMOSC NIEPOTWIERDZONA ({powod}). Nastepny ruch: NIE pisz outreachu. "
+                f"Podaj strone i zlec ponownie: /prospect {name[:40]} <adres strony>. Jesli firma "
+                f"nie ma strony, potwierdz ja telefonem albo profilem spolecznosciowym.")
             text = f"🔍 RESEARCH PROSPEKTA GOTOWY: {name}\n\n{summary}\n\n{nastepny}"
             if chat:
                 _tg_send(chat, text)
             if pipe:
-                _append_notes(pipe["id"], f"research gotowy:\n{summary[:1200]}")
+                # marker w notatkach niesie werdykt dalej (czyta go _draft_outreach)
+                stan = "potwierdzona" if potwierdzona else "niepewna"
+                _append_notes(pipe["id"], f"research gotowy [TOZSAMOSC: {stan}]:\n{summary[:1200]}")
         except Exception:
             traceback.print_exc()
 
