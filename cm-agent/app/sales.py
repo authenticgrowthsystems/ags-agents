@@ -673,6 +673,79 @@ def _voice_for_outreach(brand):
     return "\n\n".join(parts)[:_VOICE_MAX]
 
 
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+# telefon PL: opcjonalny +48, potem 9 cyfr w typowym grupowaniu. NIP-y (10 cyfr) i daty odpadaja.
+_PHONE_RE = re.compile(r"(?<![\d-])(?:\+48[\s-]?)?(?:\d{3}[\s-]?\d{3}[\s-]?\d{3})(?![\d-])")
+
+
+def _kontakt_prospekta(row):
+    """Dane do naglowka gotowca: kto i pod jakim adresem. Zrodla po kolei: kartoteka CRM
+    (contacts), notatki lejka, claims z researchu. Deterministycznie, bez LLM - to ma byc
+    dowod do zrewidowania w dwie sekundy, nie kolejna generacja.
+
+    Czego NIE MA, mowimy wprost: research StandART 24/07 nie znalazl osoby decyzyjnej ani
+    telefonu, wiec naglowek musi to pokazac zamiast udawac komplet."""
+    osoba, mail, tel = None, None, None
+    if row.get("contact_id"):
+        try:
+            c = db.fetchone("SELECT name FROM contacts WHERE contact_id=%s", (row["contact_id"],))
+            osoba = (c or {}).get("name")
+        except Exception:
+            traceback.print_exc()
+    zrodla = [row.get("notes") or ""]
+    if row.get("research_job_id"):
+        try:
+            for c in db.fetchall("SELECT claim_text FROM claims WHERE job_id=%s LIMIT 20",
+                                 (row["research_job_id"],)):
+                zrodla.append(c.get("claim_text") or "")
+        except Exception:
+            traceback.print_exc()
+    for tekst in zrodla:
+        if not mail:
+            m = _EMAIL_RE.search(tekst)
+            mail = m.group(0) if m else None
+        if not tel:
+            t = _PHONE_RE.search(tekst)
+            tel = t.group(0).strip() if t else None
+    return osoba, mail, tel
+
+
+def _outreach_naglowek(row, channel, ostrzezenie=""):
+    """Naglowek gotowca: do kogo to leci i czym to zweryfikowac."""
+    osoba, mail, tel = _kontakt_prospekta(row)
+    linie = [f"🧾 OUTREACH DO WYSLANIA RECZNIE - {channel} - {row['prospect_name'][:80]}",
+             f"👤 Osoba decyzyjna: {osoba or '(nieustalona - research jej nie znalazl)'}",
+             f"✉️ Mail: {mail or '(brak w danych)'}    ☎️ Telefon: {tel or '(brak w danych)'}"]
+    if row.get("prospect_url"):
+        linie.append(f"🔗 {row['prospect_url']}")
+    if ostrzezenie:
+        linie.append(ostrzezenie.rstrip())
+    linie.append("(ponizej czysta wklejka; NIC nie wysyla sie samo)")
+    return "\n".join(linie)
+
+
+def _outreach_stopka(row):
+    """Stopka gotowca: gdzie jestesmy w lejku i ktory to kontakt. Liczba wczesniejszych
+    gotowcow idzie z engagement_log, nie z pamieci modelu."""
+    try:
+        r = db.fetchone(
+            """SELECT COUNT(*) AS wszystkie,
+                      COUNT(*) FILTER (WHERE status='sent') AS wyslane
+               FROM engagement_log
+               WHERE agent='AGS:sprzedaz' AND content ILIKE %s""",
+            (f"%{(row.get('prospect_name') or '')[:60]}%",))
+    except Exception:
+        traceback.print_exc()
+        r = None
+    wczesniejsze = int((r or {}).get("wszystkie") or 0)
+    wyslane = int((r or {}).get("wyslane") or 0)
+    ktory = "PIERWSZY kontakt" if wczesniejsze <= 1 else f"kolejny kontakt ({wyslane} wyslanych wczesniej)"
+    nast = row.get("next_followup_at")
+    return ("📊 Lejek: etap " + str(row.get("stage") or "?") + " | " + ktory
+            + (" | follow-up: " + nast.astimezone(WARSAW).strftime("%d/%m %H:%M") if nast else "")
+            + "\n⏭ Po wyslaniu napisz \"wyslalem\" - przesune etap i ustawie follow-up.")
+
+
 def _outreach_examples(limit=3):
     """Wiadomosci, ktore Tomasz NAPRAWDE wyslal (material_type='outreach_example', wrzucane przez
     /add_sales_material z podpowiedzia 'wzorzec'). Model pisze OD NICH, nie od teorii - to jest
@@ -749,10 +822,9 @@ def _draft_outreach(inp, chat_id):
                     "wyslaniem.\n" if _stan == "niepotwierdzona"
                     else "⚠️ Podmiot potwierdzony dowodami, ale research zglosil zastrzezenie - "
                          "sprawdz je przed wyslaniem.\n" if _stan == "z zastrzezeniem" else "")
-    _tg_send(chat_id, f"🧾 OUTREACH DO WYSLANIA RECZNIE - {channel} - {row['prospect_name'][:80]}\n"
-                      + _ostrzezenie
-                      + f"(ponizej czysta wklejka; NIC nie wysyla sie samo)")
+    _tg_send(chat_id, _outreach_naglowek(row, channel, _ostrzezenie))
     _tg_send(chat_id, draft)
+    _tg_send(chat_id, _outreach_stopka(row))
     try:
         db.execute(
             """INSERT INTO engagement_log (action_type, channel, agent, content, response, notes,

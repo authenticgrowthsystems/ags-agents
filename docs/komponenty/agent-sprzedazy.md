@@ -180,6 +180,22 @@ ilustracji, pozorowana personalizacja) i konczy sie testem podmiany nazwy firmy.
 `/add_sales_material` z podpowiedzia "wzorzec"). `_outreach_examples()` wkleja do 3
 ostatnich DOSLOWNIE do promptu - model pisze od zdan Tomasza, nie od teorii.
 
+## Naglowek i stopka gotowca (24/07, feedback Tomasza)
+
+Gotowiec idzie TRZEMA wiadomosciami, zeby dalo sie go zrewidowac bez otwierania bazy:
+
+1. **Naglowek** (`_outreach_naglowek`): kanal, nazwa prospekta, osoba decyzyjna, mail, telefon,
+   strona, ewentualne ostrzezenie o tozsamosci. Dane leca z kartoteki CRM (contacts po
+   `contact_id`), notatek lejka i claims researchu - regexem, bez LLM. Czego nie ma, jest
+   napisane wprost ("(nieustalona - research jej nie znalazl)"), bo pusty naglowek klamie
+   mniej niz zgadniety. Regex telefonu odrzuca NIP i REGON (zweryfikowane na probkach).
+2. **Czysta wklejka** - sam tekst, bez ozdobnikow, do skopiowania.
+3. **Stopka** (`_outreach_stopka`): etap lejka, ktory to kontakt (pierwszy czy kolejny - liczone
+   z engagement_log, nie z pamieci modelu), termin follow-upu i instrukcja "napisz wyslalem".
+
+Docelowo dane kontaktowe maja przyjsc z CRM zamiast z regexa - brief:
+`docs/briefs/BRIEF_POCZTA_I_CRM_GHL_24072026.md`.
+
 ## Znane pulapki
 
 - Wiersz channels 'sprzedaz' pojawia sie w menu ⚙️ Cele (n8n) - NIE wlaczac go jako celu
