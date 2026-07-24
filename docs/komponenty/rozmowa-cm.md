@@ -148,6 +148,31 @@ propozycje (stara sciezka); 'odpowiedz na ten DM' = `subagent_reply_dm`
   + kontakt w CRM (stub dla nowych); wizja klasyfikuje has_notifications i
   actions per osoba. Zero LLM przy zapisie.
 
+## Prefiks adresujacy + meldunek dnia subagenta (24/07, po audycie)
+
+Audyt (docs/cm/AUDYT_SUBAGENCI_24072026.md) pokazal, ze rozmowa z subagentami byla ZBUDOWANA,
+ale nie miala wejscia do dnia Tomasza. Sonda: subagent X nie rozmawial od doby, LinkedIn od
+trzech dni, a CM i Sprzedawca codziennie. Przyczyna strukturalna: **aktywny agent to JEDEN
+slot na czat** - trzymal go Sprzedawca (kampania), wiec napisanie do X wymagalo porzucenia
+kampanii. Decyzja Tomasza 24/07: oba mechanizmy, prefiks najpierw.
+
+**1. Prefiks adresujacy (`conversation._PREFIKS_AGENTA_RE`).**
+`x: ...`, `li: ...` / `linkedin: ...`, `cm: ...`, `sprzedaz: ...` (+ aliasy tw/twitter/in/sp/
+sales/manager) kieruja JEDNA wiadomosc do wskazanego agenta i **nie zmieniaja** `active_agent`.
+Slot zostaje przy tym, z kim naprawde pracujesz; watek historii jest ten wlasciwy (per agent),
+badge pokazuje adresata. Dwukropek jest OBOWIAZKOWY, zeby "cm ma racje" ani "godzina 15:
+publikacja" nie zmienialy adresata - testy: `cm-agent/tests/test_subagenci.py`.
+
+**2. Meldunek dnia subagenta (`proactive.subagent_briefs`, okno 20:00-21:30, raz na dobe).**
+Kazdy supervised kanal (bez agent_kind='sales') pisze W GLOWNYM CZACIE, wlasnym badge'em,
+trzy rzeczy: co poszlo (z metrykami), co czeka (kolejka + najblizszy slot), czego potrzebuje
+(wiszace decyzje). Konczy zaproszeniem `x: <tresc>` / `li: <tresc>`. Deterministycznie, zero
+LLM. Pusta kolejka jest nazwana wprost ("to jest luka, nie sukces") - REGULA PRAWDY dziala
+takze przeciwko nam.
+Dlaczego w glownym czacie: raporty dzienne ida na bota logowego #2, ktory z zalozenia NIE
+wybudza, wiec caly dorobek subagentow docieral anonimowo i nie stawal sie rozmowa.
+Stan anty-spamowy: brand_config `cm_subagent_briefs` (data + licznik).
+
 ## Kto mowi + priorytet powiadomien (UI 24/07)
 
 Decyzja Tomasza 24/07: **zostajemy przy jednym bocie**, osobne interfejsy telegramowe dla

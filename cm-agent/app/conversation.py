@@ -2112,6 +2112,19 @@ def _screen_shots(images, channel):
         return None
 
 
+# Prefiks adresujacy agenta bez zmiany aktywnego slotu (audyt subagentow 24/07).
+# Dwukropek jest OBOWIAZKOWY, zeby zdanie zaczynajace sie od "cm ma racje" nie zmienialo adresata.
+_PREFIKS_AGENCI = {
+    "x": "subagent:AGS:x", "tw": "subagent:AGS:x", "twitter": "subagent:AGS:x",
+    "li": "subagent:AGS:linkedin", "linkedin": "subagent:AGS:linkedin", "in": "subagent:AGS:linkedin",
+    "cm": "cm", "manager": "cm",
+    "sp": "subagent:AGS:sprzedaz", "sprzedaz": "subagent:AGS:sprzedaz",
+    "sprzedaż": "subagent:AGS:sprzedaz", "sales": "subagent:AGS:sprzedaz",
+}
+_PREFIKS_AGENTA_RE = re.compile(
+    r"^\s*(" + "|".join(sorted(_PREFIKS_AGENCI, key=len, reverse=True)) + r")\s*:\s*(.+)$",
+    re.IGNORECASE | re.DOTALL)
+
 _ZRZUT_DO_SPRZEDAWCY_RE = re.compile(
     r"\b(skomentuj|odpowiedz|komentarz|zobacz|spojrz|spójrz|co\s+widzisz|przeczytaj)\b.*"
     r"\b(zrzut\w*|screen\w*|obraz\w*|ekran\w*|ostatni\w*)\b|^\s*(zrzut\w*|screen\w*)\s*$",
@@ -3100,6 +3113,17 @@ def handle(update):
         # Badge "kto mowi" na czas tej wiadomosci. Wersja rozszerzona (z podpowiedzia /agents),
         # gdy wracasz do rozmowy po dluzszej przerwie - wtedy najlatwiej napisac do agenta,
         # ktorego zostawiles aktywnym wczoraj.
+        # PREFIKS ADRESUJACY (24/07, po audycie subagentow - docs/cm/AUDYT_SUBAGENCI_24072026.md).
+        # Dowod problemu: aktywny agent to JEDEN slot na czat. Trzymal go Sprzedawca, wiec X nie
+        # rozmawial od doby, a LinkedIn od trzech dni - zeby napisac do nich, trzeba bylo porzucic
+        # kampanie sprzedazowa. Teraz 'x: ...', 'li: ...', 'cm: ...' idzie do WSKAZANEGO agenta
+        # i NIE rusza aktywnego: slot zostaje przy tym, z kim naprawde pracujesz.
+        m_pref = _PREFIKS_AGENTA_RE.match(text)
+        if m_pref:
+            cel = _PREFIKS_AGENCI.get(m_pref.group(1).lower())
+            reszta = (m_pref.group(2) or "").strip()
+            if cel and reszta:
+                active, text = cel, reszta
         _ost = (row or {}).get("updated_at")
         _przerwa = True
         try:

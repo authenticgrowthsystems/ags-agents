@@ -233,6 +233,76 @@ def morning_nudge(brand_id="AGS"):
     _state_set("cm_morning_nudge", {"date": today})
 
 
+BRIEF_WINDOW = (20, 0, 21, 30)   # meldunek dnia subagentow: wieczorem, po dziennej siatce slotow
+
+
+def subagent_briefs(brand_id="AGS"):
+    """MELDUNEK DNIA KAZDEGO SUBAGENTA w GLOWNYM czacie (24/07, po audycie subagentow).
+
+    Dowod potrzeby (sonda 24/07): subagent X nie rozmawial od doby, LinkedIn od trzech dni,
+    a CM i Sprzedawca codziennie. Caly dorobek subagentow szedl na bota logowego #2, ktory
+    z zalozenia NIE wybudza - wiec ich praca docierala anonimowo i nie stawala sie rozmowa.
+    Tu subagent mowi WLASNYM glosem, w czacie, w ktorym Tomasz naprawde pracuje, i konczy
+    zaproszeniem do odpowiedzi prefiksem (slot aktywnego agenta zostaje nietkniety).
+
+    Deterministycznie: zero LLM, trzy pytania - co poszlo, co czeka, czego trzeba."""
+    now = datetime.datetime.now(WARSAW)
+    minutes = now.hour * 60 + now.minute
+    h1, m1, h2, m2 = BRIEF_WINDOW
+    if not (h1 * 60 + m1 <= minutes <= h2 * 60 + m2):
+        return
+    today = now.strftime("%Y-%m-%d")
+    st = _state_get("cm_subagent_briefs")
+    if st.get("date") == today:
+        return
+    from . import conversation, crm, reports
+    kanaly = db.fetchall(
+        """SELECT channel FROM channels
+           WHERE brand_id=%s AND supervised AND status IN ('active','draft')
+             AND COALESCE(config->>'agent_kind','') <> 'sales'
+           ORDER BY channel""", (brand_id,))
+    wyslane = 0
+    for r in kanaly:
+        ch = r["channel"]
+        agent = f"subagent:{brand_id}:{ch}"
+        etykieta = conversation._AGENT_BADGES.get(agent, f"🤖 {ch}")
+        prefiks = _PREFIKS_DLA_KANALU.get(ch, ch)
+        pub = db.fetchall(
+            """SELECT content, engagement_metrics FROM published_posts
+               WHERE brand=%s AND platform=%s AND published_at > NOW() - interval '24 hours'
+               ORDER BY published_at""", (brand_id, ch))
+        kolejka = reports._queue_upcoming(brand_id, ch)
+        czeka = [q for q in kolejka if q.get("status") == "review"]
+        nast = next((q for q in kolejka if q.get("scheduled_for")), None)
+        wisi = crm.pending_text(brand_id, ch)
+        lines = [f"{etykieta} MELDUNEK DNIA ({now.strftime('%d/%m')})"]
+        if pub:
+            lines.append(f"Poszlo: {len(pub)} " + ("publikacja" if len(pub) == 1 else "publikacji")
+                         + f", metryki: {reports._fmt_metrics(reports._sum_metrics(pub))}")
+            najlepszy = max(pub, key=lambda p: reports._sum_metrics([p]).get("impressions") or 0)
+            lines.append(f"Najmocniejszy: {' '.join((najlepszy.get('content') or '').split())[:90]}")
+        else:
+            lines.append("Poszlo: nic w ostatnich 24h.")
+        if nast:
+            kiedy = nast["scheduled_for"].astimezone(WARSAW).strftime("%d/%m %H:%M")
+            lines.append(f"Czeka: {len(kolejka)} w kolejce, najblizszy slot {kiedy}"
+                         + (f"; {len(czeka)} do zatwierdzenia" if czeka else ""))
+        else:
+            lines.append(f"Czeka: {len(kolejka)} w kolejce, ZERO ze slotem"
+                         if kolejka else "Czeka: kolejka pusta - to jest luka, nie sukces.")
+        if wisi and not wisi.startswith("Nic nie wisi"):
+            lines.append("Potrzebuje decyzji: " + " ".join(wisi.split())[:180])
+        else:
+            lines.append("Potrzebuje decyzji: nic.")
+        lines.append(f"Odpisz mi jednym slowem: `{prefiks}: <tresc>` - nie zmieni to aktywnego agenta.")
+        if _send("\n".join(lines)):
+            wyslane += 1
+    _state_set("cm_subagent_briefs", {"date": today, "wyslane": wyslane})
+
+
+_PREFIKS_DLA_KANALU = {"x": "x", "linkedin": "li", "linkedin_page": "li"}
+
+
 DECIDE_TOOL = {
     "name": "emit_decision",
     "description": "Decyzja CM w sprawie propozycji subagenta.",
@@ -399,7 +469,8 @@ def _column_exists(table, col):
 
 def tick():
     """Wolane z petli workera (30s); wszystkie funkcje maja wlasne anty-spam stany."""
-    for fn in (check_gaps, morning_nudge, handle_agent_requests, weekly_metrics_reminder):
+    for fn in (check_gaps, morning_nudge, subagent_briefs, handle_agent_requests,
+               weekly_metrics_reminder):
         try:
             fn()
         except Exception:

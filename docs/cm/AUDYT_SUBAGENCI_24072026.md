@@ -131,13 +131,15 @@ Rezim stabilizacji mowi: na subagentach zero nowych funkcji bez decyzji. Dlatego
 sie propozycjami, nie kodem. Kolejnosc zmieniona po danych - najpierw to, co usuwa STRUKTURALNA
 przeszkode, potem to, co daje zaproszenie do rozmowy:
 
-1. **Adresowanie agenta bez przelaczania slotu** (usuwa przyczyne A). Prefiks w wiadomosci:
-   `x: ...`, `li: ...`, `cm: ...` idzie do wskazanego agenta i NIE zmienia aktywnego.
-   Sprzedawca zostaje w slocie przez cala kampanie, a content dostaje glos jednym slowem.
-   Zmiana w jednym miejscu (route w `conversation.handle`), zero DDL, odwracalna.
+1. **Adresowanie agenta bez przelaczania slotu** (usuwa przyczyne A). **WYKONANE 24/07**
+   (decyzja Tomasza guzikami: "oba, prefiks najpierw"). `x: ...`, `li: ...`, `cm: ...`,
+   `sprzedaz: ...` + aliasy; dwukropek obowiazkowy, `active_agent` nietkniety.
 2. **Meldunek dnia od KAZDEGO subagenta w glownym czacie, z badge'em** (zamiast albo obok
-   cichego raportu na bocie #2): trzy linie - co poszlo, co zarezonowalo, czego potrzebuje,
-   plus guzik "Odpisz". To zamienia raport w zaczepke do rozmowy.
+   cichego raportu na bocie #2). **WYKONANE 24/07**: `proactive.subagent_briefs`, okno
+   20:00-21:30, raz na dobe, trzy rzeczy (co poszlo z metrykami, co czeka, czego potrzebuje)
+   + zaproszenie do odpowiedzi prefiksem. Guzika "Odpisz" celowo NIE ma: nowa rodzina
+   callbackow wymagalaby zmiany w routerze n8n, a prefiks daje to samo jednym slowem
+   i bez ruszania transportu.
 3. **Prosba subagenta (CHANNEL_NEED) jako decyzja guzikami w glownym czacie**, nie linia
    w cichym strumieniu. Mechanizm juz jest (`decisions.ask`), brakuje przelaczenia toru.
    Uwaga: najpierw sprawdzic, DLACZEGO ta sciezka nie odpalila sie ani razu (przyczyna C) -
