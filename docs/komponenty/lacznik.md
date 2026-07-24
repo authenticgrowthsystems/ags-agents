@@ -14,7 +14,9 @@ Cztery klocki etapu 1:
    BEZ LLM -> engagement_log + contacts + inspirations -> POTWIERDZENIE z licznikami.
    Typy linii: komentarz, dm_wyslany, dm_odebrany, reakcja, zaproszenie (22/07,
    wsad LinkedIn: `- zaproszenie | @slug | wyslane/przyjete | notka`, bez bumpu
-   stadium), nowa_osoba, obserwacja.
+   stadium), nowa_osoba, obserwacja, **kpi_snapshot** (24/07, paczka #1 pkt 1:
+   `- kpi_snapshot | RRRR-MM-DD | wyswietlenia=1234 | reakcje=56 |
+   nowi_obserwujacy=7 | okres=7d` -> channel_kpi_snapshots, DDL 030).
 2. **/kontekst [x|linkedin|sprzedaz|all] (serwer -> czat, FALLBACK):** zwarty stan gry
    BEZ LLM - plan tygodnia, kolejka, publikacje z metrykami, kontakty w grze, otwarte
    decyzje, lejek, radar. Tekst do 4000 znakow albo plik .md.
@@ -44,6 +46,8 @@ KONIEC SESJI: czat drukuje [RAPORT PRACY v1] -> Tomasz wkleja do Telegrama
      -> nowa_osoba: contact (stub/istniejacy) + narration + engagement_log (logged)
         + JEDNA karta crm_tier per osoba/24h (dedup po agent_decisions, wzorzec INTAKE-UX)
      -> obserwacja: inspirations (source='raport_pracy') + engagement_log (logged, kopia hasha)
+     -> kpi_snapshot: channel_kpi_snapshots UPSERT z COALESCE (klucz brand+kanal+data+okres;
+        pola nieprzeslane zostaja NULL, nierozpoznane ida do raw) + engagement_log (logged)
   -> POTWIERDZENIE z licznikami ("zapisane: komentarze: 3, ... pominiete duplikaty: 1"
      + lista niezrozumianych linii - REGULA PRAWDY)
 STAN GRY: notion_worker._loop -> stan_gry.tick() (po kazdym drainie, <=60 s):
@@ -94,7 +98,11 @@ Transport, nie logika: parser, /kontekst, strona Notion i format raportu BEZ zmi
 ## Wejscia-wyjscia i tabele
 
 - `engagement_log`: wpisy z raportu (status wg typu: sent/logged; idempotencja
-  'sync:<hash>' w notes). ZERO nowych DDL.
+  'sync:<hash>' w notes). Etap 1 i 2: ZERO nowych DDL.
+- `channel_kpi_snapshots` (DDL 030, 24/07): liczby z panelu analitycznego, ktore czat
+  WIDZI, a serwer nie (LinkedIn do czasu App 2 CMA, X poza zakupionymi odczytami).
+  Odczyt wraca do czatu sekcja "METRYKI KANALU" w /lacznik/stan i /kontekst -
+  petla sie domyka bez pytania Tomasza o te same liczby drugi raz.
 - `contacts`: ensure_contact po clean_author (mechanizm INTAKE-UX); stadium wg akcji
   (komentarz->commented, dm_*->dm, tylko w przod).
 - `inspirations`: obserwacje radaru (source='raport_pracy', metadata.channel/date).
@@ -117,16 +125,26 @@ Transport, nie logika: parser, /kontekst, strona Notion i format raportu BEZ zmi
 - Przepustka n8n: `n8n-workflows/patches/hitl-kontekst-command-22072026.cjs`
   (deactivate+activate w skrypcie). Bez patcha /kontekst wpada do 'other' i ginie;
   wklejka RAPORTU dziala bez patcha (zwykly tekst).
-- Masterprompty czatowe: `docs/product/masterprompty-czat/` (aktualne: X_v3 +
-  LINKEDIN_AGS_v3 - rytualy przez narzedzia Lacznika, fallback Notion/plik;
-  starsze wersje zostaja jako historia).
+- Masterprompty czatowe: `docs/product/masterprompty-czat/` (aktualne: X_v3 (wersja
+  w pliku v3.1) + LINKEDIN_AGS_v3 (wersja w pliku v3.2) - rytualy przez narzedzia
+  Lacznika, fallback Notion/plik; starsze wersje zostaja jako historia).
+  Wsad 24/07 (paczka #1 pkt 1, 2, 7) w OBU plikach - parytet: sekcja WERYFIKACJA
+  TOZSAMOSCI CROSS-PLATFORM (zrzut profilu zamiast web_search; werdykt trzema
+  stanami jak bramka tozsamosci Sprzedawcy), sekcja REAKCJA NA EKSPORT ANALITYCZNY
+  (linia kpi_snapshot) i regula FAIL-CLOSED przed proponowaniem tieru
+  wykluczajacego z lejka. Po podmianie plikow Tomasz wkleja je do projektu czatowego
+  ponownie - inaczej czat pracuje na starej wersji.
 - Sekret Etapu 2: SQL z wyjscia skryptu tworzacego workflow (INSERT
   lacznik_e2_secret do app_secrets) - wykonuje Tomasz przez SSH przy wdrozeniu.
 
 ## Punkty zaczepienia w kodzie
 
 - `cm-agent/app/engagement.py`: `parse_work_report`, `apply_work_report`, `_line_hash`,
-  `_hash_seen`, `_report_insert`, `_report_tier_card`.
+  `_hash_seen`, `_report_insert`, `_report_tier_card`; KPI: `_kpi_fields`, `_kpi_date`,
+  `_kpi_num` (24/07).
+- `cm-agent/app/reports.py`: `_kontekst_kpi` (sekcja METRYKI KANALU w stanie gry).
+- `cm-agent/tests/test_paczka1.py`: testy lokalne parsera KPI i reguly fail-closed
+  (stdlib only, bez bazy - `python cm-agent/tests/test_paczka1.py`).
 - `cm-agent/app/conversation.py`: route `'[raport pracy' in text.lower()` + `_KONTEKST_RE`
   w `handle()` (PRZED sales.try_command i LLM).
 - `cm-agent/app/reports.py`: `kontekst_text(scope)`, `send_kontekst(chat_id, scope)`.

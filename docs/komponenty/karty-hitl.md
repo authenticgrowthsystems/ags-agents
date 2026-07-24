@@ -42,6 +42,13 @@ Dwa widoki decyzyjne w Telegramie:
 - Po KAZDEJ decyzji: paragon NOWA wiadomoscia + nastepna karta NOWA wiadomoscia
   NA DOLE czatu (card_bottom - koniec przewijania w gore).
 - Tryb reczny w approval pokazuje tekst-matke (canonical), nie pusty skrot.
+- ⚠️ INTERPUNKCJA (24/07, paczka #1 Managera pkt 8): dla marek polskojezycznych
+  (brand_id TNM / RDC) karta pokazuje miejsca, w ktorych prawdopodobnie brakuje
+  przecinka przed spojnikiem podrzednym (ze, zeby, ktory, gdy, jesli, bo).
+  To FLAGA dla czlowieka, nie blokada i nie automatyczna poprawka: heurystyka jest
+  deterministyczna (zero LLM, zero kosztu), liczona z PELNEJ tresci, max 3 fragmenty.
+  Poczatek zdania, istniejacy przecinek i zbitki typu "mimo ze" / "w ktorym" nie sa
+  zglaszane (`compliance.pl_comma_flags`, testy: cm-agent/tests/test_paczka1.py).
 
 ## Konfiguracja
 
@@ -51,7 +58,9 @@ Dwa widoki decyzyjne w Telegramie:
 
 ## Punkty zaczepienia w kodzie
 
-- `cm-agent/app/matreview.py`: `_card` (render karty, w tym linia ⚠️ DUPLIKACJA),
+- `cm-agent/app/compliance.py`: `pl_comma_flags` (heurystyka interpunkcji PL, flaga).
+- `cm-agent/app/matreview.py`: `_card` (render karty, w tym linie ⚠️ DUPLIKACJA
+  i ⚠️ INTERPUNKCJA),
   `send_review_card`, `handle` (callbacki matnav, akcje ok/no/okq/fulltext),
   `send_intake_buttons`, `apply_edit`, `apply_angle_guidance`,
   `_distill_style_rules`, `log_learning`, `_tg_send_document`,

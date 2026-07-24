@@ -52,13 +52,28 @@ cmt:ok (LEGACY, stare karty sprzed 21/07) -> status='approved' + task_queue 'com
   ozywia relacje - bump traktuje ghosted jak cold),
   `icp_tier` CHECK poszerzony o doktryne #71 (Buyer/Peer/Competitor/Partner) obok legacy
   (Premium/Mid/Free/Watch/N/A). Stub: name, source='Comment', status='Cold', stage='cold'.
+  Kolumna `who_is_who` JSONB (db/030, 24/07): kto jest kim PO STRONIE KLIENTA
+  ({"role","influence_level","relationship_stage","source_of_data","notes"}). `handles`
+  to tozsamosc per KANAL, `who_is_who` to pozycja czlowieka w ORGANIZACJI. Czyta ja
+  `crm.relation_context`, wiec rola i wplyw widac w naglowku propozycji i gotowca.
+  Pisze ja dzis Sales Manager L1 z czatu (przez SQL Tomasza) - automatyczny zapis
+  z raportu pracy to otwarty punkt do decyzji Managera.
 - `engagement_log`: propozycja per autor; `contact_id` FK (od 001, teraz FAKTYCZNIE
   wypelniane), `status` cyklu zycia (db/026): proposed -> approved/rejected -> sent/skipped
   (logged = wpisy historyczne), `author_display`. Decyzje NIE zyja juz tylko w notes.
+  Od 24/07 log jest TAKZE zrodlem historii DM dla reguly FAIL-CLOSED (indeks
+  idx_eng_log_contact_action; marker `[DM]` w notes zostawiaja obie sciezki: propozycja
+  subagenta i linia dm_* z RAPORTU PRACY).
 - `task_queue` (task_type='comment'): payload + author + contact_id; pending -> gotowiec
   -> in_progress -> done/failed.
 - `agent_decisions` (przez decisions.ask): typy `crm_tier` (Buyer/Peer/Competitor/Partner;
-  B3 21/07: JEDNA decyzja per osoba w 24h - dubel = nota zamiast drugiego pytania),
+  B3 21/07: JEDNA decyzja per osoba w 24h - dubel = nota zamiast drugiego pytania;
+  24/07 FAIL-CLOSED: tier WYKLUCZAJACY z lejka (Competitor / out_of_icp) nie dostaje
+  rekomendacji, gdy z czlowiekiem byla juz rozmowa - liczone z engagement_log, nie
+  z opinii modelu. Skutek uboczny jest celowy: `decisions.ask` bez rekomendacji NIE
+  podejmuje decyzji sam nawet w trybie semi_autonomous, wiec wykluczenie zawsze
+  przechodzi przez Tomasza. Karta niesie dowod: ile wpisow DM, kiedy ostatni,
+  jakie stadium. `context.fail_closed=true` zostaje w wierszu decyzji),
   `stale_comment` ([Wyslalem][Pomin][Pokaz jeszcze raz]), `stale_comment_task`
   ([Tak, odhacz][Nie, pomin]), `photo_group` (jeden post / rozne; context.menu=true gdy
   z trasy wrzutki), **`intent_menu`** (INTAKE-UX 21/07: watek wrzutki jako OBIEKT -
@@ -80,7 +95,9 @@ do nowych kolumn), patch n8n `n8n-workflows/patches/hitl-photo-mediagroup-200720
 ## Punkty zaczepienia w kodzie
 
 - `cm-agent/app/crm.py`: `find_contact`/`ensure_contact` (stub; match takze po nazwie
-  oczyszczonej `clean_author` - B3), `relation_context`, `bump_stage` (tylko w przod),
+  oczyszczonej `clean_author` - B3), `relation_context` (od 24/07 pokazuje role i wplyw
+  z `who_is_who`), `dm_history`/`fail_closed_note` (24/07, pkt 7 paczki #1),
+  `bump_stage` (tylko w przod),
   `arm_intake`/`get_intake`/`clear_intake`, `intake_recently_offered`/`mark_intake_offered`
   (strażnik karty 24h), `process_profile_photo` (z dedupem decyzji crm_tier 24h),
   `apply_tier`, `pending_text` ("co wisi?").

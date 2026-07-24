@@ -191,6 +191,49 @@ UWAGA dlug: contacts ma ZDUBLOWANE kolumny (name/full_name, icp_tier/tier, pain_
 pain_points...) - konsolidacja PRZED pelnym agentem CRM to osobna decyzja (audyt 04/07 pkt 3),
 026 celowo jej NIE dotyka.
 
+## channel_kpi_snapshots (DDL 030, paczka #1 Managera pkt 1, 24/07/2026)
+
+Metryki poziomu KANALU przepisane z panelu analitycznego przez czat na abonamencie
+(Lacznik, linia `kpi_snapshot` w RAPORCIE PRACY -> parser bez LLM). Komponent:
+docs/komponenty/lacznik.md. DDL: cm-agent/db/030_kpi_whoiswho.sql.
+
+DLACZEGO OSOBNA TABELA obok channel_metrics_daily (023): tamta ma klucz
+(brand, kanal, DATA) i zna wylacznie serie DZIENNE z importu xlsx/API. Tu wchodza
+takze okresy zbiorcze (7d/28d/90d) przepisane recznie - suma tygodniowa wpisana
+w wiersz dzienny zafalszowalaby istniejaca serie.
+
+| kolumna | typ | uwagi |
+|---|---|---|
+| brand_id, channel | VARCHAR | 'AGS' + 'x'/'linkedin' (kanal z naglowka raportu) |
+| metric_date | DATE | dla okresu zbiorczego = KONIEC okresu |
+| period | VARCHAR(10) CHECK | dzien (domyslnie) / 7d / 28d / 90d |
+| impressions, reactions, new_followers, followers_total, profile_views | INT | pole nieprzeslane zostaje NULL - NIGDY nie wpisujemy zera "na oko" |
+| source | VARCHAR(30) CHECK | raport_pracy / xlsx / api / reczny |
+| raw | JSONB | surowa linia + pola nierozpoznane przez parser (nic nie ginie po cichu) |
+| created_at, updated_at | TIMESTAMPTZ | UPSERT aktualizuje updated_at |
+
+UNIQUE (brand_id, channel, metric_date, period); indeks idx_kpi_snap_lookup.
+UPSERT z COALESCE: powtorna linia o tej samej dacie NADPISUJE tylko pola, ktore
+przyszly (korekta mozliwa, stara wartosc nie znika przez przeoczenie).
+Wiersz w sync_registry ('channel_kpi_snapshots', enabled=FALSE, append) istnieje po to,
+zeby nocna kontrola driftu widziala tabele; wlaczenie = decyzja wg SYNC_ENABLE_PLAN.
+Odczyt: reports._kontekst_kpi -> sekcja "METRYKI KANALU" w stanie gry Lacznika.
+
+## contacts.who_is_who + indeks DM (DDL 030, paczka #1 pkt 5 i 7, 24/07/2026)
+
+| kolumna | typ | uwagi |
+|---|---|---|
+| who_is_who | JSONB | kto jest kim PO STRONIE KLIENTA: {"role","influence_level","relationship_stage","source_of_data","notes"}; influence_level: decydent/wplywowy/uzytkownik/nieznany; source_of_data zawsze wypelnione (bez zrodla to plotka, nie dana) |
+
+Rozroznienie: `handles` = tozsamosc per kanal (kanon WHO IS WHO 22/07), `who_is_who` =
+pozycja czlowieka w organizacji prospekta. Odczyt: crm.relation_context (naglowek
+propozycji i gotowca pokazuje role i wplyw).
+
+Indeks idx_eng_log_contact_action (engagement_log: contact_id, action_type, created_at DESC)
+obsluguje regule FAIL-CLOSED (pkt 7): przed REKOMENDACJA tieru wykluczajacego z lejka
+(Competitor / out_of_icp) crm.fail_closed_note liczy historie DM z engagement_log.
+Kolumny `contacts.dm_history` celowo NIE MA - historia zyje w logu, duplikat by sie rozjechal.
+
 ## sales_pipeline + sales_knowledge - Agent Sprzedazy (DDL 027, BE-SPRZEDAWCA 20/07/2026)
 
 Komponent: docs/komponenty/agent-sprzedazy.md. DDL: cm-agent/db/027_sales_agent.sql.

@@ -243,8 +243,101 @@ _LINE_TYPES = {"komentarz": "komentarz", "dm_wyslany": "dm_wyslany", "dm wyslany
                "zaproszenie wyslane": "zaproszenie",
                # aliasy z polskimi znakami - agent czatowy potrafi je napisac mimo instrukcji
                "dm_wysłany": "dm_wyslany", "dm wysłany": "dm_wyslany",
-               "zaproszenie_wysłane": "zaproszenie", "zaproszenie wysłane": "zaproszenie"}
+               "zaproszenie_wysłane": "zaproszenie", "zaproszenie wysłane": "zaproszenie",
+               # paczka #1 Managera pkt 1 (24/07): eksport analityczny z panelu kanalu
+               "kpi_snapshot": "kpi_snapshot", "kpi snapshot": "kpi_snapshot", "kpi": "kpi_snapshot",
+               "metryki": "kpi_snapshot", "metryki_kanalu": "kpi_snapshot",
+               "metryki kanalu": "kpi_snapshot", "metryki kanału": "kpi_snapshot"}
 _VALID_TIERS = {"buyer": "Buyer", "peer": "Peer", "competitor": "Competitor", "partner": "Partner"}
+
+# ---- pkt 1: liczby z panelu analitycznego (deterministycznie, zero LLM) ----
+# Czat na abonamencie widzi panel, ktorego serwer nie widzi (LinkedIn do czasu App 2 CMA,
+# X poza zakupionymi odczytami). Przepisane liczby wracaja linia 'kpi_snapshot' i laduja
+# w channel_kpi_snapshots (DDL 030). Wartosci NIEROZPOZNANE nie gina - siadaja w raw.
+_KPI_ALIASES = {
+    "wyswietlenia": "impressions", "wyświetlenia": "impressions", "impressions": "impressions",
+    "odslony": "impressions", "odsłony": "impressions", "zasieg": "impressions", "zasięg": "impressions",
+    "reakcje": "reactions", "reactions": "reactions", "polubienia": "reactions",
+    "zaangazowania": "reactions", "zaangażowania": "reactions", "engagements": "reactions",
+    "nowi_obserwujacy": "new_followers", "nowi_obserwujący": "new_followers",
+    "new_followers": "new_followers", "nowi": "new_followers",
+    "obserwujacy": "followers_total", "obserwujący": "followers_total", "followers": "followers_total",
+    "obserwujacy_razem": "followers_total", "obserwujący_razem": "followers_total",
+    "odslony_profilu": "profile_views", "odsłony_profilu": "profile_views",
+    "wejscia_na_profil": "profile_views", "wejścia_na_profil": "profile_views",
+    "profile_views": "profile_views",
+}
+_KPI_FIELDS = ("impressions", "reactions", "new_followers", "followers_total", "profile_views")
+_KPI_PERIODS = {"dzien", "7d", "28d", "90d"}
+_KPI_DATE_ISO = re.compile(r"^(\d{4})-(\d{1,2})-(\d{1,2})$")
+_KPI_DATE_PL = re.compile(r"^(\d{1,2})[./](\d{1,2})[./](\d{4})$")
+
+
+def _kpi_date(raw):
+    """'2026-07-24' albo '24.07.2026' / '24/07/2026' -> 'RRRR-MM-DD'. Cokolwiek innego -> None."""
+    s = (raw or "").strip()
+    m = _KPI_DATE_ISO.match(s)
+    if m:
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    else:
+        m = _KPI_DATE_PL.match(s)
+        if not m:
+            return None
+        d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    try:
+        return datetime.date(y, mo, d).strftime("%Y-%m-%d")
+    except ValueError:
+        return None
+
+
+def _kpi_num(raw):
+    """'1 234' / '1,234' / '1.2K' / '1,2 tys.' -> int. Cokolwiek nieliczbowego -> None
+    (pole zostaje puste; NIE zgadujemy zera - to byloby klamstwo w metrykach)."""
+    s = re.sub(r"\s", "", str(raw or "")).lower()  # \s lapie tez spacje nierozdzielajaca
+    m = re.match(r"^([\d.,]+)(k|tys\.?|m|mln)?$", s)
+    if not m:
+        return None
+    num, suf = m.group(1), (m.group(2) or "")
+    mult = 1000 if suf.startswith(("k", "tys")) else (1_000_000 if suf.startswith(("m", "mln")) else 1)
+    if not suf and re.match(r"^\d{1,3}([.,]\d{3})+$", num):  # separator tysiecy
+        num = re.sub(r"[.,]", "", num)
+    try:
+        val = float(num.replace(",", ".")) * mult
+    except ValueError:
+        return None
+    return int(round(val)) if 0 <= val < 10 ** 12 else None
+
+
+def _kpi_fields(parts):
+    """Pola linii kpi_snapshot: data (goly token albo data=...), okres, znane metryki.
+    Nieznany klucz albo nieczytelna liczba ida do 'extra' - w bazie wyladuja w raw."""
+    out = {"metric_date": None, "period": "dzien", "extra": {}}
+    out.update({f: None for f in _KPI_FIELDS})
+    for raw in parts or []:
+        p = (raw or "").strip()
+        if not p:
+            continue
+        if "=" not in p and ":" not in p:
+            out["metric_date"] = _kpi_date(p) or out["metric_date"]
+            continue
+        sep = "=" if "=" in p else ":"
+        key, _, val = p.partition(sep)
+        k = re.sub(r"\s+", "_", key.strip().lower())
+        v = val.strip()
+        if k in ("okres", "period"):
+            per = v.lower().replace("dzień", "dzien").replace("dziennie", "dzien")
+            out["period"] = per if per in _KPI_PERIODS else "dzien"
+            continue
+        if k in ("data", "date"):
+            out["metric_date"] = _kpi_date(v) or out["metric_date"]
+            continue
+        field = _KPI_ALIASES.get(k)
+        n = _kpi_num(v)
+        if field and n is not None:
+            out[field] = n
+        else:
+            out["extra"][k[:40]] = v[:120]
+    return out
 
 
 def _line_hash(channel, line):
@@ -322,17 +415,22 @@ def _report_tier_card(contact_id, disp, bio, tier_raw, brand, channel):
         return (f"karta tieru dla {disp} juz czeka" if dup["status"] == "pending"
                 else f"tier {disp} rozstrzygniety w ostatnich 24h ({dup.get('answer')})")
     tier = _VALID_TIERS.get((tier_raw or "").strip().lower())
+    # pkt 7 paczki #1 (24/07): fail-closed przed wykluczeniem z lejka - patrz crm.fail_closed_note.
+    from . import crm as _crm
+    wolno, fc_note = _crm.fail_closed_note(contact_id, tier or tier_raw)
     decisions.ask(
         f"{brand}:{channel}", brand, "crm_tier",
         f"Klasyfikacja ICP dla {disp} (z RAPORTU PRACY):\n"
         + (f"NOTKA: {bio}\n" if bio else "")
-        + (f"Propozycja z raportu: {tier}" if tier else "Raport bez propozycji tieru - wybierz."),
+        + (f"Propozycja z raportu: {tier}" if tier else "Raport bez propozycji tieru - wybierz.")
+        + (f"\n{fc_note}" if fc_note else ""),
         [{"key": "buyer", "label": "Buyer"}, {"key": "peer", "label": "Peer"},
          {"key": "competitor", "label": "Competitor"}, {"key": "partner", "label": "Partner"}],
-        recommendation={"Buyer": "buyer", "Peer": "peer", "Competitor": "competitor",
-                        "Partner": "partner"}.get(tier),
-        context={"contact_id": str(contact_id)})
-    return f"karta tieru dla {disp} ponizej (guziki)"
+        recommendation=({"Buyer": "buyer", "Peer": "peer", "Competitor": "competitor",
+                         "Partner": "partner"}.get(tier) if wolno else None),
+        context={"contact_id": str(contact_id), "fail_closed": (not wolno)})
+    return (f"karta tieru dla {disp} ponizej (guziki)"
+            + (" - bez rekomendacji, jest historia rozmow" if not wolno else ""))
 
 
 def apply_work_report(chat_id, text, active_agent=None):
@@ -350,7 +448,8 @@ def apply_work_report(chat_id, text, active_agent=None):
     agent = f"{brand}:{channel}"
     stamp = rep["date"] or datetime.date.today().strftime("%Y-%m-%d")
     cnt = {"komentarz": 0, "dm_wyslany": 0, "dm_odebrany": 0, "reakcja": 0,
-           "nowa_osoba": 0, "znana_osoba": 0, "obserwacja": 0, "zaproszenie": 0}
+           "nowa_osoba": 0, "znana_osoba": 0, "obserwacja": 0, "zaproszenie": 0,
+           "kpi_snapshot": 0}
     dupes = 0
     tier_notes = []
     for typ, parts, raw_line in rep["entries"]:
@@ -432,13 +531,41 @@ def apply_work_report(chat_id, text, active_agent=None):
                                base_note + " | obserwacja radaru (kopia w inspirations)",
                                None, "logged", None)
                 cnt["obserwacja"] += 1
+            elif typ == "kpi_snapshot":
+                # pkt 1 paczki #1: liczby z panelu analitycznego (czat je WIDZI, serwer nie).
+                # Kolejny wpis o tej samej dacie i okresie NADPISUJE tylko pola, ktore przyszly
+                # (COALESCE) - korekta jest mozliwa, a stara wartosc nie znika przez przeoczenie.
+                f = _kpi_fields(parts)
+                mdate = f["metric_date"] or _kpi_date(stamp) or datetime.date.today().strftime("%Y-%m-%d")
+                extra = dict(f.get("extra") or {})
+                extra["linia"] = raw_line[:300]
+                db.execute(
+                    """INSERT INTO channel_kpi_snapshots
+                           (brand_id, channel, metric_date, period, impressions, reactions,
+                            new_followers, followers_total, profile_views, source, raw)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'raport_pracy',%s)
+                       ON CONFLICT (brand_id, channel, metric_date, period) DO UPDATE SET
+                           impressions     = COALESCE(EXCLUDED.impressions, channel_kpi_snapshots.impressions),
+                           reactions       = COALESCE(EXCLUDED.reactions, channel_kpi_snapshots.reactions),
+                           new_followers   = COALESCE(EXCLUDED.new_followers, channel_kpi_snapshots.new_followers),
+                           followers_total = COALESCE(EXCLUDED.followers_total, channel_kpi_snapshots.followers_total),
+                           profile_views   = COALESCE(EXCLUDED.profile_views, channel_kpi_snapshots.profile_views),
+                           raw             = EXCLUDED.raw,
+                           updated_at      = NOW()""",
+                    (brand, channel, mdate, f["period"], f["impressions"], f["reactions"],
+                     f["new_followers"], f["followers_total"], f["profile_views"], Jsonb(extra)))
+                _report_insert("other", channel, agent, raw_line, None,
+                               base_note + f" | KPI kanalu {mdate} ({f['period']})",
+                               None, "logged", None)
+                cnt["kpi_snapshot"] += 1
         except Exception:
             traceback.print_exc()
             rep["bad"].append(raw_line)
     labels = [("komentarz", "komentarze"), ("dm_wyslany", "DM wyslane"),
               ("dm_odebrany", "DM odebrane"), ("reakcja", "reakcje"),
               ("zaproszenie", "zaproszenia"), ("nowa_osoba", "nowe osoby"),
-              ("znana_osoba", "znane osoby zaktualizowane"), ("obserwacja", "obserwacje do radaru")]
+              ("znana_osoba", "znane osoby zaktualizowane"), ("obserwacja", "obserwacje do radaru"),
+              ("kpi_snapshot", "wpisy metryk kanalu")]
     saved = [f"{lbl}: {cnt[k]}" for k, lbl in labels if cnt[k]]
     lines = [f"📥 POTWIERDZENIE - RAPORT PRACY zapisany (kanal {channel}, {stamp}):",
              ("zapisane: " + ", ".join(saved)) if saved else "zapisane: nic nowego",

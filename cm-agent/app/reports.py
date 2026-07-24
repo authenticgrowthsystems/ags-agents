@@ -360,6 +360,32 @@ def _kontekst_contacts(limit=20, platform=None):
     return out
 
 
+def _kontekst_kpi(channel, limit=3):
+    """Ostatnie wpisy metryk KANALU z channel_kpi_snapshots (paczka #1 pkt 1, DDL 030).
+    Domyka petle Lacznika: czat przepisuje liczby z panelu, nastepna sesja je widzi
+    i nie musi pytac Tomasza o to samo. Brak tabeli (przed DDL) = cisza, nie awaria."""
+    try:
+        rows = db.fetchall(
+            """SELECT metric_date, period, impressions, reactions, new_followers,
+                      followers_total, profile_views
+               FROM channel_kpi_snapshots WHERE brand_id='AGS' AND channel=%s
+               ORDER BY metric_date DESC, updated_at DESC LIMIT %s""", (channel, limit))
+    except Exception:
+        return []
+    out = []
+    for r in rows:
+        bits = [f"{k}: {r[c]}" for c, k in (("impressions", "wyswietlenia"), ("reactions", "reakcje"),
+                                            ("new_followers", "nowi obserwujacy"),
+                                            ("followers_total", "obserwujacy"),
+                                            ("profile_views", "odslony profilu"))
+                if r.get(c) is not None]
+        if not bits:
+            continue
+        okres = "" if (r.get("period") or "dzien") == "dzien" else f" [{r['period']}]"
+        out.append(f"- {r['metric_date'].strftime('%d/%m')}{okres} " + ", ".join(bits))
+    return out
+
+
 def _kontekst_radar(limit=10):
     rows = db.fetchall(
         """SELECT content, source, created_at FROM inspirations
@@ -409,6 +435,10 @@ def kontekst_text(scope="all"):
                              + (f" | {p['post_url']}" if p.get("post_url") else ""))
             if not pub:
                 lines.append("- (brak publikacji w 7 dni)")
+            kpi = _kontekst_kpi(ch)
+            if kpi:
+                lines.append(f"## METRYKI KANALU {ch.upper()} (ostatnie wpisy z panelu):")
+                lines += kpi
             lines.append("")
     contacts = _kontekst_contacts(platform=(scope if scope in ("x", "linkedin") else None))
     _lab = f" {scope.upper()}" if scope in ("x", "linkedin") else ""

@@ -305,6 +305,13 @@ def _card(item_id=None, brand_id=None, full=False):
     dup = next((m.get("text") for m in media_all if (m or {}).get("kind") == "dup_warning"), None)
     if dup:
         med += f"\n⚠️ DUPLIKACJA: {dup[:250]}"
+    # paczka #1 Managera pkt 8 (24/07): interpunkcja PL jako FLAGA (nie blokada) dla marek
+    # polskojezycznych. Liczona z PELNEJ tresci, nie z przycietego podgladu.
+    if it_brand.lower() in ("tnm", "rdc"):
+        from . import compliance
+        pflags = compliance.pl_comma_flags(it.get("canonical_body") or "", limit=3)
+        if pflags:
+            med += "\n⚠️ INTERPUNKCJA (sprawdz przecinki): " + "; ".join(pflags)[:300]
     if not n_media:
         med += "\n➕ dodasz: wyslij zdjecie botowi i napisz 'dolacz ostatnie zdjecie'"
     brand_hdr = f"   ·   🏷 {it_brand}" if it_brand != "AGS" else ""

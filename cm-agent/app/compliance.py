@@ -81,6 +81,52 @@ def polish_pl(text, content_item_id=None):
         text, content_item_id, task_name="polish_pl"))
 
 
+# ---- Heurystyka interpunkcji PL (paczka #1 Managera pkt 8, 24/07) ----------------------
+# FLAGA, NIE BLOKADA i NIE poprawka: brakujacy przecinek przed spojnikiem podrzednym to
+# najczestszy blad w polskich tekstach generowanych modelem. Deterministycznie (zero LLM,
+# zero kosztu) pokazujemy CZLOWIEKOWI miejsca do sprawdzenia w karcie materialu marek
+# polskojezycznych. Zasada z kanonu: warunek liczymy z DANYCH, model nie jest bramka.
+_PL_COMMA_WORDS = ("że", "żeby", "aby", "który", "która", "które", "którego", "której",
+                   "którym", "którą", "których", "którzy", "gdy", "jeśli", "bo", "ponieważ")
+# Wyrazy, ktore biora przecinek NA SIEBIE ("mimo że", "nawet jeśli", "w którym", "podczas gdy"):
+# przecinek stoi PRZED nimi, wiec dla nich cofamy sie o jeden wyraz.
+_PL_COMMA_LEAD = ("mimo", "nawet", "chyba", "dlatego", "podczas", "tylko", "właśnie", "zwłaszcza",
+                  "szczególnie", "wtedy", "dopiero", "bardziej", "tym", "tak", "zawsze", "raczej",
+                  "w", "we", "o", "z", "ze", "na", "do", "przez", "dla", "po", "przy", "od", "bez",
+                  "pod", "nad", "przed", "za", "między", "wobec", "wśród")
+_PL_WORD_RE = re.compile(r"[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]+")
+_PL_NO_COMMA_BEFORE = ".!?:;,–—-([{\"'„«»…•*|/"  # po tym znaku przecinek nie jest potrzebny
+
+
+def pl_comma_flags(text, limit=5):
+    """Miejsca, w ktorych prawdopodobnie BRAKUJE przecinka przed spojnikiem podrzednym.
+    Zwraca liste krotkich fragmentow z kontekstem (gotowych do pokazania czlowiekowi).
+    Heurystyka jest CELOWO ostrozna: poczatek zdania, istniejacy przecinek i zbitki typu
+    'mimo że' / 'w którym' nie sa zglaszane."""
+    t = text or ""
+    out, seen = [], set()
+    for m in _PL_WORD_RE.finditer(t):
+        if m.group(0).lower() not in _PL_COMMA_WORDS:
+            continue
+        head = t[:m.start()].rstrip()
+        if not head or head[-1] in _PL_NO_COMMA_BEFORE:
+            continue  # poczatek zdania/akapitu/listy albo przecinek juz stoi
+        prev = _PL_WORD_RE.findall(head[-40:])
+        if prev and prev[-1].lower() in _PL_COMMA_LEAD:
+            idx = head.lower().rfind(prev[-1].lower())
+            head2 = head[:idx].rstrip()
+            if not head2 or head2[-1] in _PL_NO_COMMA_BEFORE:
+                continue  # przecinek stoi przed zbitka ("system, w którym...")
+        frag = re.sub(r"\s+", " ", t[max(0, m.start() - 28):m.end() + 12]).strip()
+        if frag.lower() in seen:
+            continue
+        seen.add(frag.lower())
+        out.append(f"„...{frag}...\" ({m.group(0).lower()})")
+        if len(out) >= limit:
+            break
+    return out
+
+
 def check_re_intro_line(text, channel, content_item_id=None):
     """Voice Bible v2.1 / Task #75: LinkedIn content ma zawierac Re-Introduction Line (kim/co/dla kogo).
     FAZA 1 (decyzja Tomasza 07/07): WARN+log do agent_logs, NIE blokuje (nie ryzykujemy pierwszego

@@ -121,8 +121,9 @@ def relation_context(contact_id):
     if not contact_id:
         return None
     try:
-        c = db.fetchone("SELECT name, icp_tier, relationship_stage FROM contacts WHERE id=%s::uuid",
-                        (contact_id,))
+        c = db.fetchone(
+            "SELECT name, icp_tier, relationship_stage, who_is_who FROM contacts WHERE id=%s::uuid",
+            (contact_id,))
         if not c:
             return None
         e = db.fetchone(
@@ -136,10 +137,66 @@ def relation_context(contact_id):
         parts.append(f"stadium: {c.get('relationship_stage') or 'cold'}")
         if c.get("icp_tier"):
             parts.append(f"tier: {c['icp_tier']}")
+        # pkt 5 paczki #1 (24/07): kto jest kim po stronie klienta - rola i wplyw na decyzje
+        # widoczne tam, gdzie pisze sie do czlowieka (naglowek propozycji i gotowca).
+        w = c.get("who_is_who") or {}
+        if isinstance(w, dict):
+            if w.get("role"):
+                parts.append(f"rola: {str(w['role'])[:60]}")
+            if w.get("influence_level"):
+                parts.append(f"wplyw: {str(w['influence_level'])[:30]}")
         return ", ".join(parts)
     except Exception:
         traceback.print_exc()
         return None
+
+
+# ---------------- fail-closed przed wykluczeniem z lejka (paczka #1 Managera pkt 7) ----------
+# Tier, ktory wyklucza czlowieka z lejka, jest decyzja NIEODWRACALNA w praktyce: nikt nie wraca
+# do listy "Competitor" szukac klienta. Dlatego zanim taki tier zostanie ZAREKOMENDOWANY, system
+# sprawdza, czy z ta osoba nie ma juz historii rozmow. Jest historia = rekomendacji nie ma
+# (a w trybie semi_autonomous decyzja NIE zapadnie sama - ask() bez rekomendacji zawsze pyta
+# Tomasza). Historii DM nie duplikujemy w contacts: zrodlem jest engagement_log.
+_EXCLUDING_TIERS = {"competitor", "competitor-adjacent", "inne", "out_of_icp", "poza icp"}
+_DM_STAGES = ("dm", "offer", "client")
+
+
+def dm_history(contact_id):
+    """(liczba wpisow DM, data ostatniego, stadium relacji) dla kontaktu. Marker [DM] w notes
+    zostawiaja obie sciezki: propozycje subagenta i linie dm_* z RAPORTU PRACY."""
+    if not contact_id:
+        return 0, None, None
+    try:
+        r = db.fetchone(
+            """SELECT (SELECT COUNT(*) FROM engagement_log e
+                        WHERE e.contact_id=c.id
+                          AND (e.notes ILIKE '%%[DM]%%' OR e.action_type ILIKE '%%dm%%')) AS n,
+                      (SELECT MAX(e.created_at) FROM engagement_log e
+                        WHERE e.contact_id=c.id
+                          AND (e.notes ILIKE '%%[DM]%%' OR e.action_type ILIKE '%%dm%%')) AS last,
+                      c.relationship_stage AS stage
+               FROM contacts c WHERE c.id=%s::uuid""", (str(contact_id),))
+        if not r:
+            return 0, None, None
+        return int(r.get("n") or 0), r.get("last"), r.get("stage")
+    except Exception:
+        traceback.print_exc()
+        return 0, None, None
+
+
+def fail_closed_note(contact_id, proposed_tier):
+    """Czy wolno REKOMENDOWAC ten tier + notka z dowodem. Zwraca (wolno, notka|None).
+    Fail-closed dziala tylko na tiery wykluczajace - Buyer/Peer/Partner ida normalnie."""
+    if (proposed_tier or "").strip().lower() not in _EXCLUDING_TIERS:
+        return True, None
+    n, last, stage = dm_history(contact_id)
+    if not n and (stage or "cold") not in _DM_STAGES:
+        return True, None
+    kiedy = f", ostatni {last.strftime('%d/%m')}" if last else ""
+    ile = f"{n} wpisow z rozmow DM{kiedy}" if n else "brak wpisow DM w logu"
+    return False, ("UWAGA: to jest wykluczenie z lejka, a z ta osoba juz cos bylo - "
+                   f"{ile}, stadium relacji '{stage or 'cold'}'. Nie podpowiadam odpowiedzi; "
+                   "zdecyduj sam. Wykluczyc zdazymy zawsze, odzyskac zamknieta rozmowe - nie.")
 
 
 def bump_stage(contact_id, stage):
@@ -269,17 +326,21 @@ def process_profile_photo(intake, images):
                     else f"Tier juz rozstrzygniety w ostatnich 24h (decyzja #{dup['id']}: "
                          f"{dup.get('answer')}) - nie pytam drugi raz.")
     else:
+        # pkt 7 paczki #1 (24/07): tier wykluczajacy z lejka nie dostaje rekomendacji,
+        # gdy z czlowiekiem byla juz rozmowa (fail-closed z DANYCH, nie z opinii modelu).
+        wolno, fc_note = fail_closed_note(contact_id, tier)
         ask_note = decisions.ask(
             f"{brand}:{channel}", brand, "crm_tier",
             f"Klasyfikacja ICP dla {disp}" + (f" (@{handle})" if handle else "") + ":\n"
             + (f"BIO: {bio}\n" if bio else "")
             + (f"Propozycja modelu: {tier}" + (f" - {why}" if why else "") if tier
-               else "Model nie mial pewnosci - wybierz tier."),
+               else "Model nie mial pewnosci - wybierz tier.")
+            + (f"\n{fc_note}" if fc_note else ""),
             [{"key": "buyer", "label": "Buyer"}, {"key": "peer", "label": "Peer"},
              {"key": "competitor", "label": "Competitor"}, {"key": "partner", "label": "Partner"}],
-            recommendation={"Buyer": "buyer", "Peer": "peer", "Competitor": "competitor",
-                            "Partner": "partner"}.get(tier),
-            context={"contact_id": contact_id})
+            recommendation=({"Buyer": "buyer", "Peer": "peer", "Competitor": "competitor",
+                             "Partner": "partner"}.get(tier) if wolno else None),
+            context={"contact_id": contact_id, "fail_closed": (not wolno)})
     return (f"🧬 Profil zapisany w CRM: {disp}" + (f" (@{handle})" if handle else "")
             + (f"\nBIO: {bio}" if bio else "") + f"\n{ask_note}")
 
