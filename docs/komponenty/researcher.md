@@ -89,8 +89,13 @@ ISO; retap = wyzerowanie klucza, ksztalt sprawdz w `sunday_brief._state_set`).
   petli nadpisywal status na 'failed'. Wynik byl w bazie, agent widzial awarie.
 - Fix (24/07): join odporny na None/puste + petla NIE cofa statusu 'completed' na 'failed'
   (blad meldunku != blad researchu). Wdrozenie: rebuild kontenera **ags-researcher**.
-- Wniosek ogolny: przy zlecaniu wielu podobnych researchow z rzedu spodziewaj sie cache-hitow;
-  to jest zaleta (0 PLN), pod warunkiem ze sciezka cache zwraca komplet danych.
+- DRUGA WARSTWA FIXU (wazniejsza): dla RESEARCHU PROSPEKTA cache SEMANTYCZNY jest wylaczony.
+  Prompty prospektowe roznia sie tylko nazwa firmy, wiec podobienstwo przekracza prog 0.92
+  i "trafienie" oznaczaloby podanie danych o INNEJ firmie jako research prospekta. Detekcja:
+  'prospect research' w pierwszych 120 znakach query. Exact cache (ten sam tekst = ta sama
+  firma) dziala dalej.
+- Wniosek ogolny: cache semantyczny ma sens dla pytan TEMATYCZNYCH, nie dla zapytan o KONKRETNY
+  PODMIOT. Przy nowych klasach zapytan sprawdz, czy podobienstwo tekstu = podobienstwo tresci.
 
 ## Znane pulapki
 

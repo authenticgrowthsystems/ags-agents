@@ -342,8 +342,14 @@ def process_job(job):
     db.set_status(job_id, "routing", complexity=level, model_tier=tier)
 
     # 1) cache (exact always; semantic only when enabled) - keyed on (query, model_tier)
-    emb = embed(query)
-    hit = cache.get_exact(query, model_tier=tier) or cache.get_semantic(emb, model_tier=tier)
+    # FIX 24/07: dla RESEARCHU PROSPEKTA cache SEMANTYCZNY jest szkodliwy - prompty roznia sie
+    # tylko nazwa firmy (podobienstwo > progu 0.92), wiec "trafienie" oznaczaloby podanie
+    # danych o INNEJ firmie jako research prospekta. Exact (ten sam tekst = ta sama firma)
+    # zostaje. Dowod: joby StandART/La Cultura/STC wracaly z cache w 0 s, zero claims.
+    _prospekt = "prospect research" in (query or "").lower()[:120]
+    emb = None if _prospekt else embed(query)
+    hit = cache.get_exact(query, model_tier=tier) or (
+        None if _prospekt else cache.get_semantic(emb, model_tier=tier))
     if hit:
         _persist_options(job_id, hit["options"])
         db.set_status(job_id, "completed", completed_at=_now(), cost_pln=0)
