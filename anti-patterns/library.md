@@ -123,6 +123,11 @@ Agents must screen output against this library BEFORE HITL preview.
 **Why bad:** every symptom looked like a fresh bug in the NEW code, while the new code was correct and bypassed; falsified DB state ('published' with future slots) poisons every later diagnosis; public-facing damage (burst, wrong language) before anyone can react.
 **Correct:** when a build changes a contract (slots become meaningful, language becomes per-channel), enumerate EVERY live path consuming that contract (here: publish_mode per channel + publisher callbacks) and switch or verify each IN THE SAME BUILD; end with an end-to-end probe through the path that will actually run in production, not the path you just wrote.
 
+### AP-308: Masowa zmiana zywych danych bez DETERMINISTYCZNEGO podgladu
+**Anti-pattern (25/07/2026, BE, re-slotter kolejki X):** skrypt zmienial scheduled_for 64 wierszy zywej kolejki naraz. Dry-run zlapal DWA bledy, ktore apply wypuscilby na produkcje: (1) v1 rozproszyl serie (nadmiar kaskadowal po chronologii, hook po rozwinieciu), (2) stala siatka gniazd nie miescila sie w oknie kanalu 13-22, wiec wyszlo 3/dzien zamiast 5 i kolejka rozwleczona do 15/08. Publikacja jest wychodzaca i nieodwracalna - zly apply psulby ja przez dni.
+**Why bad:** blad algorytmu przydzialu jest niewidoczny w kodzie i w testach syntetycznych; ujawnia sie dopiero na PELNYCH prawdziwych danych (prawdziwe okno, prawdziwe id serii, skala 64 nie 15 - stan gry ucinal widok do 10).
+**Correct:** kazda masowa zmiana zywych danych = tryb DRY-RUN drukujacy DOKLADNIE to, co zrobi apply (czlowiek zatwierdza, potem apply); wynik DETERMINISTYCZNY (losowosc jak humanize_slot -> apply != dry; re-slotter dostal _human_minute per id); idempotencja jako test (drugi przebieg = 0 zmian); nie hardkoduj tego, co w configu (godziny vs publish_windows); nie zakladaj skali - pobierz pelny zbior. Pelny opis: docs/anti-patterns/AP-308_bulk_write_needs_deterministic_dry_run.md.
+
 ### AP-302: User-facing vocabulary invented by the agent without checking brand register
 **Anti-pattern (03/07/2026):** BE named the inspirations pool "zanadrze" in bot replies and tool names. Tomasz: "na pewno nie bedziemy tego slowa uzywac".
 **Why bad:** user-facing wording is brand voice territory; archaic/bookish words break the operator register.

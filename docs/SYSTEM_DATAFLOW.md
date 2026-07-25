@@ -70,7 +70,7 @@ stan gry; Etap 2 = narzedzia MCP w n8n, czat czyta i raportuje SAM) [lacznik].
 | Komponent | Plik | W srodku |
 |---|---|---|
 | Planner | [komponenty/planner.md](komponenty/planner.md) | plan tygodnia, bramka tematow, cap 20, gap-filler, plannav |
-| Kolejka i publikacja | [komponenty/kolejka-publikacja.md](komponenty/kolejka-publikacja.md) | post_queue, sloty, humanize_slot, serie X, Scheduler, kanon publikacji, stale_approval |
+| Kolejka i publikacja | [komponenty/kolejka-publikacja.md](komponenty/kolejka-publikacja.md) | post_queue, sloty, humanize_slot, serie X, Scheduler, kanon publikacji, stale_approval; **SUFIT KADENCJI** (25/07 slots._daily_cap - seria nie rozlewa sie ponad posts_per_day) + **re-slotter** app.reslot (dry/apply, cale serie razem, gniazda z okna kanalu, gestosc per_day) |
 | Karty + approval | [komponenty/karty-hitl.md](komponenty/karty-hitl.md) | karty matreview, guziki, media, fulltext, edycja=nauka, approval hitl |
 | Decyzje + nauka | [komponenty/decyzje-nauka.md](komponenty/decyzje-nauka.md) | agent_decisions, decision_modes, dec:, progi semi-auto, learning_log |
 | Metryki | [komponenty/metryki.md](komponenty/metryki.md) | kolektor X Owned Reads, import xlsx LinkedIn, channel_metrics_daily, PROFIL |
@@ -78,7 +78,7 @@ stan gry; Etap 2 = narzedzia MCP w n8n, czat czyta i raportuje SAM) [lacznik].
 | Rozmowa CM/subagenci | [komponenty/rozmowa-cm.md](komponenty/rozmowa-cm.md) | route deterministyczne, narzedzia, pamiec 3 warstwy, subagent=ten sam kod |
 | Engagement-CRM | [komponenty/engagement-crm.md](komponenty/engagement-crm.md) | comment-radar per autor, contacts+stadium relacji, intake nieznanych, przypomnienia 24h, album=1 post |
 | Researcher | [komponenty/researcher.md](komponenty/researcher.md) | kaskada **6 zrodel** (od 24/07 `site`: kaskada czyta strone badanego podmiotu, natywnie i bez kosztu), kontrakt /request, bramki critical/model, sunday brief, cache semantyczny globalnie OFF |
-| Grafika | [komponenty/grafika.md](komponenty/grafika.md) | gpt-image-2, prompt Sonneta, brand_tokens/visual_canon, kanon mediow |
+| Grafika | [komponenty/grafika.md](komponenty/grafika.md) | **AUTO-OBRAZ WYLACZONY (kanon 25/07: tylko szczegolowe prompty do recznej roboty)**; prompt Sonneta z visual_canon, guzik 🎨 Generuj na zadanie, brand_tokens |
 | Sync Notion | [komponenty/sync-notion.md](komponenty/sync-notion.md) | mirror DB->Notion, sync_registry/page_map, drift check |
 | n8n transport | [komponenty/n8n-transport.md](komponenty/n8n-transport.md) | HITL galezie, publishery, crony, zasady PUT, patchery |
 | Agent Sprzedazy | [komponenty/agent-sprzedazy.md](komponenty/agent-sprzedazy.md) | /prospect research **medium** (critical przez API zablokowany, kanon 20/07), wizytowka (agent sam wchodzi na strone prospekta), dane kontaktowe w kolumnach lejka (DDL 029), bramka tozsamosci trzystanowa, gotowiec HITL z naglowkiem i stopka, sales_knowledge z prog trafnosci 0.55 |
