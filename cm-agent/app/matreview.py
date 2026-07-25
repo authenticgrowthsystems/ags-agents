@@ -300,9 +300,15 @@ def _card(item_id=None, brand_id=None, full=False):
     media_all = it.get("media") or []
     n_media = sum(1 for m in media_all if (m or {}).get("file_id"))
     hint = next((m.get("text") for m in media_all if (m or {}).get("kind") == "suggestion"), None)
+    # KANON 25/07: zamiast auto-obrazu material niesie SZCZEGOLOWY PROMPT (kind='visual_prompt') -
+    # Tomasz generuje grafike recznie. Guzik 📋 Prompt wysle go w calosci; tu skrot na karcie.
+    vprompt = next((m.get("text") for m in media_all if (m or {}).get("kind") == "visual_prompt"), None)
     med = f"\n🖼 zalaczniki: {n_media}" if n_media else ""
     if hint:
         med += f"\n🎨 propozycja wizualu: {hint[:220]}"
+    if vprompt:
+        med += (f"\n📋 SZCZEGOLOWY PROMPT (wygeneruj grafike recznie, pelny pod guzikiem 📋 Prompt):\n"
+                f"{vprompt[:400]}" + ("..." if len(vprompt) > 400 else ""))
     dup = next((m.get("text") for m in media_all if (m or {}).get("kind") == "dup_warning"), None)
     if dup:
         med += f"\n⚠️ DUPLIKACJA: {dup[:250]}"

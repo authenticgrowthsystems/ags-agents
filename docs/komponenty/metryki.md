@@ -68,6 +68,15 @@ w raportach subagentow. Trzy zrodla danych, jeden konsument (reports).
 
 ## Znane pulapki
 
+- ETYKIETA "brak metryk" (naprawiona 25/07): stara wersja mowila "X: wpisz w rozmowie
+  z subagentem" i Tomasz czytal to jako obowiazek RECZNEGO wpisu ("x nie pobiera sam").
+  Kolektor zbiera SAM raz na dobe - swiezy post czeka na najblizszy cykl. Etykieta mowi
+  teraz "metryki wejda same: X przy dobowym zbiorze kolektora, LinkedIn po App 2 CMA".
+  Jesli metryk brak MIMO ze post jest starszy niz doba: sonda ponizej (join po tweet_id).
+- Diagnostyka "czy kolektor faktycznie zbiera" (SSH):
+  `docker exec -i pg_n8n psql -U n8n -d ags_crd -c "SELECT (config->>'stats_mode') AS tryb FROM channels WHERE brand_id='AGS' AND channel='x';" -c "SELECT MAX(snapshot_date) AS ostatni_zbior, COUNT(*) AS snapshotow FROM x_post_metric_snapshots WHERE brand_id='AGS';" -c "SELECT COUNT(*) AS posty_bez_metryk FROM published_posts WHERE brand='AGS' AND platform='x' AND published_at < NOW()-interval '1 day' AND (engagement_metrics IS NULL OR engagement_metrics='{}'::jsonb);"`
+  (tryb ma byc x_owned_reads; ostatni_zbior <= dzis; posty_bez_metryk starsze niz doba > 0
+  = problem joinu post_id<->tweet_id, nie kolektora).
 - Kazdy dzien zwloki we wlaczeniu kolektora = BEZPOWROTNIE stracone
   non_public metryki postow starszych niz okno 30 dni.
 - start_time = now-29d (margines na 400 przy postach na granicy 30 dni;

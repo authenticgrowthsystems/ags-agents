@@ -197,7 +197,11 @@ def _pq_label(r):
 
 def _fmt_metrics(m):
     if not m:
-        return "(brak metryk; X: wpisz w rozmowie z subagentem, LinkedIn: wejda po review App 2)"
+        # 25/07 (zgloszenie Tomasza "x nie pobiera metryk sam"): stara etykieta mowila "wpisz
+        # w rozmowie z subagentem" i czytalo sie to jako obowiazek RECZNEGO wpisu. Kolektor X
+        # zbiera SAM raz na dobe (Owned Reads), wiec swiezy post po prostu czeka na najblizszy
+        # cykl - to nie jest brak mechanizmu. Etykieta mowi teraz prawde o tym, co sie stanie.
+        return "(metryki wejda same: X przy dobowym zbiorze kolektora, LinkedIn po App 2 CMA)"
     parts = [f"{k}: {m[k]}" for k in METRIC_KEYS if m.get(k)]
     if m.get("engagement_rate"):
         parts.append(f"engagement: {m['engagement_rate']:.2%}")

@@ -1,25 +1,44 @@
-# Komponent: GRAFIKA (generacja obrazow, visual canon, kanon mediow)
+# Komponent: GRAFIKA (prompt graficzny, visual canon, kanon mediow)
 
-**STATUS GOTOWOSCI: CZESCIOWY (gpt-image-2+kanon LIVE; brak assetow referencyjnych i wariantow per platforma)** (macierz: docs/GOTOWOSC_PRODUKTU.md; aktualizuj przy kazdej zmianie zachowania)
+**STATUS GOTOWOSCI: AUTO-GENEROWANIE OBRAZOW WYLACZONE (kanon 25/07 - tylko prompty do recznej roboty)** (macierz: docs/GOTOWOSC_PRODUKTU.md; aktualizuj przy kazdej zmianie zachowania)
 
-## Co robi
+## KANON 25/07: prompty, nie auto-obrazy (feedback Tomasza POWTORZONY)
 
-Generuje grafiki do materialow i daje agentom "wzrok": prompt graficzny pisze
-Sonnet z kanonu wizualnego marki, obraz robi gpt-image-2 (quality high),
-agent potrafi OPISAC wygenerowana grafike w rozmowie. Wynik laduje w media
-jsonb materialu i idzie z publikacja (reuse na wszystkie kanaly).
+Zgloszenie: "materialy graficzne generowane nie sa w sposob zadowalajacy - dopoki nie bedzie
+dedykowanego agenta do tych spraw to chce to robic recznie - mam dostawac tylko szczegolowe
+prompty." Auto-grafika gpt-image wychodzila slabo (dowod 25/07: "One Key Prevents Double
+Charges", "Outside ICP Is Not a Verdict"), a slaba grafika szkodzi marce bardziej niz jej brak.
+
+Co to znaczy w kodzie:
+- `worker._auto_generate_image` NIE generuje juz obrazu - dolacza do materialu SZCZEGOLOWY
+  PROMPT (`kind='visual_prompt'`, 150-250 slow z kanonu wizualnego). Karta pokazuje go jako
+  "📋 SZCZEGOLOWY PROMPT", pelny pod guzikiem 📋 Prompt.
+- `channels._ensure_li_graphic` (dispatch) = celowy NO-OP. Post bez dolaczonego pliku idzie
+  TEKSTOWO; grafike Tomasz dodaje sam przed zatwierdzeniem, gdy chce.
+- Flagi zgaszone: `brand_config.cm_auto_image=false`, `channels.config.auto_image=false`
+  (X + LinkedIn) - docs/ops/grafiki_off_25072026.sql. To COFA P4 Managera (auto_image X ON).
+- Guzik 🎨 Generuj NA ZADANIE zostaje (swiadome klikniecie to nie automat).
+- Zniesienie kanonu: dopiero dedykowany Agent Wizualny (backlog, wstrzymany przez Tomasza).
+
+## Co robi (stan po 25/07)
+
+Pisze SZCZEGOLOWY PROMPT graficzny do materialu (Sonnet z kanonu wizualnego marki) i daje
+agentom "wzrok" (opis cudzej grafiki w rozmowie). Obrazu NIE generuje sam - to robi Tomasz
+recznie w swoim narzedziu, na podstawie promptu. Guzik 🎨 Generuj (gpt-image-2) zostaje na
+wyrazne zadanie.
 
 ## Przeplyw
 
 ```
 canonical gotowy -> generate_media_hint (podpowiedz medium)
   -> hint_wants_generated_graphic? -> generate_image_prompt (Sonnet; kanon
-     wizualny + temat + guidance) -> generate_image (gpt-image-2, high)
-  -> media jsonb: obraz + media[].image_prompt (prompt ZAPAMIETANY)
-Wyzwalacze: auto-grafika przed karta (brand_config cm_auto_image),
-  guzik 🎨 Generuj na karcie, narzedzie generate_material_image w rozmowie CM
-Guzik 📋 Prompt: wysyla media[].image_prompt do skopiowania w ZEWNETRZNY
-  generator; wynik wraca przez ➕ Media (Telegram file_id)
+     wizualny + temat + guidance)
+  -> media jsonb: kind='visual_prompt' (prompt do RECZNEJ roboty) - ZERO auto-obrazu (25/07)
+Wyzwalacze OBRAZU (tylko na zadanie): guzik 🎨 Generuj na karcie,
+  narzedzie generate_material_image w rozmowie CM. AUTO-obraz przed karta i przy
+  dispatchu = WYLACZONE (kanon 25/07).
+Guzik 📋 Prompt: wysyla media[].image_prompt (takze z visual_prompt) do skopiowania
+  w generator Tomasza; wynik wraca przez ➕ Media (Telegram file_id)
 describe_material_image: agent OGLADA grafike materialu (vision) i rozmawia
   o niej; suggest_comment_from_image: vision na cudzych postach (subagent)
 ```

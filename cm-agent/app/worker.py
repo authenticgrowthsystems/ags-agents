@@ -227,35 +227,28 @@ def _x_collector_tick():
 
 
 # ---------------- state machine ----------------
-def _auto_image_enabled():
-    """Feedback Tomasza 10/07 ('post do zatwierdzenia ma przychodzic OD RAZU z grafika'):
-    default ON; wylaczenie bez deployu przez /set cm_auto_image false (koszt gpt-image high)."""
-    row = db.fetchone(
-        "SELECT config_value FROM brand_config WHERE brand_id='AGS' AND config_key='cm_auto_image' ORDER BY version DESC LIMIT 1")
-    return str(((row or {}).get("config_value")) or "").strip().lower() not in ("false", "off", "0", "no")
-
-
 def _auto_generate_image(item, brand, hint, media):
-    """Grafika generuje sie AUTOMATYCZNIE przed karta zatwierdzenia, gdy sugestia wizualu to grafika
-    (zdjecie/screenshot/wideo = zadanie czlowieka, pomijamy). Prompt premium w kanonie wizualnym marki.
-    Zwraca zaktualizowana liste media (albo wejsciowa przy bledzie - material idzie dalej bez obrazu)."""
-    if not (hint and generate.hint_wants_generated_graphic(hint) and _auto_image_enabled()):
+    """KANON 25/07 (feedback Tomasza POWTORZONY - [[feedback_grafiki_tylko_prompty]]):
+    ZADNYCH auto-generowanych OBRAZOW dopoki nie ma dedykowanego Agenta Wizualnego. Auto-grafika
+    gpt-image wychodzila slabo, a slaba grafika szkodzi marce bardziej niz jej brak. Zamiast obrazu
+    dolaczamy SZCZEGOLOWY PROMPT - Tomasz generuje grafike recznie w swoim narzedziu.
+
+    Gdy sugestia wizualu to grafika (nie zdjecie/wideo - to i tak zadanie czlowieka), dolaczamy
+    do materialu pelny prompt (kind='visual_prompt'); karta pokaze go jako propozycje do skopiowania.
+    Zero kosztu gpt-image, zero wysylki obrazu. Guzik 🎨 Generuj NA ZADANIE zostaje osobno."""
+    if not (hint and generate.hint_wants_generated_graphic(hint)):
         return media
     if any((m or {}).get("file_id") for m in media):
-        return media  # material ma juz zalacznik (np. zdjecie Tomasza) - nie dokladamy drugiego
+        return media  # material ma juz zalacznik (np. zdjecie Tomasza) - nie dokladamy nic
+    if any((m or {}).get("kind") == "visual_prompt" for m in media):
+        return media  # prompt juz dolaczony (regeneracja) - nie dublujemy
     try:
         prompt = generate.generate_image_prompt(brand, item["master_theme"], item.get("canonical_body"),
                                                 hint, content_item_id=item["id"])
-        png = generate.generate_image(prompt)
-        chat = hitl._admin_chat_id()
-        fid = matreview._tg_upload_photo(chat, png,
-                                         f"🎨 AUTO-GRAFIKA (poleci z postem): {item['master_theme'][:120]}") if chat else None
-        if fid:
-            media = media + [{"source": "telegram", "file_id": fid, "kind": "photo", "generated": True,
-                              "image_prompt": prompt[:3400]}]  # 19/07: guzik 📋 Prompt na karcie go wysle
-            print(f"[cm] auto-image attached to {item['id']}", flush=True)
+        media = media + [{"kind": "visual_prompt", "text": prompt[:3400], "image_prompt": prompt[:3400]}]
+        print(f"[cm] visual prompt attached to {item['id']} (recznie, bez auto-obrazu)", flush=True)
     except Exception:
-        traceback.print_exc()  # brak obrazu nie blokuje materialu - karta przyjdzie bez grafiki
+        traceback.print_exc()  # brak promptu nie blokuje materialu - karta przyjdzie bez niego
     return media
 
 

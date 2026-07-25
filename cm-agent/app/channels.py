@@ -154,50 +154,14 @@ def _auto_obraz_wlaczony(brand_id, platform):
 
 
 def _ensure_li_graphic(item, r):
-    """REGULA Tomasza 23/07 (#280 wyszedl na LinkedIn bez grafiki): post bez pliku graficznego
-    dostaje AUTO-generowany obraz przy dispatchu, PRZED publikacja. Porazka generacji NIE blokuje
-    publikacji - post idzie tekstowo, slad w logu. Obraz laduje tez na Telegramie (podglad)
-    i materiale. Od 24/07 dotyczy KAZDEGO kanalu z flaga auto_image (parytet subagentow)."""
-    import json as _json
-    import traceback as _tb
-    media = r.get("media") or []
-    if isinstance(media, str):
-        try:
-            media = _json.loads(media)
-        except Exception:
-            media = []
-    if any(isinstance(m, dict) and m.get("file_id") for m in media):
-        return
-    try:
-        from . import generate, matreview, hitl
-        from .brand import load_brand
-        hint = next((m.get("text") for m in (item.get("media") or [])
-                     if isinstance(m, dict) and m.get("kind") == "suggestion"), "")
-        brand = load_brand(item.get("brand_id") or "AGS")
-        try:
-            prompt = generate.generate_image_prompt(
-                brand, item.get("master_theme"), r.get("content") or item.get("canonical_body"),
-                hint, content_item_id=item["id"])
-        except Exception:
-            prompt = (f"Professional social media graphic for a {r.get('platform') or 'social'} post. Theme: "
-                      f"{(item.get('master_theme') or '')[:300]}. Clean, modern tech aesthetic, "
-                      f"high contrast, no watermarks, no real faces, no fake event photos.")
-        png = generate.generate_image(prompt)
-        chat = hitl._admin_chat_id()
-        fid = matreview._tg_upload_photo(
-            chat, png, f"🎨 AUTO-grafika (LinkedIn bez pliku) do #{r['id']}: "
-                       f"{(item.get('master_theme') or '')[:80]}") if chat else None
-        if not fid:
-            return
-        desc = {"source": "telegram", "file_id": fid, "kind": "photo", "generated": True,
-                "auto": "li_dispatch", "image_prompt": prompt[:3000]}
-        db.execute("UPDATE post_queue SET media = %s::jsonb WHERE id=%s",
-                   (_json.dumps([desc]), r["id"]))
-        db.execute("UPDATE content_items SET media = COALESCE(media,'[]'::jsonb) || %s::jsonb "
-                   "WHERE id=%s", (_json.dumps([desc]), item["id"]))
-        r["media"] = [desc]
-    except Exception:
-        _tb.print_exc()
+    """KANON 25/07 (feedback Tomasza POWTORZONY - [[feedback_grafiki_tylko_prompty]]): przy
+    dispatchu NIE generujemy juz obrazu automatycznie. Auto-grafika gpt-image wychodzila slabo,
+    a slaba grafika szkodzi marce bardziej niz jej brak. Post bez dolaczonego pliku idzie
+    TEKSTOWO (Tomasz woli tekst niz amatorski auto-obraz); szczegolowy prompt do recznego
+    wygenerowania jest na KARCIE zatwierdzenia (kind='visual_prompt'), wiec grafike dodaje sam
+    PRZED zatwierdzeniem, gdy chce. Funkcja zostaje jako no-op pod flaga auto_image na wypadek,
+    gdyby ktos ja wlaczyl - ale domyslnie flaga jest OFF (patrz DDL / SQL 25/07)."""
+    return  # celowy no-op: zero auto-generowania obrazu (kanon 25/07)
 
 
 def dispatch_item(item):
