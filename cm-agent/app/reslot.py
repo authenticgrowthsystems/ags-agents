@@ -29,10 +29,26 @@ from .slots import _parse_window, _daily_cap
 
 WARSAW = ZoneInfo("Europe/Warsaw")
 ACTIVE_STATUSES = ("review", "scheduled", "queued", "held")
-# rownomierna siatka dnia (do `cap` gniazd); humanize_slot doda ludzka minute i +/-15
-GRID = [datetime.time(10, 0), datetime.time(12, 30), datetime.time(15, 0),
-        datetime.time(17, 30), datetime.time(20, 0)]
 MIN_GAP_MIN = 30  # nowy slot nie blizej niz 30 min od istniejacego tego dnia
+
+
+def _grid(ws, we, n):
+    """`n` rownomiernych gniazd W OKNIE kanalu (srodki rownych przedzialow).
+
+    BUG NAPRAWIONY 25/07 (dowod: dry pokazal 3/dzien zamiast 5): stala siatka
+    10:00/12:30/... nie pasowala do okna X (13:00-22:00) - dwa pierwsze gniazda
+    wypadaly PRZED oknem, wiec na dzien wchodzily tylko 3. Siatke liczymy z faktycznego
+    okna, wiec kazde gniazdo jest w [ws, we] i wykorzystujemy pelna kadencje."""
+    start = ws.hour * 60 + ws.minute
+    end = we.hour * 60 + we.minute
+    if n <= 0 or end <= start:
+        return [ws]
+    step = (end - start) / n
+    out = []
+    for i in range(n):
+        m = int(start + step * i + step / 2)
+        out.append(datetime.time(m // 60, m % 60))
+    return out
 
 
 def _human_minute(base, row_id):
@@ -80,13 +96,17 @@ def _sequence(rows):
     return seq
 
 
-def plan(brand_id="AGS", channel="x"):
-    """Zwraca (zmiany, rozklad_dni, cap). zmiany = [(id, ci, stary_slot, nowy_slot, tresc)].
+def plan(brand_id="AGS", channel="x", per_day=None):
+    """Zwraca (zmiany, rozklad_dni, na_dzien). zmiany = [(id, ci, stary_slot, nowy_slot, tresc)].
     Przeplanowuje CALA kolejke: serie w ciaglych blokach, czesci w kolejnosci narracyjnej,
-    od dzis, max cap/dzien, rownomierna siatka, ludzka minuta. Zero zapisu do bazy."""
+    od dzis, `na_dzien` publikacji na dobe (domyslnie sufit kadencji), gniazda z OKNA kanalu,
+    ludzka minuta deterministyczna. per_day: nadpisz gestosc (nie moze przekroczyc sufitu).
+    Zero zapisu do bazy."""
     cfg = _cfg(brand_id, channel)
     cap = _daily_cap(cfg, channel) or 5
+    na_dzien = min(per_day, cap) if per_day else cap
     ws, we = _parse_window(cfg.get("publish_windows"), channel)
+    grid = _grid(ws, we, na_dzien)   # dokladnie `na_dzien` gniazd, wszystkie w oknie
     now = datetime.datetime.now(WARSAW)
     seq = _sequence(_rows(brand_id, channel))
 
@@ -95,12 +115,10 @@ def plan(brand_id="AGS", channel="x"):
     probe = now.date()
     for r in seq:
         placed = None
-        for _ in range(120):  # bezpiecznik: max 120 dni w przod
+        for _ in range(180):  # bezpiecznik: max 180 dni w przod
             slots_today = used_by_day.get(probe, [])
-            if len(slots_today) < cap:
-                for gt in GRID[:cap]:
-                    if not (ws <= gt <= we):
-                        continue
+            if len(slots_today) < na_dzien:
+                for gt in grid:
                     cand = datetime.datetime.combine(probe, gt, WARSAW)
                     if cand <= now + datetime.timedelta(minutes=5):
                         continue
@@ -118,15 +136,15 @@ def plan(brand_id="AGS", channel="x"):
                 changes.append((r["id"], r["content_item_id"], old, placed, r["tresc"]))
 
     rozklad = {d: len(v) for d, v in sorted(used_by_day.items())}
-    return changes, rozklad, cap
+    return changes, rozklad, na_dzien
 
 
-def _print_plan(brand_id, channel):
-    changes, rozklad, cap = plan(brand_id, channel)
-    print(f"\n=== RE-SLOT {brand_id}/{channel} (sufit {cap}/dzien) ===", flush=True)
+def _print_plan(brand_id, channel, per_day=None):
+    changes, rozklad, na_dzien = plan(brand_id, channel, per_day)
+    print(f"\n=== RE-SLOT {brand_id}/{channel} ({na_dzien}/dzien) ===", flush=True)
     print("\nROZKLAD PO ZMIANIE (dzien: liczba postow):", flush=True)
     for d, n in rozklad.items():
-        flag = "  <-- PELNY" if n >= cap else ""
+        flag = "  <-- PELNY" if n >= na_dzien else ""
         print(f"  {d.strftime('%d/%m %a')}: {n}{flag}", flush=True)
     print(f"\nPRZENIESIENIA ({len(changes)} wierszy; reszta zostaje jak jest):", flush=True)
     for _id, _ci, old, new, tresc in changes:
@@ -136,8 +154,8 @@ def _print_plan(brand_id, channel):
     return changes
 
 
-def apply(brand_id="AGS", channel="x"):
-    changes = _print_plan(brand_id, channel)
+def apply(brand_id="AGS", channel="x", per_day=None):
+    changes = _print_plan(brand_id, channel, per_day)
     if not changes:
         print("\nNic do przeniesienia - kolejka juz sie zgadza.", flush=True)
         return
@@ -148,15 +166,16 @@ def apply(brand_id="AGS", channel="x"):
             # content_items trzyma CZYSTY slot planu (bez jittera) - dla higieny ci<->pq
             db.execute("UPDATE content_items SET scheduled_for=%s, updated_at=NOW() WHERE id=%s",
                        (new.replace(second=0, microsecond=0), ci))
-    print(f"\nWYKONANE: przeniesiono {len(changes)} wierszy. Kolejka zgodna z sufitem {_daily_cap(_cfg(brand_id, channel), channel)}/dzien.",
-          flush=True)
+    print(f"\nWYKONANE: przeniesiono {len(changes)} wierszy.", flush=True)
 
 
 if __name__ == "__main__":
+    # uzycie: python -m app.reslot <dry|apply> [na_dzien] [brand] [channel]
     cmd = sys.argv[1] if len(sys.argv) > 1 else "dry"
-    bid = sys.argv[2] if len(sys.argv) > 2 else "AGS"
-    ch = sys.argv[3] if len(sys.argv) > 3 else "x"
+    pd = int(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2].isdigit() else None
+    bid = sys.argv[3] if len(sys.argv) > 3 else "AGS"
+    ch = sys.argv[4] if len(sys.argv) > 4 else "x"
     if cmd == "apply":
-        apply(bid, ch)
+        apply(bid, ch, pd)
     else:
-        _print_plan(bid, ch)
+        _print_plan(bid, ch, pd)

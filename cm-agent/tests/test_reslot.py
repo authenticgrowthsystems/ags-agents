@@ -21,9 +21,12 @@ sys.modules["app"] = pkg
 QUEUE = []  # lista wierszy (dict) - ustawiana w tescie
 
 
+WINDOW = {"v": "13:00-22:00"}  # okno X jak w produkcji (bug 25/07: siatka musi je respektowac)
+
+
 def _fetchall(sql, params=None):
     if "FROM channels" in sql:
-        return [{"config": {"posts_per_day": "3-5", "publish_windows": "09:00-21:00"}}]
+        return [{"config": {"posts_per_day": "3-5", "publish_windows": WINDOW["v"]}}]
     if "FROM post_queue" in sql:
         return list(QUEUE)
     return []
@@ -31,7 +34,7 @@ def _fetchall(sql, params=None):
 
 def _fetchone(sql, params=None):
     if "FROM channels" in sql:
-        return {"config": {"posts_per_day": "3-5", "publish_windows": "09:00-21:00"}}
+        return {"config": {"posts_per_day": "3-5", "publish_windows": WINDOW["v"]}}
     return None
 
 
@@ -106,11 +109,23 @@ check("zaden post serii TT nie wpada w srodek bloku SS",
 check("TT tez w kolejnosci id (#10<#11<#12)", tt[0] < tt[1] < tt[2],
       [t.strftime('%d/%m %H:%M') for t in tt])
 
-print("\n[reslot v2] nowe sloty poprawne:")
+print("\n[reslot v2] gniazda z OKNA kanalu (bug 25/07: siatka nie wykorzystywala okna):")
+import datetime as _d2  # noqa: E402
+grid5 = reslot._grid(_d2.time(13, 0), _d2.time(22, 0), 5)
+check("okno 13-22, 5 gniazd -> wszystkie w oknie", all(_d2.time(13, 0) <= g <= _d2.time(22, 0) for g in grid5), grid5)
+check("okno 13-22, 5 gniazd -> dokladnie 5", len(grid5) == 5, grid5)
+
+print("\n[reslot v2] nowe sloty poprawne (okno 13-22):")
 now = _dt.datetime.now(WARSAW)
 for _id, _ci, _old, new, _t in changes:
     check(f"#{_id} w przyszlosci, ludzka minuta, w oknie",
-          new > now and new.minute % 15 != 0 and 9 <= new.hour <= 21, new)
+          new > now and new.minute % 15 != 0 and 13 <= new.hour <= 22, new)
+
+print("\n[reslot v2] gestosc sterowalna (per_day):")
+ch3, roz3, nd3 = reslot.plan("AGS", "x", per_day=3)
+check("per_day=3 -> max 3/dzien", nd3 == 3 and all(n <= 3 for n in roz3.values()), roz3)
+ch9, roz9, nd9 = reslot.plan("AGS", "x", per_day=9)
+check("per_day=9 -> przyciete do sufitu 5", nd9 == 5, nd9)
 
 print("\n[reslot v2] idempotencja: drugi przebieg nic nie zmienia:")
 for r in QUEUE:
