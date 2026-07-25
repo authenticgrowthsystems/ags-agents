@@ -1,5 +1,5 @@
-"""Test re-slottera kolejki X (25/07): przeladowane dni schodza do sufitu, pierwsze `cap`
-kazdego dnia zostaja nietkniete, nadmiar kaskaduje w kolejnosci (serie spojne).
+"""Test re-slottera kolejki X v2 (25/07, "dopracuj: cale serie razem"): serie w ciaglych
+blokach, czesci w kolejnosci narracyjnej (id), zaden dzien ponad sufit, ludzkie minuty.
 Stdlib only, baza podstawiona stubem. Uruchomienie: python cm-agent/tests/test_reslot.py"""
 import datetime as _dt
 import pathlib
@@ -56,59 +56,67 @@ def _slot(day, h, m):
     return _dt.datetime.combine(day, _dt.time(h, m), WARSAW)
 
 
-# Zbuduj przeladowana kolejke: dzien "za 2 dni" ma 7 postow (dwie serie), dzien "+3" ma 3.
-baza = (_dt.datetime.now(WARSAW) + _dt.timedelta(days=2)).date()
-dzien2 = baza + _dt.timedelta(days=1)
+# Kolejka jak PO pierwszym re-slocie: serie ROZPROSZONE (scheduled_for nie odzwierciedla juz
+# kolejnosci narracyjnej), a id ja trzyma. Seria SS (id 1-6, 6 czesci) rozbita na rozne dni,
+# w tym czesc #1 (hook) PO czesci #2 wg scheduled_for. Seria TT (id 10-12). Jeden bez slotu.
+baza = (_dt.datetime.now(WARSAW) + _dt.timedelta(days=1)).date()
+d2 = baza + _dt.timedelta(days=1)
+d3 = baza + _dt.timedelta(days=2)
 QUEUE = [
-    # seria A (ci='AAA') - 4 czesci tego samego dnia
-    {"id": 1, "content_item_id": "AAA", "scheduled_for": _slot(baza, 10, 5), "status": "scheduled", "tresc": "A1"},
-    {"id": 2, "content_item_id": "AAA", "scheduled_for": _slot(baza, 12, 40), "status": "scheduled", "tresc": "A2"},
-    {"id": 3, "content_item_id": "AAA", "scheduled_for": _slot(baza, 15, 3), "status": "scheduled", "tresc": "A3"},
-    {"id": 4, "content_item_id": "AAA", "scheduled_for": _slot(baza, 17, 33), "status": "scheduled", "tresc": "A4"},
-    # seria B (ci='BBB') - 3 czesci tego samego dnia (to one wypchna dzien ponad 5)
-    {"id": 5, "content_item_id": "BBB", "scheduled_for": _slot(baza, 19, 2), "status": "scheduled", "tresc": "B1"},
-    {"id": 6, "content_item_id": "BBB", "scheduled_for": _slot(baza, 20, 11), "status": "scheduled", "tresc": "B2"},
-    {"id": 7, "content_item_id": "BBB", "scheduled_for": _slot(baza, 20, 55), "status": "scheduled", "tresc": "B3"},
-    # dzien +3: tylko 2 posty (miejsce na nadmiar)
-    {"id": 8, "content_item_id": "CCC", "scheduled_for": _slot(dzien2, 11, 7), "status": "scheduled", "tresc": "C1"},
-    {"id": 9, "content_item_id": "CCC", "scheduled_for": _slot(dzien2, 16, 20), "status": "scheduled", "tresc": "C2"},
-    # jeden bez slotu (ma trafic na koniec)
-    {"id": 10, "content_item_id": "DDD", "scheduled_for": None, "status": "review", "tresc": "D1"},
+    # seria SS (ci='SS', id 1-6) - ROZPROSZONA: #1 (hook) ma pozniejszy slot niz #2-#4
+    {"id": 1, "content_item_id": "SS", "scheduled_for": _slot(d3, 14, 3), "status": "scheduled", "tresc": "SS-hook"},
+    {"id": 2, "content_item_id": "SS", "scheduled_for": _slot(baza, 10, 5), "status": "scheduled", "tresc": "SS-2"},
+    {"id": 3, "content_item_id": "SS", "scheduled_for": _slot(baza, 12, 40), "status": "scheduled", "tresc": "SS-3"},
+    {"id": 4, "content_item_id": "SS", "scheduled_for": _slot(baza, 15, 3), "status": "scheduled", "tresc": "SS-4"},
+    {"id": 5, "content_item_id": "SS", "scheduled_for": _slot(d2, 17, 33), "status": "scheduled", "tresc": "SS-5"},
+    {"id": 6, "content_item_id": "SS", "scheduled_for": _slot(d2, 19, 2), "status": "scheduled", "tresc": "SS-6"},
+    # seria TT (ci='TT', id 10-12) - swiezo rozbita: IDENTYCZNY slot (kolejnosc tylko z id)
+    {"id": 10, "content_item_id": "TT", "scheduled_for": _slot(d3, 14, 12), "status": "review", "tresc": "TT-1"},
+    {"id": 11, "content_item_id": "TT", "scheduled_for": _slot(d3, 14, 12), "status": "review", "tresc": "TT-2"},
+    {"id": 12, "content_item_id": "TT", "scheduled_for": _slot(d3, 14, 12), "status": "review", "tresc": "TT-3"},
+    # wiersz bez serii i bez slotu
+    {"id": 20, "content_item_id": None, "scheduled_for": None, "status": "review", "tresc": "solo"},
 ]
 
 changes, rozklad, cap = reslot.plan("AGS", "x")
+nowy = {c[0]: c[3] for c in changes}
+# pelny nowy slot per id (zmienione + niezmienione) - do sprawdzenia kolejnosci calej sekwencji
+wszystkie = dict(nowy)
+for r in QUEUE:
+    if r["id"] not in wszystkie and r["scheduled_for"] is not None:
+        wszystkie[r["id"]] = r["scheduled_for"]
 
-print("\n[reslot] sufit i rozklad:")
+print("\n[reslot v2] sufit i rozklad:")
 check("cap = 5 (gorna granica 3-5)", cap == 5, cap)
 check("zaden dzien nie przekracza sufitu", all(n <= cap for n in rozklad.values()), rozklad)
 
-print("\n[reslot] pierwsze 5 przeladowanego dnia ZOSTAJA (nietkniete):")
-zmienione_ids = {c[0] for c in changes}
-check("#1-#5 (pierwsze 5 chronologicznie) nie ruszone",
-      zmienione_ids.isdisjoint({1, 2, 3, 4, 5}), zmienione_ids)
-check("#6 i #7 (nadmiar 6. i 7.) przeniesione", {6, 7}.issubset(zmienione_ids), zmienione_ids)
-check("#10 (bez slotu) dostal slot", 10 in zmienione_ids, zmienione_ids)
+print("\n[reslot v2] SERIA w kolejnosci narracyjnej (id), nie po starym slocie:")
+ss = [wszystkie[i] for i in (1, 2, 3, 4, 5, 6)]
+check("SS: #1(hook) < #2 < #3 < #4 < #5 < #6 wg NOWYCH slotow",
+      all(ss[k] < ss[k + 1] for k in range(5)), [s.strftime('%d/%m %H:%M') for s in ss])
+check("SS-hook (#1) PRZED SS-2 (#2) - mimo ze stary slot #1 byl pozniejszy",
+      wszystkie[1] < wszystkie[2], (wszystkie[1], wszystkie[2]))
 
-print("\n[reslot] nowe sloty poprawne:")
+print("\n[reslot v2] SERIA jest CIAGLA (blok, bez obcych postow w srodku):")
+# miedzy pierwszym a ostatnim slotem serii SS nie ma slotu z serii TT
+ss_min, ss_max = min(ss), max(ss)
+tt = [wszystkie[i] for i in (10, 11, 12)]
+check("zaden post serii TT nie wpada w srodek bloku SS",
+      not any(ss_min < t < ss_max for t in tt), [t.strftime('%d/%m %H:%M') for t in tt])
+check("TT tez w kolejnosci id (#10<#11<#12)", tt[0] < tt[1] < tt[2],
+      [t.strftime('%d/%m %H:%M') for t in tt])
+
+print("\n[reslot v2] nowe sloty poprawne:")
 now = _dt.datetime.now(WARSAW)
 for _id, _ci, _old, new, _t in changes:
-    check(f"#{_id} nowy slot w przyszlosci", new > now, new)
-    check(f"#{_id} ludzka minuta (nie rowny kwadrans)", new.minute % 15 != 0, new.minute)
-    check(f"#{_id} w oknie 09-21", 9 <= new.hour <= 21, new.hour)
+    check(f"#{_id} w przyszlosci, ludzka minuta, w oknie",
+          new > now and new.minute % 15 != 0 and 9 <= new.hour <= 21, new)
 
-print("\n[reslot] serie zachowuja kolejnosc:")
-# #6 (B2) i #7 (B3) - nadmiar serii B - po przeniesieniu #7 nie przed #6
-b_nowe = {c[0]: c[3] for c in changes if c[0] in (6, 7)}
-if 6 in b_nowe and 7 in b_nowe:
-    check("B2 (#6) przed B3 (#7) po przeniesieniu", b_nowe[6] < b_nowe[7], b_nowe)
-
-print("\n[reslot] idempotencja: drugi przebieg nic nie zmienia:")
-# zasymuluj zastosowanie: podmien sloty w QUEUE na nowe, usun None
-applied = {c[0]: c[3] for c in changes}
+print("\n[reslot v2] idempotencja: drugi przebieg nic nie zmienia:")
 for r in QUEUE:
-    if r["id"] in applied:
-        r["scheduled_for"] = applied[r["id"]]
-changes2, rozklad2, _ = reslot.plan("AGS", "x")
+    if r["id"] in nowy:
+        r["scheduled_for"] = nowy[r["id"]]
+changes2, _, _ = reslot.plan("AGS", "x")
 check("po zastosowaniu planu drugi przebieg = 0 zmian", len(changes2) == 0, len(changes2))
 
 print("\n" + ("WSZYSTKIE TESTY PASS" if not FAILS else f"FAIL: {len(FAILS)} -> {FAILS}"))

@@ -6,15 +6,14 @@ Kolejka X urosla do 64 wierszy przez ~2 tygodnie i wiele dni ma WIECEJ niz kaden
 sufit ZANIM sufit kadencji powstal (slots._daily_cap, 25/07). Ten skrypt sprzata to, co
 juz w kolejce lezy - kanon "zalegle dane po naprawie".
 
-ZASADA (dokladnie to, o co prosil Tomasz: "poustawiac tak by sie zgadzalo, a nadmiar
-merytorycznie i logicznie spojnie przerzucic na nastepne dni"):
-- Kazdy dzien zachowuje PIERWSZE `cap` publikacji chronologicznie - NIETKNIETE (ich sloty
-  i grafiki zostaja; nie ruszamy tego, co dzis juz zaplanowane z zalacznikami).
-- NADMIAR (6., 7., ... danego dnia) + wiersze BEZ slotu kaskaduja na najblizsze dni z
-  wolnym miejscem, w KOLEJNOSCI - a poniewaz kolejnosc jest chronologiczna, a kazda seria
-  jest chronologiczna, czesci serii ladują dalej w swojej kolejnosci (spojnosc zachowana).
-- Nowy slot: wolne gniazdo z rownomiernej siatki dnia (10:00/12:30/15:00/17:30/20:00),
-  z ludzka minuta (humanize_slot), >30 min od kazdego istniejacego slotu dnia, w przyszlosci.
+ZASADA (v2, decyzja Tomasza 25/07 "dopracuj: cale serie razem" - grupowanie po serii):
+- Przeplanowujemy CALA przyszla kolejke od dzis: SERIE w ciaglych blokach, czesci w
+  kolejnosci NARRACYJNEJ. Hook idzie przed rozwinieciem, seria nie jest porozrzucana.
+- Kolejnosc czesci w serii = `id` ASC (kolejnosc wstawiania przez stage_variant =
+  narracyjna). NIE scheduled_for - ten zostal rozproszony poprzednim re-slotem v1.
+- Kolejnosc SERII = najnizsze id (material powstal wczesniej -> publikuje sie wczesniej).
+- Sloty: rownomierna siatka dnia (10:00/12:30/15:00/17:30/20:00), max cap/dzien, ludzka
+  minuta (humanize_slot), w oknie, w przyszlosci. Dzien pelny -> seria plynie na kolejny.
 - Media (grafiki Tomasza) NIE sa ruszane - zmieniamy WYLACZNIE scheduled_for.
 
 Uruchomienie (SSH, Tomasz):
@@ -26,7 +25,7 @@ import sys
 from zoneinfo import ZoneInfo
 
 from . import db
-from .slots import humanize_slot, _parse_window, _daily_cap
+from .slots import _parse_window, _daily_cap
 
 WARSAW = ZoneInfo("Europe/Warsaw")
 ACTIVE_STATUSES = ("review", "scheduled", "queued", "held")
@@ -34,6 +33,14 @@ ACTIVE_STATUSES = ("review", "scheduled", "queued", "held")
 GRID = [datetime.time(10, 0), datetime.time(12, 30), datetime.time(15, 0),
         datetime.time(17, 30), datetime.time(20, 0)]
 MIN_GAP_MIN = 30  # nowy slot nie blizej niz 30 min od istniejacego tego dnia
+
+
+def _human_minute(base, row_id):
+    """Ludzka minuta DETERMINISTYCZNA per wiersz (nie losowa jak humanize_slot). Determinizm
+    jest tu konieczny: bez niego kazdy dry/apply dawalby inne sloty i re-slotter nie bylby
+    idempotentny (drugi przebieg zawsze widzialby 'zmiany'). Gniazdo pelna godzina -> +3..+13
+    minut z id: nigdy rowny kwadrans (:00/:15/:30/:45 wyglada maszynowo, kanon 19/07)."""
+    return base + datetime.timedelta(minutes=3 + (row_id * 7) % 11)
 
 
 def _cfg(brand_id, channel):
@@ -55,62 +62,62 @@ def _rows(brand_id, channel):
         (brand_id, channel, list(ACTIVE_STATUSES), today0))
 
 
+def _sequence(rows):
+    """Kolejnosc publikacji: SERIE w calosci, czesci w kolejnosci NARRACYJNEJ.
+
+    Kolejnosc czesci w serii = `id` ASC (kolejnosc, w jakiej stage_variant je wstawial =
+    narracyjna: hook, potem rozwiniecie). NIE scheduled_for - ten zostal rozproszony
+    poprzednim re-slotem, wiec nie odzwierciedla juz kolejnosci mysli. Kolejnosc SERII =
+    najnizsze id w serii (material powstal wczesniej -> idzie wczesniej). Wiersze bez
+    content_item_id = seria jednoelementowa."""
+    groups = {}
+    for r in rows:
+        key = r["content_item_id"] or f"single:{r['id']}"
+        groups.setdefault(key, []).append(r)
+    seq = []
+    for key in sorted(groups, key=lambda k: min(x["id"] for x in groups[k])):
+        seq.extend(sorted(groups[key], key=lambda x: x["id"]))
+    return seq
+
+
 def plan(brand_id="AGS", channel="x"):
-    """Zwraca (zmiany, rozklad_dni). zmiany = [(id, stary_slot, nowy_slot, tresc)];
-    rozklad_dni = {date: liczba_postow_po}. Zero zapisu do bazy."""
+    """Zwraca (zmiany, rozklad_dni, cap). zmiany = [(id, ci, stary_slot, nowy_slot, tresc)].
+    Przeplanowuje CALA kolejke: serie w ciaglych blokach, czesci w kolejnosci narracyjnej,
+    od dzis, max cap/dzien, rownomierna siatka, ludzka minuta. Zero zapisu do bazy."""
     cfg = _cfg(brand_id, channel)
     cap = _daily_cap(cfg, channel) or 5
     ws, we = _parse_window(cfg.get("publish_windows"), channel)
     now = datetime.datetime.now(WARSAW)
-    rows = _rows(brand_id, channel)
+    seq = _sequence(_rows(brand_id, channel))
 
-    # 1) podzial: pierwsze `cap` chronologicznie kazdego dnia ZOSTAJA; reszta + NULL -> nadmiar
-    keep_by_day = {}          # date -> [slot,...] (zajete, nietkniete)
-    kept_ids = set()
-    overflow = []
-    dated = [r for r in rows if r["scheduled_for"] is not None]
-    undated = [r for r in rows if r["scheduled_for"] is None]
-    by_day = {}
-    for r in dated:
-        d = r["scheduled_for"].astimezone(WARSAW).date()
-        by_day.setdefault(d, []).append(r)
-    for d in sorted(by_day):
-        day_rows = sorted(by_day[d], key=lambda r: (r["scheduled_for"], r["id"]))
-        for r in day_rows[:cap]:
-            keep_by_day.setdefault(d, []).append(r["scheduled_for"].astimezone(WARSAW))
-            kept_ids.add(r["id"])
-        overflow.extend(day_rows[cap:])
-    overflow.extend(undated)
-    # nadmiar w kolejnosci intencji (czas rosnaco, NULL na koniec, id)
-    overflow.sort(key=lambda r: (r["scheduled_for"] or datetime.datetime.max.replace(tzinfo=WARSAW), r["id"]))
-
-    # 2) rozklad nadmiaru na wolne gniazda kolejnych dni (od dzis)
     changes = []
-    day = now.date()
-    for r in overflow:
+    used_by_day = {}   # date -> [slot,...] przydzielone w tym planie
+    probe = now.date()
+    for r in seq:
         placed = None
-        probe = day
-        for _ in range(60):  # bezpiecznik: max 60 dni w przod
-            existing = keep_by_day.get(probe, [])
-            if len(existing) < cap:
-                for gt in GRID:
+        for _ in range(120):  # bezpiecznik: max 120 dni w przod
+            slots_today = used_by_day.get(probe, [])
+            if len(slots_today) < cap:
+                for gt in GRID[:cap]:
+                    if not (ws <= gt <= we):
+                        continue
                     cand = datetime.datetime.combine(probe, gt, WARSAW)
                     if cand <= now + datetime.timedelta(minutes=5):
                         continue
-                    if not (ws <= gt <= we):
-                        continue
-                    if all(abs((cand - e).total_seconds()) >= MIN_GAP_MIN * 60 for e in existing):
-                        placed = humanize_slot(cand)
+                    if all(abs((cand - e).total_seconds()) >= MIN_GAP_MIN * 60 for e in slots_today):
+                        placed = _human_minute(cand, r["id"])  # deterministyczne -> idempotentne
                         break
             if placed:
-                keep_by_day.setdefault(probe, []).append(placed)
+                used_by_day.setdefault(probe, []).append(placed)
                 break
-            probe = probe + datetime.timedelta(days=1)
+            probe = probe + datetime.timedelta(days=1)   # dzien pelny -> nastepny (serie ciagle)
         if placed:
-            changes.append((r["id"], r["content_item_id"], r["scheduled_for"], placed, r["tresc"]))
-        day = probe  # kolejny nadmiar zaczyna szukac od ostatnio uzytego dnia (rownomiernie w przod)
+            old = r["scheduled_for"]
+            # zglaszamy tylko realna zmiane (co do minuty) - reszta zostaje
+            if old is None or abs((placed - old.astimezone(WARSAW)).total_seconds()) >= 60:
+                changes.append((r["id"], r["content_item_id"], old, placed, r["tresc"]))
 
-    rozklad = {d: len(v) for d, v in sorted(keep_by_day.items())}
+    rozklad = {d: len(v) for d, v in sorted(used_by_day.items())}
     return changes, rozklad, cap
 
 

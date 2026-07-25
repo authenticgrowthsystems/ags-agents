@@ -64,13 +64,16 @@ Przypomnij jutro), nigdy auto-decyzja.
   kolejny dzien. Sufit jest niezalezny od gap/siatki/jittera (liczy WSZYSTKIE
   sloty dnia z content_items + post_queue). Test: cm-agent/tests/test_kadencja_sufit.py.
 - RE-SLOTTER `app.reslot` (25/07, sprzatanie kolejki sprzed sufitu): kolejka X urosla
-  do 64 wierszy z dniami po 7-9 postow (serie rozlewaly sie ZANIM powstal sufit). Skrypt
-  jednorazowy: kazdy dzien zachowuje PIERWSZE `cap` chronologicznie NIETKNIETE (sloty
-  i grafiki zostaja), a NADMIAR + wiersze bez slotu kaskaduja na najblizsze wolne dni
-  w kolejnosci (serie chronologiczne = czesci ladują dalej w porzadku). Zmienia WYLACZNIE
-  scheduled_for (media Tomasza nietkniete). `docker exec cm-agent python -m app.reslot dry`
-  = podglad, `... apply` = wykonanie. Idempotentny (drugi przebieg = 0 zmian).
-  Test: cm-agent/tests/test_reslot.py.
+  do 64 wierszy z dniami po 7-9 postow (serie rozlewaly sie ZANIM powstal sufit).
+  **v2 (decyzja Tomasza "cale serie razem"):** przeplanowuje CALA przyszla kolejke od dzis,
+  SERIE w ciaglych blokach, czesci w kolejnosci NARRACYJNEJ (`id` = kolejnosc wstawiania
+  przez stage_variant; NIE scheduled_for - ten rozprasza sie przy kolejnych re-slotach).
+  Hook idzie przed rozwinieciem, seria nie jest porozrzucana. Sloty: rownomierna siatka
+  dnia (10/12:30/15/17:30/20), max cap/dzien, LUDZKA MINUTA DETERMINISTYCZNA per id
+  (`_human_minute` - nie losowa, inaczej dry != apply i brak idempotencji). Zmienia
+  WYLACZNIE scheduled_for (media/grafiki Tomasza nietkniete). `docker exec cm-agent python
+  -m app.reslot dry` = podglad, `... apply` = wykonanie. Idempotentny (drugi przebieg = 0
+  zmian). Test: cm-agent/tests/test_reslot.py.
 - STRAZNIK JEZYKA (20/07): przed zapisem do kolejki wariant sprawdzany z
   `channels.config.language_publish`; gdy kanal 'en' a tekst wyglada po polsku
   (`compliance.looks_polish`) -> `generate.translate_text` na EN. Karta HITL
