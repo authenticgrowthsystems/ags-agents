@@ -67,6 +67,27 @@ def channel_rules(brand_id, channels_list):
     return out
 
 
+def _daily_cap(cfg, channel):
+    """Twardy SUFIT liczby publikacji na dzien (kanon 25/07, zgloszenie Tomasza: seria X
+    rozlewala sie ponad kadencje - 7-8 postow zamiast 3-5).
+
+    Gap w channel_rules wymusza tylko ODSTEP miedzy postami, nie ich LICZBE: seria wolana
+    z prefer_today upycha kolejne czesci, az okno sie wypelni. Ten limit jest niezalezny od
+    gap/siatki/jittera - gdy dzien ma juz `cap` postow, next_slot przechodzi na kolejny dzien.
+    Dla X: GORNA granica posts_per_day ('3-5' -> 5 = maksimum kadencji). LinkedIn: 1 (kanon 11d).
+    Zwraca None = brak limitu."""
+    fam = channel.split("_")[0]
+    if fam == "x":
+        raw = str(cfg.get("posts_per_day", "5")).replace(" ", "")
+        try:
+            return max(int(p) for p in raw.split("-") if p.isdigit())
+        except ValueError:
+            return 5
+    if fam == "linkedin":
+        return 1
+    return None
+
+
 def _busy(brand_id, channel, day_start, day_end):
     rows = db.fetchall(
         """SELECT scheduled_for FROM content_items
@@ -100,6 +121,11 @@ def next_slot(brand_id, channels_list, is_article=False, prefer_today=True):
     rules = channel_rules(brand_id, channels_list)
     if not rules:
         return None
+    # SUFIT KADENCJI (kanon 25/07): ile publikacji dziennie wolno na KAZDYM kanale materialu.
+    cfg_rows = db.fetchall(
+        "SELECT channel, config FROM channels WHERE brand_id=%s AND channel = ANY(%s)",
+        (brand_id, list(channels_list)))
+    caps = {r["channel"]: _daily_cap(r.get("config") or {}, r["channel"]) for r in cfg_rows}
     now = datetime.datetime.now(WARSAW)
     start_day = now.date() if prefer_today else (now + datetime.timedelta(days=1)).date()
     grids = [g for *_, g in rules if g]
@@ -116,6 +142,10 @@ def next_slot(brand_id, channels_list, is_article=False, prefer_today=True):
         day_start = datetime.datetime.combine(day, datetime.time(0, 0), WARSAW)
         day_end = day_start + datetime.timedelta(days=1)
         busy = {ch: _busy(brand_id, ch, day_start, day_end) for ch, *_ in rules}
+        # SUFIT KADENCJI: dzien, w ktorym KTORYKOLWIEK kanal materialu osiagnal juz swoj limit,
+        # jest pelny - kolejna czesc serii idzie na nastepny dzien (kanon 25/07, twardy sufit).
+        if any(caps.get(ch) is not None and len(busy[ch]) >= caps[ch] for ch, *_ in rules):
+            continue
         # siatka (jesli ustawiona) > skan co GRANULARITY_MIN w oknie
         if grid_times:
             candidates = [datetime.datetime.combine(day, gt, WARSAW) for gt in grid_times

@@ -55,6 +55,14 @@ Przypomnij jutro), nigdy auto-decyzja.
   markerem `===POST===`, po slotach dnia, czesci publikowane SEKWENCYJNIE.
 - STRAZNIK: wariant >600 znakow bez `===POST===` = automatyczne ciecie po
   akapitach na serie. Grafika idzie tylko z czescia 1.
+- SUFIT KADENCJI (kanon 25/07, zgloszenie Tomasza "po co dzis tyle tweetow"):
+  seria rozbijala sie na sloty NIEZALEZNIE od kadencji - gap wymuszal tylko
+  ODSTEP miedzy postami, nie ich LICZBE, wiec czesci upychaly sie na dzis, az
+  okno sie wypelnilo (7-8 zamiast 3-5). Teraz `slots._daily_cap` daje twardy
+  sufit per kanal (X = gorna granica posts_per_day, np. '3-5' -> 5; LinkedIn = 1),
+  a `next_slot` pomija dzien, ktory osiagnal limit - nadmiar serii przechodzi na
+  kolejny dzien. Sufit jest niezalezny od gap/siatki/jittera (liczy WSZYSTKIE
+  sloty dnia z content_items + post_queue). Test: cm-agent/tests/test_kadencja_sufit.py.
 - STRAZNIK JEZYKA (20/07): przed zapisem do kolejki wariant sprawdzany z
   `channels.config.language_publish`; gdy kanal 'en' a tekst wyglada po polsku
   (`compliance.looks_polish`) -> `generate.translate_text` na EN. Karta HITL
