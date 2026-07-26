@@ -270,7 +270,57 @@ _LINE_TYPES = {"komentarz": "komentarz", "dm_wyslany": "dm_wyslany", "dm wyslany
                # paczka #1 Managera pkt 1 (24/07): eksport analityczny z panelu kanalu
                "kpi_snapshot": "kpi_snapshot", "kpi snapshot": "kpi_snapshot", "kpi": "kpi_snapshot",
                "metryki": "kpi_snapshot", "metryki_kanalu": "kpi_snapshot",
-               "metryki kanalu": "kpi_snapshot", "metryki kanału": "kpi_snapshot"}
+               "metryki kanalu": "kpi_snapshot", "metryki kanału": "kpi_snapshot",
+               # paczka #1 pkt 5, droga zapisu domknieta 27/07 (decyzja Managera): kto jest kim
+               # po stronie klienta. Kolumna i odczyt byly od DDL 030, brakowalo tylko wejscia.
+               "kto_jest_kim": "kto_jest_kim", "kto jest kim": "kto_jest_kim",
+               "who_is_who": "kto_jest_kim", "kto_to": "kto_jest_kim", "rola": "kto_jest_kim"}
+
+# ---- pkt 5: kto jest kim po stronie klienta (deterministycznie, zero LLM) ----
+# Kanon z DDL 030: `source_of_data` ZAWSZE wypelnione - bez zrodla to plotka, nie dana.
+# Gdy raport zrodla nie poda, wpisujemy uczciwie sam raport, a nie zgadujemy.
+_WHO_INFLUENCE = ("decydent", "wplywowy", "uzytkownik", "nieznany")
+_WHO_ALIASES = {"rola": "role", "role": "role", "stanowisko": "role", "funkcja": "role",
+                "wplyw": "influence_level", "wpływ": "influence_level",
+                "influence": "influence_level", "influence_level": "influence_level",
+                "zrodlo": "source_of_data", "źródło": "source_of_data", "zrodlo_danych": "source_of_data",
+                "source": "source_of_data", "source_of_data": "source_of_data",
+                "notka": "notes", "notatka": "notes", "notes": "notes",
+                "relacja": "relationship_stage", "relationship_stage": "relationship_stage"}
+
+
+def _who_fields(parts, stamp):
+    """Pola linii kto_jest_kim. Nierozpoznany klucz nie ginie - dokleja sie do notes.
+    Wartosc wplywu spoza skali laduje w notes, a samo pole dostaje 'nieznany' (nie zgadujemy)."""
+    out, luzne = {}, []
+    for raw in parts or []:
+        p = (raw or "").strip()
+        if not p:
+            continue
+        if "=" not in p and ":" not in p:
+            luzne.append(p[:200])
+            continue
+        sep = "=" if "=" in p else ":"
+        key, _, val = p.partition(sep)
+        k = _WHO_ALIASES.get(re.sub(r"\s+", "_", key.strip().lower()))
+        v = val.strip()
+        if not v:
+            continue
+        if k == "influence_level":
+            low = v.lower().replace("ł", "l").replace("ó", "o")
+            if low in _WHO_INFLUENCE:
+                out["influence_level"] = low
+            else:
+                out["influence_level"] = "nieznany"
+                luzne.append(f"wplyw wg raportu: {v[:60]}")
+        elif k:
+            out[k] = v[:300]
+        else:
+            luzne.append(f"{key.strip()[:40]}: {v[:120]}")
+    if luzne:
+        out["notes"] = ((out.get("notes", "") + " | ") if out.get("notes") else "") + " | ".join(luzne)
+    out.setdefault("source_of_data", f"RAPORT PRACY {stamp}")
+    return out
 def _valid_tiers():
     """Skala tierow trzymana w JEDNYM miejscu (crm.TIERS) - 24/07 doszedl 'Inne' (DDL 031)."""
     from . import crm
@@ -473,7 +523,7 @@ def apply_work_report(chat_id, text, active_agent=None):
     stamp = rep["date"] or datetime.date.today().strftime("%Y-%m-%d")
     cnt = {"komentarz": 0, "dm_wyslany": 0, "dm_odebrany": 0, "reakcja": 0,
            "nowa_osoba": 0, "znana_osoba": 0, "obserwacja": 0, "zaproszenie": 0,
-           "kpi_snapshot": 0}
+           "kpi_snapshot": 0, "kto_jest_kim": 0}
     dupes = 0
     tier_notes = []
     for typ, parts, raw_line in rep["entries"]:
@@ -555,6 +605,25 @@ def apply_work_report(chat_id, text, active_agent=None):
                                base_note + " | obserwacja radaru (kopia w inspirations)",
                                None, "logged", None)
                 cnt["obserwacja"] += 1
+            elif typ == "kto_jest_kim":
+                # pkt 5 paczki #1, droga zapisu domknieta 27/07. Kolumna contacts.who_is_who
+                # i odczyt (crm, naglowek gotowca) istnialy od DDL 030 - nie bylo tylko sposobu,
+                # zeby czlowiek to WPISAL. Merge JSONB: nowe klucze nadpisuja stare, reszta
+                # zostaje, wiec kolejne raporty uzupelniaja obraz zamiast go kasowac.
+                who = parts[0]
+                f = _who_fields(parts[1:], stamp)
+                contact_id, _new = crm.ensure_contact(who, brand, channel)
+                disp = crm.clean_author(who) or who
+                if contact_id:
+                    db.execute(
+                        """UPDATE contacts
+                           SET who_is_who = COALESCE(who_is_who, '{}'::jsonb) || %s::jsonb
+                           WHERE id=%s::uuid""", (Jsonb(f), contact_id))
+                opis = ", ".join(f"{k}: {v}" for k, v in f.items() if k != "notes")
+                _report_insert("other", channel, agent, opis or raw_line, None,
+                               base_note + " | kto jest kim (kartoteka klienta)",
+                               contact_id, "logged", disp)
+                cnt["kto_jest_kim"] += 1
             elif typ == "kpi_snapshot":
                 # pkt 1 paczki #1: liczby z panelu analitycznego (czat je WIDZI, serwer nie).
                 # Kolejny wpis o tej samej dacie i okresie NADPISUJE tylko pola, ktore przyszly
@@ -589,7 +658,7 @@ def apply_work_report(chat_id, text, active_agent=None):
               ("dm_odebrany", "DM odebrane"), ("reakcja", "reakcje"),
               ("zaproszenie", "zaproszenia"), ("nowa_osoba", "nowe osoby"),
               ("znana_osoba", "znane osoby zaktualizowane"), ("obserwacja", "obserwacje do radaru"),
-              ("kpi_snapshot", "wpisy metryk kanalu")]
+              ("kpi_snapshot", "wpisy metryk kanalu"), ("kto_jest_kim", "kartoteki kto jest kim")]
     saved = [f"{lbl}: {cnt[k]}" for k, lbl in labels if cnt[k]]
     lines = [f"📥 POTWIERDZENIE - RAPORT PRACY zapisany (kanal {channel}, {stamp}):",
              ("zapisane: " + ", ".join(saved)) if saved else "zapisane: nic nowego",

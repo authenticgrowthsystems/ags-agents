@@ -151,6 +151,35 @@ check("spacja jako separator tysiecy", f4["impressions"] == 1234, f4)
 check("obserwujacy -> followers_total", f4["followers_total"] == 1010, f4)
 
 
+# ---------------- pkt 5: kto jest kim (droga zapisu domknieta 27/07) ----------------
+print("\n[pkt 5] parser kto_jest_kim:")
+RAPORT_KIM = """[RAPORT PRACY v1] kanal: LinkedIn | data: 2026-07-26
+- kto_jest_kim | @rajmund | rola=wlasciciel | wplyw=decydent | zrodlo=raport wywiadowczy
+- kto jest kim | @lukasz | stanowisko=wiceprezes | wplyw=szara eminencja
+- kto_jest_kim | @anna | rola=asystentka
+[KONIEC RAPORTU]"""
+rep_kim = engagement.parse_work_report(RAPORT_KIM)
+kim = [e for e in rep_kim["entries"] if e[0] == "kto_jest_kim"]
+check("parser widzi 3 linie kto_jest_kim (takze alias ze spacja)", len(kim) == 3, [e[1] for e in kim])
+
+w1 = engagement._who_fields(kim[0][1][1:], "2026-07-26")
+check("rola trafia do role", w1.get("role") == "wlasciciel", w1)
+check("wplyw ze skali zostaje", w1.get("influence_level") == "decydent", w1)
+check("podane zrodlo nie jest nadpisywane", w1.get("source_of_data") == "raport wywiadowczy", w1)
+
+w2 = engagement._who_fields(kim[1][1][1:], "2026-07-26")
+check("stanowisko to alias roli", w2.get("role") == "wiceprezes", w2)
+check("wplyw spoza skali -> nieznany", w2.get("influence_level") == "nieznany", w2)
+check("slowo Tomasza nie ginie, siada w notatce",
+      "szara eminencja" in (w2.get("notes") or ""), w2)
+
+w3 = engagement._who_fields(kim[2][1][1:], "2026-07-26")
+check("brak zrodla = uczciwie sam raport, nie zgadywanie",
+      w3.get("source_of_data") == "RAPORT PRACY 2026-07-26", w3)
+check("brak wplywu = brak pola (nie domyslamy sie decydenta)",
+      "influence_level" not in w3, w3)
+
+
 # ---------------- pkt 7: fail-closed przed wykluczeniem z lejka ----------------
 print("\n[pkt 7] fail-closed (rekomendacja tieru wykluczajacego):")
 from app import crm  # noqa: E402

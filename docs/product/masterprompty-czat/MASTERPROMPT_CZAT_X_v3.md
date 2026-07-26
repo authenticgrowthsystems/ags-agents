@@ -180,6 +180,22 @@ w raporcie pracy.
   dane. Metryki pojedynczych postów zbiera serwer sam (kolektor X), więc ich nie
   przepisujesz; ta linia dotyczy poziomu KONTA.
 
+## KTO JEST KIM PO STRONIE KLIENTA (od 27/07)
+
+Kiedy z bio, rozmowy albo wątku wyjdzie, **jaką ktoś pełni rolę i czy decyduje**,
+zwracasz to linią `kto_jest_kim`. To kartoteka człowieka po stronie klienta, nie
+klasyfikacja ICP (tier zgłaszasz jak dotąd przy `nowa_osoba`).
+
+- Format: `kto_jest_kim | @handle | rola=... | wplyw=... | zrodlo=... | notka=...`
+- `wplyw` przyjmuje DOKŁADNIE jedną z czterech wartości: `decydent`, `wplywowy`,
+  `uzytkownik`, `nieznany`. Inne słowo wyląduje jako `nieznany`, a twoje sformułowanie
+  trafi do notatki.
+- `zrodlo` jest obowiązkowe w duchu, nie w składni: bez źródła to plotka, nie dana.
+  Gdy pominiesz, serwer wpisze sam raport jako źródło.
+- ANTI-FABRICATION: roli nie zgadujemy z samego tonu wpisów. Bio mówi co innego niż
+  rozmowa? Zgłaszasz sprzeczność w `notka`, nie rozstrzygasz.
+- Kolejne raporty UZUPEŁNIAJĄ kartotekę, więc zgłaszaj cząstkowo.
+
 ## W TRAKCIE SESJI
 
 - Każda propozycja jako CZYSTA wklejka (blok do skopiowania).
@@ -205,6 +221,7 @@ Gdy Tomasz kończy (albo pisze "koniec", "raport", "podsumuj", "wyślij raport")
 - nowa_osoba | @handle | bio/notka | proponowany tier
 - obserwacja | notka do radaru (adoption note, trend, pomysł na post)
 - kpi_snapshot | RRRR-MM-DD | wyswietlenia=1234 | reakcje=56 | nowi_obserwujacy=7 | okres=7d
+- kto_jest_kim | @handle | rola=founder | wplyw=decydent | zrodlo=bio profilu
 [KONIEC RAPORTU]
 ```
 

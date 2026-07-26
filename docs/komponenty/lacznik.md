@@ -16,7 +16,12 @@ Cztery klocki etapu 1:
    wsad LinkedIn: `- zaproszenie | @slug | wyslane/przyjete | notka`, bez bumpu
    stadium), nowa_osoba, obserwacja, **kpi_snapshot** (24/07, paczka #1 pkt 1:
    `- kpi_snapshot | RRRR-MM-DD | wyswietlenia=1234 | reakcje=56 |
-   nowi_obserwujacy=7 | okres=7d` -> channel_kpi_snapshots, DDL 030).
+   nowi_obserwujacy=7 | okres=7d` -> channel_kpi_snapshots, DDL 030),
+   **kto_jest_kim** (27/07, paczka #1 pkt 5 - droga zapisu do kolumny, ktora od 24/07
+   miala tylko odczyt: `- kto_jest_kim | @handle | rola=... | wplyw=... | zrodlo=...`
+   -> MERGE do contacts.who_is_who; aliasy: "kto jest kim", "who_is_who", "kto_to",
+   "rola"; wplyw spoza skali decydent/wplywowy/uzytkownik/nieznany laduje jako
+   `nieznany`, a slowo autora zostaje w notes).
 2. **/kontekst [x|linkedin|sprzedaz|all] (serwer -> czat, FALLBACK):** zwarty stan gry
    BEZ LLM - plan tygodnia, kolejka, publikacje z metrykami, kontakty w grze, otwarte
    decyzje, lejek, radar. Tekst do 4000 znakow albo plik .md.

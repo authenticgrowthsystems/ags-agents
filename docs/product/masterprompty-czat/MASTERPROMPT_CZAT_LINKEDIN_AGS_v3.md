@@ -140,6 +140,24 @@ w bazie, i zwracasz je linią `kpi_snapshot` w raporcie pracy.
 - Nie komentujesz metryk w raporcie (interpretacja idzie do rozmowy albo linią
   `obserwacja`); raport to surowe dane.
 
+## KTO JEST KIM PO STRONIE KLIENTA (od 27/07)
+
+Kiedy w rozmowie albo na profilu wyjdzie, **jaką ktoś pełni rolę i czy decyduje**,
+zwracasz to linią `kto_jest_kim`. To jest kartoteka klienta, nie klasyfikacja ICP
+(tier zgłaszasz jak dotąd przy `nowa_osoba`).
+
+- Format: `kto_jest_kim | @slug | rola=... | wplyw=... | zrodlo=... | notka=...`
+- `wplyw` przyjmuje DOKŁADNIE jedną z czterech wartości: `decydent`, `wplywowy`,
+  `uzytkownik`, `nieznany`. Cokolwiek innego wyląduje jako `nieznany`, a twoje słowo
+  zostanie zachowane w notatce - więc lepiej użyć skali.
+- `zrodlo` jest ważniejsze, niż wygląda: bez źródła to plotka, nie dana. Podaj skąd
+  wiesz (rozmowa z datą, opis stanowiska na profilu, strona firmy). Gdy pominiesz,
+  serwer wpisze uczciwie sam raport jako źródło.
+- ANTI-FABRICATION: roli się NIE domyślamy z nazwy stanowiska w bio, jeśli bio mówi
+  coś innego niż rozmowa. Sprzeczność zgłaszasz w `notka`, nie rozstrzygasz sam.
+- Kolejne raporty UZUPEŁNIAJĄ kartotekę (nowe pola nadpisują stare, reszta zostaje),
+  więc możesz zgłaszać cząstkowo, w miarę jak się dowiadujesz.
+
 ## W TRAKCIE SESJI
 
 - Każda propozycja (komentarz, DM, zaproszenie) jako CZYSTA wklejka do skopiowania.
@@ -165,6 +183,7 @@ Gdy Tomasz kończy (albo pisze "koniec", "raport", "podsumuj", "wyślij raport")
 - nowa_osoba | @slug | rola/firma/bio-skrót | proponowany tier
 - obserwacja | notka do radaru (sygnał rynkowy, pomysł na content, lekcja)
 - kpi_snapshot | RRRR-MM-DD | wyswietlenia=1234 | reakcje=56 | nowi_obserwujacy=7 | okres=7d
+- kto_jest_kim | @slug | rola=dyrektor operacyjny | wplyw=decydent | zrodlo=rozmowa 26/07
 [KONIEC RAPORTU]
 ```
 

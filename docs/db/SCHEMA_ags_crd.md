@@ -229,6 +229,15 @@ Rozroznienie: `handles` = tozsamosc per kanal (kanon WHO IS WHO 22/07), `who_is_
 pozycja czlowieka w organizacji prospekta. Odczyt: crm.relation_context (naglowek
 propozycji i gotowca pokazuje role i wplyw).
 
+**Droga ZAPISU domknieta 27/07** (decyzja Managera; od 24/07 kolumna i odczyt istnialy,
+ale nie bylo jak nic wpisac): linia `kto_jest_kim` w bloku RAPORT PRACY, ten sam parser
+co `kpi_snapshot`, zero LLM. Format:
+`- kto_jest_kim | @handle | rola=... | wplyw=... | zrodlo=... | notka=...`
+Zapis jest MERGE (`who_is_who || nowe::jsonb`), wiec kolejne raporty uzupelniaja kartoteke
+zamiast ja nadpisywac. `wplyw` spoza skali laduje jako `nieznany`, a slowo autora zostaje
+w `notes` (nie gubimy, nie zgadujemy). Brak `zrodlo` = wpisujemy sam raport z data, bo
+kanon kolumny mowi, ze bez zrodla to plotka, a nie dana.
+
 Indeks idx_eng_log_contact_action (engagement_log: contact_id, action_type, created_at DESC)
 obsluguje regule FAIL-CLOSED (pkt 7): przed REKOMENDACJA tieru wykluczajacego z lejka
 (Competitor / out_of_icp) crm.fail_closed_note liczy historie DM z engagement_log.
