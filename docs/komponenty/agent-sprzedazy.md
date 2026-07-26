@@ -44,7 +44,8 @@ Bible; gotowiec = naglowek + CZYSTA WKLEJKA osobna wiadomoscia, wzorzec comment-
 zapis engagement_log status 'proposed' + notatka lejka), offer_for (pakiet danych:
 lejek+research+cennik -> model rekomenduje OD GORY), pipeline_view, pipeline_add,
 pipeline_move (paragon 📊 przy kazdej zmianie), sales_knowledge_search (pgvector,
-fallback ILIKE), outreach_sent (propozycja -> 'sent', follow-up +3 dni).
+fallback ILIKE), outreach_sent (propozycja -> 'sent', follow-up +3 dni; od 26/07 cienka
+nakladka na wspolny rdzen `mark_outreach_sent`).
 
 ## Wejscia-wyjscia i tabele (DDL 027)
 
@@ -58,7 +59,11 @@ fallback ILIKE), outreach_sent (propozycja -> 'sent', follow-up +3 dni).
 - `channels`: wiersz (AGS,'sprzedaz','draft',supervised=true, agent_kind='sales',
   welcomed=true) - TYLKO po to, zeby /agents go pokazal. NIE aktywowac w ⚙️ Cele!
 - `engagement_log`: outreach drafty (action_type 'other', agent 'AGS:sprzedaz',
-  status proposed->sent).
+  status proposed->sent). Nowy gotowiec UNIEWAZNIA poprzedni w tym samym kanale
+  (proposed -> rejected), wysylka domyka rodzenstwo (proposed -> skipped). Rozpoznanie
+  wlasnych wierszy: `author_display` = nazwa prospekta ORAZ `notes ILIKE '%gotowiec
+  outreach%'` - bez tego drugiego warunku filtr lapie takze wiersze Lacznika, ktore maja
+  ten sam `agent`.
 - `brand_config`: sales_pending_material (stan /add_sales_material, TTL 2h),
   cm_tier_sales_chat / cm_tier_sales_outreach / cm_tier_sales_research_summary
   (nadpisania modelu przez /set).
@@ -283,6 +288,39 @@ Gotowiec idzie TRZEMA wiadomosciami, zeby dalo sie go zrewidowac bez otwierania 
 
 Docelowo dane kontaktowe maja przyjsc z CRM zamiast z regexa - brief:
 `docs/briefs/BRIEF_POCZTA_I_CRM_GHL_24072026.md`.
+
+## Cykl zycia gotowca: jedno wejscie, jedno wyjscie (26/07)
+
+Diagnoza 26/07 (`docs/cm/RAPORT_do_Managera_26072026_stan_i_zapytanie.md`, sekcje 4.2-4.4)
+pokazala, ze petla outreachu nigdy sie nie domykala. **Dowod produkcyjny:** Klub Sportowy
+StandART mial SIEDEM wierszy `proposed` z 24/07 (09:44-13:49) i ZERO `sent`, a piec z nich
+trzymalo otwarte bramki #152-156. Tomasz byl przekonany, ze gotowiec poszedl. Nie poszedl.
+
+**Jak jest teraz:**
+
+- **Nadpisanie poprzednika** (`_draft_outreach`): przed zapisem nowego gotowca zywe `proposed`
+  tego samego prospekta I TEGO SAMEGO KANALU ida na `rejected`, a ich otwarte bramki
+  `stale_outreach` na `expired`. Kanaly `email` / `linkedin_dm` / `x_dm` to legalnie osobne
+  wiersze i nigdy nie zamykaja sie nawzajem.
+- **Jedno odhaczenie** (`mark_outreach_sent`): jedyna droga oznaczenia wysylki. Wolana z DWOCH
+  miejsc - narzedzia `outreach_sent` i guzika `apply_stale_outreach` w engagement-crm. Robi
+  komplet: wiersz na `sent`, rodzenstwo na `skipped`, bramki na `expired`, termin nastepnego
+  kontaktu gdy pusty ALBO PRZETERMINOWANY. Wczesniej guzik nie ustawial terminu w ogole,
+  a narzedzie milczalo przy terminie przeterminowanym.
+- **Etap lejka NIE jest ruszany** ani przez jedna, ani przez druga droge. `qualified` znaczy
+  zakwalifikowany, nie skontaktowany - etap przesuwa sie swiadomie przez `pipeline_move`.
+  Stopka mowila wczesniej "przesune etap", czego kod nigdy nie robil; teraz obiecuje
+  dokladnie tyle, ile wykonuje.
+- **Licznik w stopce** liczy wylacznie WLASNE gotowce (`author_display` + `notes ILIKE
+  '%gotowiec outreach%'`). Poprzednia wersja dopasowywala po substringu `content` bez filtra
+  rodzaju, wiec zliczala takze wiersze wstawiane przez Lacznik z bloku RAPORT PRACY.
+
+**Zaleglosci sprzed poprawki** sprzata `python -m app.outreach_cleanup dry|apply` (AP-308:
+dry-run drukuje dokladnie to, co zrobi apply; plan deterministyczny, w kazdej grupie
+prospekt+kanal zostaje NAJNOWSZY wiersz). Skrypt wygasza tez bramki-sieroty, czyli te,
+ktorych wiersz nie jest juz propozycja.
+
+Test: `python cm-agent/tests/test_outreach_petla.py` (30 przypadkow, bez bazy i bez sieci).
 
 ## Czysta polszczyzna (sugestia Tomasza 24/07)
 

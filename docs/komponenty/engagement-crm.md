@@ -78,7 +78,11 @@ cmt:ok (LEGACY, stare karty sprzed 21/07) -> status='approved' + task_queue 'com
   przechodzi przez Tomasza. Karta niesie dowod: ile wpisow DM, kiedy ostatni,
   jakie stadium. `context.fail_closed=true` zostaje w wierszu decyzji),
   `stale_comment` ([Wyslalem][Pomin][Pokaz jeszcze raz]), `stale_comment_task`
-  ([Tak, odhacz][Nie, pomin]), `photo_group` (jeden post / rozne; context.menu=true gdy
+  ([Tak, odhacz][Nie, pomin]), **`stale_outreach`** ([Wyslalem][Czekam][Pokaz tresc]
+  [Rezygnuje] - gotowce Agenta Sprzedazy, obsluga `apply_stale_outreach`; od 26/07 guzik
+  "Wyslalem" NIE pisze sam do engagement_log, tylko wola `sales.mark_outreach_sent`, zeby
+  obie drogi odhaczenia robily to samo - wczesniej guzik nie ustawial terminu nastepnego
+  kontaktu i prospekt zostawal z "BRAK nastepnego kroku"), `photo_group` (jeden post / rozne; context.menu=true gdy
   z trasy wrzutki), **`intent_menu`** (INTAKE-UX 21/07: watek wrzutki jako OBIEKT -
   context: insp_ids/contact_id/screening/done_keys; przyszly konektor UI wyswietli te
   wiersze jako liste wiszacych zadan). Kazda odpowiedz uczy (agent_learning_log); typy

@@ -1042,32 +1042,157 @@ def _outreach_naglowek(row, channel, ostrzezenie="", wiz=None):
     return "\n".join(linie)
 
 
+# ---------------- wspolny rdzen cyklu zycia gotowca (26/07) ----------------
+# Diagnoza 26/07 (docs/cm/RAPORT_do_Managera_26072026_stan_i_zapytanie.md, sekcje 4.2-4.4):
+# gotowiec POWSTAWAL w jednym miejscu, ale "wyslane" odhaczaly DWIE rozjechane drogi, a stary
+# gotowiec nigdy nie byl uniewazniany. Dowod produkcyjny: StandART mial SIEDEM zywych wierszy
+# 'proposed' z 24/07 i zero 'sent', a piec z nich trzymalo otwarte bramki #152-156.
+# Odtad: jedno miejsce nadpisuje poprzednika, jedno miejsce odhacza wysylke.
+
+_OUTREACH_NOTE = "gotowiec outreach"
+
+
+def _open_outreach_rows(prospect_name, eng_channel=None):
+    """Zywe gotowce ('proposed') tego prospekta, najstarsze pierwsze.
+
+    Kanaly email / linkedin_dm / x_dm to LEGALNIE osobne wiersze (sales.py:412), wiec przy
+    nadpisywaniu zawezamy do jednego kanalu. Filtr po notes trzyma nas z dala od wierszy
+    Lacznika, ktore maja ten sam agent='AGS:sprzedaz' (engagement.py, RAPORT PRACY)."""
+    sql = """SELECT id, channel, created_at FROM engagement_log
+             WHERE agent='AGS:sprzedaz' AND status='proposed'
+               AND author_display=%s AND COALESCE(notes,'') ILIKE %s"""
+    params = [(prospect_name or "")[:200], f"%{_OUTREACH_NOTE}%"]
+    if eng_channel:
+        sql += " AND channel=%s"
+        params.append(eng_channel)
+    sql += " ORDER BY created_at"
+    try:
+        return db.fetchall(sql, tuple(params)) or []
+    except Exception:
+        traceback.print_exc()
+        return []
+
+
+def _close_outreach_rows(ids, status, powod):
+    """Zamyka wiersze gotowcow ORAZ wygasza ich otwarte bramki `stale_outreach`.
+
+    Drugi krok jest konieczny, nie kosmetyczny: bez niego lista decyzji dalej pyta
+    "gotowiec czeka na wyslanie" o wiersz, ktorego juz nie ma, a taka wieczna bramka
+    zajmuje slot strazniowi przypomnien (dowod 26/07: piec bramek na piec z siedmiu
+    wierszy StandART blokowalo caly organ)."""
+    ids = [str(i) for i in (ids or [])]
+    if not ids:
+        return 0
+    stamp = datetime.datetime.now(WARSAW).strftime("%d/%m %H:%M")
+    try:
+        db.execute(
+            """UPDATE engagement_log SET status=%s, notes = COALESCE(notes,'') || %s
+               WHERE id = ANY(%s::uuid[])""",
+            (status, f" | {powod} ({stamp})", ids))
+        db.execute(
+            """UPDATE agent_decisions SET status='expired'
+               WHERE decision_type='stale_outreach' AND status='pending'
+                 AND context->>'engagement_id' = ANY(%s)""",
+            (ids,))
+    except Exception:
+        traceback.print_exc()
+        return 0
+    return len(ids)
+
+
+def mark_outreach_sent(row=None, eng_id=None, zrodlo="narzedzie"):
+    """JEDYNA droga odhaczenia wysylki gotowca. Wolana z `_outreach_sent` (narzedzie sprzedawcy)
+    i z `engagement.apply_stale_outreach` (guzik na przypomnieniu).
+
+    Robi cztery rzeczy, z ktorych kazda droga wczesniej robila inny podzbior:
+      1. oznacza gotowiec jako 'sent',
+      2. domyka RODZENSTWO w tym samym kanale jako 'skipped' (jeden poszedl, reszta nieaktualna),
+      3. wygasza otwarte bramki tych wierszy,
+      4. ustawia `next_followup_at` gdy pusty ALBO PRZETERMINOWANY - stary kod milczal przy
+         przeterminowanym, wiec drugi kontakt zostawal z data z przeszlosci.
+
+    Etapu w lejku NIE rusza swiadomie: `qualified` znaczy zakwalifikowany, nie skontaktowany.
+    Zwraca (row_lejka | None, tekst dla czlowieka)."""
+    e = None
+    if eng_id:
+        try:
+            e = db.fetchone(
+                """SELECT id, channel, author_display FROM engagement_log
+                   WHERE id=%s::uuid""", (str(eng_id),))
+        except Exception:
+            traceback.print_exc()
+        if e and row is None:
+            row = _find_pipeline(e.get("author_display") or "")
+    if row is None:
+        return None, "Nie znajduje tego prospekta w lejku."
+
+    kanal = (e or {}).get("channel")
+    zywe = _open_outreach_rows(row["prospect_name"], kanal)
+    if e:
+        glowny = str(e["id"])
+    else:
+        glowny = str(zywe[-1]["id"]) if zywe else None  # najnowszy gotowiec = ten, ktory poszedl
+
+    if glowny:
+        _close_outreach_rows([glowny], "sent", f"WYSLANE ({zrodlo})")
+    rodzenstwo = [str(r["id"]) for r in zywe if str(r["id"]) != glowny]
+    zamkniete = _close_outreach_rows(rodzenstwo, "skipped", "NIEAKTUALNE (poszla inna wersja)")
+
+    nast = row.get("next_followup_at")
+    teraz = datetime.datetime.now(datetime.timezone.utc)
+    przeterminowany = bool(nast) and nast <= teraz
+    if not nast or przeterminowany:
+        db.execute("""UPDATE sales_pipeline SET next_followup_at=NOW() + interval '3 days',
+                      updated_at=NOW() WHERE id=%s""", (row["id"],))
+    _append_notes(row["id"], f"outreach WYSLANY przez Tomasza ({zrodlo})")
+
+    opis = f"outreach do {row['prospect_name'][:70]} wyslany"
+    if not glowny:
+        opis += " (nie znalazlem pasujacego gotowca - zapisalem sama notatke)"
+    if zamkniete:
+        opis += f"; zamknalem {zamkniete} nieaktualnych gotowcow tego kanalu"
+    if not nast:
+        opis += ". Nastepny kontakt za 3 dni"
+    elif przeterminowany:
+        opis += ". Termin byl przeterminowany - przesunalem o 3 dni"
+    return row, opis + "."
+
+
 def _outreach_stopka(row):
     """Stopka gotowca: gdzie jestesmy w lejku i ktory to kontakt. Liczba wczesniejszych
-    gotowcow idzie z engagement_log, nie z pamieci modelu."""
+    gotowcow idzie z engagement_log, nie z pamieci modelu.
+
+    26/07: licznik zawezony do WLASNYCH gotowcow. Wczesniej dopasowywal po substringu
+    `content` bez filtra rodzaju, wiec lapal takze wiersze wstawiane przez Lacznik
+    z bloku RAPORT PRACY (ten sam agent) i pokazywal cudze wpisy jako nasze wysylki."""
     try:
         r = db.fetchone(
-            """SELECT COUNT(*) AS wszystkie,
-                      COUNT(*) FILTER (WHERE status='sent') AS wyslane
+            """SELECT COUNT(*) FILTER (WHERE status='proposed') AS otwarte,
+                      COUNT(*) FILTER (WHERE status='sent')     AS wyslane
                FROM engagement_log
-               WHERE agent='AGS:sprzedaz' AND content ILIKE %s""",
-            (f"%{(row.get('prospect_name') or '')[:60]}%",))
+               WHERE agent='AGS:sprzedaz' AND author_display=%s
+                 AND COALESCE(notes,'') ILIKE %s""",
+            ((row.get("prospect_name") or "")[:200], f"%{_OUTREACH_NOTE}%"))
     except Exception:
         traceback.print_exc()
         r = None
     # Liczy sie WYSYLKA, nie liczba gotowcow. Pierwsza wersja mowila "kolejny kontakt
     # (0 wyslanych wczesniej)" - zdanie, ktore przeczy samo sobie (dowod: stopka 24/07 14:03).
-    gotowce = int((r or {}).get("wszystkie") or 0)
+    otwarte = int((r or {}).get("otwarte") or 0)
     wyslane = int((r or {}).get("wyslane") or 0)
     if wyslane:
         ktory = f"kolejny kontakt ({wyslane} wyslanych wczesniej)"
+    elif otwarte:
+        ktory = "PIERWSZY kontakt (poprzedni gotowiec zastepuje tym - zaden nie byl wyslany)"
     else:
-        ktory = "PIERWSZY kontakt" + (f" (gotowcow w kolejce: {gotowce}, zaden nie oznaczony "
-                                      f"jako wyslany)" if gotowce > 1 else "")
+        ktory = "PIERWSZY kontakt"
     nast = row.get("next_followup_at")
+    # 26/07: stopka obiecywala przesuniecie ETAPU, ktorego kod nigdy nie robil (sekcja 4.4
+    # diagnozy). Obiecujemy dokladnie to, co narzedzie wykonuje - reszta to lamanie reguly prawdy.
     return ("📊 Lejek: etap " + str(row.get("stage") or "?") + " | " + ktory
             + (" | nastepny kontakt: " + nast.astimezone(WARSAW).strftime("%d/%m %H:%M") if nast else "")
-            + "\n⏭ Po wyslaniu napisz \"wyslalem\" - przesune etap i ustawie nastepny kontakt.")
+            + "\n⏭ Po wyslaniu napisz \"wyslalem\" - odhacze gotowiec i ustawie termin nastepnego "
+              "kontaktu. Etap w lejku przesuwasz osobno (pipeline_move).")
 
 
 def _outreach_examples(limit=3):
@@ -1196,13 +1321,19 @@ def _draft_outreach(inp, chat_id):
     _tg_send(chat_id, _outreach_naglowek(row, channel, _ostrzezenie, wiz))
     _tg_send(chat_id, draft)
     _tg_send(chat_id, _outreach_stopka(row))
+    _eng_kanal = _ENG_CHANNEL.get(channel, "Other")
+    # 26/07 (sekcja 4.2 diagnozy): nowy gotowiec UNIEWAZNIA poprzedni w tym samym kanale.
+    # Bez tego kazde przepisanie zostawialo wieczny wiersz 'proposed' z wlasna bramka -
+    # StandART uzbieral tak siedem wierszy i piec bramek w cztery godziny 24/07.
+    _stare = _open_outreach_rows(row["prospect_name"], _eng_kanal)
+    _close_outreach_rows([r["id"] for r in _stare], "rejected", "ZASTAPIONE nowszym gotowcem")
     try:
         db.execute(
             """INSERT INTO engagement_log (action_type, channel, agent, content, response, notes,
                                            contact_id, status, author_display)
                VALUES ('other',%s,'AGS:sprzedaz',%s,%s,%s,%s,'proposed',%s)""",
-            (_ENG_CHANNEL.get(channel, "Other"), f"outreach {channel}: {row['prospect_name'][:200]}",
-             draft[:3000], "gotowiec outreach (Agent Sprzedazy, HITL)",
+            (_eng_kanal, f"outreach {channel}: {row['prospect_name'][:200]}",
+             draft[:3000], f"{_OUTREACH_NOTE} (Agent Sprzedazy, HITL)",
              row.get("contact_id"), row["prospect_name"][:200]))
     except Exception:
         traceback.print_exc()
@@ -1286,22 +1417,13 @@ def _pipeline_move(inp):
 
 
 def _outreach_sent(inp):
+    """Narzedzie sprzedawcy "wyslalem". Jedna z DWOCH drog odhaczenia - obie ida przez
+    `mark_outreach_sent`, zeby nie rozjechaly sie ponownie (AP-309)."""
     row = _find_pipeline(inp.get("prospect_fragment"))
     if not row:
         return f"Nie znajduje w lejku prospekta \"{(inp.get('prospect_fragment') or '')[:60]}\"."
-    upd = db.fetchone(
-        """UPDATE engagement_log SET status='sent'
-           WHERE id = (SELECT id FROM engagement_log
-                       WHERE agent='AGS:sprzedaz' AND status='proposed' AND content ILIKE %s
-                       ORDER BY created_at DESC LIMIT 1)
-           RETURNING id""", (f"%{row['prospect_name'][:80]}%",))
-    if not row.get("next_followup_at"):
-        db.execute("UPDATE sales_pipeline SET next_followup_at=NOW() + interval '3 days', updated_at=NOW() WHERE id=%s",
-                   (row["id"],))
-    _append_notes(row["id"], "outreach WYSLANY przez Tomasza")
-    return (f"✉️ Odnotowane: outreach do {row['prospect_name'][:70]} wyslany"
-            + ("" if upd else " (nie znalazlem pasujacej propozycji - zapisalem sama notatke)")
-            + (". Nastepny kontakt ustawiony za 3 dni." if not row.get("next_followup_at") else "."))
+    _, opis = mark_outreach_sent(row=row, zrodlo="narzedzie")
+    return "✉️ Odnotowane: " + opis
 
 
 # ---------------- baza wiedzy ----------------

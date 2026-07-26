@@ -202,9 +202,12 @@ def apply_stale_outreach(row, key, chat):
     stamp = datetime.datetime.now().strftime("%d/%m %H:%M")
     who = e.get("author_display") or (e.get("content") or "")[:60]
     if key == "sent":
-        db.execute("UPDATE engagement_log SET status='sent', notes = COALESCE(notes,'') || %s WHERE id=%s::uuid",
-                   (f" | WYSLANE (przypomnienie {stamp})", eng_id))
-        _tg("sendMessage", {"chat_id": chat, "text": f"✅ Odhaczone - outreach do {who} zapisany jako wyslany."})
+        # 26/07 (sekcja 4.3 diagnozy): guzik aktualizowal WYLACZNIE engagement_log - nie ustawial
+        # terminu nastepnego kontaktu i nie domykal rodzenstwa. Kto odhaczyl guzikiem, ten zostawal
+        # z "BRAK nastepnego kroku" w lejku. Obie drogi wolaja teraz jeden rdzen (AP-309).
+        from . import sales
+        _, opis = sales.mark_outreach_sent(eng_id=eng_id, zrodlo="przypomnienie")
+        _tg("sendMessage", {"chat_id": chat, "text": "✅ Odhaczone - " + opis})
     elif key == "wait":
         db.execute("UPDATE engagement_log SET notes = COALESCE(notes,'') || %s WHERE id=%s::uuid",
                    (f" | CZEKAMY ({stamp})", eng_id))
