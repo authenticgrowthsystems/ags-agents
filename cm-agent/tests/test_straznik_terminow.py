@@ -102,11 +102,24 @@ sales.followup_watch()
 sql = SQL[-1]
 check("czyta next_followup_at (pole mialo zero konsumentow push)", "next_followup_at" in sql, sql)
 check("bierze tylko terminy, ktore juz minely", "next_followup_at <= NOW()" in sql, sql)
-check("pomija zamkniete transakcje", "NOT IN ('won','lost')" in sql, sql)
+check("pomija transakcje poza gra (won, lost, parked)",
+      "NOT IN ('won','lost','parked')" in sql, sql)
 check("odsiew otwartych bramek jest w SQL", "NOT EXISTS" in sql, sql)
 check("odsiew PRZED LIMIT-em (AP-310)",
       0 < sql.find("NOT EXISTS") < sql.find("LIMIT"),
       "inaczej trzy zalegle prospekty zablokowalyby straznika tak jak przypomnienia")
+
+
+# ---------------- etap 'parked' (DDL 033, decyzja Managera 27/07) ----------------
+print("\n[parked] uspione prospekty wypadaja z gry, ale nie z bazy:")
+check("'parked' jest legalnym etapem", "parked" in sales._STAGES, str(sales._STAGES))
+check("etapy poza gra trzymane w JEDNYM miejscu (AP-309)",
+      sales._STAGES_ZAMKNIETE == ("won", "lost", "parked"), str(sales._STAGES_ZAMKNIETE))
+check("'parked' to nie 'lost' - osobna wartosc, nie alias",
+      "parked" != "lost" and len(set(sales._STAGES_ZAMKNIETE)) == 3)
+check("straznik terminow pomija uspione", "parked" in sql, sql)
+check("uspiony etap ma wlasna ikone", sales._STAGE_ICON.get("parked"), str(sales._STAGE_ICON))
+check("pipeline_move przyjmie 'parked' (jest w skali narzedzia)", "parked" in sales._STAGES)
 
 
 # ---------------- karta niesie dowod ----------------

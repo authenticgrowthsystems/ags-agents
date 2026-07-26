@@ -38,9 +38,16 @@ _MAX_TOOL_STEPS = 5
 _STATE_KEY = "sales_pending_material"  # brand_config: uzbrojony /add_sales_material
 _PENDING_TTL_MIN = 120
 
-_STAGES = ("prospect", "qualified", "proposal", "negotiation", "won", "lost")
+_STAGES = ("prospect", "qualified", "proposal", "negotiation", "won", "lost", "parked")
 _STAGE_ICON = {"prospect": "🔍", "qualified": "🎯", "proposal": "📄",
-               "negotiation": "🤝", "won": "✅", "lost": "❌"}
+               "negotiation": "🤝", "won": "✅", "lost": "❌", "parked": "🅿️"}
+# Etapy POZA gra: nie licza sie do "otwartych", nie budzi ich straznik terminow.
+# JEDNO miejsce, bo ta lista zyla dotad przepisana w dwoch zapytaniach (AP-309) -
+# dodanie 'parked' (DDL 033) byloby trzecia okazja do rozjazdu.
+# 'parked' to NIE 'lost': lost = przegrane albo odrzucone, parked = swiadomie odlozone,
+# wroci. Zliczanie parkowanych jako przegranych falszowaloby skutecznosc w raporcie.
+_STAGES_ZAMKNIETE = ("won", "lost", "parked")
+_SQL_POZA_GRA = "'" + "','".join(_STAGES_ZAMKNIETE) + "'"
 
 
 # ---------------- stan (brand_config, wzorzec crm/_dispatch_alert) ----------------
@@ -139,17 +146,18 @@ def _knowledge_stats():
 
 def pipeline_text():
     rows = db.fetchall(
-        """SELECT prospect_name, stage, offer_tier, value, currency, next_followup_at, updated_at,
+        f"""SELECT prospect_name, stage, offer_tier, value, currency, next_followup_at, updated_at,
                   notes, contact_email, contact_phone
-           FROM sales_pipeline WHERE brand_id='AGS' AND stage NOT IN ('won','lost')
+           FROM sales_pipeline WHERE brand_id='AGS' AND stage NOT IN ({_SQL_POZA_GRA})
            ORDER BY array_position(ARRAY['negotiation','proposal','qualified','prospect']::text[], stage),
                     updated_at DESC LIMIT 30""")
     closed = db.fetchone(
         """SELECT COUNT(*) FILTER (WHERE stage='won') AS won,
                   COUNT(*) FILTER (WHERE stage='lost') AS lost,
+                  COUNT(*) FILTER (WHERE stage='parked') AS parked,
                   COALESCE(SUM(value) FILTER (WHERE stage='won'), 0) AS won_value
            FROM sales_pipeline WHERE brand_id='AGS'""") or {}
-    if not rows and not (closed.get("won") or closed.get("lost")):
+    if not rows and not (closed.get("won") or closed.get("lost") or closed.get("parked")):
         return "📊 Lejek pusty. Start: /prospect <nazwa albo URL firmy>."
     now = datetime.datetime.now(datetime.timezone.utc)
     lines = [f"📊 LEJEK SPRZEDAZY ({len(rows)} otwartych):"]
@@ -180,6 +188,11 @@ def pipeline_text():
                      + (" | " + ", ".join(bits) if bits else ""))
     lines.append(f"Zamkniete: won {closed.get('won', 0)} ({closed.get('won_value', 0):.0f}), "
                  f"lost {closed.get('lost', 0)}.")
+    # Parkowane wypadaja z listy i z licznika otwartych, ale NIE znikaja po cichu -
+    # jedna linia trzyma je w zasiegu wzroku (kanon: dane zostaja, wracamy do nich).
+    if closed.get("parked"):
+        lines.append(f"🅿️ Uspione: {closed['parked']} (poza gra, wracaja na haslo - "
+                     f"pipeline_move ustawia etap z powrotem).")
     return "\n".join(lines)
 
 
@@ -1832,10 +1845,10 @@ def followup_watch():
     straznik przypomnien."""
     try:
         rows = db.fetchall(
-            """SELECT p.id, p.prospect_name, p.stage, p.next_followup_at, p.notes,
+            f"""SELECT p.id, p.prospect_name, p.stage, p.next_followup_at, p.notes,
                       p.contact_email, p.contact_phone, p.contact_person
                FROM sales_pipeline p
-               WHERE p.brand_id='AGS' AND p.stage NOT IN ('won','lost')
+               WHERE p.brand_id='AGS' AND p.stage NOT IN ({_SQL_POZA_GRA})
                  AND p.next_followup_at IS NOT NULL AND p.next_followup_at <= NOW()
                  AND NOT EXISTS (
                    SELECT 1 FROM agent_decisions d
