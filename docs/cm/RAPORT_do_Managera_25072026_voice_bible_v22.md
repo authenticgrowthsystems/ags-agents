@@ -31,13 +31,18 @@ w library + docs/anti-patterns.
 **SQL db/032** wgrywa pelna tresc v2.2 (sekcje 1-23, instrukcja deploy uciete), history z md5,
 guard idempotentny (pomija gdy tresc juz ma 'SEKCJA 23'), dollar-quote.
 
-## Jedno do rozstrzygniecia PRZED wdrozeniem: numer wersji
+## ROZSTRZYGNIETE SONDA: wersja koncowa to 5, nie 4
 
-Prosisz o bump do 4, zakladajac v2.1=3. Ale **db/022 to STARA v2.2 (12/07, inna tresc)**. Jesli
-zostala kiedys wdrozona, baza ma juz version 4, a nowa v2.2 idzie na 5. SQL bumpuje `version+1`
-od AKTUALNEJ (nie hardkod 4), wiec zrobi poprawnie tak czy inaczej - ale numer koncowy zalezy
-od stanu. Sonda przed psql rozstrzyga (jest w komendach dla Tomasza). Dam znac, czy wyszlo 4,
-czy 5.
+Prosiles o bump do 4, zakladajac v2.1=3. Sonda produkcyjna (25/07) pokazala inny stan:
+**brand_config ma version=4, ale to STARA v2.2 z 12/07** (data w tresci; `juz_nowa_v22=f`,
+brak sekcji 23). db/022 zostala wdrozona i zajela version 4. Wiec nowa v2.2 (24/07) idzie na
+**version 5**.
+
+db/032 zrobi to poprawnie bez zmian - bumpuje `version+1` od aktualnej (4 -> 5), guard
+`NOT LIKE '%SEKCJA 23%'` przepuszcza (stara v2.2 nie ma sekcji 23). **Sygnal gotowosci zmienia
+sie z "version 4" na "version 5" + `ma_sekcje_23=t`.** Gdybym zahardkodowal version=4 wg
+Twojego zalozenia, wpadlbym w konflikt z istniejaca v4 - stad sonda przed wdrozeniem (AP-308/309:
+nie zakladaj stanu, sprawdz).
 
 ## Krok 3 sekwencji (agent_prompts) - uwaga
 
