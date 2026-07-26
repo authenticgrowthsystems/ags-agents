@@ -47,3 +47,5 @@ n8n-workflows/**/*-with-credentials.json
 .claude/
 n8n-workflows/x-agent/N8N_CREDENTIALS_SETUP.md
 **/AGS_Credentials_Internal.md
+# Poufne materialy sprzedazowe per prospekt - NIE do publicznego origin (decyzja 25/07)
+docs/research/prospekci/MATERIAL_DLA_PIOTRA_*.md
