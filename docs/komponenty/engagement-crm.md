@@ -12,6 +12,12 @@ intake profilu (zrzut profilu -> wizja -> bio/handle + tier zatwierdzany guzikam
 Nic nie ginie: propozycje bez decyzji i zatwierdzone-a-niepotwierdzone wracaja po 24h
 guzikami. Album Telegram = JEDEN post (jedna sklejona analiza).
 
+**UWAGA HISTORYCZNA (26/07):** obietnica "nic nie ginie" byla przez pare dni nieprawdziwa.
+`_watch_proposed` nakladal `LIMIT 5` PRZED odsiewem wierszy z otwarta bramka, a odsiew robil
+w Pythonie - piec zablokowanych wierszy StandART zajelo cala pule i organ zamilkl dla
+WSZYSTKICH rodzajow zaleglosci, takze komentarzy i DM-ow. Odsiew jest od 26/07 w SQL, przed
+limitem, w obu strazniki. Lekcja spisana jako AP-310.
+
 ## Przeplyw (szczesliwa sciezka; INTAKE-UX 21/07: najpierw MENU INTENCJI)
 
 ```

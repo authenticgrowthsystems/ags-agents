@@ -80,10 +80,23 @@ def stale_watch():
 
 
 def _watch_proposed():
+    # 26/07 (sekcja 4.5 diagnozy): LIMIT 5 stal PRZED odsiewem, a odsiew robil sie dopiero
+    # w Pythonie przez `continue`. Kazdy wiersz z otwarta bramka zjadal slot i nie generowal
+    # niczego. DOWOD PRODUKCYJNY (sonda C, 26/07): siedem wierszy StandART czekalo ponad dobe,
+    # piec najstarszych mialo bramki #152-156, wiec caly organ konczyl przebieg z zerem
+    # przypomnien - takze dla komentarzy i DM-ow, ktore z ta sprawa nie mialy nic wspolnego.
+    # Odtad odsiew jest w SQL i LIMIT dotyczy wierszy, ktore NAPRAWDE moga cos wygenerowac.
+    # Warunek per typ zostaje nizej jako drugi pas: SQL laczy oba typy, Python pilnuje
+    # wlasciwego dla danego agenta.
     rows = db.fetchall(
-        """SELECT id, agent, author_display FROM engagement_log
-           WHERE status='proposed' AND created_at < NOW() - interval '24 hours'
-           ORDER BY created_at LIMIT 5""")
+        """SELECT e.id, e.agent, e.author_display FROM engagement_log e
+           WHERE e.status='proposed' AND e.created_at < NOW() - interval '24 hours'
+             AND NOT EXISTS (
+               SELECT 1 FROM agent_decisions d
+               WHERE d.decision_type IN ('stale_comment','stale_outreach')
+                 AND d.context->>'engagement_id' = e.id::text
+                 AND (d.status='pending' OR d.answered_at > NOW() - interval '24 hours'))
+           ORDER BY e.created_at LIMIT 5""")
     for r in rows:
         eid = str(r["id"])
         agent = r.get("agent") or "AGS:x"
@@ -123,11 +136,18 @@ def _watch_proposed():
 
 
 def _watch_in_progress():
+    # Ta sama wada co w _watch_proposed, drugie wystapienie (AP-309: policz miejsca, zanim
+    # uznasz poprawke za zrobiona). Odsiew przed LIMIT-em, klucz to task_id.
     rows = db.fetchall(
-        """SELECT id, agent_id, payload FROM task_queue
-           WHERE task_type='comment' AND status='in_progress'
-             AND created_at < NOW() - interval '24 hours'
-           ORDER BY created_at LIMIT 5""")
+        """SELECT t.id, t.agent_id, t.payload FROM task_queue t
+           WHERE t.task_type='comment' AND t.status='in_progress'
+             AND t.created_at < NOW() - interval '24 hours'
+             AND NOT EXISTS (
+               SELECT 1 FROM agent_decisions d
+               WHERE d.decision_type='stale_comment_task'
+                 AND d.context->>'task_id' = t.id::text
+                 AND (d.status='pending' OR d.answered_at > NOW() - interval '24 hours'))
+           ORDER BY t.created_at LIMIT 5""")
     for r in rows:
         tid = str(r["id"])
         if db.fetchone(
