@@ -1786,6 +1786,111 @@ def handle_chat(chat_id, text):
     conversation._reply(chat_id, reply, placeholder_id=ph_id)
 
 
+# ---------------- straznik terminow lejka (26/07, Level 2 zatwierdzony przez Managera) ----------------
+# Diagnoza 26/07 (sekcja 4.1): `next_followup_at` mialo WYLACZNIE konsumentow pull. Czternascie
+# tickow petli workera, zaden nie czytal tego pola; w n8n zero trafien; w db/027 stal nawet
+# indeks czesciowy skrojony pod zapytanie, ktorego nikt nie napisal. Praktyczny skutek: termin
+# kontaktu z najwiekszym prospektem w lejku zyl wylacznie w pamieci Tomasza.
+#
+# Bramka `stale_outreach` gasnie dokladnie tam, gdzie ten straznik ma sie zaczynac: gdy gotowiec
+# idzie na 'sent', a termin zostaje ustawiony. To jest domkniecie tamtej dziury.
+
+_FOLLOWUP_SNOOZE_DNI = 3
+_FOLLOWUP_PO_KONTAKCIE_DNI = 7
+
+
+def _followup_karta(row):
+    """Karta niesie dowod (kanon kart): kto, na jakim etapie, ile po terminie, czym sie z nim
+    skontaktowac i co bylo ostatnio. Bez tego guzik jest zgadywanka."""
+    nast = row.get("next_followup_at")
+    spoznienie = ""
+    if nast:
+        dni = (datetime.datetime.now(datetime.timezone.utc) - nast).days
+        spoznienie = ("dzisiaj" if dni <= 0 else
+                      "wczoraj" if dni == 1 else f"{dni} dni temu")
+    kanaly = [k for k in (row.get("contact_email"), row.get("contact_phone")) if k]
+    kontakt = ", ".join(kanaly) if kanaly else "BRAK danych kontaktowych w kartotece"
+    osoba = (row.get("contact_person") or "").strip()
+    ostatnia = ""
+    for linia in reversed((row.get("notes") or "").splitlines()):
+        if linia.strip():
+            ostatnia = linia.strip()[:140]
+            break
+    return (f"Termin kontaktu z {row['prospect_name'][:70]} minal {spoznienie} "
+            f"(etap: {row.get('stage') or '?'}).\n"
+            f"Kontakt: {kontakt}" + (f" | osoba: {osoba}" if osoba else "") + "\n"
+            + (f"Ostatnio: {ostatnia}" if ostatnia else "Brak notatek w kartotece.")
+            + "\nCo robimy?")
+
+
+def followup_watch():
+    """Wolane z petli workera. Termin minal -> pytanie guzikami. Zero zgadywania, zero
+    automatycznego kontaktu: system przypomina, kontaktuje sie Tomasz.
+
+    AP-310: odsiew wierszy z otwarta bramka siedzi w SQL PRZED LIMIT-em. Inaczej trzy
+    zalegle prospekty zabralyby cala pule i straznik zamilkby dokladnie tak, jak zamilkl
+    straznik przypomnien."""
+    try:
+        rows = db.fetchall(
+            """SELECT p.id, p.prospect_name, p.stage, p.next_followup_at, p.notes,
+                      p.contact_email, p.contact_phone, p.contact_person
+               FROM sales_pipeline p
+               WHERE p.brand_id='AGS' AND p.stage NOT IN ('won','lost')
+                 AND p.next_followup_at IS NOT NULL AND p.next_followup_at <= NOW()
+                 AND NOT EXISTS (
+                   SELECT 1 FROM agent_decisions d
+                   WHERE d.decision_type='sales_followup'
+                     AND d.context->>'pipeline_id' = p.id::text
+                     AND (d.status='pending' OR d.answered_at > NOW() - interval '24 hours'))
+               ORDER BY p.next_followup_at LIMIT 3""")
+    except Exception:
+        traceback.print_exc()
+        return
+    from . import decisions
+    for row in rows or []:
+        try:
+            decisions.ask(
+                "AGS:sprzedaz", "AGS", "sales_followup", _followup_karta(row),
+                [{"key": "done", "label": "Skontaktowalem sie"},
+                 {"key": "snooze", "label": f"Przypomnij za {_FOLLOWUP_SNOOZE_DNI} dni"},
+                 {"key": "park", "label": "Odpuszczam na teraz"}],
+                recommendation=None, context={"pipeline_id": str(row["id"]),
+                                              "prospect": row["prospect_name"][:120]})
+        except Exception:
+            traceback.print_exc()
+
+
+def apply_followup(row, key, chat):
+    """Akcja decyzji 'sales_followup'. Kazda galaz robi DOKLADNIE to, co obiecuje etykieta
+    guzika - stopka gotowca obiecywala kiedys przesuniecie etapu, ktorego kod nie robil,
+    i to wlasnie ta lekcja (sekcja 4.4 diagnozy 26/07)."""
+    ctx = row.get("context") or {}
+    pid = ctx.get("pipeline_id")
+    if not pid:
+        return
+    nazwa = ctx.get("prospect") or "prospekt"
+    if key == "done":
+        db.execute("""UPDATE sales_pipeline SET next_followup_at=NOW() + (%s * interval '1 day'),
+                      updated_at=NOW() WHERE id=%s""", (_FOLLOWUP_PO_KONTAKCIE_DNI, pid))
+        _append_notes(pid, "kontakt odbyty (przypomnienie terminu)")
+        tekst = (f"✅ Zapisane: kontakt z {nazwa} odbyty. Nastepne przypomnienie za "
+                 f"{_FOLLOWUP_PO_KONTAKCIE_DNI} dni.")
+    elif key == "snooze":
+        db.execute("""UPDATE sales_pipeline SET next_followup_at=NOW() + (%s * interval '1 day'),
+                      updated_at=NOW() WHERE id=%s""", (_FOLLOWUP_SNOOZE_DNI, pid))
+        tekst = f"⏳ Jasne. Przypomne o {nazwa} za {_FOLLOWUP_SNOOZE_DNI} dni."
+    elif key == "park":
+        db.execute("UPDATE sales_pipeline SET next_followup_at=NULL, updated_at=NOW() WHERE id=%s",
+                   (pid,))
+        _append_notes(pid, "termin zdjety przez Tomasza (odpuszczamy na teraz)")
+        tekst = (f"⏭ Zdjalem termin z {nazwa}. Prospekt zostaje w lejku, ale juz o nim nie "
+                 f"przypominam - wroci, gdy ustawisz nowy termin.")
+    else:
+        return
+    from .engagement import _tg
+    _tg("sendMessage", {"chat_id": chat, "text": tekst})
+
+
 # ---------------- tick workera: wyniki researchu prospektow ----------------
 def tick():
     """Petla workera: RESPONSE Researchera do sales-agent -> synteza sygnalow buyer (Sonnet)

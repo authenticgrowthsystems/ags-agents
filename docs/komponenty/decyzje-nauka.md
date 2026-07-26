@@ -80,6 +80,14 @@ Przypomnij jutro); throttle w DB = jedna otwarta/swieza decyzja per item.
   komentarzy - wlasne guziki [Wyslalem/Czekam/Pokaz tresc/Rezygnuje]; 'Pokaz tresc' =
   czysta wklejka BEZ intake'u ("Dam zrzut profilu" przy prospekcie z researchem strony
   to byl incydent decyzji #14). Zrodlo prawdy o prospekcie = sales_pipeline.
+- NOWY typ 'sales_followup' (26/07, Level 2 zatwierdzony przez Managera): termin kontaktu
+  w lejku minal -> pytanie guzikami [Skontaktowalem sie / Przypomnij za 3 dni / Odpuszczam
+  na teraz]. Powstal, bo `next_followup_at` mialo WYLACZNIE konsumentow pull: czternascie
+  tickow workera, zaden nie czytal pola, w n8n zero trafien. Karta niesie dowod (etap, ile
+  po terminie, kanaly kontaktu albo jawne "BRAK", ostatnia notatka), zeby guzik nie byl
+  zgadywanka. Trzy guziki, kazdy ROZSTRZYGAJACY - swiadomie bez "pokaz", bo kazda odpowiedz
+  zamyka decyzje i "pokaz" wyciszyloby przypomnienie na dobe. Obsluga: `sales.apply_followup`.
+  ETAPU nie rusza zaden guzik (qualified znaczy zakwalifikowany, nie skontaktowany).
 
 ## Znane pulapki
 
@@ -87,6 +95,14 @@ Przypomnij jutro); throttle w DB = jedna otwarta/swieza decyzja per item.
   nowy typ = swiadoma decyzja projektowa.
 - Throttle stale_approval: jedna otwarta decyzja per item - flood niemozliwy,
   ale tez nie czekaj na drugie przypomnienie tego samego dnia.
+- **Throttle jest PER PRZEDMIOT, nie per przebieg** (doprecyzowanie 26/07): zdanie "flood
+  niemozliwy" bylo za mocne. Dodatkowo kazdy straznik, ktory laczy throttle z `LIMIT`, musi
+  miec odsiew W ZAPYTANIU przed limitem - inaczej zablokowane pozycje zjadaja cala pule
+  i organ zamiera po cichu (AP-310, dowod produkcyjny 25-26/07).
+- **Status 'expired' nie jest ustawiany przez zaden cykliczny sprzatacz** (stan na 26/07).
+  Pisza go dzis: recznny SQL Tomasza oraz - od 26/07 - zamykanie nadmiarowych gotowcow
+  w `sales._close_outreach_rows` i skrypt `app.outreach_cleanup`. Bramka bez wlasciciela
+  zostaje 'pending' na zawsze i wycisza czujke swojego przedmiotu.
 - Status 'auto' = decyzja podjeta w semi-auto; przy audycie odrozniac od
   'answered' (czlowiek).
 - Pokrewna, STARSZA warstwa bramek Researchera (agent_approval_gates:

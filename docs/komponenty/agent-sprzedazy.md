@@ -322,6 +322,26 @@ ktorych wiersz nie jest juz propozycja.
 
 Test: `python cm-agent/tests/test_outreach_petla.py` (30 przypadkow, bez bazy i bez sieci).
 
+## Straznik terminow lejka (26/07, Level 2)
+
+`sales.followup_watch()` w petli workera (`worker.py`, zaraz po `sales.tick()`). Powstal,
+bo `next_followup_at` mialo WYLACZNIE konsumentow pull - czternascie tickow, zaden nie czytal
+tego pola, w n8n zero trafien, a w `db/027` stal indeks czesciowy skrojony pod zapytanie,
+ktorego nikt nie napisal. Termin kontaktu z najwiekszym prospektem zyl w pamieci Tomasza.
+
+- **Kogo bierze:** `brand_id='AGS'`, etap poza `won`/`lost`, `next_followup_at <= NOW()`.
+- **Czego nie bierze:** wierszy z otwarta albo swieza (24h) bramka `sales_followup`. Odsiew
+  siedzi w SQL PRZED `LIMIT 3` - AP-310, ta sama wada zabila wczesniej straznika przypomnien.
+- **Co robi:** `decisions.ask` typu `sales_followup` z trzema guzikami. Kontaktuje sie Tomasz,
+  system tylko przypomina. Zero automatycznego wysylania czegokolwiek.
+- **Karta niesie dowod:** etap, ile dni po terminie, kanaly kontaktu albo jawne "BRAK danych
+  kontaktowych w kartotece", ostatnia notatka z kartoteki.
+- **Guziki** (`sales.apply_followup`): `Skontaktowalem sie` -> termin +7 dni i notatka;
+  `Przypomnij za 3 dni` -> termin +3 dni; `Odpuszczam na teraz` -> termin wyczyszczony,
+  prospekt ZOSTAJE w lejku. Zaden nie rusza etapu.
+
+Test: `python cm-agent/tests/test_straznik_terminow.py` (27 przypadkow, bez bazy i bez sieci).
+
 ## Czysta polszczyzna (sugestia Tomasza 24/07)
 
 "Wszelkie zangielszczenia nie powinny miec tu miejsca". Filtr `compliance.polish_pl` istnieje

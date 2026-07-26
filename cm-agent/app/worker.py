@@ -580,6 +580,7 @@ def loop():
             engagement.consumer_tick()            # 10/07: zatwierdzone komentarze -> gotowiec do wklejenia + guziki
             engagement.stale_watch()              # 20/07 BE-ENGAGEMENT: propozycje/wklejenia >24h -> przypomnienie guzikami
             sales.tick()                          # 20/07 BE-SPRZEDAWCA: wyniki researchu prospektow -> synteza + lejek
+            sales.followup_watch()                # 26/07: termin kontaktu w lejku minal -> pytanie guzikami (Level 2)
             _brand_tokens_tick()                  # 12/07 #84: Notion Brand Config -> brand_tokens (poll 10 min)
             _x_collector_tick()                   # 19/07 kolektor X: snapshoty Owned Reads raz na dobe UTC
             item = db.claim_content_item()
