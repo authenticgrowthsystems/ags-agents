@@ -175,6 +175,41 @@ def pl_comma_flags(text, limit=5):
     return out
 
 
+# ---- Test szatni: polska skladnia MOWIONA (Voice Bible v2.2 sekcja 23, canonical 25/07) ----
+# Origin: korekta Tomasza na mailu do Dudzika. "Zgodnosc z lista zakazanych slow nie oznacza,
+# ze zdanie brzmi po polsku" - moja wlasna wersja przeszla banned vocab i abstract-tech, a byla
+# kalka. Test: czy powiedzialbys to na glos drugiemu czlowiekowi po zajeciach. To jest wezsza
+# warstwa niz polish_pl (poprawnosc) - lapie zdania POPRAWNE, ktore brzmia jak slajd, nie mowa.
+TEST_SZATNI_PROMPT = (
+    "Przepisz ponizszy polski tekst tak, by kazde zdanie przeszlo TEST SZATNI: czy powiedzialbys "
+    "to na glos drugiemu czlowiekowi po zajeciach. Zdanie brzmiace jak sentencja, naglowek albo "
+    "slajd jest do przepisania na mowe.\n"
+    "ZDEJMIJ cztery kalki z angielskiego:\n"
+    "1. Aforyzm 'Kto..., ten...' (konstrukcja przyslowiowa) - zamien na zwykle zdanie o tym, co sie dzieje.\n"
+    "2. Rzeczownik odczasownikowy jako przydawka ('w tygodniu wahania', 'w momencie decyzji') - "
+    "przenies akcje na CZASOWNIK ('zanim sie zawaha', 'kiedy sie decyduje').\n"
+    "3. Zaimek bez jasnego odniesienia ('...ten je utrzymuje' - co utrzymuje?) - nazwij rzecz wprost.\n"
+    "4. Zdanie bez czasownika akcji niosace teze ('Zapisy ida na emocjach.') - dopisz czasownik.\n"
+    "ZOSTAW trzy rzeczy naturalne po polsku: kolejnosc zdarzen zgodna z czasem (najpierw co sie "
+    "dzieje, potem skutek); powtorzenie slowa jako klamre (NIE szukaj synonimu); elipse dopelnienia "
+    "('zanim sami sobie wytlumacza' nie wymaga 'ze nie warto').\n"
+    "Wzorzec docelowy (tak ma brzmiec): 'Ludzie zapisuja sie pod wplywem emocji i najczesciej pod "
+    "ich wplywem odpuszczaja. Cala rzecz w tym, zeby ich uprzedzic, nim sami sobie wytlumacza i "
+    "odpuszcza.'\n"
+    "NIE zmieniaj sensu, tonu ani dlugosci. Zero em dashes. Zachowaj przecinki przed "
+    "ze/zeby/ktory/gdy/jesli/bo/nim. Zwroc WYLACZNIE poprawiony tekst."
+)
+
+
+def test_szatni(text, content_item_id=None):
+    """HARD check sekcji 23 (brandy PL + gotowce sprzedazowe PL): przepisz kalki z angielskiego
+    na polski mowiony. Wezsze niz polish_pl - lapie zdania poprawne, ale brzmiace jak slajd.
+    Tanie (Haiku), rzadkie (tylko content PL marek PL i gotowce sprzedazowe PL)."""
+    if not looks_polish(text):
+        return text
+    return fix_dashes(_rewrite(TEST_SZATNI_PROMPT, text, content_item_id, task_name="test_szatni"))
+
+
 def check_re_intro_line(text, channel, content_item_id=None):
     """Voice Bible v2.1 / Task #75: LinkedIn content ma zawierac Re-Introduction Line (kim/co/dla kogo).
     FAZA 1 (decyzja Tomasza 07/07): WARN+log do agent_logs, NIE blokuje (nie ryzykujemy pierwszego
@@ -210,5 +245,9 @@ def enforce(brand, text, content_item_id=None, channel=None):
             f"meaning and voice: {', '.join(banned)}. Zero em dashes. Return ONLY the rewritten text.",
             text, content_item_id))
     text = polish_pl(text, content_item_id)
+    # Voice Bible v2.2 sekcja 23 (25/07): test szatni HARD dla marek PL (TNM/RDC) - polska
+    # skladnia mowiona, nie kalka z angielskiego. Wezsza warstwa niz polish_pl.
+    if str((brand or {}).get("brand_id", "")).lower() in ("tnm", "rdc"):
+        text = test_szatni(text, content_item_id)
     check_re_intro_line(text, channel, content_item_id)  # v2.1: warn-only na razie
     return text

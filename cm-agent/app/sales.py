@@ -1171,6 +1171,9 @@ def _draft_outreach(inp, chat_id):
     if lang == "pl":
         try:
             draft = _tylko_gotowiec(compliance.polish_pl(draft), channel)
+            # Voice Bible v2.2 sekcja 23 (25/07): test szatni HARD dla KAZDEGO gotowca sprzedazowego
+            # PL (niezaleznie od marki). Origin sekcji = korekta Tomasza na mailu do Dudzika.
+            draft = _tylko_gotowiec(compliance.test_szatni(draft), channel)
         except Exception:
             traceback.print_exc()
     # gotowiec: naglowek + CZYSTA WKLEJKA osobna wiadomoscia (kanon comment-radar)

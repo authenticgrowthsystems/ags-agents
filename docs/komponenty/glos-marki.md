@@ -58,6 +58,24 @@ bledu, co ucinanie.
 - Test: `cm-agent/tests/test_import_smoke.py` sprawdza, ze blok glosu niesie
   CALA Voice Bible i CALY rdzen oraz ma wlaczony prompt-cache.
 
+## Voice Bible v2.2 (24-25/07) - warstwy compliance
+
+Voice Bible v2.2 dodaje sekcje 14-23 (canonical). W KODZIE zyja jako warstwy `compliance.enforce`
+(NIE w agent_prompts - ta tabela to rejestr, kod jej nie czyta):
+- **Sekcja 14 abstract-tech** (Ottley): hard block slownictwa produktowego w outreach -
+  `sales._ZAKAZANE_PRODUKTOWE` + auto-odrzut w gotowcu (od 24/07, pkt 3 paczki).
+- **Sekcja 20 interpunkcja PL**: `compliance.pl_comma_flags` (deterministyczna FLAGA w karcie
+  TNM/RDC, od 24/07 pkt 8).
+- **Sekcja 23 TEST SZATNI** (25/07): `compliance.test_szatni` - HARD (LLM Haiku, przepisanie
+  kalki z angielskiego na polski MOWIONY) dla marek PL w `enforce` ORAZ dla kazdego gotowca
+  sprzedazowego PL w `sales._draft_outreach`. Wezsza warstwa niz `polish_pl`: lapie zdania
+  POPRAWNE, ktore brzmia jak slajd (aforyzm "Kto...ten", rzeczownik odczasownikowy, zaimek bez
+  odniesienia, zdanie bez czasownika). Origin: korekta Tomasza na mailu do Dudzika. Test:
+  cm-agent/tests/test_voice_v22.py.
+- Deploy tresci: `cm-agent/db/032_voice_bible_v22_nowa.sql` (bump version+1 od aktualnej,
+  guard idempotentny po 'SEKCJA 23', dollar-quote). UWAGA WERSJI: db/022 to STARA v2.2 (12/07,
+  inna tresc) - jesli byla wdrozona, baza ma juz v4 i nowa idzie na v5 (sonda rozstrzyga).
+
 ## Kanony ktore go dotycza
 
 - Glos = jeden DNA + nakladki marek (12/07).
