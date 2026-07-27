@@ -70,6 +70,44 @@ def _admin_chat():
     return hitl._admin_chat_id()
 
 
+def zdejmij_guziki(ids, powod="zamknieta poza czatem"):
+    """Zdejmuje klawiature z kart decyzji zamknietych INACZEJ niz tapnieciem (skrypt, reczny SQL).
+
+    Klawiature kasowal dotad tylko `handle` po odpowiedzi guzikiem. Decyzja wygaszona skryptem
+    zostawiala w Telegramie karte z zywo wygladajacymi guzikami NA ZAWSZE.
+
+    Dowod (27/07, zlapane przez Tomasza): sprzatanie gotowcow wygasilo szesc bramek, a Tomasz
+    tapnal jedna z nich i dostal "Decyzja #161 juz rozstrzygnieta". W czacie lezalo siedem
+    prawie identycznych kart o tym samym prospekcie, z ktorych zywa byla jedna - nie mial jak
+    zgadnac ktora. To ta sama rodzina co reszta wczorajszych bledow: stan widoczny dla czlowieka
+    rozjezdza sie ze stanem w bazie.
+    """
+    ids = [i for i in (ids or [])]
+    if not ids:
+        return 0
+    chat = _admin_chat()
+    if not chat:
+        return 0
+    zdjete = 0
+    try:
+        rows = db.fetchall(
+            "SELECT id, tg_message_id FROM agent_decisions WHERE id = ANY(%s) AND tg_message_id IS NOT NULL",
+            (ids,)) or []
+    except Exception:
+        traceback.print_exc()
+        return 0
+    for r in rows:
+        try:
+            _tg("editMessageReplyMarkup", {"chat_id": chat, "message_id": r["tg_message_id"],
+                                           "reply_markup": {"inline_keyboard": []}})
+            zdjete += 1
+        except Exception:
+            traceback.print_exc()
+    if zdjete:
+        print(f"[decisions] zdjeto guziki z {zdjete} kart ({powod})", flush=True)
+    return zdjete
+
+
 def _norm_options(options):
     """Przyjmij [{'key','label'}] albo ['label1','label2'] -> zawsze [{'key','label'}]."""
     out = []

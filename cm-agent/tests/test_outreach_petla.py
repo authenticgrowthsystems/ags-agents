@@ -119,9 +119,14 @@ check("bez kanalu nie ma warunku channel", "channel=%s" not in FETCHALL[-1][0])
 EXEC.clear()
 sales._close_outreach_rows(["a", "b"], "rejected", "ZASTAPIONE nowszym gotowcem")
 check("zamkniecie wierszy wykonane", any("engagement_log SET status=%s" in s for s, _ in EXEC))
+# Wygaszanie bramek idzie przez fetchall (potrzebujemy RETURNING id, zeby zdjac guziki z kart).
+_caly_sql = [s for s, _ in EXEC] + [s for s, _ in FETCHALL]
 check("bramki wierszy wygaszone w tym samym kroku",
-      any("agent_decisions SET status='expired'" in s for s, _ in EXEC),
+      any("agent_decisions SET status='expired'" in s for s in _caly_sql),
       "bez tego lista decyzji pyta o gotowiec, ktorego nie ma")
+check("wygaszanie zwraca id, zeby dalo sie zdjac guziki z kart",
+      any("agent_decisions SET status='expired'" in s and "RETURNING id" in s for s in _caly_sql),
+      "bez RETURNING karta w Telegramie zostaje klikalna na zawsze")
 check("pusta lista nie generuje zapisu", sales._close_outreach_rows([], "rejected", "x") == 0)
 
 

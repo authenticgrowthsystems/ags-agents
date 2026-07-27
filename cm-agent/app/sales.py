@@ -1156,14 +1156,23 @@ def _close_outreach_rows(ids, status, powod):
             """UPDATE engagement_log SET status=%s, notes = COALESCE(notes,'') || %s
                WHERE id = ANY(%s::uuid[])""",
             (status, f" | {powod} ({stamp})", ids))
-        db.execute(
+        wygaszone = db.fetchall(
             """UPDATE agent_decisions SET status='expired'
                WHERE decision_type='stale_outreach' AND status='pending'
-                 AND context->>'engagement_id' = ANY(%s)""",
-            (ids,))
+                 AND context->>'engagement_id' = ANY(%s)
+               RETURNING id""",
+            (ids,)) or []
     except Exception:
         traceback.print_exc()
         return 0
+    # Bramka wygaszona w bazie zostawiala w Telegramie karte z zywymi guzikami - Tomasz tapnal
+    # taka 27/07 i dostal "Decyzja #161 juz rozstrzygnieta". Klawiature zdejmowal dotad WYLACZNIE
+    # `decisions.handle` po odpowiedzi guzikiem, wiec kazde zamkniecie skryptem zostawialo sierote.
+    try:
+        from . import decisions
+        decisions.zdejmij_guziki([w["id"] for w in wygaszone], powod="gotowiec zastapiony")
+    except Exception:
+        traceback.print_exc()
     return len(ids)
 
 

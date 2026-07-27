@@ -111,9 +111,18 @@ def main():
     sieroty = _bramki_sieroty()
     wygaszone = 0
     if sieroty:
-        db.execute("UPDATE agent_decisions SET status='expired' WHERE id = ANY(%s)",
-                   ([b["id"] for b in sieroty],))
+        ids = [b["id"] for b in sieroty]
+        db.execute("UPDATE agent_decisions SET status='expired' WHERE id = ANY(%s)", (ids,))
         wygaszone = len(sieroty)
+        # 27/07: pierwszy przebieg tego skryptu wygasil szesc bramek w bazie, ale zostawil ich
+        # karty w Telegramie z zywymi guzikami. Tomasz tapnal jedna i dostal "juz rozstrzygnieta",
+        # majac w czacie siedem prawie identycznych kart i zadnego sposobu, zeby odroznic zywa.
+        try:
+            from . import decisions
+            decisions.zdejmij_guziki(ids, powod="sprzatanie gotowcow")
+        except Exception:
+            import traceback
+            traceback.print_exc()
 
     print(f"APPLY: zamknietych wierszy {zamkniete}, wygaszonych bramek {wygaszone}, "
           f"zywych gotowcow zostalo {len(zostaja)}.")
