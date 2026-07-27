@@ -72,6 +72,25 @@ Voice Bible v2.2 dodaje sekcje 14-23 (canonical). W KODZIE zyja jako warstwy `co
   POPRAWNE, ktore brzmia jak slajd (aforyzm "Kto...ten", rzeczownik odczasownikowy, zaimek bez
   odniesienia, zdanie bez czasownika). Origin: korekta Tomasza na mailu do Dudzika. Test:
   cm-agent/tests/test_voice_v22.py.
+- **TAP-TEST SEKCJI 23 NA ZYWO (27/07, polecenie Managera) - PRZESZEDL i znalazl DWIE wady.**
+  Dwa przypadki: gotowiec PL napchany kalkami oraz czysty mail sprzedazowy PL (drugi celowo,
+  zeby zmierzyc PRECYZJE - falszywa poprawka jest tu rownie kosztowna jak przeoczona kalka).
+  - **Kalki: wyciete wszystkie.** "adresujemy wyzwania", "w obszarze", "dedykowane rozwiazanie
+    dostarcza wymierne rezultaty w oparciu o najlepsze praktyki", "zaimplementujemy",
+    "na poziomie procesu", "synergie", "wartosc dodana dla Panstwa organizacji" - zniknely.
+  - **WADA 1: bramka zepsula ODMIANE.** Wynik zaczynal sie od "pomagamy szkoly tanca" zamiast
+    "pomagamy szkolom tanca". Bramka pilnujaca polszczyzny sama zrobila blad przypadka.
+  - **WADA 2: bramka wygladzila KONKRET.** W czystym mailu "Znam ten moment z wlasnej szkoly"
+    zamienila na "Znam to dobrze z wlasnej szkoly" - ogolniej, mniej Tomaszowo. Prompt mowil
+    "nie zmieniaj sensu, tonu ani dlugosci", ale nie mowil "nie poprawiaj na sile".
+  - **Poprawka (27/07):** dwie reguly dopisane do `TEST_SZATNI_PROMPT` DOSLOWNIE z tych dwoch
+    bledow, nie z teorii: (a) odmiana jest wazniejsza niz kalka, bo kalka brzmi korporacyjnie,
+    a blad przypadka brzmi jak brak wyksztalcenia; (b) zdanie, ktore juz brzmi jak mowa, wraca
+    bajt w bajt.
+  - **MINA (AP-306, trzeci raz w repo):** pierwsza proba tap-testu padla na braku klucza, bo
+    jednorazowy `docker exec python -` NIE przechodzi przez `worker._load_secrets`. Poprawna
+    forma doklada `config.ANTHROPIC_API_KEY = db.get_secret("anthropic_api_key")` na starcie
+    (wzorzec z `bulk_polish.py`). Wczesniejsze wystapienia: drift_check 05/07, bulk_polish 06/07.
 - Deploy tresci: `cm-agent/db/032_voice_bible_v22_nowa.sql` (bump version+1 od aktualnej,
   guard idempotentny po 'SEKCJA 23', dollar-quote). UWAGA WERSJI: db/022 to STARA v2.2 (12/07,
   inna tresc) - jesli byla wdrozona, baza ma juz v4 i nowa idzie na v5 (sonda rozstrzyga).

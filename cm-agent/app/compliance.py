@@ -63,10 +63,28 @@ def _rewrite(prompt, text, content_item_id, task_name="compliance"):
         tasks.log_task(task_name, tier, model, source, getattr(resp, "usage", None), content_item_id)
         out = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
         return out or text
-    except Exception:
+    except Exception as e:
         # AP-306: filtr moze nie zadzialac, ale nie moze zniknac bez sladu - inaczej tekst
-        # wychodzi NIEPOPRAWIONY i nikt sie o tym nie dowiaduje
+        # wychodzi NIEPOPRAWIONY i nikt sie o tym nie dowiaduje.
+        #
+        # 27/07: sam traceback na stderr to ZA MALO i to jest wlasnie ta pulapka. Tap-test
+        # sekcji 23 padl na braku klucza, funkcja oddala tekst wejsciowy BAJT W BAJT, a jedynym
+        # sygnalem byl slad w logach kontenera - czyli tam, gdzie czlowiek nie zaglada.
+        # Na karcie taki tekst wyglada IDENTYCZNIE jak tekst, ktory bramke przeszedl.
+        # Odtad kazde nieudane przepuszczenie laduje w agent_logs (wzorzec check_re_intro_line):
+        # da sie o nie zapytac i widac je w przegladzie.
         traceback.print_exc()
+        try:
+            db.execute(
+                """INSERT INTO agent_logs (agent_id, log_type, rationale, context)
+                   VALUES ('cm','COMPLIANCE_SKIPPED',%s,%s)""",
+                (f"Filtr '{task_name}' NIE przepuscil tekstu (wyszedl NIEPOPRAWIONY): "
+                 f"{type(e).__name__}: {str(e)[:200]}",
+                 Jsonb({"task": task_name, "blad": type(e).__name__,
+                        "content_item_id": str(content_item_id) if content_item_id else None,
+                        "dlugosc_tekstu": len(text or "")})))
+        except Exception:
+            traceback.print_exc()
         return text
 
 
@@ -197,7 +215,18 @@ TEST_SZATNI_PROMPT = (
     "ich wplywem odpuszczaja. Cala rzecz w tym, zeby ich uprzedzic, nim sami sobie wytlumacza i "
     "odpuszcza.'\n"
     "NIE zmieniaj sensu, tonu ani dlugosci. Zero em dashes. Zachowaj przecinki przed "
-    "ze/zeby/ktory/gdy/jesli/bo/nim. Zwroc WYLACZNIE poprawiony tekst."
+    "ze/zeby/ktory/gdy/jesli/bo/nim.\n"
+    # Obie reguly ponizej pochodza z tap-testu 27/07 - to sa BLEDY, ktore ta bramka POPELNILA
+    # na zywym tekscie, nie hipotezy. Wpisane doslownie, zeby model widzial konkret.
+    "ODMIANA JEST WAZNIEJSZA NIZ KALKA. Po kazdym przepisanym zdaniu sprawdz przypadki: "
+    "czasownik rzadzi przypadkiem dopelnienia ('pomagamy szkolom tanca' - celownik, NIE "
+    "'pomagamy szkoly tanca'). Blad odmiany w tekscie do klienta jest gorszy niz kalka, ktora "
+    "mialas usunac - kalka brzmi korporacyjnie, blad odmiany brzmi jak brak wyksztalcenia.\n"
+    "ZDANIE, KTORE JUZ BRZMI JAK MOWA, ZOSTAW BEZ ZMIANY. Nie wygladzaj konkretu do ogolnika: "
+    "'Znam ten moment z wlasnej szkoly' jest LEPSZE niz 'Znam to dobrze z wlasnej szkoly', bo "
+    "nazywa konkretna rzecz. Nie szukaj czego poprawic na sile. Tekst bez kalk ma wrocic "
+    "bajt w bajt taki, jaki przyszedl.\n"
+    "Zwroc WYLACZNIE poprawiony tekst."
 )
 
 
