@@ -45,8 +45,22 @@ Jedno zdanie o "przeniesieniu bazy" potrafi zabić rozmowę, której nic innego 
   jest mały.
 - **RODO mówimy wprost:** serwery w Stanach, zgodność przez umowę powierzenia i ramy EU-US.
   Dla szkoły tańca wystarcza.
-- **Granica ICP:** dla gabinetu fizjoterapii **nie wystarcza i tam nie sprzedajemy w ogóle.**
-  Gdy prospekt przetwarza dane o zdrowiu, mówimy wprost, że to nie dla nich, i kończymy temat.
+- **Branże zdrowotne: piszemy do nich normalnie** (decyzja Tomasza 27/07, **cofa wykluczenie
+  Managera z tego samego dnia**). Uzasadnienie właściciela: *"nie wycinamy rodziny zdrowie
+  i uroda wcale, będziemy próbować i zobaczymy, mail i SMS nic nie kosztuje jak wyślę ręcznie"*.
+
+  **Rozdzielenie, które warto trzymać:** zastrzeżenie Managera dotyczyło WDROŻENIA, nie wysyłki.
+  Próba kontaktu nie niesie żadnego ryzyka; problem RODO powstaje dopiero, gdy dane pacjentów
+  miałyby usiąść na serwerach w Stanach.
+
+  **Korekta pozycjonowania w dużej mierze to rozbraja.** Skoro sprzedajemy przedsionek i nie
+  ruszamy systemu, w którym siedzi kartoteka, to u fizjoterapeuty tak samo nie ruszamy jego
+  systemu pacjentów, jak u szkoły tańca nie ruszamy ActiveNow. "Macie wolny termin we wtorek"
+  nie jest daną o zdrowiu.
+
+  **Czego nie wolno przemilczeć przy wdrożeniu:** wiadomość przychodząca potrafi sama nieść
+  informację o zdrowiu ("boli mnie kręgosłup, macie termin"), a tego nie da się z góry
+  powstrzymać. Mówimy o tym wprost i ustalamy zakres, zamiast udawać, że problemu nie ma.
 
 ## 1. Z jakiego adresu piszemy
 
