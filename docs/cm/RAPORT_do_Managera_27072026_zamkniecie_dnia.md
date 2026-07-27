@@ -125,15 +125,32 @@ milczy o stanie, który jest.** Warto, żeby to zostało jako soczewka na przysz
 
 ---
 
-## 6. Co czeka na Tomasza
+## 6. Wdrożone i zweryfikowane (uzupełnione po wykonaniu)
 
-1. `git push` (dwa commity: `515ef7f`, `f4e88e1`).
-2. Pull i przebudowa - dopiero wtedy działa etykieta lejka, kanon w prompcie Sprzedawcy
-   i zdejmowanie guzików.
-3. SQL z notatką o Adamietzu (przekazany w rozmowie, nie w repo).
-4. Bramka **#162** - jedyna żywa decyzja w systemie. Gotowiec do StandART z 24/07,
-   temat "Klagenfurt, byłem tam jako sędzia". Do sprawdzenia, czy mówi o wydarzeniu w czasie
-   przyszłym, bo minęły trzy dni.
+Wszystko z tego raportu jest **na produkcji**. Tomasz wykonał trzy kroki przed wyjazdem:
+
+1. Push - origin na `2a0533f`.
+2. Pull i przebudowa kontenera, `/health` odpowiada `{"status":"ok"}`. Od tego momentu działają:
+   etykieta lejka, `_KANON_KAMPANII` w prompcie Sprzedawcy, zdejmowanie guzików z wygaszonych kart.
+3. Notatka o materiale dla Adamietza dopisana do kartoteki (`UPDATE 1`, termin potwierdzony
+   na 28/07 18:37 czasu lokalnego).
+
+**Weryfikacja etykiety odczytem z produkcji** - i to jest liczba, którą warto zobaczyć:
+
+| | |
+|---|---|
+| otwartych | 22 |
+| z terminem, w rozmowie | 3 |
+| **do pierwszego kontaktu** | **19** |
+| **realny dług (pisaliśmy i urwało się)** | **0** |
+
+Lejek, który rano Twój agent opisał jako "osiemnaście pozycji martwego ciężaru", to w istocie
+trzy sprawy w toku, dziewiętnaście osób czekających na pierwszego maila i **ani jednej urwanej
+rozmowy**. Nic nie było zaniedbane. Zła była nazwa, nie stan.
+
+**Zostaje jedna rzecz, po stronie Tomasza:** bramka **#162**, jedyna żywa decyzja w systemie.
+Gotowiec do StandART z 24/07, temat "Klagenfurt, byłem tam jako sędzia". Do sprawdzenia, czy
+mówi o wydarzeniu w czasie przyszłym, bo minęły trzy dni.
 
 ---
 
