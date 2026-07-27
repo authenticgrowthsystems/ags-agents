@@ -1,0 +1,57 @@
+# AP-311: Brak danych to nie fakt o swiecie, dopoki nie sprawdzisz, czy system mial jak je pokazac
+
+**Ustanowiony 27/07/2026 (Manager AGS, po ustaleniu o dwunastu odrzuconych duplikatach).**
+Blizniak AP-309 od strony DIAGNOZY: tam jedna wada w wielu miejscach, tu jeden brak wzięty
+za wlasciwosc rzeczywistosci.
+
+## Wzorzec
+
+Widok systemu pokazuje pustke - "brak kontaktu", "zero wysylek", "nie ma tego w bazie" -
+i ta pustka zostaje potraktowana jako FAKT, na ktorym buduje sie decyzje. Tymczasem pustka
+w widoku ma dwie mozliwe przyczyny i tylko jedna z nich jest faktem o swiecie:
+
+1. **Danych naprawde nie ma** (fakt o swiecie),
+2. **Dane sa, ale system nie mial ich jak pokazac** - byly poza jego zasiegiem, w pliku,
+   w innej kolumnie, odrzucone przez filtr albo nigdy nie zapisane, bo brakowalo drogi zapisu.
+
+Roznica jest zasadnicza, bo w przypadku drugim decyzja podjeta "wobec danych" jest
+**poprawna proceduralnie i falszywa merytorycznie**, a winny jest system, nie czlowiek.
+
+## Dowod: trzy przypadki w jednym tygodniu
+
+1. **Voice Bible (25/07).** Manager oczekiwal, ze nowa wersja pojdzie na `version=4`. Sonda
+   pokazala, ze czworke zajela juz stara v2.2 z db/022. Stan w glowie kontra stan w bazie.
+2. **StandART (26/07).** Pamiec projektu twierdzila: "gotowiec wyslany 24/07". Sonda: siedem
+   wierszy `proposed`, ZERO `sent`. Nie wyszlo nic. Stan w glowie kontra stan w bazie.
+3. **Dwanascie odrzuconych duplikatow (27/07).** Lejek pokazywal przy dziewieciu prospektach
+   "⚠️ brak kontaktu", wiec uznano ich za nieobslugiwalnych i zapadla decyzja o zaparkowaniu.
+   Mail i telefon kazdego z nich **lezaly w pliku na dysku Tomasza od 23/07**, a import
+   wyrzucil je jako duplikaty, bo pytal wylacznie "czy nazwa jest juz w lejku", a nie
+   "czy ten rekord wnosi cos, czego lejek nie ma".
+
+We wszystkich trzech przypadkach czlowiek dzialal racjonalnie na tym, co widzial. We wszystkich
+trzech to, co widzial, bylo niepelne z winy systemu.
+
+## Why bad
+
+- Decyzja wyglada na ugruntowana w danych, wiec nikt jej nie kwestionuje.
+- Wina laduje na czlowieku ("zaniedbane prospekty"), a nalezy sie systemowi ("nigdy nie podal
+  adresow"). To psuje nie tylko decyzje, ale i ocene wlasnej pracy.
+- Pustka jest cicha: brakujaca kolumna nie rzuca wyjatku, odrzucony rekord nie zostawia sladu,
+  a filtr, ktory cos wyciol, wyglada dokladnie jak filtr, ktory nie mial czego wyciac.
+
+## Correct
+
+1. **Zanim uznasz brak za fakt, zapytaj: czy system mial JAK to pokazac?** Konkretnie:
+   czy istnieje droga zapisu? czy istnieje odczyt? czy jakis filtr mogl to wyciac po drodze?
+   Trzy pytania, kilkanascie sekund.
+2. **Odrzucone rekordy musza zostawiac slad.** Kazdy filtr, ktory cos usuwa ze zbioru, ma
+   powiedziec ILE i DLACZEGO. Import mowi "duplikaty: 12" wlasnie po to - i to ta liczba
+   pozwolila znalezc wade.
+3. **Duplikat nie jest smieciem.** Rekord, ktory pokrywa sie kluczem, moze niesc pola, ktorych
+   docelowy wiersz nie ma. Zanim odrzucisz, sprawdz, co wnosi.
+4. **Kolumna bez drogi zapisu to kolumna martwa.** `contacts.who_is_who` istniala cztery dni
+   z odczytem i bez wejscia - widok pokazywal pustke, ktora nie miala prawa sie zapelnic.
+   Przy kazdym nowym polu: gdzie to sie WPISUJE, nie tylko gdzie sie czyta.
+5. **Gdy stan w glowie rozjezdza sie ze stanem w bazie, wygrywa sonda.** Nie pamiec, nie
+   dokumentacja, nie raport sprzed dwoch dni. Odczyt.
