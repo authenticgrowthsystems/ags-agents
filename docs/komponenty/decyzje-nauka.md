@@ -95,6 +95,13 @@ Przypomnij jutro); throttle w DB = jedna otwarta/swieza decyzja per item.
   nowy typ = swiadoma decyzja projektowa.
 - Throttle stale_approval: jedna otwarta decyzja per item - flood niemozliwy,
   ale tez nie czekaj na drugie przypomnienie tego samego dnia.
+- **KAZDA odpowiedz zamyka decyzje** (`decisions.answer` ustawia `answered` bezwarunkowo).
+  Guzik, ktory brzmi jak podglad ("Pokaz tresc"), tez ja zamyka - a poniewaz throttle liczy
+  `answered_at > NOW() - 24h`, sprawa milknie na dobe. Dlatego: **albo wszystkie guziki typu
+  sa ROZSTRZYGAJACE** (tak zaprojektowany jest `sales_followup`, swiadomie bez "pokaz"),
+  **albo galaz podgladu musi zadac pytanie ponownie** (tak robi od 27/07 `apply_stale_outreach`
+  po pokazaniu tresci, wzorem toru komentarzy). Zgloszone przez Tomasza przy bramce #162:
+  "klikam Pokaz tresc, nie Wyslalem" - i zostalby z tekstem bez guzika.
 - **Throttle jest PER PRZEDMIOT, nie per przebieg** (doprecyzowanie 26/07): zdanie "flood
   niemozliwy" bylo za mocne. Dodatkowo kazdy straznik, ktory laczy throttle z `LIMIT`, musi
   miec odsiew W ZAPYTANIU przed limitem - inaczej zablokowane pozycje zjadaja cala pule

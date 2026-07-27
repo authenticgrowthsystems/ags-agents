@@ -238,10 +238,23 @@ def apply_stale_outreach(row, key, chat):
         _tg("sendMessage", {"chat_id": chat, "text": f"⏭ Zamkniete - outreach do {who} wycofany."})
     elif key == "show":
         _tg("sendMessage", {"chat_id": chat,
-                            "text": f"📋 OUTREACH do {who} - ponizej czysta wklejka (po wyslaniu tapnij "
-                                    f"'Wyslalem' na przypomnieniu albo napisz sprzedawcy):"})
+                            "text": f"📋 OUTREACH do {who} - ponizej czysta wklejka:"})
         _tg("sendMessage", {"chat_id": chat, "text": (e.get("response") or e.get("content") or "")[:4096],
                             "disable_web_page_preview": True})
+        # 27/07: 'Pokaz tresc' to PODGLAD, nie decyzja - ale kazda odpowiedz na bramke ustawia
+        # status 'answered' (decisions.py), wiec sprawa znikala z listy i straznik milczal przez
+        # dobe. Czlowiek zostawal z tekstem i bez guzika. Odtad po pokazaniu tresci sprawa
+        # WRACA z tymi samymi guzikami - wzorzec 'show' z toru komentarzy, gdzie ponowne
+        # pokazanie tez tworzy nowy wiersz z decyzja. Zgloszone przez Tomasza 27/07 przy #162.
+        decisions.ask(
+            e.get("agent") or "AGS:sprzedaz", (e.get("agent") or "AGS:sprzedaz").split(":")[0],
+            "stale_outreach",
+            f"Gotowiec outreach do {who} - pokazalem tresc. Co z nim robimy?",
+            [{"key": "sent", "label": "Wyslalem (odhacz)"},
+             {"key": "wait", "label": "Czekam (przypomnij jutro)"},
+             {"key": "show", "label": "Pokaz tresc"},
+             {"key": "drop", "label": "Rezygnuje"}],
+            recommendation=None, context={"engagement_id": eng_id})
 
 
 # ---------------- LACZNIK (22/07): parser RAPORT PRACY czat -> serwer, BEZ LLM ----------------

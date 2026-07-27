@@ -79,10 +79,13 @@ def _fetchall(sql, params=None):
     return []
 
 
+WIERSZ = {"v": None}   # co zwraca fetchone; None = zaden wiersz nie ma bramki w drugim pasie
 db.fetchall = _fetchall
-db.fetchone = lambda sql, params=None: None   # zaden wiersz nie ma bramki w drugim pasie
+db.fetchone = lambda sql, params=None: WIERSZ["v"]
 db.execute = lambda *a, **k: None
-decisions.ask = lambda *a, **k: ASKED.append({"agent": a[0], "typ": a[2], "ctx": k.get("context")})
+decisions.ask = lambda *a, **k: ASKED.append({"agent": a[0], "typ": a[2], "pytanie": a[3],
+                                              "opcje": a[4], "ctx": k.get("context")})
+engagement._tg = lambda *a, **k: None
 
 
 def _pozycja(sql, igla):
@@ -130,6 +133,31 @@ check("propozycja komentarza pyta jako stale_comment",
 check("oba wiersze obsluzone w jednym przebiegu", len(ASKED) == 2, str(len(ASKED)))
 check("kazde pytanie niesie identyfikator wiersza",
       all((a["ctx"] or {}).get("engagement_id") for a in ASKED), str(ASKED))
+
+
+# ---------------- 'Pokaz tresc' to podglad, nie decyzja ----------------
+print("\n[27/07] 'Pokaz tresc' nie moze wyciszyc sprawy na dobe:")
+WIERSZ["v"] = {"id": "e9", "agent": "AGS:sprzedaz", "author_display": "Klub Sportowy StandART",
+               "content": "outreach email: StandART", "response": "Dzien dobry, sezon sie konczy..."}
+ASKED.clear()
+engagement.apply_stale_outreach({"context": {"engagement_id": "e9"}}, "show", 1)
+check("po pokazaniu tresci sprawa WRACA z guzikami", len(ASKED) == 1, str(ASKED))
+if ASKED:
+    a = ASKED[0]
+    check("wraca jako ta sama sprawa (ten sam wiersz)",
+          (a["ctx"] or {}).get("engagement_id") == "e9", str(a["ctx"]))
+    check("wraca z kompletem czterech guzikow", len(a["opcje"]) == 4, str(a["opcje"]))
+    check("wsrod nich jest odhaczenie wysylki",
+          any(o["key"] == "sent" for o in a["opcje"]), str(a["opcje"]))
+    check("pytanie mowi, ze tresc juz pokazano", "pokazalem" in a["pytanie"].lower(), a["pytanie"])
+
+ASKED.clear()
+engagement.apply_stale_outreach({"context": {"engagement_id": "e9"}}, "wait", 1)
+check("'Czekam' NIE tworzy nowej bramki (straznik wroci sam jutro)", not ASKED, str(ASKED))
+ASKED.clear()
+engagement.apply_stale_outreach({"context": {}}, "show", 1)
+check("bramka bez identyfikatora wiersza nie robi nic", not ASKED, str(ASKED))
+WIERSZ["v"] = None
 
 print("\n" + ("WSZYSTKO PRZESZLO" if not FAILS else f"BLEDY: {FAILS}"))
 sys.exit(1 if FAILS else 0)
