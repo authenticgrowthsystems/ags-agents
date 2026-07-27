@@ -3,6 +3,51 @@
 Krótki dokument, bo decyzje są krótkie. Powstał, gdy kampania weszła w fazę ręcznej,
 spersonalizowanej wysyłki do zaimportowanej listy szkół tańca.
 
+---
+
+## 0. POZYCJONOWANIE: przedsionek, nie zamiennik (korekta Managera 27/07 wieczorem)
+
+**To jest najważniejsza część tego dokumentu.** Research trzech źródeł dał sprzeczne werdykty
+i sprzeczność rozstrzyga się tak:
+
+**Nasze narzędzie jest przedsionkiem, nie zamiennikiem systemu do zapisów.** Większość polskich
+szkół tańca trzyma bazę kursantów w **ActiveNow** i nikt jej nie migruje.
+
+Obsługujemy wszystko, co dzieje się **zanim** ktoś stanie się kursantem: nieodebrany telefon,
+wiadomość w niedzielę wieczorem, formularz z Facebooka, pytanie o pierwszy taniec. Dopiero
+zapisany człowiek wchodzi do ActiveNow i tam zostaje.
+
+**ZAKAZ ABSOLUTNY: nie proponujemy migracji bazy ani rezygnacji z obecnego systemu zapisów.**
+To jest największy strach właściciela szkoły i jednocześnie rzecz, której nie musimy ruszać.
+Jedno zdanie o "przeniesieniu bazy" potrafi zabić rozmowę, której nic innego by nie zabiło.
+
+**Synchronizacja przez API to etap drugi** - nie sprzedajemy jej na wejściu.
+
+## 0.1 Trzy argumenty, w tej kolejności ważności
+
+1. **Trzy subkonta w cenie jednej subskrypcji.** Szkoła ma zwykle trzy linie: kursy regularne,
+   pierwszy taniec, imprezy. Dziś wszystkie wpadają do jednej skrzynki. Dowód własny: Tomasz
+   nie puszcza pierwszego tańca przez stronę Royal Dance, tylko przez dedykowaną.
+2. **Rachunek spina się przed retencją.** Tomasz zszedł z 2500 zł rocznie za hosting na 200 zł,
+   bo strony stoją w narzędziu. Do tego odpada Calendly i osobny mailing. Dla szkoły płacącej
+   dziś agencji za hosting narzędzie zwraca się **z samych rachunków**, zanim zatrzyma pierwszego
+   kursanta. To argument z faktury, nie z obietnicy, więc idzie w rozmowie **przed** retencją.
+3. **Wdrożenie nie jest dodatkiem do subskrypcji, tylko warunkiem jej sensu.** Research podaje
+   3-4 tygodnie codziennego używania do swobody w panelu i 2-3 miesiące do stabilnego systemu.
+   Właściciel szkoły tego czasu nie ma. **Sprzedajemy zdjęcie trzech tygodni, nie dostęp
+   do narzędzia.**
+
+## 0.2 Konkrety wdrożeniowe
+
+- **Komunikacja masowa w Polsce idzie przez WhatsApp, nie SMS-em.** SMS do Polski to około
+  17 gr za segment, WhatsApp użytkowy około 5 gr plus 10 USD miesięcznie za subkonto.
+  **SMS zostaje wyłącznie przy nieodebranym połączeniu**, gdzie liczy się dotarcie, a wolumen
+  jest mały.
+- **RODO mówimy wprost:** serwery w Stanach, zgodność przez umowę powierzenia i ramy EU-US.
+  Dla szkoły tańca wystarcza.
+- **Granica ICP:** dla gabinetu fizjoterapii **nie wystarcza i tam nie sprzedajemy w ogóle.**
+  Gdy prospekt przetwarza dane o zdrowiu, mówimy wprost, że to nie dla nich, i kończymy temat.
+
 ## 1. Z jakiego adresu piszemy
 
 **`tomasznawrocki.pl`** - do zimnej wysyłki do szkół tańca.
@@ -31,22 +76,26 @@ Uzasadnienie Managera jest ekonomiczne, nie oszczędnościowe: przy szkole tańc
 prospekcie, nie przy stu dziesięciu wysłanych w ciemno. **Przy Adamietzu płatny research
 jest oczywisty i tam się go nie żałuje.**
 
-## 3. Gdzie się zatrzymujemy z budową
+## 3. Kolejność budowy (STOP cofnięty 27/07 wieczorem)
 
-**Ogniwo 2 (wysyłka automatyczna) i ogniwo 3 (zbieracz z rejestrów) NIE są budowane.**
-Łańcuch stoi na wzbogacaniu.
+**Decyzja Tomasza, przekazana przez Managera: budowa idzie RÓWNOLEGLE z pozyskiwaniem.**
+Jedno nie blokuje drugiego - BE buduje, Tomasz w tym samym czasie dzwoni i pisze ręcznie.
 
-Decyzja Managera 27/07, uzasadnienie policzone: po imporcie w lejku siedzi 110 uśpionych
-szkół z kompletem maili, 10 aktywnych i 9 odzyskiwanych. Przy ręcznej wysyłce w tempie
-kilkunastu dziennie to materiał na dwa tygodnie pracy. **Zbieracz produkowałby zapas,
-którego nie zużywamy** - a to jest pierwszy z zapisanych anty-wzorców Tomasza: nie budujemy
-systemów przed pierwszą sprzedażą.
+Wcześniejsza tego samego dnia decyzja o zatrzymaniu łańcucha po wzbogacaniu **już nie
+obowiązuje**. Powód cofnięcia: zatrzymanie zakładało, że budowa konkuruje z pozyskiwaniem
+o czas Tomasza. Nie konkuruje - to dwie różne pary rąk.
 
-**Warunek powrotu do ogniw 2 i 3:** lista uśpionych schodzi poniżej trzydziestu ALBO
-pierwszy klient płaci.
+**Kolejność po zamianie (rekomendacja BE przyjęta przez Managera):**
 
-Do tego czasu przedmiotem pracy jest **jakość jednego kontaktu**, nie wolumen. Przy stu
-dwudziestu dziewięciu podmiotach o wyniku decyduje treść.
+1. ~~Import listy z kwalifikacją~~ - **zrobione 27/07**.
+2. **Zbieracz podmiotów z rejestrów po PKD** - następny. CEIDG i KRS/REGON mają oficjalne API,
+   dane jawne, filtr po PKD i województwie daje powtarzalny wolumen w każdej niszy.
+3. **Wysyłka automatyczna** - na koniec, i to świadomie. Ręczna wysyłka nie jest wąskim
+   gardłem (Tomasz woli pisać sam, bo ręcznie znaczy personalnie), a automat tworzyłby ryzyko
+   domeny i tonu, którego dziś nie mamy.
+
+Scraping Map Google nadal odpada: łamie regulamin, a Places zabrania trwałego składowania
+wyników. Mapy do uzupełnienia pojedynczego rekordu, nie do budowy bazy.
 
 ## 4. Zakres pilotażu
 

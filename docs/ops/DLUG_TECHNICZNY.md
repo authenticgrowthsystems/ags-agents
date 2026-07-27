@@ -46,6 +46,12 @@ niezaleznie od kodu. Zweryfikowane: pada identycznie na czystym HEAD.
 nie ma. Albo, gorzej, przyzwyczaja sie do czerwonego i przeoczy prawdziwa.
 **Docelowo:** wstrzykiwac "teraz" do `next_slot` w tescie zamiast polegac na zegarze.
 
+**DRUGI PLIK, ta sama wada (dopisane 27/07):** `cm-agent/tests/test_reslot.py`, przypadek
+"#4 w przyszlosci, ludzka minuta, w oknie". Pada okolo poludnia i po poludniu, bo siatka gniazd
+liczona z okna 13:00-22:00 czesciowo wypada juz w przeszlosci. Zweryfikowane stashem: pada
+identycznie na czystym HEAD. Czyli wada dotyka DWOCH plikow testowych (AP-309) i obie naprawy
+sa te sama poprawka: wstrzykniecie zegara zamiast `datetime.now()`.
+
 ---
 
 ## D-003: Kolumny kontaktowe lejka bez drogi zapisu przez czlowieka

@@ -40,17 +40,28 @@ przeze mnie od A do Z** w Twojej firmie: konfiguracja, treści wiadomości dopas
 branży, Twoje logo i kolory, przeszkolenie Ciebie lub Twojej osoby (2-4 krótkie sesje)
 i prosta instrukcja obsługi. Ty nie klikasz nic technicznego.
 
+## Czego to NIE zastępuje (mów o tym wcześnie, nie na końcu)
+
+**Twój system do zapisów zostaje tam, gdzie jest.** Jeśli prowadzisz kursantów w ActiveNow
+albo czymkolwiek innym, nie ruszamy tego i nie przenosimy bazy. To, co budujemy, dzieje się
+**zanim** ktoś stanie się Twoim kursantem: nieodebrany telefon, wiadomość w niedzielę wieczorem,
+formularz z Facebooka, pytanie o pierwszy taniec. Dopiero zapisany człowiek wchodzi do Twojego
+systemu zapisów i tam zostaje.
+
+Łączenie obu światów przez wymianę danych jest możliwe, ale to osobny etap i osobna rozmowa.
+Na start nie jest potrzebne.
+
 ## Pakiety
 
 **Kompletny System Retencji - 5000-8000 zł jednorazowo** (wdrożenie 10-14 dni)
-Pełna ścieżka klienta: baza klientów, sekwencje przypomnień e-mail i SMS, automatyczna
-prośba o opinię w Google, odzyskiwanie nieaktywnych klientów, kampanie do bazy, automat
-odpowiadający na pytania 24/7, raport co miesiąc, 2 godziny szkolenia, 30 dni gwarancji
-i miesiąc wsparcia po starcie.
+Pełna ścieżka zapytania: rejestr osób, które się do Ciebie odezwały, sekwencje przypomnień
+przez WhatsApp i e-mail, automatyczna prośba o opinię w Google, odzyskiwanie osób, które
+przestały przychodzić, kampanie, automat odpowiadający na pytania 24/7, raport co miesiąc,
+2 godziny szkolenia, 30 dni gwarancji i miesiąc wsparcia po starcie.
 
 **Strona + Podstawowa Automatyzacja - 3000-5000 zł jednorazowo** (wdrożenie 7-10 dni)
 Strona internetowa, rezerwacje online, automatyczna odpowiedź na każde zapytanie,
-przypomnienia SMS i e-mail o wizytach, prosta ścieżka sprzedaży z podglądem, panel.
+przypomnienia WhatsApp i e-mail o terminach, prosta ścieżka sprzedaży z podglądem, panel.
 
 **Fundament - 2000-3000 zł jednorazowo** (wdrożenie 5-7 dni)
 Strona internetowa do 5 podstron, która zbiera zapytania zamiast je gubić: formularz
