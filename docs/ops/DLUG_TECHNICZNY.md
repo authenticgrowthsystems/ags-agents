@@ -89,6 +89,54 @@ Sprzedawcy: przeczytaj notatki, ZANIM zaproponujesz przygotowanie czegokolwiek.
 Warunek wejscia: po pierwszej platnej sprzedazy, zgodnie z kanonem "nie budujemy systemow przed
 pierwsza sprzedaza".
 
+## D-006: Status `dispatching` ma nazwe, ktora obiecuje co innego niz znaczy
+
+**Zapisany 27/07/2026** (zgloszenie Managera; polecenie: zapisac jako dlug, nie naprawiac dzis).
+
+**Zgloszenie brzmialo:** "status dispatching nie ma limitu czasu, post z 13:30 wisial ponad pol
+godziny i ani system, ani CM nie potrafili powiedziec, czy jest w trakcie wysylki, czy zawisl".
+Podejrzana przyczyna: tekst ~2000 znakow odrzucony przez API jako za dlugi.
+
+**ODCZYT PRZED NAPRAWA (27/07, cztery zapytania read-only) OBALIL OBIE HIPOTEZY:**
+
+1. **Zaden post nie wisi.** Siedem materialow w `dispatching`, u kazdego liczba wierszy
+   "po terminie ponad 2h" wynosi ZERO. Wszystkie oczekujace wiersze maja sloty w przyszlosci
+   (od 27/07 21:02 do 04/08 14:15).
+2. **Limit czasu ISTNIEJE:** `worker._dispatch_timeout_alert`, prog `config.DISPATCH_TIMEOUT_H = 2`.
+   Liczy od SLOTU WIERSZA, nie od dispatchu - swiadomie, bo poprzednia wersja alarmowala o 15:15
+   o postach ze slotami na 20:10, a falszywe alarmy ucza ignorowania prawdziwych (komentarz A6,
+   21/07). Nie alarmowal, bo nie mial o czym.
+3. **Hipoteza o dlugosci bez poparcia.** X opublikowal przez 10 dni 28 postow, najdluzszy
+   556 znakow; najdluzszy `scheduled` w kolejce ma 563. LinkedIn publikowal 1549-2016 znakow,
+   w kolejce ma 2392-2621 przy limicie platformy 3000. Zaden wiersz nie przekracza limitu swojej
+   platformy. Nie ma tez wiersza ze slotem 13:30.
+
+**PRAWDZIWA WADA, ktora zgloszenie odslonilo:**
+
+`dispatching` brzmi jak stan PRZELOTNY ("wysylam"), a znaczy "rozeslane do kolejki, czekam az
+WSZYSTKIE wiersze serii osiagna stan terminalny" - czyli stan, ktory normalnie trwa DNI. Szesc
+materialow siedzi w nim 51 godzin i jest to poprawne: re-slotter rozrzucil serie na dni, wiec
+seria konczaca sie 4 sierpnia bedzie w `dispatching` przez dziewiec dni.
+
+Czlowiek czyta nazwe i spodziewa sie sekund. System ma na mysli tydzien. **To jest AP-311 od
+strony NAZEWNICTWA:** nie "stan, ktorego nikt nie potrafi zweryfikowac", tylko stan, ktorego
+nazwa wprowadza w blad. Manager wyciagnal rozsadny wniosek z mylacej etykiety - dokladnie tak,
+jak Agent Sprzedazy przy "BRAK nastepnego kroku".
+
+**CO ZOSTAJE DO ZROBIENIA (druga polowa zgloszenia, trafna w stu procentach):**
+
+Nigdzie nie widac, OD KIEDY material jest w `dispatching` i NA CO czeka. Poprawka jest tania:
+przy kazdej pozycji w tym stanie pokazac liczbe wierszy oczekujacych i najblizszy slot -
+"dispatching, czeka 5 wierszy, najblizszy slot 28/07 09:00". Wtedy roznica miedzy "wysylam od
+dwoch minut" a "wisi od trzydziestu" jest widoczna bez patrzenia na zegarek.
+
+Rozwazyc takze przemianowanie stanu na cos, co nie klamie ("w kolejce", "rozeslane"), ale to
+zmiana kontraktu miedzy tabelami i n8n, wiec osobna decyzja.
+
+**Czym grozi, jesli zostawimy:** przy czterech publikacjach dziennie na dwoch kanalach czlowiek
+bedzie regularnie pytal "czy to wisi", a odpowiedz bedzie za kazdym razem wymagala sondy do bazy.
+Prawdziwy zwis utonie kiedys w tych falszywych alarmach.
+
 ## D-005: Karty decyzji wygaszone PRZED 27/07 zostaja klikalne
 
 **Zapisany 27/07/2026.**
