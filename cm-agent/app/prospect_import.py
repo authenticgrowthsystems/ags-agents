@@ -215,6 +215,23 @@ def _istniejace():
     return nazwy, domeny, maile
 
 
+def _rozne(kolumna, stara, nowa):
+    """Czy to NAPRAWDE dwie rozne wartosci, czy ten sam fakt w innym zapisie.
+
+    Pierwszy dry na produkcji (27/07) pokazal cztery "konflikty", z ktorych trzy byly szumem:
+    `scorpiondanceteam.com` kontra `https://scorpiondanceteam.com/`, `510-555-099` kontra
+    `510 555 099`, `lacultura.pl` kontra `https://lacultura.pl/`. Realny konflikt byl JEDEN
+    (mail StandART: recepcja@ kontra biuro@) i utonal wsrod reszty.
+
+    To ta sama wada co piec identycznych bramek: lista rzeczy do rozstrzygniecia, z ktorych
+    wiekszosc nie wymaga rozstrzygniecia, uczy czlowieka przewijac zamiast czytac."""
+    if kolumna == "prospect_url":
+        return _domena(stara) != _domena(nowa)
+    if kolumna == "contact_phone":
+        return re.sub(r"\D", "", stara) != re.sub(r"\D", "", nowa)
+    return _norm(stara) != _norm(nowa)
+
+
 def _wiersze_lejka():
     return db.fetchall(
         """SELECT id, prospect_name, contact_email, contact_phone, prospect_url, stage
@@ -252,7 +269,9 @@ def plan_wzbogacenia(rekordy):
                 continue
             if not stara:
                 pola[kol] = nowa
-            elif _norm(stara) != _norm(nowa):
+            elif not _rozne(kol, stara, nowa):
+                continue           # ta sama wartosc, inny zapis - nie zawracamy glowy
+            else:
                 sporne.append((kol, stara, nowa))
         if pola:
             uzupelnienia.append((w, rec, pola))

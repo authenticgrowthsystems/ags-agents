@@ -209,6 +209,30 @@ check("ten sam mail to nie konflikt",
 check("podmiot spoza lejka jest pomijany, nie dopisywany",
       all(w["prospect_name"] != "Kogo Nie Ma W Lejku" for w, _, _ in uzup))
 
+# Ten sam fakt w innym zapisie to NIE konflikt (regresja z pierwszego dry na produkcji 27/07:
+# cztery "konflikty", z ktorych trzy byly szumem, i realny utonal wsrod nich).
+check("adres bez schematu kontra z ukosnikiem to nie konflikt",
+      not pi._rozne("prospect_url", "lacultura.pl", "https://lacultura.pl/"))
+check("telefon z myslnikami kontra ze spacjami to nie konflikt",
+      not pi._rozne("contact_phone", "510-555-099", "510 555 099"))
+check("mail roznica wielkosci liter to nie konflikt",
+      not pi._rozne("contact_email", "Biuro@Firma.PL", "biuro@firma.pl"))
+check("INNY mail to nadal konflikt",
+      pi._rozne("contact_email", "recepcja@firma.org", "biuro@firma.org"))
+check("INNY numer to nadal konflikt",
+      pi._rozne("contact_phone", "510 555 099", "600 100 200"))
+check("INNA domena to nadal konflikt",
+      pi._rozne("prospect_url", "https://jedna.pl", "https://druga.pl"))
+
+LEJEK[:] = [{"id": "s1", "prospect_name": "Scorpion", "contact_email": "a@b.pl",
+             "contact_phone": "533-331-170", "prospect_url": "scorpiondanceteam.com",
+             "stage": "lost"}]
+_, konf_szum, bez_szum = pi.plan_wzbogacenia(
+    [rec(nazwa="Scorpion", email="a@b.pl", telefon="533 331 170",
+         www="https://scorpiondanceteam.com/")])
+check("wiersz rozniacy sie WYLACZNIE zapisem nie generuje ani zmiany, ani konfliktu",
+      not konf_szum and bez_szum == 1, f"konflikty={konf_szum}, bez_zmian={bez_szum}")
+
 EXEC.clear()
 pi.wzbogac(uzup, "lista.xlsx")
 check("wzbogacanie robi UPDATE, nie INSERT",
