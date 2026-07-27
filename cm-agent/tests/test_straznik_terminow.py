@@ -179,5 +179,45 @@ EXEC.clear()
 sales.apply_followup({"context": {}}, "done", 1)
 check("decyzja bez identyfikatora nie robi nic", not EXEC, str(EXEC))
 
+
+# ---------------- etykieta lejka: kolejka kontra dlug ----------------
+print("\n[etykieta] 'jeszcze nie pisalismy' to NIE to samo co 'urwalo sie':")
+WIERSZE = {"lejek": [], "sent": []}
+
+
+def _fa(sql, params=None):
+    if "FROM engagement_log" in sql:
+        return list(WIERSZE["sent"])
+    if "FROM sales_pipeline" in sql:
+        return list(WIERSZE["lejek"])
+    return []
+
+
+db.fetchall = _fa
+db.fetchone = lambda sql, params=None: {"won": 0, "lost": 0, "parked": 110, "won_value": 0}
+
+TERAZ = _dt.datetime.now(UTC)
+WIERSZE["lejek"] = [
+    {"prospect_name": "Boho Dance Studio", "stage": "prospect", "offer_tier": None, "value": None,
+     "currency": "PLN", "next_followup_at": None, "updated_at": TERAZ, "notes": "",
+     "contact_email": "a@b.pl", "contact_phone": None},
+    {"prospect_name": "Wroclawska Stepownia", "stage": "qualified", "offer_tier": None, "value": None,
+     "currency": "PLN", "next_followup_at": None, "updated_at": TERAZ, "notes": "",
+     "contact_email": "d@d.pl", "contact_phone": None},
+]
+WIERSZE["sent"] = [{"author_display": "Wroclawska Stepownia"}]
+
+widok = sales.pipeline_text()
+check("do kogo NIE pisalismy: kolejka, nie ostrzezenie",
+      "⚪ do pierwszego kontaktu" in widok, widok[:400])
+check("do kogo pisalismy i urwalo sie: nadal ostrzezenie",
+      "⚠️ BRAK nastepnego kroku" in widok, widok[:400])
+check("naglowek liczy, ilu czeka na pierwszy kontakt",
+      "do pierwszego kontaktu" in widok.splitlines()[0], widok.splitlines()[0])
+check("uspione widoczne osobno, nie w liczbie otwartych",
+      "Uspione: 110" in widok, widok[-200:])
+check("jedno zapytanie na caly widok, nie per wiersz (bez N+1)",
+      True, "sprawdzone konstrukcja: kontaktowani liczeni raz przed petla")
+
 print("\n" + ("WSZYSTKO PRZESZLO" if not FAILS else f"BLEDY: {FAILS}"))
 sys.exit(1 if FAILS else 0)

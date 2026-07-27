@@ -340,7 +340,34 @@ ktorego nikt nie napisal. Termin kontaktu z najwiekszym prospektem zyl w pamieci
   `Przypomnij za 3 dni` -> termin +3 dni; `Odpuszczam na teraz` -> termin wyczyszczony,
   prospekt ZOSTAJE w lejku. Zaden nie rusza etapu.
 
-Test: `python cm-agent/tests/test_straznik_terminow.py` (27 przypadkow, bez bazy i bez sieci).
+Test: `python cm-agent/tests/test_straznik_terminow.py` (bez bazy i bez sieci).
+
+## Kolejka kontra dlug: dwie rzeczy, ktore mowila jedna etykieta (27/07)
+
+**Dowod z zycia:** po imporcie listy Tomasz zapytal Sprzedawce "co jest w kolejce", a ten
+odpowiedzial o osiemnastu prospektach: *"To martwy ciezar - albo je ruszamy, albo leca do
+uspionych"*. Zaproponowal DOKLADNIE to, co Tomasz odrzucil tego samego dnia rano ("prospekty
+nie sa martwe, tylko nieobsluzone"). Agent nie zrobil bledu rozumowania - **przeczytal
+etykiete, ktora klamala**.
+
+`pipeline_text` pisalo "⚠️ BRAK nastepnego kroku" w dwoch calkiem roznych sytuacjach:
+
+| stan | co znaczy | etykieta od 27/07 |
+|---|---|---|
+| mamy adres, jeszcze nie pisalismy | KOLEJKA do zrobienia | `⚪ do pierwszego kontaktu` |
+| pisalismy i urwalo sie | prawdziwy DLUG | `⚠️ BRAK nastepnego kroku` |
+
+Rozroznienie liczy sie JEDNYM zapytaniem na caly widok (zbior nazw z `engagement_log`, gdzie
+gotowiec ma status `sent`), nie per wiersz - przy trzydziestu wierszach to byloby N+1.
+Naglowek podaje takze liczbe czekajacych na pierwszy kontakt, zeby "22 otwartych" nie czytalo
+sie jak "22 sprawy w toku".
+
+**Druga polowa tej samej lekcji: kanon trafil do promptu.** `_KANON_KAMPANII` w prompcie
+systemowym Sprzedawcy niesie decyzje z 27/07 (nie uspiaj prospektow z lejka, wysylka jest
+reczna i personalizowana z wyboru, personalizacja z natywnego `site`, pilotaz to jedna nisza,
+nie budujemy narzedzi przed pierwsza sprzedaza, sprawdz notatki ZANIM zaproponujesz robote -
+material moze juz istniec poza baza). Wczesniej ten kanon zyl wylacznie w
+`docs/komponenty/wysylka-zimna-kanon.md`, czyli tam, gdzie zaglada BE, a nie agent.
 
 ## Czysta polszczyzna (sugestia Tomasza 24/07)
 

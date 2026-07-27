@@ -159,8 +159,26 @@ def pipeline_text():
            FROM sales_pipeline WHERE brand_id='AGS'""") or {}
     if not rows and not (closed.get("won") or closed.get("lost") or closed.get("parked")):
         return "📊 Lejek pusty. Start: /prospect <nazwa albo URL firmy>."
+    # 27/07: "BRAK nastepnego kroku" mowilo dwie ROZNE rzeczy jednym zdaniem - "nie wiem, co
+    # z tym zrobic" (prawdziwy dlug) oraz "jeszcze do nich nie napisalem" (normalny stan swiezo
+    # obudzonego prospekta). Po imporcie listy tych drugich zrobilo sie osiemnascie i WLASNY
+    # Agent Sprzedazy odczytal je jako "martwy ciezar - albo je ruszamy, albo leca do uspionych",
+    # czyli zaproponowal dokladnie to, co Tomasz tego samego dnia odrzucil. Klamala ETYKIETA,
+    # nie dane. Jedno zapytanie na caly widok (nie per wiersz - to bylby N+1 przy 30 wierszach).
+    kontaktowani = set()
+    try:
+        for k in db.fetchall(
+                """SELECT DISTINCT author_display FROM engagement_log
+                   WHERE agent='AGS:sprzedaz' AND status='sent'
+                     AND COALESCE(notes,'') ILIKE %s""", (f"%{_OUTREACH_NOTE}%",)) or []:
+            kontaktowani.add(_klucz_nazwy(k.get("author_display")))
+    except Exception:
+        traceback.print_exc()
+    nowi = sum(1 for r in rows
+               if not r.get("next_followup_at") and _klucz_nazwy(r["prospect_name"]) not in kontaktowani)
     now = datetime.datetime.now(datetime.timezone.utc)
-    lines = [f"📊 LEJEK SPRZEDAZY ({len(rows)} otwartych):"]
+    lines = [f"📊 LEJEK SPRZEDAZY ({len(rows)} otwartych"
+             + (f", w tym {nowi} do pierwszego kontaktu" if nowi else "") + "):"]
     for r in rows:
         bits = []
         if r.get("offer_tier"):
@@ -171,8 +189,10 @@ def pipeline_text():
             fu = r["next_followup_at"]
             late = " ⚠️ PO TERMINIE" if fu < now else ""
             bits.append(f"nastepny kontakt: {fu.astimezone(WARSAW).strftime('%d/%m %H:%M')}{late}")
+        elif _klucz_nazwy(r["prospect_name"]) in kontaktowani:
+            bits.append("⚠️ BRAK nastepnego kroku")   # pisalismy i urwalo sie - to jest dlug
         else:
-            bits.append("⚠️ BRAK nastepnego kroku")
+            bits.append("⚪ do pierwszego kontaktu")   # jeszcze nie pisalismy - to jest kolejka
         stale = (now - r["updated_at"]).days if r.get("updated_at") else 0
         if stale >= 14:
             bits.append(f"⚠️ cisza {stale} dni")
@@ -228,6 +248,34 @@ def _tg_send(chat_id, text):
 # ---------------- prompt systemowy ----------------
 # Destylat GOTOWOSC_PRODUKTU.md (stan 22/07) - co WOLNO sprzedawac. Zrodlo prawdy = plik;
 # aktualizacja tego bloku przy kazdej zmianie macierzy (kanon DOKUMENTACJA ZYJE).
+# Kanon kampanii wpisany 27/07 po tym, jak Agent Sprzedazy zaproponowal Tomaszowi uspienie
+# osiemnastu prospektow ("martwy ciezar") - czyli DOKLADNIE to, co Tomasz odrzucil tego samego
+# dnia rano. Agent nie mial jak wiedziec: kanon zyl w dokumentacji repozytorium, do ktorej on
+# nie zaglada. Wiedza musi byc TAM, gdzie jest potrzebna, nie tam, gdzie ja zapisalem.
+# Zrodlo: docs/komponenty/wysylka-zimna-kanon.md
+_KANON_KAMPANII = (
+    "KANON KAMPANII (27/07, decyzje Tomasza i Managera - NIE proponuj wbrew nim):\n"
+    "- Prospekt bez nastepnego kroku NIE jest 'martwym ciezarem'. Tomasz wprost: 'prospekty nie "
+    "sa martwe, tylko nieobsluzone'. NIE proponuj uspienia prospektow z lejka - etap 'parked' "
+    "sluzy ZIMNYM listom z importu, nie ludziom, do ktorych po prostu jeszcze nie napisalismy.\n"
+    "- Czytaj etykiety doslownie: '⚪ do pierwszego kontaktu' = mamy adres, jeszcze nie pisalismy, "
+    "to KOLEJKA do zrobienia. '⚠️ BRAK nastepnego kroku' = pisalismy i urwalo sie, dopiero TO jest "
+    "dlug. Nie mieszaj tych dwoch w jedna kupe.\n"
+    "- Wysylka jest RECZNA i SPERSONALIZOWANA. Tomasz pisze sam, ze swojej skrzynki, w tempie "
+    "kilkunastu dziennie. To jest jego swiadomy wybor i zaleta, nie waskie gardlo - NIE proponuj "
+    "automatu wysylkowego ani masowej kampanii.\n"
+    "- Personalizacja domyslnie z natywnego zrodla 'site' (strona prospekta, zero kosztu API). "
+    "Platny research tylko tam, gdzie Tomasz zna kogos osobiscie albo podmiot jest wyraznie "
+    "wiekszy od reszty - maksimum kilka sztuk. Przy Adamietzu platny research jest oczywisty.\n"
+    "- Pilotaz to JEDNA nisza: taniec. Nie rozszerzaj na kolejne branze, dopoki ta nie przejdzie "
+    "calej drogi do pierwszego platnego klienta.\n"
+    "- Nie budujemy nowych narzedzi przed pierwsza sprzedaza. Gdy brakuje organu, powiedz to "
+    "wprost i zaproponuj obejscie recznie - nie budowe.\n"
+    "- ZANIM zaproponujesz przygotowanie gotowca albo researchu, PRZECZYTAJ notatki tego prospekta "
+    "w lejku. Czesc materialow powstaje poza baza (pliki u Tomasza) i jest odnotowana wlasnie tam. "
+    "Proponowanie roboty, ktora jest juz zrobiona, kosztuje zaufanie."
+)
+
 _GOTOWOSC = (
     "CO SPRZEDAJEMY DZIS (macierz gotowosci 22/07, model done-for-you na NASZEJ infrastrukturze):\n"
     "- DIAGNOZA PRZEPLYWU INFORMACJI (enterprise/premium; decyzja Tomasza 22/07): osobista "
@@ -368,6 +416,7 @@ def _system(chat_id):
         f"Priorytet operacyjny: PIERWSZA sprzedaz jak najszybciej - kazda rozmowa ma prowadzic "
         f"do nastepnego konkretnego ruchu w lejku.\n"
         f"Teraz jest {now} (Europe/Warsaw).\n\n"
+        f"{_KANON_KAMPANII}\n\n"
         f"{_GOTOWOSC}\n\n"
         f"OFERTA I CENY (pricing_tiers, zywe z bazy):\n{_pricing_text()}\n\n"
         f"{_RULES}\n\n"
@@ -1063,6 +1112,11 @@ def _outreach_naglowek(row, channel, ostrzezenie="", wiz=None):
 # Odtad: jedno miejsce nadpisuje poprzednika, jedno miejsce odhacza wysylke.
 
 _OUTREACH_NOTE = "gotowiec outreach"
+
+
+def _klucz_nazwy(nazwa):
+    """Znormalizowana nazwa prospekta - do porownan miedzy lejkiem a engagement_log."""
+    return re.sub(r"\s+", " ", (nazwa or "").strip().lower())
 
 
 def _open_outreach_rows(prospect_name, eng_channel=None):
