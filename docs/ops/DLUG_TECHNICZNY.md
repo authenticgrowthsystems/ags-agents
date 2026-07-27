@@ -61,3 +61,39 @@ nie czyta `contact_person`, wiec "brak kontaktu" zapali sie takze przy wypelnion
 dwunastu wierszach lejka, wiec drugi objaw jeszcze nie wystapil.
 **Czym grozi:** adamietz.pl ma ciepla sciezke przez Piotra Hamryszaka i nie ma jej gdzie
 zapisac - wiedza o dojsciu zyje poza systemem.
+
+---
+
+## D-004: Materialy przygotowane poza baza sa dla agenta niewidzialne
+
+**Zapisany 27/07/2026** (Manager: zapisac jako swiadomy dlug, nie budowac przed pierwsza sprzedaza).
+
+Agent Sprzedazy zaproponowal Tomaszowi przygotowanie gotowca i researchu pod Adamietza na 28/07,
+podczas gdy **material dla Piotra istnieje od 25/07**: notatka dla posrednika plus jednostronicowka
+do przekazania decydentowi, oparta na pelnym raporcie wywiadowczym. Agent nie mial jak wiedziec -
+plik lezy w `docs/research/prospekci/` POZA gitem (celowo, origin jest publiczny) i poza baza.
+
+**Czym grozi:** agent proponuje robote, ktora jest zrobiona, i to akurat przy najwiekszym dealu
+w lejku. Kosztuje zaufanie do agenta bardziej niz przeoczenie, bo wyglada na niekompetencje.
+
+**Doraznie (zrobione):** notatka w `sales_pipeline.notes` prospekta plus regula w prompcie
+Sprzedawcy: przeczytaj notatki, ZANIM zaproponujesz przygotowanie czegokolwiek.
+
+**Docelowo:** minimalny rejestr materialow per prospekt (co powstalo, gdzie lezy, jaki status).
+Warunek wejscia: po pierwszej platnej sprzedazy, zgodnie z kanonem "nie budujemy systemow przed
+pierwsza sprzedaza".
+
+## D-005: Karty decyzji wygaszone PRZED 27/07 zostaja klikalne
+
+**Zapisany 27/07/2026.**
+
+Do commita `f4e88e1` klawiature z karty zdejmowal wylacznie `decisions.handle` po odpowiedzi
+guzikiem. Bramki wygaszone skryptem albo recznym SQL zostawialy w Telegramie karte z zywo
+wygladajacymi guzikami. Tomasz tapnal taka 27/07 i dostal "Decyzja #161 juz rozstrzygnieta",
+majac w czacie siedem prawie identycznych kart o tym samym prospekcie.
+
+Poprawka dziala od `f4e88e1` w PRZOD. **Karty wygaszone wczesniej (m.in. #152-156, #161) zostaja
+martwe i klikalne** - nie mamy juz ich identyfikatorow w reku w momencie wygaszania.
+
+**Czym grozi:** kolejne tapniecie w stara karte i komunikat "juz rozstrzygnieta". Nieszkodliwe,
+mylace. Znikna z pola widzenia same, gdy czat sie przewinie.
