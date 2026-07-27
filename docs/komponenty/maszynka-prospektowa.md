@@ -69,6 +69,31 @@ prospekta - te robi czlowiek i research, nie arytmetyka na kolumnach arkusza.
    Franczyza to nie duplikat - to tylu klientow, ile oddzialow. Klucz domeny zawiera teraz
    miasto. Dwa razy ten sam oddzial dalej jest duplikatem.
 
+### Wzbogacanie: duplikat nie jest smieciem (dodane 27/07 po uwadze Tomasza)
+
+```
+docker exec cm-agent python -m app.prospect_import wzbogac-dry   <plik.xlsx>
+docker exec cm-agent python -m app.prospect_import wzbogac-apply <plik.xlsx>
+```
+
+Tomasz, 27/07: **"prospekty nie sa martwe, tylko nieobsluzone"**. Mial racje podwojnie.
+Pierwotny import traktowal trafienie w istniejacy wiersz jako duplikat i wyrzucal rekord,
+patrzac wylacznie na to, czy nazwa jest juz w lejku - a nie na to, czy przynosi cos, czego
+lejek NIE MA.
+
+**Dowod:** wszystkie dwanascie "duplikatow" z bialej listy tanca mialo mail i telefon,
+podczas gdy dziewiec odpowiadajacych im wierszy lejka swiecilo "⚠️ brak kontaktu". Ci
+prospekci nie byli zaniedbani - system nigdy nie podal Tomaszowi ich adresow, choc adresy
+lezaly w pliku na jego dysku.
+
+Zasady trybu:
+- **Dopisuje WYLACZNIE puste kolumny.** Nigdy nie nadpisuje tego, co juz jest.
+- **Rozna wartosc = KONFLIKT do decyzji czlowieka**, nie ciche nadpisanie. Przyklad z zycia:
+  StandART ma w lejku `recepcja@...`, a na liscie `biuro@...` - to moze byc lepszy adres
+  albo gorszy, i rozstrzyga to czlowiek, nie skrypt.
+- **Nie dotyka etapu** i nie dodaje nowych wierszy - podmiot spoza lejka jest pomijany.
+- Slad w notatce: `27/07 uzupelnione z listy <plik>: contact_email, contact_phone`.
+
 ### Dowod z pierwszego przebiegu (biala lista tanca, 27/07)
 
 276 wierszy w pliku, **132 do zapisu, 0 duplikatow, 144 odsiane** (115 z werdyktem

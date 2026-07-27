@@ -63,15 +63,19 @@ Przypomnij jutro), nigdy auto-decyzja.
   a `next_slot` pomija dzien, ktory osiagnal limit - nadmiar serii przechodzi na
   kolejny dzien. Sufit jest niezalezny od gap/siatki/jittera (liczy WSZYSTKIE
   sloty dnia z content_items + post_queue). Test: cm-agent/tests/test_kadencja_sufit.py.
-- **KADENCJA X SCHODZI NA 1/DZIEN (decyzja Managera 27/07).** Powod nie jest techniczny:
-  zasieg X jest martwy (0-8 wyswietlen przy 16 obserwujacych), a wszystkie realne kontakty
-  w lejku przyszly z LinkedIna. X zostaje jako notatnik dowodowy build-in-public, nie jako
-  kanal pozyskania - cztery publikacje dziennie na kanal, ktorego nikt nie widzi, to
-  kadencja wydawana bez zwrotu. Uwaga idzie na LinkedIn.
-  Wykonanie: `ustaw posts_per_day dla AGS x na 1` (paragon ⚙️), potem `app.reslot dry 1`
-  i `apply 1`. Zaden konsument nie wymaga poprawki: `_daily_cap` bierze gorna granice
-  (1), `slots._grid` i `proactive._expected` dolna (tez 1) - wartosc jednoliczbowa jest
-  spojna we wszystkich czterech miejscach czytajacych `posts_per_day`.
+- **KADENCJA X: ZOSTAJE 4/DZIEN (decyzja Tomasza 27/07, NADPISUJE Managera).**
+  Manager zdecydowal 26/07 zejscie z czterech na jeden, uzasadniajac to martwym zasiegiem
+  (0-8 wyswietlen przy 16 obserwujacych) i tym, ze wszystkie realne kontakty w lejku przyszly
+  z LinkedIna. **Tomasz decyzje cofnal tego samego dnia: "kadencja na X bez zmian, zostaja 4,
+  nic nie zmieniam".** Zmiana NIGDY nie zostala wykonana na produkcji - `posts_per_day`
+  stoi na `3-5` jak stalo, kolejka nie byla re-slotowana. To jest zapis, nie zalegly plan.
+  Precedens ten sam co przy grafikach (kanon 25/07): w sprawach wlasnej marki decyzja
+  wlasciciela bije decyzje Managera.
+  Gdyby kiedys wracac do tematu: `ustaw posts_per_day dla AGS x na 1` (paragon ⚙️), potem
+  `app.reslot dry 1` i `apply 1`. Zaden konsument nie wymaga poprawki - sprawdzone 27/07:
+  `_daily_cap` bierze gorna granice zakresu, `slots._grid` i `proactive._expected` dolna,
+  wiec wartosc jednoliczbowa jest spojna we wszystkich czterech miejscach czytajacych
+  `posts_per_day`.
 - RE-SLOTTER `app.reslot` (25/07, sprzatanie kolejki sprzed sufitu): kolejka X urosla
   do 64 wierszy z dniami po 7-9 postow (serie rozlewaly sie ZANIM powstal sufit).
   **v2 (decyzja Tomasza "cale serie razem"):** przeplanowuje CALA przyszla kolejke od dzis,

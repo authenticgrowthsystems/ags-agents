@@ -174,5 +174,47 @@ check("budzenie NIE ustawia terminu", "next_followup_at" not in sql_w,
       "inaczej straznik terminow zrobilby tyle bramek, ilu obudzonych")
 check("pusta lista nie generuje zapisu", pi.wake([]) == 0)
 
+
+# ---------------- wzbogacanie istniejacych wierszy ----------------
+print("\n[wzbogacanie] duplikat nie jest smieciem, tylko moze niesc brakujace dane:")
+LEJEK[:] = [
+    {"id": "p1", "prospect_name": "Dance4Kids", "contact_email": None, "contact_phone": None,
+     "prospect_url": None, "stage": "prospect"},
+    {"id": "p2", "prospect_name": "Klub Sportowy StandART", "contact_email": "recepcja@standart.org",
+     "contact_phone": "510-555-099", "prospect_url": None, "stage": "qualified"},
+    {"id": "p3", "prospect_name": "Wroclawska Stepownia", "contact_email": "dudzikdariusz@gmail.com",
+     "contact_phone": None, "prospect_url": None, "stage": "qualified"},
+]
+lista = [
+    rec(nazwa="Dance4Kids", email="dance4kids.edu@gmail.com", telefon="530 749 205"),
+    rec(nazwa="Klub Sportowy StandART", email="biuro@klubsportowystandart.org",
+        telefon="510 555 099"),
+    rec(nazwa="Wroclawska Stepownia", email="dudzikdariusz@gmail.com", telefon="501 130 016"),
+    rec(nazwa="Kogo Nie Ma W Lejku", email="x@x.pl"),
+]
+uzup, konf, bez = pi.plan_wzbogacenia(lista)
+nazwy_uzup = {w["prospect_name"] for w, _, _ in uzup}
+check("pusty kontakt zostaje uzupelniony", "Dance4Kids" in nazwy_uzup, str(nazwy_uzup))
+check("brakujacy telefon dolozony przy istniejacym mailu",
+      any(w["prospect_name"] == "Wroclawska Stepownia" and "contact_phone" in p
+          for w, _, p in uzup), str([(w["prospect_name"], p) for w, _, p in uzup]))
+check("istniejacy mail NIE jest nadpisywany po cichu",
+      not any("contact_email" in p for w, _, p in uzup if w["prospect_name"].endswith("StandART")),
+      str([(w["prospect_name"], p) for w, _, p in uzup]))
+check("rozny mail zglaszany jako konflikt do decyzji czlowieka",
+      any(w["prospect_name"].endswith("StandART") for w, _, _ in konf), str(konf))
+check("ten sam mail to nie konflikt",
+      not any(w["prospect_name"] == "Wroclawska Stepownia" for w, _, s in konf
+              for k, _, _ in s if k == "contact_email"), str(konf))
+check("podmiot spoza lejka jest pomijany, nie dopisywany",
+      all(w["prospect_name"] != "Kogo Nie Ma W Lejku" for w, _, _ in uzup))
+
+EXEC.clear()
+pi.wzbogac(uzup, "lista.xlsx")
+check("wzbogacanie robi UPDATE, nie INSERT",
+      all("UPDATE sales_pipeline" in s for s, _ in EXEC) and EXEC, str(EXEC[:1]))
+check("nie dotyka etapu", not any("stage" in s for s, _ in EXEC), str(EXEC[:1]))
+check("dopisuje slad w notatce", any("uzupelnione z listy" in str(p) for _, p in EXEC), str(EXEC[:1]))
+
 print("\n" + ("WSZYSTKO PRZESZLO" if not FAILS else f"BLEDY: {FAILS}"))
 sys.exit(1 if FAILS else 0)

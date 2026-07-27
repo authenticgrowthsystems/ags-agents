@@ -215,6 +215,67 @@ def _istniejace():
     return nazwy, domeny, maile
 
 
+def _wiersze_lejka():
+    return db.fetchall(
+        """SELECT id, prospect_name, contact_email, contact_phone, prospect_url, stage
+           FROM sales_pipeline WHERE brand_id='AGS'""") or []
+
+
+def plan_wzbogacenia(rekordy):
+    """Co lista WNOSI do wierszy, ktore juz sa w lejku.
+
+    Powstalo z uwagi Tomasza 27/07: "prospekty nie sa martwe, tylko nieobsluzone". Mial racje
+    podwojnie. Import traktowal trafienie w istniejacy wiersz jako duplikat i WYRZUCAL rekord,
+    patrzac wylacznie na to, czy nazwa jest juz w lejku - a nie na to, czy przynosi cos, czego
+    lejek NIE MA. Dowod: wszystkie dwanascie "duplikatow" z bialej listy tanca mialo mail
+    i telefon, podczas gdy dziewiec odpowiadajacych im wierszy lejka swiecilo "brak kontaktu".
+    Ci ludzie nie byli zaniedbani - system nigdy nie podal Tomaszowi ich adresow.
+
+    Zwraca (uzupelnienia, konflikty, bez_zmian). Konflikt = lejek MA juz inna wartosc;
+    takiego nie nadpisujemy po cichu, tylko pokazujemy czlowiekowi.
+    """
+    lejek = _wiersze_lejka()
+    po_nazwie = {}
+    for w in lejek:
+        po_nazwie[_norm(w.get("prospect_name"))] = w
+    uzupelnienia, konflikty, bez_zmian = [], [], 0
+    for rec in rekordy:
+        w = po_nazwie.get(_norm(rec["nazwa"]))
+        if not w:
+            continue
+        pola, sporne = {}, []
+        for kol, nowa in (("contact_email", rec["email"]),
+                          ("contact_phone", rec["telefon"]),
+                          ("prospect_url", rec["www"])):
+            stara = (w.get(kol) or "").strip()
+            if not nowa:
+                continue
+            if not stara:
+                pola[kol] = nowa
+            elif _norm(stara) != _norm(nowa):
+                sporne.append((kol, stara, nowa))
+        if pola:
+            uzupelnienia.append((w, rec, pola))
+        if sporne:
+            konflikty.append((w, rec, sporne))
+        if not pola and not sporne:
+            bez_zmian += 1
+    return uzupelnienia, konflikty, bez_zmian
+
+
+def wzbogac(uzupelnienia, zrodlo):
+    """Dopisuje WYLACZNIE puste kolumny. Niczego nie nadpisuje - konflikty ida do czlowieka."""
+    n = 0
+    for w, rec, pola in uzupelnienia:
+        sets = ", ".join(f"{k}=%s" for k in pola)
+        db.execute(
+            f"""UPDATE sales_pipeline SET {sets}, updated_at=NOW(),
+                notes = COALESCE(notes,'') || %s WHERE id=%s""",
+            (*pola.values(), f"\n27/07 uzupelnione z listy {zrodlo}: " + ", ".join(pola), w["id"]))
+        n += 1
+    return n
+
+
 def plan(rekordy, tylko_ok=True):
     """Dzieli rekordy na (do_zapisu, duplikaty, odsiane). Czysty odczyt bazy, zero zapisow."""
     nazwy, domeny, maile = _istniejace()
@@ -344,6 +405,38 @@ def main():
         n = zapisz(do_zapisu, nisza, sciezka.split("/")[-1].split("\\")[-1])
         print(f"APPLY: zapisano {n} wierszy w etapie 'parked', nisza '{nisza}'.")
         print(f"Obudzenie do wysylki: python -m app.prospect_import wake-dry {nisza} 40")
+        return 0
+
+    if tryb in ("wzbogac-dry", "wzbogac-apply"):
+        if len(a) < 2:
+            print("Uzycie: python -m app.prospect_import wzbogac-dry|wzbogac-apply <plik.xlsx>")
+            return 2
+        sciezka = a[1]
+        rekordy, _, _ = czytaj(sciezka)
+        uzup, konf, bez = plan_wzbogacenia(rekordy)
+        print(f"=== WZBOGACANIE LEJKA Z LISTY ({tryb.upper()}) ===")
+        print(f"Wierszy lejka trafionych przez liste: {len(uzup) + len(konf) + bez}")
+        print(f"Do uzupelnienia: {len(uzup)} | konflikty do decyzji: {len(konf)} | bez zmian: {bez}")
+        print()
+        if uzup:
+            print("--- UZUPELNIE PUSTE POLA ---")
+            for w, rec, pola in uzup:
+                opis = ", ".join(f"{k}={v}" for k, v in pola.items())
+                print(f"  [{w.get('stage'):<10}] {w['prospect_name'][:40]:<40} {opis[:70]}")
+            print()
+        if konf:
+            print("--- KONFLIKTY (lejek ma juz INNA wartosc; NIE nadpisuje) ---")
+            for w, rec, sporne in konf:
+                for kol, stara, nowa in sporne:
+                    print(f"  {w['prospect_name'][:36]:<36} {kol}: w lejku '{stara[:30]}' "
+                          f"| na liscie '{nowa[:30]}'")
+            print("  -> rozstrzyga czlowiek: zmiane robi sie przez pipeline_move albo recznym SQL.")
+            print()
+        if tryb == "wzbogac-dry":
+            print("DRY - nic nie zapisano.")
+            return 0
+        n = wzbogac(uzup, sciezka.split("/")[-1].split("\\")[-1])
+        print(f"APPLY: uzupelnionych wierszy {n}. Konfliktow NIE ruszalem ({len(konf)}).")
         return 0
 
     if tryb in ("wake-dry", "wake-apply"):
