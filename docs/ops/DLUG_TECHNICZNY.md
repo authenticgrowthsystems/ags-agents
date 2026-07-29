@@ -111,7 +111,8 @@ Podejrzana przyczyna: tekst ~2000 znakow odrzucony przez API jako za dlugi.
    w kolejce ma 2392-2621 przy limicie platformy 3000. Zaden wiersz nie przekracza limitu swojej
    platformy. Nie ma tez wiersza ze slotem 13:30.
 
-**PRAWDZIWA WADA, ktora zgloszenie odslonilo:**
+**PRAWDZIWA WADA, ktora zgloszenie odslonilo** (od 29/07 ma wlasny anty-wzorzec: **AP-312**,
+a sama nazwa idzie do przemianowania jako **D-008**):
 
 `dispatching` brzmi jak stan PRZELOTNY ("wysylam"), a znaczy "rozeslane do kolejki, czekam az
 WSZYSTKIE wiersze serii osiagna stan terminalny" - czyli stan, ktory normalnie trwa DNI. Szesc
@@ -136,6 +137,33 @@ zmiana kontraktu miedzy tabelami i n8n, wiec osobna decyzja.
 **Czym grozi, jesli zostawimy:** przy czterech publikacjach dziennie na dwoch kanalach czlowiek
 bedzie regularnie pytal "czy to wisi", a odpowiedz bedzie za kazdym razem wymagala sondy do bazy.
 Prawdziwy zwis utonie kiedys w tych falszywych alarmach.
+
+## D-008: Status `dispatching` do przemianowania
+
+**Zapisany 29/07/2026** (decyzja Managera: "nie dzis, ale dopisz do listy z data").
+Bezposrednia konsekwencja ustanowienia **AP-312**.
+
+`content_items.dispatching` brzmi jak stan PRZELOTNY ("wysylam"), a znaczy "rozeslane do kolejki,
+czekam az WSZYSTKIE wiersze serii osiagna stan terminalny" - stan, ktory normalnie trwa DNI.
+Manager zglosil 27/07 zawieszony post; odczyt pokazal siedem materialow w tym stanie, wszystkie
+zdrowe, najstarszy 51 godzin i poprawnie, bo jego sloty siegaly 4 sierpnia.
+
+Czlowiek czyta nazwe i spodziewa sie sekund. System ma na mysli tydzien.
+
+**Kandydaci na nazwe:** `w_kolejce`, `rozeslane`, `czeka_na_sloty`. Ostatni jest najdluzszy
+i najuczciwszy - mowi doslownie, na co stan czeka.
+
+**Dlaczego nie dzis:** to zmiana KONTRAKTU miedzy trzema warstwami naraz. Wartosc wystepuje
+w `content_items.status`, w filtrach Pythona (`worker.reconcile_publications` pyta
+`WHERE status='dispatching'`, `slots.assign_if_needed` i dwie trasy `conversation` maja ja
+w liscie `status IN (...)`) oraz w SQL wezlow n8n. Przemianowanie w polowie zostawi system,
+ktory czesciowo szuka starej wartosci, a czesciowo nowej - i to bedzie gorsze niz mylaca nazwa.
+
+**Warunek wykonania:** osobna decyzja, osobne okno, komplet grepem PRZED zmiana (AP-309),
+oraz migracja danych i PUT do n8n z rytualem backup / PUT / deactivate+activate.
+
+**Powiazane:** D-006 (widok nie pokazuje, od kiedy material wisi i na co czeka) - te dwie
+naprawy warto zrobic razem, bo obie dotykaja tego samego stanu i tej samej niejasnosci.
 
 ## D-007: Operacja hurtowa nie zostawia sladu czytelnego dla DRUGIEGO agenta
 

@@ -32,26 +32,16 @@ Roznica jest zasadnicza, bo w przypadku drugim decyzja podjeta "wobec danych" je
 We wszystkich trzech przypadkach czlowiek dzialal racjonalnie na tym, co widzial. We wszystkich
 trzech to, co widzial, bylo niepelne z winy systemu.
 
-## Trzy kolejne odslony (27-29/07) - wzorzec okazal sie szerszy niz zaklada nazwa
+## Granica z AP-312 (rozstrzygnieta przez Managera 29/07)
 
-4. **Etykieta, ktora klamie o tym, co znaczy (27/07).** "⚠️ BRAK nastepnego kroku" oznaczalo
-   naraz "nie wiem, co dalej" (dlug) i "jeszcze do nich nie napisalem" (kolejka). Agent Sprzedazy
-   przeczytal to i zaproponowal uspienie osiemnastu prospektow jako "martwego ciezaru" - czyli
-   dokladnie to, co Tomasz odrzucil tego samego dnia rano. **Agent nie zrobil bledu rozumowania.
-   Przeczytal etykiete.**
-5. **Nazwa stanu obiecujaca co innego, niz stan znaczy (27/07).** `dispatching` brzmi jak stan
-   przelotny ("wysylam"), a znaczy "czekam az wszystkie wiersze serii sie domkna" - stan
-   trwajacy DNI. Manager zglosil zawieszenie posta; odczyt pokazal siedem materialow w tym
-   stanie, wszystkie zdrowe, najstarszy 51 godzin i to poprawnie.
-6. **Operacja hurtowa niewidzialna dla drugiego agenta (29/07).** Wycofanie 21 materialow przez
-   `status='rejected'` jest w bazie NIEODROZNIALNE od odrzucenia przy przegladzie kart miesiac
-   temu. Zapytanie "X + rejected + wiecej niz jeden wiersz" zwraca 26, z czego dzisiejszych 21.
-   BE wie, co wycofal, bo sam to robil; CM patrzy na te sama baze i nie widzi roznicy.
+Ten anty-wzorzec dotyczy WYLACZNIE sytuacji, w ktorej **widok milczy o stanie, ktory baza zna**.
+Przypadki, w ktorych dane BYLY, ale ich nazwa albo etykieta wprowadzala w blad, naleza do
+**AP-312** i tam sa opisane. BE proponowal 29/07 zlaczenie obu w jeden szerszy wzorzec; Manager
+je rozdzielil i mial racje - to sa dwie rozne diagnozy i dwie rozne naprawy.
 
-**Wniosek z szesciu odslon:** regula "sprawdz, czy system mial jak pokazac dane" jest za waska.
-Pelniejsza brzmi tak: **sprawdz takze, czy to, co system POKAZUJE, znaczy to, co obiecuje** -
-nazwa statusu, tresc etykiety i zakres operacji sa danymi tak samo jak liczby. Cztery z szesciu
-przypadkow to nie brak danych, tylko dane wprowadzajace w blad.
+Test rozstrzygajacy, gdy nie wiesz, ktory to przypadek: **czy dane w bazie byly?**
+Nie byly, albo byly poza zasiegiem systemu - to AP-311. Byly i widok je pokazal, tylko pod nazwa,
+ktora znaczy co innego - to AP-312.
 
 ## Why bad
 
