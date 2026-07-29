@@ -32,6 +32,27 @@ Roznica jest zasadnicza, bo w przypadku drugim decyzja podjeta "wobec danych" je
 We wszystkich trzech przypadkach czlowiek dzialal racjonalnie na tym, co widzial. We wszystkich
 trzech to, co widzial, bylo niepelne z winy systemu.
 
+## Trzy kolejne odslony (27-29/07) - wzorzec okazal sie szerszy niz zaklada nazwa
+
+4. **Etykieta, ktora klamie o tym, co znaczy (27/07).** "⚠️ BRAK nastepnego kroku" oznaczalo
+   naraz "nie wiem, co dalej" (dlug) i "jeszcze do nich nie napisalem" (kolejka). Agent Sprzedazy
+   przeczytal to i zaproponowal uspienie osiemnastu prospektow jako "martwego ciezaru" - czyli
+   dokladnie to, co Tomasz odrzucil tego samego dnia rano. **Agent nie zrobil bledu rozumowania.
+   Przeczytal etykiete.**
+5. **Nazwa stanu obiecujaca co innego, niz stan znaczy (27/07).** `dispatching` brzmi jak stan
+   przelotny ("wysylam"), a znaczy "czekam az wszystkie wiersze serii sie domkna" - stan
+   trwajacy DNI. Manager zglosil zawieszenie posta; odczyt pokazal siedem materialow w tym
+   stanie, wszystkie zdrowe, najstarszy 51 godzin i to poprawnie.
+6. **Operacja hurtowa niewidzialna dla drugiego agenta (29/07).** Wycofanie 21 materialow przez
+   `status='rejected'` jest w bazie NIEODROZNIALNE od odrzucenia przy przegladzie kart miesiac
+   temu. Zapytanie "X + rejected + wiecej niz jeden wiersz" zwraca 26, z czego dzisiejszych 21.
+   BE wie, co wycofal, bo sam to robil; CM patrzy na te sama baze i nie widzi roznicy.
+
+**Wniosek z szesciu odslon:** regula "sprawdz, czy system mial jak pokazac dane" jest za waska.
+Pelniejsza brzmi tak: **sprawdz takze, czy to, co system POKAZUJE, znaczy to, co obiecuje** -
+nazwa statusu, tresc etykiety i zakres operacji sa danymi tak samo jak liczby. Cztery z szesciu
+przypadkow to nie brak danych, tylko dane wprowadzajace w blad.
+
 ## Why bad
 
 - Decyzja wyglada na ugruntowana w danych, wiec nikt jej nie kwestionuje.

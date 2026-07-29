@@ -137,6 +137,35 @@ zmiana kontraktu miedzy tabelami i n8n, wiec osobna decyzja.
 bedzie regularnie pytal "czy to wisi", a odpowiedz bedzie za kazdym razem wymagala sondy do bazy.
 Prawdziwy zwis utonie kiedys w tych falszywych alarmach.
 
+## D-007: Operacja hurtowa nie zostawia sladu czytelnego dla DRUGIEGO agenta
+
+**Zapisany 29/07/2026** (zgloszenie Managera, szosta odslona AP-311).
+
+Wycofalem 29/07 dwadziescia jeden materialow X (99 wierszy) ustawiajac im `status='rejected'`.
+Content Manager zapytal, **po czym ma je rozpoznac** - i mial racje, bo bez tego zgaduje.
+
+**Problem nie jest w tym, ze danych brakuje. Jest w tym, ze sa nieodroznialne.** Ja wiem, co
+wycofalem, bo sam to robilem. CM patrzy na te sama baze i widzi materialy w statusie `rejected`
+- **te same, co odrzucone przy przegladzie kart miesiac temu**. Sprawdzone: zapytanie
+"platforma X, status rejected, wiecej niz jeden wiersz" zwraca **26** materialow, z czego
+dzisiejszych jest **21**. Piec to stare odrzucenia bez zwiazku z operacja.
+
+Doraznie ratuje to `updated_at::date`, ale to jest proteza: dziala tylko dopoki nikt inny nie
+dotknie tych wierszy tego samego dnia i tylko dopoki pamietamy date operacji.
+
+**Czym grozi:** kazda operacja hurtowa (sprzatanie gotowcow 27/07, import listy 27/07,
+wycofanie serii 29/07) jest dla pozostalych agentow niewidzialna jako operacja. Widza SKUTEK,
+nie widza PRZYCZYNY ani ZAKRESU. Przy trzech agentach czytajacych te sama baze to jest
+mnozenie sie nieporozumien, a nie brak wygody.
+
+**Docelowo (rozszerzenie sladu audytowego z DDL 035):** slad ma obejmowac nie tylko KTO ustawil
+slot, ale takze **kto zmienil status i w ramach jakiej operacji**. Ksztalt do rozstrzygniecia:
+kolumna `status_source` symetryczna do `slot_source`, albo etykieta operacji (np.
+`op='wycofanie-serii-29072026'`) pozwalajaca wyciac dokladny zbior jednym warunkiem.
+
+Manager 29/07: *"Ty wiesz, co wycofales, bo sam to robiles. CM patrzy na te sama baze i nie
+widzi roznicy miedzy materialem wycofanym a odrzuconym przy przegladzie miesiac temu."*
+
 ## D-005: Karty decyzji wygaszone PRZED 27/07 zostaja klikalne
 
 **Zapisany 27/07/2026.**
