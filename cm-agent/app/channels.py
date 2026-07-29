@@ -98,8 +98,9 @@ def stage_variant(item, channel_row, variant_text):
             except Exception:
                 slot = None
             row = db.fetchone(
-                """INSERT INTO post_queue (content, brand, platform, topic, status, content_item_id, scheduled_for, media)
-                   VALUES (%s,%s,%s,%s,'review',%s,%s,%s::jsonb) RETURNING id""",
+                """INSERT INTO post_queue (content, brand, platform, topic, status, content_item_id,
+                                           scheduled_for, media, slot_source)
+                   VALUES (%s,%s,%s,%s,'review',%s,%s,%s::jsonb,'staging') RETURNING id""",
                 (part, item["brand_id"], "x", item.get("master_theme"), item["id"],
                  _slots.humanize_slot(slot),  # kanon 19/07: niepelne godziny +/-15 min
                  json.dumps(_pub_media(item.get("media")) if i == 0 else [])),
@@ -108,8 +109,9 @@ def stage_variant(item, channel_row, variant_text):
                 ids.append(row["id"])
         return ids[0] if ids else None
     row = db.fetchone(
-        """INSERT INTO post_queue (content, brand, platform, topic, status, content_item_id, scheduled_for, media)
-           VALUES (%s,%s,%s,%s,'review',%s,%s,%s::jsonb) RETURNING id""",
+        """INSERT INTO post_queue (content, brand, platform, topic, status, content_item_id,
+                                   scheduled_for, media, slot_source)
+           VALUES (%s,%s,%s,%s,'review',%s,%s,%s::jsonb,'staging') RETURNING id""",
         (variant_text, item["brand_id"], channel_row["channel"], item.get("master_theme"),
          item["id"], _slots.humanize_slot(item.get("scheduled_for")),  # kanon 19/07: niepelne godziny
          json.dumps(_pub_media(item.get("media")))),
@@ -194,7 +196,14 @@ def dispatch_item(item):
             # linkedin=tak, reszta=nie). Wlaczenie X nie wymaga zmiany kodu.
             if _auto_obraz_wlaczony(item.get("brand_id"), r["platform"]):
                 _ensure_li_graphic(item, r)
-            db.execute("UPDATE post_queue SET status='scheduled', scheduled_for=COALESCE(scheduled_for, NOW()) WHERE id=%s", (r["id"],))
+            # slot_source tylko wtedy, gdy TU nadajemy slot (pusty przed COALESCE) - inaczej
+            # nadpisalibysmy etykiete prawdziwego autora slotu wlasnym 'dispatch' (DDL 035).
+            db.execute("""UPDATE post_queue
+                             SET status='scheduled',
+                                 slot_source = CASE WHEN scheduled_for IS NULL THEN 'dispatch'
+                                                    ELSE slot_source END,
+                                 scheduled_for = COALESCE(scheduled_for, NOW())
+                           WHERE id=%s""", (r["id"],))
         else:
             db.execute("UPDATE post_queue SET status='held' WHERE id=%s", (r["id"],))
         handoff.append({"platform": r["platform"], "mode": mode, "queue_id": r["id"]})

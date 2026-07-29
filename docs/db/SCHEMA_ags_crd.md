@@ -287,3 +287,28 @@ Pełny `pg_dump --schema-only` do zrzucenia i dopisania tu dla POZOSTAŁYCH tabe
 content_items, user_agent_state, app_secrets, agent_messages, agent_logs...). Priorytet: te,
 które app zapisuje/czyta bez DDL w repo. Zrzut nie zmieścił się w jednym wklejeniu - do zrobienia
 plikowo przy następnej okazji SSH (wariant: pg_dump do pliku w repo na Mikrusie + commit stamtąd).
+
+## post_queue.slot_source (DDL 035, 29/07/2026)
+
+| kolumna | typ | uwagi |
+|---|---|---|
+| slot_source | TEXT NOT NULL DEFAULT 'nieznane' | ktora trasa ostatnio ustawila `scheduled_for` |
+
+Wartosci: `staging` (channels.stage_variant przy wpisie do kolejki), `planner`
+(slots.assign_if_needed), `reslot` (app.reslot), `rozmowa` (przesuniecie terminu przez
+czlowieka - `conversation`), `dispatch` (channels, gdy slot byl pusty), `nieznane`
+(**domyslna**: zapis spoza Pythona, czyli wezel n8n albo reczny SQL).
+
+`nieznane` jest wartoscia ZNACZACA, nie brakiem: mowi "nie wiemy, skad ten slot", zamiast
+udawac wiedze. Wszystkie wiersze sprzed DDL 035 maja te wartosc.
+
+**Powod powstania kolumny (29/07):** 28/07 piec wpisow wyszlo na X w piec minut, o 09:00,
+poza oknem publikacji 13:00-22:00, na koncie ktore trzy dni wczesniej dostalo 403 za wykryta
+automatyzacje. Ustalenie, ktora trasa nadala ten slot, zajelo pol godziny i udalo sie wylacznie
+przez ELIMINACJE wszystkich pozostalych drog zapisu - w danych nie bylo ani jednego sladu.
+Sprawca okazal sie `conversation.py:1286-1290` (reczne przesuniecie terminu materialu, jedna
+wartosc na wszystkie wiersze). Kolumna sprawia, ze nastepnym razem odpowiedz jest jednym
+odczytem. Decyzja Managera 29/07, rekomendacja BE. Test: `cm-agent/tests/test_slot_source.py`.
+
+Indeks `idx_post_queue_slot_source (slot_source, scheduled_for)` pod zapytanie diagnostyczne
+"pokaz salwy per zrodlo".

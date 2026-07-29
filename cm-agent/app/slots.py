@@ -204,7 +204,13 @@ def assign_if_needed(item):
     # FIX 07/07: trzymaj post_queue w zgodzie z content_item (zrodlo prawdy). Bez tego wiersze
     # post_queue zostawaly na starym slocie (subagent czytal 10:00, choc ci = 13:00) - rozjazd.
     # Kolejka dostaje czas ULUDZKI (kanon 19/07: +/-15 min, niepelna godzina); ci = czysty slot.
-    db.execute("""UPDATE post_queue SET scheduled_for=%s WHERE content_item_id=%s
+    # UWAGA (29/07): to jest DRUGA trasa, ktora jednym UPDATE-em dotyka WSZYSTKICH wierszy
+    # materialu. Przy materiale wieloczesciowym daje im ten sam czas - salwa. Dzis nie boli,
+    # bo humanize_slot rozrzuca +/-15 min i kanon idzie na jeden wpis na material, ale gdyby
+    # serie wrocily, to jest miejsce do rozsuwania czesci. slot_source (DDL 035) sprawia,
+    # ze nastepnym razem widac to odczytem, a nie eliminacja tras.
+    db.execute("""UPDATE post_queue SET scheduled_for=%s, slot_source='planner'
+                  WHERE content_item_id=%s
                   AND status IN ('review','held','scheduled','queued','dispatching')""",
                (humanize_slot(slot), item["id"]))
     return slot, True

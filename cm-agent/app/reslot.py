@@ -161,7 +161,8 @@ def apply(brand_id="AGS", channel="x", per_day=None):
         return
     for _id, ci, _old, new, _t in changes:
         # tylko scheduled_for; media (grafiki Tomasza) nietkniete
-        db.execute("UPDATE post_queue SET scheduled_for=%s WHERE id=%s", (new, _id))
+        db.execute("UPDATE post_queue SET scheduled_for=%s, slot_source='reslot' WHERE id=%s",
+                   (new, _id))
         if ci:
             # content_items trzyma CZYSTY slot planu (bez jittera) - dla higieny ci<->pq
             db.execute("UPDATE content_items SET scheduled_for=%s, updated_at=NOW() WHERE id=%s",

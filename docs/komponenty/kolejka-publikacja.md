@@ -63,6 +63,25 @@ Przypomnij jutro), nigdy auto-decyzja.
   a `next_slot` pomija dzien, ktory osiagnal limit - nadmiar serii przechodzi na
   kolejny dzien. Sufit jest niezalezny od gap/siatki/jittera (liczy WSZYSTKIE
   sloty dnia z content_items + post_queue). Test: cm-agent/tests/test_kadencja_sufit.py.
+- **SLAD AUDYTOWY ZRODLA SLOTU (DDL 035, 29/07).** `post_queue.slot_source` mowi, ktora trasa
+  ostatnio ustawila `scheduled_for`: `staging` (channels.stage_variant), `planner`
+  (slots.assign_if_needed), `reslot` (app.reslot), `rozmowa` (przesuniecie terminu przez
+  czlowieka), `dispatch` (channels, gdy slot byl pusty), `nieznane` (zapis spoza Pythona:
+  wezel n8n albo reczny SQL - **nie udajemy, ze wiemy**).
+  **Powod:** 28/07 piec wpisow wyszlo w piec minut o 09:00, poza oknem, na koncie ktore trzy
+  dni wczesniej dostalo 403 za wykryta automatyzacje. Ustalenie sprawcy zajelo pol godziny
+  i udalo sie WYLACZNIE przez eliminacje wszystkich innych tras - w danych nie bylo ani jednego
+  sladu. To AP-311 w wersji zapobiegawczej.
+  **Uwaga przy dodawaniu nowego zapisu slotu:** etykieta jest obowiazkowa, pilnuje tego
+  `cm-agent/tests/test_slot_source.py` (liczy wszystkie zapisy i sprawdza, czy zaden nie zostal
+  bez etykiety). `dispatch` etykietuje TYLKO gdy sam nadaje slot - inaczej nadpisalby etykiete
+  prawdziwego autora.
+- **DWIE TRASY DOTYKAJA WSZYSTKICH WIERSZY MATERIALU NARAZ** (`conversation` przy przesunieciu
+  terminu, `slots.assign_if_needed`). Przy materiale wieloczesciowym daja im ten sam czas,
+  czyli SALWE. `assign_if_needed` rozrzuca przez `humanize_slot` (+/-15 min), `conversation`
+  zapisuje wartosc czlowieka DOSLOWNIE - i to ta druga zbila 28/07 piec wpisow na jedna minute.
+  Kontrola okna w `conversation` istnieje i CELOWO nie blokuje ("Ty decydujesz o terminie");
+  wada lezy w zalozeniu, ze jeden material to jeden wiersz kolejki.
 - **KADENCJA X: ZOSTAJE 4/DZIEN (decyzja Tomasza 27/07, NADPISUJE Managera).**
   Manager zdecydowal 26/07 zejscie z czterech na jeden, uzasadniajac to martwym zasiegiem
   (0-8 wyswietlen przy 16 obserwujacych) i tym, ze wszystkie realne kontakty w lejku przyszly

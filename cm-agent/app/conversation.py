@@ -1284,8 +1284,11 @@ def _reschedule_material(inp):
         if not _within_windows(row["brand_id"], row.get("target_channels") or ["x"], slot):
             note = "\n(uwaga: to poza standardowym oknem publikacji tego kanalu - ustawiam mimo to, bo Ty decydujesz o terminie)"
     db.execute("UPDATE content_items SET scheduled_for=%s, updated_at=NOW() WHERE id=%s", (slot, row["id"]))
+    # DDL 035: etykieta zrodla slotu. Ta trasa zbila 28/07 piec wpisow na jedna minute o 09:00
+    # (jedna wartosc od czlowieka -> WSZYSTKIE wiersze materialu), a ustalenie tego zajelo pol
+    # godziny eliminowania pozostalych drog. Odtad widac to jednym odczytem.
     db.execute(
-        """UPDATE post_queue SET scheduled_for=%s
+        """UPDATE post_queue SET scheduled_for=%s, slot_source='rozmowa'
            WHERE content_item_id=%s AND status IN ('review','held','scheduled','queued','dispatching')""",
         (slot, row["id"]))
     return (f"🗓 Przesuniete: \"{row['master_theme'][:90]}\"\n"
@@ -2765,7 +2768,8 @@ def _sub_reschedule(inp, brand, channel):
     except (ValueError, TypeError):
         return "Nie rozumiem terminu, podaj konkretnie (np. jutro 14:00)."
     row = db.fetchone(
-        "UPDATE post_queue SET scheduled_for=%s WHERE id=%s AND brand=%s AND platform=%s RETURNING content_item_id",
+        "UPDATE post_queue SET scheduled_for=%s, slot_source='rozmowa' "
+        "WHERE id=%s AND brand=%s AND platform=%s RETURNING content_item_id",
         (new_dt, pid, brand, channel))
     if not row:
         return f"Nie znalazlem pozycji #{pid} w kolejce {channel}."
