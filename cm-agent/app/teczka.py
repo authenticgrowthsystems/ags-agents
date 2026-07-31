@@ -196,15 +196,31 @@ def _wpisy(cel):
     jej czesc, ktora akurat powstala po migracji."""
     if cel["rodzaj"] == "lejek":
         return db.fetchall(
-            """SELECT created_at, channel, action_type, status, agent, content, notes
+            """SELECT created_at, channel, action_type, status, agent, content, response, notes
                  FROM engagement_log
                 WHERE pipeline_id=%s::uuid
                    OR (pipeline_id IS NULL AND lower(btrim(COALESCE(author_display,''))) = lower(%s))
                 ORDER BY created_at""", (cel["id"], _norm(cel["nazwa"]))) or []
     return db.fetchall(
-        """SELECT created_at, channel, action_type, status, agent, content, notes
+        """SELECT created_at, channel, action_type, status, agent, content, response, notes
              FROM engagement_log WHERE contact_id=%s::uuid ORDER BY created_at""",
         (cel["id"],)) or []
+
+
+def _tresc_wpisu(w):
+    """Rozdziela to, co PRZYSZLO, od tego, co MY napisalismy.
+
+    Wszystkie tory zapisu trzymaja te sama konwencje: `content` to wejscie (komentarz, DM)
+    albo etykieta, a `response` to NASZ tekst. Gotowiec Sprzedawcy ma w `content` sam napis
+    "outreach email: <nazwa>", a caly mail w `response` - czytanie samego `content` pokazywalo
+    wiec etykiete zamiast tresci, czyli ukrywalo dokladnie to, po co teczka istnieje.
+    Zlapane tap-testem na ZYWYCH danych StandART 31/07: siedem wpisow, w kazdym sama etykieta."""
+    przyszlo = _norm(w.get("content"))
+    nasze = _norm(w.get("response"))
+    if nasze and przyszlo and nasze != przyszlo:
+        return [f"> {przyszlo[:600]}", nasze[:2000] + ("..." if len(nasze) > 2000 else "")]
+    tresc = nasze or przyszlo
+    return [tresc[:2000] + ("..." if len(tresc) > 2000 else "")] if tresc else ["_(pusty wpis)_"]
 
 
 def _naglowek(cel):
@@ -246,10 +262,9 @@ def teczka_text(ident):
         L.append("Nic jeszcze nie poszlo. Teczka pusta.")
     for i, w in enumerate(wpisy, 1):
         kiedy = str(w["created_at"])[:16]
-        tresc = _norm(w.get("content"))
         L.append(f"\n**{i}. {kiedy} | {w.get('channel') or '?'} | {w.get('status')}** "
                  f"({w.get('agent') or '?'})")
         if w.get("notes"):
             L.append(f"_{_norm(w['notes'])[:200]}_")
-        L.append(tresc[:2000] + ("..." if len(tresc) > 2000 else ""))
+        L += _tresc_wpisu(w)
     return "\n".join(L)

@@ -87,9 +87,14 @@ KONTAKTY = [
      "next_action": None, "next_action_due": None},
 ]
 # Wpis sprzed DDL 036: ma nazwe w author_display, nie ma pipeline_id.
+# UWAGA na ksztalt: gotowiec Sprzedawcy trzyma w `content` sama ETYKIETE, a caly mail
+# w `response` (sales.py). Tap-test na zywych danych StandART 31/07 pokazal, ze czytanie
+# samego `content` wyswietlalo siedem razy etykiete i ANI SLOWA z tresci maili.
 LOG = [
     {"created_at": "2026-07-24 10:00", "channel": "Other", "action_type": "other",
-     "status": "proposed", "agent": "AGS:sprzedaz", "content": "stary gotowiec Sprzedawcy",
+     "status": "proposed", "agent": "AGS:sprzedaz",
+     "content": "outreach email: Studio Tanca StandART",
+     "response": "Dzien dobry, pisze w sprawie zapisow na zajecia - mam pomysl na przedsionek.",
      "notes": "gotowiec outreach", "pipeline_id": None, "contact_id": None,
      "author_display": "Studio Tanca StandART"},
 ]
@@ -138,8 +143,8 @@ def execute(sql, params=None):
     if "INSERT INTO engagement_log" in sql:
         ZEGAR[0] += 1
         LOG.append({"created_at": f"2026-07-31 12:{ZEGAR[0]:02d}", "action_type": p[0],
-                    "channel": p[1], "agent": p[2], "content": p[3], "notes": p[4],
-                    "contact_id": p[5], "pipeline_id": p[6], "status": p[7],
+                    "channel": p[1], "agent": p[2], "content": p[3], "response": None,
+                    "notes": p[4], "contact_id": p[5], "pipeline_id": p[6], "status": p[7],
                     "author_display": p[8]})
         return
     if "UPDATE sales_pipeline" in sql:
@@ -172,9 +177,15 @@ t = teczka.teczka_text("StandART")
 i1, i2, i3 = t.find("Pierwszy mail"), t.find("Drugi:"), t.find("Trzeci,")
 check("wszystkie trzy wpisy sa w teczce", min(i1, i2, i3) > -1, f"{i1},{i2},{i3}")
 check("wpisy sa W KOLEJNOSCI zapisu", i1 < i2 < i3, f"{i1},{i2},{i3}")
-check("historia sprzed DDL 036 tez jest widoczna", "stary gotowiec" in t)
+check("historia sprzed DDL 036 tez jest widoczna", "outreach email" in t)
 check("stary wpis jest PIERWSZY (chronologia, nie kolejnosc wstawiania)",
-      t.find("stary gotowiec") < i1)
+      t.find("outreach email") < i1)
+
+# Wada zlapana tap-testem na produkcji 31/07: teczka pokazywala ETYKIETE zamiast maila.
+check("gotowiec Sprzedawcy pokazuje TRESC MAILA, nie sama etykiete",
+      "przedsionek" in t, t[t.find("outreach email"):][:300])
+check("etykieta zostaje jako kontekst, cytatem", "> outreach email" in t,
+      t[t.find("outreach email") - 20:][:200])
 check("naglowek liczy wszystkie cztery wpisy", "## Historia (4)" in t, t[:400])
 
 check("nastepny krok ma TRESC", "Telefon do wlasciciela" in t, t)

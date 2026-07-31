@@ -109,6 +109,12 @@ czat (MCP) -> teczka -> GET /lacznik/teczka?kontakt=... -> teczka.teczka_text:
   `pipeline_id` ORAZ dokladna nazwe z `author_display`, inaczej teczka pokazalaby tylko
   te czesc historii, ktora powstala po migracji. Backfill w DDL 036 dopina, co da sie dopiac
   dokladnym dopasowaniem; reszta zostaje z NULL, bo lepiej puste niz podpiete blednie.
+- **`content` to WEJSCIE albo etykieta, `response` to NASZ tekst.** Konwencja jest wspolna dla
+  wszystkich torow zapisu: przy komentarzu `content` niesie cudzy komentarz, a `response` nasza
+  odpowiedz; przy gotowcu Sprzedawcy `content` to sam napis "outreach email: <nazwa>", a caly mail
+  siedzi w `response`. Pierwsza wersja `_wpisy` czytala wylacznie `content` - **tap-test na zywych
+  danych StandART 31/07 pokazal siedem wpisow, w kazdym sama etykieta i ani slowa z tresci maili.**
+  Odtad `_tresc_wpisu` pokazuje oba: wejscie cytatem, nasz tekst normalnie. Test tego pilnuje.
 - **Brak nastepnego kroku jest WYPISANY** ("BRAK ustalonego nastepnego kroku"), nie zostawiony
   jako pusta linia. Pusty wiersz w raporcie lejka byl jedna z przyczyn tego, ze przez tygodnie
   nikt nie zauwazyl prospektow bez terminu (diagnoza 26/07).
