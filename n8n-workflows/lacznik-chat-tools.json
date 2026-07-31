@@ -9,7 +9,7 @@
         0,
         0
       ],
-      "webhookId": "46df4cbd-aa86-48ce-88ca-ec639b1794ea",
+      "webhookId": "c15774c9-b525-4d5b-b04a-c71832048a19",
       "parameters": {
         "path": "lacznik-<LACZNIK_E2_SECRET>"
       }
@@ -75,6 +75,78 @@
       }
     },
     {
+      "name": "zapisz_tekst",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        540,
+        260
+      ],
+      "parameters": {
+        "toolDescription": "Zapisuje w bazie tekst wysłany do kontaktu (mail, SMS, WhatsApp, DM, notatka z telefonu) razem z datą i statusem. Wołaj ZAWSZE po napisaniu tekstu sprzedażowego, także szkicu - inaczej tekst zostaje wyłącznie w czacie i przepada. Kontakt podaj nazwą albo UUID; jeśli nie istnieje, dostaniesz listę podobnych i NIC nie zostanie zapisane - nigdy nie zakładaj nowego kontaktu na siłę. UWAGA: n8n wymaga wszystkich parametrów, więc dla tych, które nie dotyczą (temat, next_step, next_step_date), podaj PUSTY CIĄG - system potraktuje je jak brak i niczego nie nadpisze.",
+        "method": "POST",
+        "url": "http://cm-agent:8089/lacznik/zapisz-tekst",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Lacznik-Secret",
+              "value": "<LACZNIK_E2_SECRET>"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contact_id: $fromAI('contact_id', 'Nazwa prospekta albo UUID z lejka lub kontaktow', 'string'), kanal: $fromAI('kanal', 'Kanal: email, sms, whatsapp, dm albo telefon', 'string'), tresc: $fromAI('tresc', 'Pelna tresc tekstu, ktory poszedl albo ma pojsc do kontaktu', 'string'), status: $fromAI('status', 'draft gdy szkic, sent gdy juz wyslane', 'string'), temat: $fromAI('temat', 'Temat wiadomosci. PUSTY CIAG jesli nie dotyczy', 'string'), next_step: $fromAI('next_step', 'Nastepny ustalony krok. PUSTY CIAG jesli nie ustalasz', 'string'), next_step_date: $fromAI('next_step_date', 'Termin nastepnego kroku RRRR-MM-DD GG:MM. PUSTY CIAG jesli nie ustalasz', 'string') }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "teczka",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        260
+      ],
+      "parameters": {
+        "toolDescription": "Zwraca w JEDNYM wywołaniu całą teczkę kontaktu: dane, wszystko co do niego poszło chronologicznie, ostatni ustalony następny krok z datą oraz status. Wołaj ZANIM napiszesz cokolwiek do prospekta - bez tego nie wiesz, co już dostał ani co obiecaliśmy. Kontakt podaj nazwą albo UUID.",
+        "method": "GET",
+        "url": "http://cm-agent:8089/lacznik/teczka",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Lacznik-Secret",
+              "value": "<LACZNIK_E2_SECRET>"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "kontakt",
+              "value": "={{ $fromAI('contact_id', 'Nazwa prospekta albo UUID z lejka lub kontaktow', 'string') }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
       "name": "Webhook Chat Raport",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -82,7 +154,7 @@
         0,
         520
       ],
-      "webhookId": "aee2e65b-c83d-4c6b-8eee-69dce87566d9",
+      "webhookId": "6793e0bc-5471-4a43-9768-6df429e59b68",
       "parameters": {
         "httpMethod": "POST",
         "path": "chat-raport",
@@ -135,7 +207,7 @@
         0,
         720
       ],
-      "webhookId": "27f483d7-3e46-41ac-a698-f238a3634faf",
+      "webhookId": "26f9248d-068d-4de4-bcb3-b7b35137b8d4",
       "parameters": {
         "httpMethod": "GET",
         "path": "stan-gry",
@@ -191,6 +263,28 @@
       ]
     },
     "wyslij_raport_pracy": {
+      "ai_tool": [
+        [
+          {
+            "node": "MCP Lacznik",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "zapisz_tekst": {
+      "ai_tool": [
+        [
+          {
+            "node": "MCP Lacznik",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "teczka": {
       "ai_tool": [
         [
           {
