@@ -11,7 +11,7 @@ from fastapi import FastAPI, Header, HTTPException
 from . import config, db
 from .brand import load_brand
 
-from . import generate, compliance, channels, research, hitl, conversation, logbot, content_memory, reports, planner, matreview, slots, proactive, engagement, metrics_import, decisions, sunday_brief, sales
+from . import generate, compliance, channels, research, hitl, conversation, logbot, content_memory, reports, planner, matreview, slots, proactive, engagement, metrics_import, decisions, sunday_brief, sales, teczka
 
 api = FastAPI(title="AGS Content Manager")
 wake = threading.Event()
@@ -211,6 +211,43 @@ def lacznik_raport(body: dict, x_lacznik_secret: str = Header(default=""), secre
             traceback.print_exc()
     wake.set()
     return {"ok": True, "potwierdzenie": potwierdzenie}
+
+
+# ---- Teczka prospekta (31/07/2026): para zapisz_tekst + teczka, JEDEN kontrakt (app/teczka.py) ----
+# Powod: teksty sprzedazowe pisane w Cowork ladowaly wylacznie w czacie - zero sladu w bazie,
+# nie dalo sie iterowac ani wczytac w nowej rozmowie. Oba endpointy stoja za tym samym guardem
+# co reszta Lacznika i sa synchroniczne (zero LLM - czysty SQL).
+@api.post("/lacznik/zapisz-tekst")
+def lacznik_zapisz_tekst(body: dict, x_lacznik_secret: str = Header(default=""), secret: str = ""):
+    """Zapisuje tekst przy kontakcie, z data i statusem. Nieznany identyfikator = blad z lista
+    podobnych, NIGDY ciche zalozenie nowego wiersza."""
+    _lacznik_guard(x_lacznik_secret or secret)
+    try:
+        return {"ok": True, "potwierdzenie": teczka.zapisz(
+            body.get("contact_id") or body.get("kontakt") or body.get("ident"),
+            body.get("kanal"), body.get("tresc"), body.get("status") or "draft",
+            next_step=body.get("next_step"), next_step_date=body.get("next_step_date"),
+            temat=body.get("temat"))}
+    except teczka.Blad as e:
+        # 400 z trescia DLA CZLOWIEKA: czat ma pokazac liste podobnych, a nie "bad request".
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:200]}")
+
+
+@api.get("/lacznik/teczka")
+def lacznik_teczka(kontakt: str = "", x_lacznik_secret: str = Header(default=""), secret: str = ""):
+    """Cala teczka w JEDNYM wywolaniu: dane kontaktu, chronologia wszystkiego co poszlo,
+    ostatni ustalony nastepny krok z data, status."""
+    _lacznik_guard(x_lacznik_secret or secret)
+    try:
+        return {"ok": True, "teczka": teczka.teczka_text(kontakt)}
+    except teczka.Blad as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:200]}")
 
 
 def _brand_tokens_tick():

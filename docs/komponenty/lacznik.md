@@ -100,6 +100,25 @@ Transport, nie logika: parser, /kontekst, strona Notion i format raportu BEZ zmi
   LACZNIK_E2_SECRET=<nowy> (URL konektora sie zmienia - podmien w claude.ai);
   saveDataSuccessExecution=none (tresci raportow nie leza w logach n8n).
 
+## Etap 3: teczka prospekta (31/07/2026) - dwa kolejne narzedzia
+
+Workflow ma od 31/07 **cztery** narzedzia, nie dwa. Doszla para jednego kontraktu:
+
+- `zapisz_tekst(contact_id, kanal, tresc, status)` -> POST cm-agent `/lacznik/zapisz-tekst`
+- `teczka(contact_id)` -> GET cm-agent `/lacznik/teczka`
+
+Powod: teksty sprzedazowe pisane w czacie zostawaly wylacznie w czacie. Pelny opis, ustalenie
+o rozlacznosci `contacts` i `sales_pipeline` oraz pulapki: **docs/komponenty/teczka-prospekta.md**.
+
+Oba wezly maja `neverError: true` - blad kontraktu (nieznany kontakt) ma wrocic do czatu jako
+TRESC z lista podobnych, a nie jako "tool call failed", bo to lista jest tu wartoscia.
+
+**POPRAWKA W SKRYPCIE TWORZACYM (31/07, wazna przy kazdej przyszlej zmianie):** skrypt bez
+zmiennej `LACZNIK_E2_SECRET` losowal dotad NOWY sekret przy kazdym uruchomieniu. Sekret siedzi
+w sciezce triggera, wiec **dolozenie jednego narzedzia zmienialoby adres konektora claude.ai
+i rozjezdzalo go z app_secrets**. Od 31/07 skrypt PRZEJMUJE sekret z zywego workflow; nowy
+generuje tylko wtedy, gdy workflow nie istnieje. Jawna rotacja nadal przez `LACZNIK_E2_SECRET`.
+
 ## Wejscia-wyjscia i tabele
 
 - `engagement_log`: wpisy z raportu (status wg typu: sent/logged; idempotencja

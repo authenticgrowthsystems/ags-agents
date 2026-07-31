@@ -1453,12 +1453,14 @@ def _draft_outreach(inp, chat_id):
     _close_outreach_rows([r["id"] for r in _stare], "rejected", "ZASTAPIONE nowszym gotowcem")
     try:
         db.execute(
+            # pipeline_id od DDL 036: dotad jedynym wiazaniem gotowca z prospektem byl
+            # author_display (napis z nazwa), wiec teczka musialaby dopasowywac po tekscie.
             """INSERT INTO engagement_log (action_type, channel, agent, content, response, notes,
-                                           contact_id, status, author_display)
-               VALUES ('other',%s,'AGS:sprzedaz',%s,%s,%s,%s,'proposed',%s)""",
+                                           contact_id, pipeline_id, status, author_display)
+               VALUES ('other',%s,'AGS:sprzedaz',%s,%s,%s,%s,%s,'proposed',%s)""",
             (_eng_kanal, f"outreach {channel}: {row['prospect_name'][:200]}",
              draft[:3000], f"{_OUTREACH_NOTE} (Agent Sprzedazy, HITL)",
-             row.get("contact_id"), row["prospect_name"][:200]))
+             row.get("contact_id"), row["id"], row["prospect_name"][:200]))
     except Exception:
         traceback.print_exc()
     _append_notes(row["id"], f"outreach draft ({channel}, {lang}) - gotowiec u Tomasza")

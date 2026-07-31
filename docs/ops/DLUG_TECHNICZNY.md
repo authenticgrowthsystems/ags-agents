@@ -68,6 +68,11 @@ dwunastu wierszach lejka, wiec drugi objaw jeszcze nie wystapil.
 **Czym grozi:** adamietz.pl ma ciepla sciezke przez Piotra Hamryszaka i nie ma jej gdzie
 zapisac - wiedza o dojsciu zyje poza systemem.
 
+**Aktualizacja 31/07:** teczka prospekta domyka POLOWE tego dlugu - `zapisz_tekst` daje czlowiekowi
+droge zapisu tresci wysylki oraz nastepnego kroku z terminem (`sales_pipeline.next_step`, DDL 036).
+Pol kontaktowych (osoba, telefon, mail przy wierszu lejka) nadal **nie da sie** wypelnic recznie,
+wiec dojscie przez Piotra dalej nie ma swojego miejsca. Dlug zostaje otwarty w tej czesci.
+
 ---
 
 ## D-004: Materialy przygotowane poza baza sa dla agenta niewidzialne
@@ -208,3 +213,23 @@ martwe i klikalne** - nie mamy juz ich identyfikatorow w reku w momencie wygasza
 
 **Czym grozi:** kolejne tapniecie w stara karte i komunikat "juz rozstrzygnieta". Nieszkodliwe,
 mylace. Znikna z pola widzenia same, gdy czat sie przewinie.
+
+---
+
+## D-009: Gotowiec mailowy Sprzedawcy laduje w kanale `Other`, tekst z teczki w `Email`
+
+**Zapisany 31/07/2026** (stan zastany, zauwazony przy budowie teczki prospekta).
+
+`sales.py:802` mapuje kanaly gotowcow tak: `_ENG_CHANNEL = {"email": "Other", "linkedin_dm":
+"LinkedIn", "x_dm": "X"}`. Wartosc `'Email'` istnieje w ograniczeniu `engagement_log` od DDL 001,
+ale tor gotowcow z niej nie korzysta. `teczka.zapisz` zapisuje maile poprawnie jako `'Email'`,
+wiec od 31/07 ten sam kanal ma w ksiedze **dwie rozne etykiety** zaleznie od tego, kto pisal.
+
+**Dlaczego nie poprawilem od reki:** `_ENG_CHANNEL` jest KLUCZEM w `_open_outreach_rows`, ktore
+domyka poprzednie gotowce w tym samym kanale. Podmiana wartosci rozjechalaby dopasowanie
+z wierszami juz lezacymi w bazie i zywe gotowce przestalyby sie unieważniac - to ta sama wada,
+ktora 24/07 zrobila StandART siedem wierszy i piec bramek. Poprawka wymaga migracji istniejacych
+wierszy razem ze zmiana slownika, w jednym kroku.
+
+**Czym grozi:** nie rozbija niczego dzisiaj (teczka laczy wpisy po `pipeline_id`, nie po kanale),
+ale **kazde liczenie wysylki per kanal bedzie klamac** - maile rozpadna sie na dwie kupki.

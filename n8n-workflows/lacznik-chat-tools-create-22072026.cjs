@@ -3,7 +3,8 @@
 //
 // Zawartosc workflowu:
 //   1. MCP Server Trigger (sciezka z sekretem = capability URL dla konektora claude.ai)
-//      + 2 narzedzia HTTP (wyslij_raport_pracy, stan_gry) -> cienkie endpointy cm-agent
+//      + 4 narzedzia HTTP (stan_gry, wyslij_raport_pracy oraz - od 31/07/2026 - para
+//      zapisz_tekst + teczka) -> cienkie endpointy cm-agent
 //      /lacznik/raport i /lacznik/stan (guard: sekret lacznik_e2_secret z app_secrets).
 //   2. Wariant B (fallback bez MCP): webhook POST /webhook/chat-raport + GET /webhook/stan-gry
 //      - czysty przelot do cm-agent, sekret przekazuje WOLAJACY (walidacja w cm-agent,
@@ -19,7 +20,9 @@
 // URUCHOMIENIE (Git Bash / node na maszynie z .env):
 //   set -a && . <(grep -E '^(N8N_BASE_URL|N8N_API_KEY)=' "C:\Claude-CoWork\AGS\ags-agents\.env" | sed 's/\r$//') && set +a \
 //     && node "C:\Claude-CoWork\AGS\ags-agents\n8n-workflows\lacznik-chat-tools-create-22072026.cjs"
-// Rotacja sekretu: jak wyzej, ale z LACZNIK_E2_SECRET=<nowy> w env przed node.
+// Rotacja sekretu: jak wyzej, ale z LACZNIK_E2_SECRET=<nowy> w env przed node. BEZ tej zmiennej
+// skrypt PRZEJMUJE sekret z zywego workflow, wiec adres konektora claude.ai zostaje nietkniety
+// (od 31/07 - wczesniej kazde uruchomienie losowalo nowy sekret i zrywalo polaczenie).
 // Skrypt jest idempotentny: workflow o tej nazwie istnieje -> PUT (z backupem), nie duplikat.
 // Po zapisie: deactivate+activate (kanon) + sonda MCP initialize/tools-list (dowod, ze trigger zyje).
 const fs = require('fs');
@@ -67,6 +70,42 @@ function buildWorkflow(secret) {
         options: {},
       },
     },
+    // ---- Teczka prospekta (31/07/2026): para zapisz/odczyt JEDNEGO kontraktu ----
+    // Powod: teksty sprzedazowe pisane w czacie ladowaly tylko w czacie. Zero sladu w bazie,
+    // wiec nie dalo sie iterowac, policzyc ani wczytac w nowej rozmowie.
+    // neverError: bledy kontraktu (nieznany kontakt) wracaja jako TRESC z lista podobnych -
+    // czat ma je pokazac czlowiekowi, a nie polec na "tool call failed".
+    {
+      name: 'zapisz_tekst', type: 'n8n-nodes-base.httpRequestTool', typeVersion: 4.2,
+      position: [540, 260],
+      parameters: {
+        toolDescription: 'Zapisuje w bazie tekst wysłany do kontaktu (mail, SMS, WhatsApp, DM, notatka z telefonu) razem z datą i statusem. Wołaj ZAWSZE po napisaniu tekstu sprzedażowego, także szkicu - inaczej tekst zostaje wyłącznie w czacie i przepada. Kontakt podaj nazwą albo UUID; jeśli nie istnieje, dostaniesz listę podobnych i NIC nie zostanie zapisane - nigdy nie zakładaj nowego kontaktu na siłę. Opcjonalnie ustal następny krok z terminem.',
+        method: 'POST',
+        url: `${CM}/lacznik/zapisz-tekst`,
+        sendHeaders: true,
+        headerParameters: { parameters: [ { name: 'X-Lacznik-Secret', value: secret } ] },
+        sendBody: true,
+        specifyBody: 'json',
+        jsonBody: "={{ JSON.stringify({ contact_id: $fromAI('kontakt', 'Nazwa prospekta albo UUID z lejka lub kontaktow', 'string'), kanal: $fromAI('kanal', 'Kanal: email, sms, whatsapp, dm albo telefon', 'string'), tresc: $fromAI('tresc', 'Pelna tresc tekstu, ktory poszedl albo ma pojsc do kontaktu', 'string'), status: $fromAI('status', 'draft gdy szkic, sent gdy juz wyslane', 'string'), temat: $fromAI('temat', 'Temat wiadomosci, opcjonalny', 'string'), next_step: $fromAI('next_step', 'Nastepny ustalony krok, opcjonalny', 'string'), next_step_date: $fromAI('next_step_date', 'Termin nastepnego kroku RRRR-MM-DD GG:MM, opcjonalny', 'string') }) }}",
+        options: { response: { response: { neverError: true } } },
+      },
+    },
+    {
+      name: 'teczka', type: 'n8n-nodes-base.httpRequestTool', typeVersion: 4.2,
+      position: [900, 260],
+      parameters: {
+        toolDescription: 'Zwraca w JEDNYM wywołaniu całą teczkę kontaktu: dane, wszystko co do niego poszło chronologicznie, ostatni ustalony następny krok z datą oraz status. Wołaj ZANIM napiszesz cokolwiek do prospekta - bez tego nie wiesz, co już dostał ani co obiecaliśmy. Kontakt podaj nazwą albo UUID.',
+        method: 'GET',
+        url: `${CM}/lacznik/teczka`,
+        sendHeaders: true,
+        headerParameters: { parameters: [ { name: 'X-Lacznik-Secret', value: secret } ] },
+        sendQuery: true,
+        queryParameters: { parameters: [
+          { name: 'kontakt', value: "={{ $fromAI('kontakt', 'Nazwa prospekta albo UUID z lejka lub kontaktow', 'string') }}" },
+        ] },
+        options: { response: { response: { neverError: true } } },
+      },
+    },
     // ---- Wariant B: fallback bez MCP (ChatGPT Action / dowolny klient HTTP) ----
     {
       name: 'Webhook Chat Raport', type: 'n8n-nodes-base.webhook', typeVersion: 2,
@@ -112,6 +151,8 @@ function buildWorkflow(secret) {
   const connections = {
     'stan_gry': { ai_tool: [[{ node: 'MCP Lacznik', type: 'ai_tool', index: 0 }]] },
     'wyslij_raport_pracy': { ai_tool: [[{ node: 'MCP Lacznik', type: 'ai_tool', index: 0 }]] },
+    'zapisz_tekst': { ai_tool: [[{ node: 'MCP Lacznik', type: 'ai_tool', index: 0 }]] },
+    'teczka': { ai_tool: [[{ node: 'MCP Lacznik', type: 'ai_tool', index: 0 }]] },
     'Webhook Chat Raport': { main: [[{ node: 'Forward Raport', type: 'main', index: 0 }]] },
     'Forward Raport': { main: [[{ node: 'Respond Raport', type: 'main', index: 0 }]] },
     'Webhook Stan Gry': { main: [[{ node: 'Forward Stan', type: 'main', index: 0 }]] },
@@ -147,13 +188,34 @@ async function mcpProbe(base, mcpPath) {
 async function main() {
   const base = process.env.N8N_BASE_URL, key = process.env.N8N_API_KEY;
   if (!base || !key) { console.log('BRAK N8N_BASE_URL / N8N_API_KEY w env'); process.exit(1); }
-  const secret = (process.env.LACZNIK_E2_SECRET || '').trim() || crypto.randomBytes(24).toString('hex');
   const H = { 'X-N8N-API-KEY': key, 'Content-Type': 'application/json' };
-  const wf = buildWorkflow(secret);
 
   // idempotencja: szukaj po nazwie
   const all = await (await fetch(`${base}/api/v1/workflows?limit=250`, { headers: H })).json();
   const existing = (all.data || []).find(w => w.name === NAME);
+
+  // SEKRET: jawna rotacja z env > sekret ZYWEGO workflow > dopiero na koncu nowy.
+  // 31/07/2026: srodkowego czlonu nie bylo, wiec KAZDE ponowne uruchomienie skryptu losowalo
+  // nowy sekret. A sekret siedzi w sciezce triggera, wiec zmienial sie adres konektora
+  // claude.ai i rozjezdzal z wartoscia w app_secrets - czyli dolozenie jednego narzedzia
+  // zrywalo Managerowi polaczenie. Skrypt idempotentny musi byc idempotentny takze w tym.
+  let secret = (process.env.LACZNIK_E2_SECRET || '').trim();
+  let zrodlo = secret ? 'env (jawna rotacja - adres konektora SIE ZMIENI)' : '';
+  if (!secret && existing) {
+    const live0 = await (await fetch(`${base}/api/v1/workflows/${existing.id}`, { headers: H })).json();
+    const trig = (live0.nodes || []).find(n => (n.type || '').includes('mcpTrigger'));
+    const p = (((trig || {}).parameters) || {}).path || '';
+    if (p.startsWith('lacznik-')) {
+      secret = p.slice('lacznik-'.length);
+      zrodlo = 'zywy workflow (adres konektora BEZ ZMIAN)';
+    }
+  }
+  if (!secret) {
+    secret = crypto.randomBytes(24).toString('hex');
+    zrodlo = 'NOWY - trzeba wpisac do app_secrets i przepiac konektor';
+  }
+  console.log('sekret z:', zrodlo);
+  const wf = buildWorkflow(secret);
   let id;
   if (existing) {
     id = existing.id;
