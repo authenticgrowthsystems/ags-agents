@@ -113,6 +113,20 @@ o rozlacznosci `contacts` i `sales_pipeline` oraz pulapki: **docs/komponenty/tec
 Oba wezly maja `neverError: true` - blad kontraktu (nieznany kontakt) ma wrocic do czatu jako
 TRESC z lista podobnych, a nie jako "tool call failed", bo to lista jest tu wartoscia.
 
+**DWIE PULAPKI `$fromAI`, zlapane tap-testem 31/07 (dotycza KAZDEGO przyszlego narzedzia):**
+
+1. **Klucz `$fromAI` JEST nazwa parametru, ktora widzi wolajacy.** Wezel mial
+   `contact_id: $fromAI('kontakt', ...)`, wiec narzedzie wystawialo parametr `kontakt`, a nie
+   `contact_id` z uzgodnionego kontraktu - Manager wolalby nazwa z kontraktu i dostawal
+   `Received tool input did not match expected schema`. Klucz musi byc DOKLADNIE taki jak kontrakt.
+   To AP-312 w warstwie integracji: etykieta obiecywala co innego, niz znaczyla.
+2. **n8n oznacza KAZDY parametr `$fromAI` jako WYMAGANY i nie ma sposobu na opcjonalny.**
+   Sygnatura to `$fromAI(key, description?, type?, defaultValue?)`, ale `defaultValue` nie zdejmuje
+   wymagalnosci - flaga `isOptional` to dopiero otwarty wniosek o funkcje
+   (docs "Let AI specify tool parameters" + zgloszenia spolecznosci). **Opcjonalnosc realizujemy
+   PUSTYM CIAGIEM:** opis parametru mowi wprost "PUSTY CIAG jesli nie dotyczy", a serwer traktuje
+   pusty ciag jak brak i niczego nie nadpisuje. Nie da sie tego obejsc po stronie n8n.
+
 **POPRAWKA W SKRYPCIE TWORZACYM (31/07, wazna przy kazdej przyszlej zmianie):** skrypt bez
 zmiennej `LACZNIK_E2_SECRET` losowal dotad NOWY sekret przy kazdym uruchomieniu. Sekret siedzi
 w sciezce triggera, wiec **dolozenie jednego narzedzia zmienialoby adres konektora claude.ai

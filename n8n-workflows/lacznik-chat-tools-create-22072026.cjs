@@ -79,14 +79,20 @@ function buildWorkflow(secret) {
       name: 'zapisz_tekst', type: 'n8n-nodes-base.httpRequestTool', typeVersion: 4.2,
       position: [540, 260],
       parameters: {
-        toolDescription: 'Zapisuje w bazie tekst wysłany do kontaktu (mail, SMS, WhatsApp, DM, notatka z telefonu) razem z datą i statusem. Wołaj ZAWSZE po napisaniu tekstu sprzedażowego, także szkicu - inaczej tekst zostaje wyłącznie w czacie i przepada. Kontakt podaj nazwą albo UUID; jeśli nie istnieje, dostaniesz listę podobnych i NIC nie zostanie zapisane - nigdy nie zakładaj nowego kontaktu na siłę. Opcjonalnie ustal następny krok z terminem.',
+        toolDescription: 'Zapisuje w bazie tekst wysłany do kontaktu (mail, SMS, WhatsApp, DM, notatka z telefonu) razem z datą i statusem. Wołaj ZAWSZE po napisaniu tekstu sprzedażowego, także szkicu - inaczej tekst zostaje wyłącznie w czacie i przepada. Kontakt podaj nazwą albo UUID; jeśli nie istnieje, dostaniesz listę podobnych i NIC nie zostanie zapisane - nigdy nie zakładaj nowego kontaktu na siłę. UWAGA: n8n wymaga wszystkich parametrów, więc dla tych, które nie dotyczą (temat, next_step, next_step_date), podaj PUSTY CIĄG - system potraktuje je jak brak i niczego nie nadpisze.',
         method: 'POST',
         url: `${CM}/lacznik/zapisz-tekst`,
         sendHeaders: true,
         headerParameters: { parameters: [ { name: 'X-Lacznik-Secret', value: secret } ] },
         sendBody: true,
         specifyBody: 'json',
-        jsonBody: "={{ JSON.stringify({ contact_id: $fromAI('kontakt', 'Nazwa prospekta albo UUID z lejka lub kontaktow', 'string'), kanal: $fromAI('kanal', 'Kanal: email, sms, whatsapp, dm albo telefon', 'string'), tresc: $fromAI('tresc', 'Pelna tresc tekstu, ktory poszedl albo ma pojsc do kontaktu', 'string'), status: $fromAI('status', 'draft gdy szkic, sent gdy juz wyslane', 'string'), temat: $fromAI('temat', 'Temat wiadomosci, opcjonalny', 'string'), next_step: $fromAI('next_step', 'Nastepny ustalony krok, opcjonalny', 'string'), next_step_date: $fromAI('next_step_date', 'Termin nastepnego kroku RRRR-MM-DD GG:MM, opcjonalny', 'string') }) }}",
+        // Nazwy kluczy $fromAI SA nazwami parametrow, ktore widzi wolajacy - musza byc DOKLADNIE
+        // takie, jak kontrakt uzgodniony z Managerem (`contact_id`), inaczej wola nazwa z kontraktu
+        // i dostaje blad schematu. Zlapane tap-testem 31/07 (parametr nazywal sie `kontakt`).
+        // n8n oznacza KAZDY parametr $fromAI jako wymagany i nie ma sposobu na opcjonalny
+        // (docs "Let AI specify tool parameters"; `isOptional` to otwarty wniosek o funkcje),
+        // dlatego opcjonalnosc realizujemy PUSTYM CIAGIEM, ktory serwer traktuje jak brak.
+        jsonBody: "={{ JSON.stringify({ contact_id: $fromAI('contact_id', 'Nazwa prospekta albo UUID z lejka lub kontaktow', 'string'), kanal: $fromAI('kanal', 'Kanal: email, sms, whatsapp, dm albo telefon', 'string'), tresc: $fromAI('tresc', 'Pelna tresc tekstu, ktory poszedl albo ma pojsc do kontaktu', 'string'), status: $fromAI('status', 'draft gdy szkic, sent gdy juz wyslane', 'string'), temat: $fromAI('temat', 'Temat wiadomosci. PUSTY CIAG jesli nie dotyczy', 'string'), next_step: $fromAI('next_step', 'Nastepny ustalony krok. PUSTY CIAG jesli nie ustalasz', 'string'), next_step_date: $fromAI('next_step_date', 'Termin nastepnego kroku RRRR-MM-DD GG:MM. PUSTY CIAG jesli nie ustalasz', 'string') }) }}",
         options: { response: { response: { neverError: true } } },
       },
     },
@@ -101,7 +107,7 @@ function buildWorkflow(secret) {
         headerParameters: { parameters: [ { name: 'X-Lacznik-Secret', value: secret } ] },
         sendQuery: true,
         queryParameters: { parameters: [
-          { name: 'kontakt', value: "={{ $fromAI('kontakt', 'Nazwa prospekta albo UUID z lejka lub kontaktow', 'string') }}" },
+          { name: 'kontakt', value: "={{ $fromAI('contact_id', 'Nazwa prospekta albo UUID z lejka lub kontaktow', 'string') }}" },
         ] },
         options: { response: { response: { neverError: true } } },
       },
