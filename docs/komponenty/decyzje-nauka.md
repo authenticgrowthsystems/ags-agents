@@ -89,6 +89,21 @@ Przypomnij jutro); throttle w DB = jedna otwarta/swieza decyzja per item.
   zamyka decyzje i "pokaz" wyciszyloby przypomnienie na dobe. Obsluga: `sales.apply_followup`.
   ETAPU nie rusza zaden guzik (qualified znaczy zakwalifikowany, nie skontaktowany).
 
+- NOWY typ 'slot_confirm' (29/07, decyzja Managera): **bramka potwierdzenia terminu publikacji**.
+  Wyzwala sie przy przesunieciu materialu, gdy zachodzi CHOCBY JEDEN z dwoch NIEZALEZNYCH
+  warunkow: termin jest poza oknem publikacji kanalu **albo** polecenie dotyczy wiecej niz
+  jednego wiersza kolejki. Guziki [Ustaw (N wp.)][Anuluj], obsluga `conversation.apply_slot_confirm`.
+  **Powod:** 28/07 piec czesci jednego materialu wyszlo na X w piec minut, o 09:00, poza oknem,
+  na koncie ktore trzy dni wczesniej dostalo 403 za wykryta automatyzacje. Czlowiek podal JEDEN
+  termin i nie wiedzial, ze polecenie dotyczy PIECIU wpisow - notatka po fakcie nie miala czego
+  zatrzymac. Zasada "Ty decydujesz o terminie" ZOSTAJE; zmienia sie tylko to, ze przy takim
+  skutku system pyta PRZED, a nie melduje PO.
+  **Karta niesie skutek, nie samo pytanie:** ile wpisow, na kiedy, ktore warunki zaszly oraz
+  zdanie "wszystkie N wpisow dostana TEN SAM termin i wyjda jedna seria".
+  **Swiadomie BEZ rekomendacji:** to bramka bezpieczenstwa, nie preferencja - `decisions.ask`
+  bez rekomendacji nie odpowie sobie sam nawet w trybie semi_autonomous.
+  Test: `cm-agent/tests/test_slot_confirm.py`.
+
 ## Znane pulapki
 
 - decision_type musi byc STALY (nie freetext) - po nim grupuje sie nauka;

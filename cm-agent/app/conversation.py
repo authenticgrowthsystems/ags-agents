@@ -1264,7 +1264,7 @@ def _reschedule_material(inp):
     from . import slots
     from .planner import _DAYS_PL
     now = datetime.datetime.now(WARSAW)
-    note = ""
+    poza_oknem = False  # slot z next_slot jest z definicji w oknie; sprawdzamy tylko podany recznie
     if inp.get("to_next_free") or not inp.get("scheduled_for"):
         is_article = str(row.get("master_theme") or "").startswith("[ARTYKUL]")
         slot = slots.next_slot(row["brand_id"], row.get("target_channels") or ["x"],
@@ -1282,17 +1282,92 @@ def _reschedule_material(inp):
         if slot <= now + datetime.timedelta(minutes=2):
             return f"Termin {_fmt_slot(slot)} jest w przeszlosci - podaj przyszly."
         if not _within_windows(row["brand_id"], row.get("target_channels") or ["x"], slot):
-            note = "\n(uwaga: to poza standardowym oknem publikacji tego kanalu - ustawiam mimo to, bo Ty decydujesz o terminie)"
-    db.execute("UPDATE content_items SET scheduled_for=%s, updated_at=NOW() WHERE id=%s", (slot, row["id"]))
+            poza_oknem = True
+    # BRAMKA POTWIERDZENIA (29/07, decyzja Managera). Dwa warunki NIEZALEZNE: termin poza oknem
+    # ALBO polecenie dotykajace wiecej niz jednego wiersza kolejki.
+    #
+    # Powod nie jest formalny. 28/07 piec czesci jednego materialu wyszlo na X w PIEC MINUT,
+    # o 09:00, poza oknem, na koncie ktore trzy dni wczesniej dostalo 403 za wykryta
+    # automatyzacje. Czlowiek podal JEDEN termin i nie wiedzial, ze dotyczy PIECIU wpisow -
+    # notatka po fakcie nie miala czego zatrzymac. Zasada "Ty decydujesz o terminie" zostaje
+    # bez zmian; zmienia sie tylko to, ze przy takim skutku pyta PRZED, a nie melduje PO.
+    ile = _ile_wierszy_kolejki(row["id"])
+    if poza_oknem or ile > 1:
+        return _spytaj_o_przesuniecie(row, slot, ile, poza_oknem)
+    return _wykonaj_przesuniecie(row["id"], row["master_theme"], slot)
+
+
+def _ile_wierszy_kolejki(item_id):
+    """Ile wierszy kolejki dotknie przesuniecie materialu (ten sam warunek co UPDATE nizej)."""
+    r = db.fetchone(
+        """SELECT COUNT(*) AS n FROM post_queue
+           WHERE content_item_id=%s AND status IN ('review','held','scheduled','queued','dispatching')""",
+        (item_id,))
+    return int((r or {}).get("n") or 0)
+
+
+def _wykonaj_przesuniecie(item_id, temat, slot, dopisek=""):
+    """Wlasciwy zapis terminu. Jedno miejsce, wolane z trasy bezposredniej I z guzika (AP-309)."""
+    from .planner import _DAYS_PL
+    db.execute("UPDATE content_items SET scheduled_for=%s, updated_at=NOW() WHERE id=%s", (slot, item_id))
     # DDL 035: etykieta zrodla slotu. Ta trasa zbila 28/07 piec wpisow na jedna minute o 09:00
     # (jedna wartosc od czlowieka -> WSZYSTKIE wiersze materialu), a ustalenie tego zajelo pol
     # godziny eliminowania pozostalych drog. Odtad widac to jednym odczytem.
     db.execute(
         """UPDATE post_queue SET scheduled_for=%s, slot_source='rozmowa'
            WHERE content_item_id=%s AND status IN ('review','held','scheduled','queued','dispatching')""",
-        (slot, row["id"]))
-    return (f"🗓 Przesuniete: \"{row['master_theme'][:90]}\"\n"
-            f"   nowy slot: {_DAYS_PL[slot.weekday()]} {_fmt_slot(slot)}.{note}")
+        (slot, item_id))
+    return (f"🗓 Przesuniete: \"{(temat or '')[:90]}\"\n"
+            f"   nowy slot: {_DAYS_PL[slot.weekday()]} {_fmt_slot(slot)}.{dopisek}")
+
+
+def _spytaj_o_przesuniecie(row, slot, ile, poza_oknem):
+    """Karta niesie DOWOD, nie samo pytanie: ile wpisow, na kiedy, czy w oknie. Bez tego czlowiek
+    tapie na slepo, a to jest dokladnie stan, ktory doprowadzil do salwy 28/07."""
+    from . import decisions
+    from .planner import _DAYS_PL
+    powody = []
+    if poza_oknem:
+        powody.append("termin jest POZA oknem publikacji tego kanalu")
+    if ile > 1:
+        powody.append(f"polecenie dotyczy {ile} wpisow, nie jednego")
+    skutek = (f"Wszystkie {ile} wpisow dostana TEN SAM termin i wyjda jedna seria."
+              if ile > 1 else "Dotyczy jednego wpisu.")
+    pytanie = (f"Przesuniecie: \"{(row.get('master_theme') or '')[:70]}\"\n"
+               f"Nowy termin: {_DAYS_PL[slot.weekday()]} {_fmt_slot(slot)}\n"
+               f"Powod pytania: {', '.join(powody)}.\n"
+               f"{skutek}\nUstawiam?")
+    decisions.ask(
+        "CM", row.get("brand_id") or "AGS", "slot_confirm", pytanie,
+        [{"key": "tak", "label": f"Ustaw ({ile} wp.)" if ile > 1 else "Ustaw"},
+         {"key": "nie", "label": "Anuluj"}],
+        recommendation=None,  # swiadomie BEZ rekomendacji: to bramka bezpieczenstwa, nie
+                              # preferencja - bez rekomendacji nie odpowie sobie sama w semi-auto
+        context={"content_item_id": str(row["id"]), "slot": slot.isoformat(),
+                 "temat": (row.get("master_theme") or "")[:120], "wierszy": ile,
+                 "poza_oknem": bool(poza_oknem)})
+    return ("⏸ Nie ustawilem jeszcze - wyslalem pytanie z guzikami, bo " + " oraz ".join(powody)
+            + ". Tapnij, zeby potwierdzic albo anulowac.")
+
+
+def apply_slot_confirm(row, key, chat):
+    """Akcja decyzji 'slot_confirm': tak = wykonaj przesuniecie, nie = zostaw jak bylo."""
+    ctx = row.get("context") or {}
+    item_id, iso = ctx.get("content_item_id"), ctx.get("slot")
+    if not item_id or not iso:
+        return
+    if key != "tak":
+        _tg("sendMessage", {"chat_id": chat,
+                            "text": f"⏹ Anulowane - termin \"{(ctx.get('temat') or '')[:60]}\" "
+                                    f"zostaje bez zmian."})
+        return
+    try:
+        slot = datetime.datetime.fromisoformat(str(iso))
+    except (ValueError, TypeError):
+        _tg("sendMessage", {"chat_id": chat, "text": "❌ Nieczytelny termin w decyzji - nie ruszam."})
+        return
+    tekst = _wykonaj_przesuniecie(item_id, ctx.get("temat"), slot)
+    _tg("sendMessage", {"chat_id": chat, "text": tekst})
 
 
 def _replace_material(inp):

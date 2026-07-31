@@ -38,6 +38,7 @@ _TYPE_LABEL = {
     "stale_comment_task": "Komentarz do odhaczenia",
     "stale_outreach": "Outreach czeka na wyslanie",
     "sales_followup": "Termin kontaktu z prospektem",
+    "slot_confirm": "Potwierdz termin publikacji",
     "stale_approval": "Material czeka na Twoja decyzje",
     "crm_tier": "Klasyfikacja osoby",
     "intent_menu": "Co robimy z wrzutka",
@@ -249,6 +250,10 @@ def _apply_action(row, key, chat):
     if dt == "sales_followup":
         from . import sales
         sales.apply_followup(row, key, chat)
+        return
+    if dt == "slot_confirm":
+        from . import conversation
+        conversation.apply_slot_confirm(row, key, chat)
         return
     if dt == "photo_group":
         from . import conversation

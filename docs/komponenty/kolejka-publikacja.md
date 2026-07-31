@@ -76,6 +76,13 @@ Przypomnij jutro), nigdy auto-decyzja.
   `cm-agent/tests/test_slot_source.py` (liczy wszystkie zapisy i sprawdza, czy zaden nie zostal
   bez etykiety). `dispatch` etykietuje TYLKO gdy sam nadaje slot - inaczej nadpisalby etykiete
   prawdziwego autora.
+- **BRAMKA POTWIERDZENIA TERMINU (29/07, typ decyzji `slot_confirm`).** Przesuniecie materialu
+  przez rozmowe NIE zapisuje sie od razu, gdy zachodzi chocby jeden z dwoch NIEZALEZNYCH
+  warunkow: termin poza oknem kanalu **albo** polecenie dotyczace wiecej niz jednego wiersza.
+  Wtedy leci pytanie z guzikami, a zapis czeka na tapniecie. Zasada "Ty decydujesz o terminie"
+  bez zmian - system pyta PRZED skutkiem, zamiast meldowac PO nim.
+  Zapis wykonuje `_wykonaj_przesuniecie`, wolane z OBU drog (bezposredniej i z guzika) - jedno
+  miejsce, zeby sie nie rozjechaly (AP-309).
 - **DWIE TRASY DOTYKAJA WSZYSTKICH WIERSZY MATERIALU NARAZ** (`conversation` przy przesunieciu
   terminu, `slots.assign_if_needed`). Przy materiale wieloczesciowym daja im ten sam czas,
   czyli SALWE. `assign_if_needed` rozrzuca przez `humanize_slot` (+/-15 min), `conversation`
