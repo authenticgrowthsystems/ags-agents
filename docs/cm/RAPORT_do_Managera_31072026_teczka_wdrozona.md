@@ -86,12 +86,26 @@ sprawdza go wobec danych.
 
 1. **StandART (etap `qualified`) ma następny krok z terminem 29/07 08:00** - dwa dni po terminie
    i **bez opisu**, sama data. To jeden z trzech najdalej posuniętych prospektów w lejku.
-2. **Drugi gotowiec StandART ma w treści ROZUMOWANIE agenta, nie sam mail:** „Zanim napiszę
-   tekst, jedna uwaga: ... Hak, który wybrałem: ...", razem z analizą odległości od Royal Dance
-   Center. Gdyby ktoś skopiował ten gotowiec bez czytania, poszłoby to do klienta.
-   **Nie naprawiałem** - zgłaszam, bo to Twoja decyzja, czy to wada promptu Sprzedawcy.
+2. **DWA z SIEDMIU gotowców StandART mają w treści ROZUMOWANIE agenta zamiast samego maila.**
+   Po pełnym odczycie teczki policzyłem to dokładnie - **29 procent, czyli wzorzec, nie incydent**
+   (AP-309: sprawdź, ile miejsc dzieli tę wadę):
+   - wpis 2: „Zanim napiszę tekst, jedna uwaga: ... Hak, który wybrałem: ..."
+   - wpis 4: „Ornontowice to nie Opole, więc konflikt interesów RDC tu nie zachodzi, mogę pisać
+     normalnie. Hak sezonowy jest solidny: ..."
+
+   Oba niosą wewnętrzną analizę odległości od Royal Dance Center i wybraną strategię zaczepienia.
+   Gdyby ktoś skopiował taki gotowiec bez czytania, poszłoby to do klienta razem z uzasadnieniem,
+   dlaczego wolno go zaczepiać.
+
+   **Nie naprawiałem** - to zachowanie agenta, nie kod, więc decyzja jest Twoja. Zwracam uwagę,
+   że pole `response` było dotąd praktycznie nieoglądane: teczka jest pierwszym narzędziem, które
+   te treści w ogóle pokazuje. Wada mogła siedzieć tam od początku i nikt nie miał jak jej zobaczyć.
 3. **Skrypt tworzący workflow Łącznika losował nowy sekret przy każdym uruchomieniu**, a sekret
    siedzi w ścieżce triggera - dołożenie jednego narzędzia zerwałoby adres konektora. Naprawione.
+   **Sekret Łącznika został tego dnia wymieniony** (trafił na zrzut ekranu). Rotacja domknięta
+   w trzech miejscach: definicja n8n, `app_secrets`, konektor claude.ai. Stary adres zwraca 404 -
+   sprawdzone. Narzędzia zweryfikowane wywołaniem przez konektor, czyli tą samą drogą, którą
+   pójdziesz Ty.
 4. **Dług D-009:** gotowiec mailowy Sprzedawcy ląduje w kanale `Other`, tekst z teczki w `Email`.
    Nie poprawiłem od ręki, bo ta wartość jest kluczem dopasowania przy unieważnianiu gotowców -
    podmiana bez migracji odtworzyłaby wadę StandART z 24/07. Liczenie wysyłki per kanał kłamie.
