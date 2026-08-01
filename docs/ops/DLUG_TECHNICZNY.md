@@ -233,3 +233,71 @@ wierszy razem ze zmiana slownika, w jednym kroku.
 
 **Czym grozi:** nie rozbija niczego dzisiaj (teczka laczy wpisy po `pipeline_id`, nie po kanale),
 ale **kazde liczenie wysylki per kanal bedzie klamac** - maile rozpadna sie na dwie kupki.
+
+---
+
+## D-010: `contacts` ma TRZY kolumny na stan tej samej osoby
+
+**Zapisany 01/08/2026** (polecenie Tomasza: nie ruszac, zgłosic po moscie).
+
+- `relationship_stage` varchar(20) NOT NULL, CHECK na 7 wartosci - zywa, wypelniona zawsze
+  (cold 121, commented 69, dm 4).
+- `status` varchar(50) NOT NULL, CHECK na 7 INNYCH wartosci (Cold/Warm/Hot/Customer/...).
+- `pipeline_stage` **text, BEZ ograniczenia, wypelniony w 45 wierszach** - pozostalosc,
+  ktorej nikt nie pilnuje i nic nie waliduje.
+
+**Czym grozi:** dwa pierwsze da sie obronic (relacja kontra temperatura), trzeci jest czystym
+dlugiem - tekst bez slownika, ktory przy pierwszym odczycie przez agenta zostanie wzięty za
+zrodlo prawdy o etapie. To AP-312 czekajace na wywolanie.
+
+---
+
+## D-011: 61 sierot w `engagement_log`
+
+**Zapisany 01/08/2026** (polecenie Tomasza: nie ruszac, zgłosic po moscie).
+
+Na 348 wierszy `engagement_log`: 278 wisi na `contact_id`, 9 na `pipeline_id`, a **61 nie wisi
+na niczym** - ani kontakt, ani prospekt. To wpisy sprzed DDL 026 i DDL 036, gdy klucze jeszcze
+nie istnialy, a wiazanie szlo po napisie w `author_display`.
+
+**Czym grozi:** teczka ich nie pokaze przy nikim, bo laczy po kluczu. Sa w bazie, zajmuja
+miejsce w licznikach ("348 wpisow"), a nie da sie ich przypisac do zadnej sprawy.
+**Docelowo:** proba dopiecia po `author_display` z normalizacja ogonkow (AP-313), reszta
+oznaczona jawnie jako historyczna - nie kasowana.
+
+---
+
+## D-012: Nic nie mapuje marki na korzen katalogu
+
+**Zapisany 01/08/2026** (wyszlo przy budowie mostu katalogi-baza).
+
+`sales_pipeline.katalog` trzyma sciezke WZGLEDNA (`Klienci\Chwalinski`) i to jest poprawne -
+korzen jest cecha maszyny, nie prospekta. Ale **korzen nie jest nigdzie zapisany**. Ustalenie
+Tomasza brzmi "korzen wynika z brand_id", tyle ze:
+
+- wszystkie 134 wiersze maja dzis `brand_id='AGS'`,
+- katalogi tych czterech leza pod `C:\Claude-CoWork\TyNieMusisz`,
+- czyli mapowanie marka -> korzen dalo by dzis ZLY wynik, gdyby ktos je napisal doslownie.
+
+**Czym grozi:** dopoki sciezke sklada czlowiek, nic sie nie dzieje. Pierwsze narzedzie, ktore
+zechce OTWORZYC plik z teczki, bedzie musialo ten korzen skads wziac - i zgadnie.
+**Docelowo:** `brands.katalog_korzen` albo wpis w `brand_config`, wypelniony razem
+z przejsciem kodu na wielomarkowosc (patrz D-013).
+
+---
+
+## D-013: Kod jest jednomarkowy - wielomarkowosc czeka na pierwsza sprzedaz
+
+**Zapisany 01/08/2026 (decyzja Tomasza, wariant drugi).**
+
+**107 miejsc w `cm-agent/app/` filtruje `brand_id='AGS'`, w tym 13 w samym `sales.py`.**
+Przepiecie 24 polskich wierszy na marke TNM wypchneloby je z widoku lejka, ze straznika
+terminow i z generowania gotowcow - po cichu, bo zapytanie bez wynikow nie jest bledem.
+
+**Decyzja:** dane NIE sa przepinane. Powstaje ETYKIETA `sales_pipeline.marka_docelowa`
+(DDL 038), ktorej **zaden kod nie czyta**, zeby przyszle przepiecie bylo jednym UPDATE-em,
+a nie ponownym rozstrzyganiem 24 przypadkow z pamieci.
+
+**Warunek wejscia buildu wielomarkowego:** PO pierwszej zamknietej sprzedazy, nie wczesniej.
+Uzasadnienie Tomasza: *"Wielomarkowosc nie przybliza do pierwszej faktury, a przepiecie danych
+bez gotowego kodu ja oddala"*.

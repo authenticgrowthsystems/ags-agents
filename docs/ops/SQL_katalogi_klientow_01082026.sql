@@ -52,7 +52,7 @@ SELECT 'AGS', 'Grupa Chwaliński', 'https://grupachwalinski.pl', 'proposal', 'mo
        'Zalozony 01/08/2026 przy budowie mostu katalogi-baza. Katalog i materialy powstaly '
        'wczesniej niz wiersz w lejku: badanie 31/07 (Manus), dokument wyslany (02_wyslane), '
        'ankieta spotkania przygotowana. KRS 0000033676.'
- WHERE NOT EXISTS (SELECT 1 FROM sales_pipeline WHERE prospect_name ILIKE '%Chwalin%')
+ WHERE NOT EXISTS (SELECT 1 FROM sales_pipeline WHERE prospect_name ILIKE '%Chwali%')
 RETURNING prospect_name, stage, katalog;
 
 \echo '--- WERYFIKACJA: wszystkie katalogi w lejku ---'
@@ -64,10 +64,10 @@ SELECT prospect_name, stage, 'BRAK KATALOGU' AS uwaga
   FROM sales_pipeline
  WHERE katalog IS NULL
    AND (prospect_name ILIKE '%StandART%' OR prospect_name ILIKE '%Stepownia%'
-        OR prospect_name ILIKE '%La Cultura%' OR prospect_name ILIKE '%Chwalin%');
+        OR prospect_name ILIKE '%La Cultura%' OR prospect_name ILIKE '%Chwali%');
 
 \echo '--- KONTROLA KODOWANIA: nazwa Chwalinskiego ma miec ogonek w "nski" ---'
 -- Jesli zamiast "Chwaliński" zobaczysz krzaki, kodowanie sie przekrecilo przy INSERT.
 -- Wtedy: NIE uruchamiaj ponownie (wiersz juz jest), tylko zglos mi to - poprawimy nazwe UPDATE-em.
 SELECT prospect_name, length(prospect_name) AS znakow, katalog
-  FROM sales_pipeline WHERE prospect_name ILIKE '%Chwalin%';
+  FROM sales_pipeline WHERE prospect_name ILIKE '%Chwali%';

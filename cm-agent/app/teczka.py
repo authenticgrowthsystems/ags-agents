@@ -51,6 +51,25 @@ def _norm(s):
     return re.sub(r"\s+", " ", str(s or "").strip())
 
 
+# AP-313 (01/08/2026): dopasowanie nazwy wlasnej MUSI byc odporne na ogonki po OBU stronach.
+# Czlowiek pisze "Chwalinski", bo tak nazywa sie katalog na dysku i tak jest szybciej;
+# w bazie stoi "Chwaliński". Bez normalizacji obu stron wyglada to jak "nie ma takiego klienta".
+_OGONKI = "ąćęłńóśźżĄĆĘŁŃÓŚŹŻ"
+_BEZ_OGONKOW = "acelnoszzACELNOSZZ"
+# Ta sama para po stronie SQL - translate() nie wymaga zadnego rozszerzenia bazy, w odroznieniu
+# od unaccent, ktorego nie ma pewnosci na kazdym wdrozeniu.
+_SQL_BEZ_OGONKOW = f"translate(%s, '{_OGONKI}', '{_BEZ_OGONKOW}')"
+
+
+def _bez_ogonkow(s):
+    return str(s or "").translate(str.maketrans(_OGONKI, _BEZ_OGONKOW))
+
+
+def _jak_nazwa(kolumna):
+    """Wyrazenie SQL porownujace kolumne z nazwa BEZ wzgledu na ogonki (AP-313)."""
+    return _SQL_BEZ_OGONKOW % kolumna
+
+
 # ---------------------------------------------------------------- rozstrzyganie identyfikatora
 def _z_lejka(row):
     return {"rodzaj": "lejek", "id": str(row["id"]), "nazwa": row["prospect_name"], "wiersz": row}
@@ -66,17 +85,19 @@ def _podobne(fragment, limit=8):
     slowa = [w for w in re.split(r"[\s,;/]+", _norm(fragment)) if len(w) >= 3][:4]
     if not slowa:
         return []
-    warunki = " OR ".join(["prospect_name ILIKE %s"] * len(slowa))
+    warunki = " OR ".join([f"{_jak_nazwa('prospect_name')} ILIKE %s"] * len(slowa))
     out = []
     try:
         for r in db.fetchall(
                 f"SELECT prospect_name AS n, stage AS s FROM sales_pipeline WHERE {warunki} "
-                f"ORDER BY updated_at DESC LIMIT {limit}", tuple(f"%{w}%" for w in slowa)) or []:
+                f"ORDER BY updated_at DESC LIMIT {limit}",
+                tuple(f"%{_bez_ogonkow(w)}%" for w in slowa)) or []:
             out.append(f"{r['n']} (lejek, {r['s']})")
-        warunki_k = " OR ".join(["name ILIKE %s"] * len(slowa))
+        warunki_k = " OR ".join([f"{_jak_nazwa('name')} ILIKE %s"] * len(slowa))
         for r in db.fetchall(
                 f"SELECT name AS n FROM contacts WHERE {warunki_k} "
-                f"ORDER BY updated_at DESC LIMIT {limit}", tuple(f"%{w}%" for w in slowa)) or []:
+                f"ORDER BY updated_at DESC LIMIT {limit}",
+                tuple(f"%{_bez_ogonkow(w)}%" for w in slowa)) or []:
             out.append(f"{r['n']} (kontakt)")
     except Exception:
         traceback.print_exc()
@@ -102,12 +123,15 @@ def znajdz(ident):
         raise Blad(f"Nie ma takiego identyfikatora ani w lejku, ani wsrod kontaktow: {frag}. "
                    f"Podaj fragment nazwy zamiast UUID, to pokaze podobne.")
 
+    # AP-313: obie strony bez ogonkow. Katalog na dysku nazywa sie "Chwalinski", wiersz w lejku
+    # "Chwaliński" - bez tego wpisanie nazwy katalogu zwracaloby "nie znajduje".
+    wzor = f"%{_bez_ogonkow(frag)}%"
     lejek = db.fetchall(
-        """SELECT * FROM sales_pipeline WHERE prospect_name ILIKE %s
-           ORDER BY updated_at DESC LIMIT 12""", (f"%{frag}%",)) or []
+        f"""SELECT * FROM sales_pipeline WHERE {_jak_nazwa('prospect_name')} ILIKE %s
+            ORDER BY updated_at DESC LIMIT 12""", (wzor,)) or []
     kontakty = db.fetchall(
-        """SELECT * FROM contacts WHERE name ILIKE %s
-           ORDER BY updated_at DESC LIMIT 12""", (f"%{frag}%",)) or []
+        f"""SELECT * FROM contacts WHERE {_jak_nazwa('name')} ILIKE %s
+            ORDER BY updated_at DESC LIMIT 12""", (wzor,)) or []
 
     trafienia = [_z_lejka(r) for r in lejek] + [_z_kontaktow(r) for r in kontakty]
     if len(trafienia) == 1:
@@ -121,7 +145,8 @@ def znajdz(ident):
 
     # Dokladne dopasowanie nazwy rozstrzyga wieloznacznosc (franczyzy: "Egurrola Warszawa"
     # kontra "Egurrola Krakow" - fragment "Egurrola" trafia w oba, pelna nazwa w jeden).
-    dokladne = [t for t in trafienia if _norm(t["nazwa"]).lower() == frag.lower()]
+    dokladne = [t for t in trafienia
+                if _bez_ogonkow(_norm(t["nazwa"])).lower() == _bez_ogonkow(frag).lower()]
     if len(dokladne) == 1:
         return dokladne[0]
     lista = "\n".join(f"  - {t['nazwa']} ({t['rodzaj']}, id {t['id']})" for t in trafienia[:12])
@@ -267,12 +292,17 @@ def _wpisy(cel):
     Sprzedawcy sprzed DDL 036 maja tylko nazwe, a teczka ma pokazac PELNA historie, nie te
     jej czesc, ktora akurat powstala po migracji."""
     if cel["rodzaj"] == "lejek":
+        # AP-313 takze tutaj: historia sprzed DDL 036 wisi na NAPISIE z nazwa, wiec porownanie
+        # musi ignorowac ogonki po obu stronach - inaczej gotowce prospekta z polskim nazwiskiem
+        # wypadlyby z teczki po cichu.
         return db.fetchall(
-            """SELECT created_at, channel, action_type, status, agent, content, response, notes
-                 FROM engagement_log
-                WHERE pipeline_id=%s::uuid
-                   OR (pipeline_id IS NULL AND lower(btrim(COALESCE(author_display,''))) = lower(%s))
-                ORDER BY created_at""", (cel["id"], _norm(cel["nazwa"]))) or []
+            f"""SELECT created_at, channel, action_type, status, agent, content, response, notes
+                  FROM engagement_log
+                 WHERE pipeline_id=%s::uuid
+                    OR (pipeline_id IS NULL
+                        AND lower({_jak_nazwa("btrim(COALESCE(author_display,''))")}) = lower(%s))
+                 ORDER BY created_at""",
+            (cel["id"], _bez_ogonkow(_norm(cel["nazwa"])))) or []
     return db.fetchall(
         """SELECT created_at, channel, action_type, status, agent, content, response, notes
              FROM engagement_log WHERE contact_id=%s::uuid ORDER BY created_at""",

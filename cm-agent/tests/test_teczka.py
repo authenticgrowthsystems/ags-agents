@@ -71,6 +71,7 @@ def check(name, cond, detail=""):
 # ------------------------------------------------------------------ atrapa bazy
 P1 = "11111111-1111-1111-1111-111111111111"
 P2 = "33333333-3333-3333-3333-333333333333"
+P3 = "44444444-4444-4444-4444-444444444444"
 K1 = "22222222-2222-2222-2222-222222222222"
 
 LEJEK = [
@@ -80,6 +81,12 @@ LEJEK = [
     {"id": P2, "prospect_name": "Egurrola Dance Studio Krakow", "stage": "parked",
      "prospect_url": None, "next_step": None, "next_followup_at": None,
      "offer_tier": None, "value": None, "currency": "PLN", "source": "import", "katalog": None},
+    # AP-313: nazwa z ogonkiem W SRODKU. Katalog na dysku nazywa sie "Chwalinski" (bez ogonka,
+    # taka jest regula), wiec czlowiek wpisze wlasnie tak - i musi trafic.
+    {"id": P3, "prospect_name": "Grupa Chwaliński", "stage": "qualified",
+     "prospect_url": "https://grupachwalinski.pl", "next_step": None, "next_followup_at": None,
+     "offer_tier": None, "value": None, "currency": "PLN", "source": "manual",
+     "katalog": "Klienci\\Chwalinski"},
 ]
 KONTAKTY = [
     {"id": K1, "name": "jasonfeifer", "status": "Cold", "email": None, "phone": None,
@@ -105,8 +112,14 @@ def _norm(s):
     return " ".join(str(s or "").split()).strip().lower()
 
 
+def _bez(s):
+    """Atrapa SQL-owego translate() z AP-313 - kolumna traci ogonki przed porownaniem."""
+    return str(s or "").translate(str.maketrans("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ", "acelnoszzACELNOSZZ"))
+
+
 def _like(hay, pat):
-    return _norm(pat).replace("%", "") in _norm(hay)
+    # Wzorzec przychodzi juz bez ogonkow (robi to kod), kolumne rozogonkowuje SQL.
+    return _norm(pat).replace("%", "") in _bez(_norm(hay))
 
 
 def fetchone(sql, params=None):
@@ -125,9 +138,9 @@ def fetchall(sql, params=None):
                 if any(_like(r["prospect_name"], x) for x in p)]
     if "SELECT name AS n FROM contacts" in sql:
         return [{"n": r["name"]} for r in KONTAKTY if any(_like(r["name"], x) for x in p)]
-    if "FROM sales_pipeline WHERE prospect_name ILIKE" in sql:
+    if "FROM sales_pipeline WHERE" in sql and "ILIKE" in sql:
         return [dict(r) for r in LEJEK if _like(r["prospect_name"], p[0])]
-    if "FROM contacts WHERE name ILIKE" in sql:
+    if "FROM contacts WHERE" in sql and "ILIKE" in sql:
         return [dict(r) for r in KONTAKTY if _like(r["name"], p[0])]
     if "FROM engagement_log" in sql and "pipeline_id=" in sql:
         out = [r for r in LOG if r["pipeline_id"] == p[0]
@@ -315,6 +328,37 @@ check("blad mowi, ze katalog nalezy do LEJKA", e and "LEJKA" in e, str(e))
 zapisow = len([r for r in LOG if r.get("content") == "PROBA_KATALOGU"])
 check("szesc odrzuconych prob nie zapisalo NIC, zapisala sie tylko jedna udana",
       zapisow == 1, f"wierszy: {zapisow}, oczekiwano 1")
+
+# ------------------------------------------------------------ AP-313: ogonki w nazwach wlasnych
+print("\n[AP-313] nazwa z ogonkiem W SRODKU - most dysk-baza pekal wlasnie tu:")
+
+# Katalog na dysku: "Chwalinski". Wiersz w bazie: "Grupa Chwaliński". Czlowiek wpisuje to,
+# co widzi w katalogu. Przed poprawka dostawal "nie znajduje" - czyli komunikat brzmiacy jak
+# BRAK KLIENTA, a nie jak usterka wyszukiwania.
+t = teczka.teczka_text("Chwalinski")
+check("nazwa katalogu (bez ogonka) ZNAJDUJE prospekta z ogonkiem",
+      "Grupa Chwaliński" in t, t[:200])
+check("teczka pokazuje jego katalog", "Klienci\\Chwalinski" in t, t[:400])
+
+check("pelna nazwa Z ogonkiem tez dziala",
+      "Grupa Chwaliński" in teczka.teczka_text("Grupa Chwaliński"))
+check("pisownia mieszana tez dziala", "Grupa Chwaliński" in teczka.teczka_text("grupa chwalinski"))
+
+# Sedno anty-wzorca: fragment "Chwalin" NIE ISTNIEJE w slowie "Chwaliński"
+# (C-h-w-a-l-i-ń-s-k-i - nie ma tam zwyklego "n"). Po normalizacji obu stron - istnieje.
+check("wlasnie ten fragment, ktory zawiodl w SQL, teraz trafia",
+      "Grupa Chwaliński" in teczka.teczka_text("Chwalin"))
+
+# Lista podobnych tez musi byc odporna, inaczej podpowiedz przy literowce milczy.
+try:
+    # Calosc nie pasuje do niczego, ale slowo "Chwalinski" (bez ogonka) musi wskazac
+    # "Grupa Chwaliński" (z ogonkiem) - inaczej podpowiedz milczy akurat przy literowce.
+    teczka.zapisz("Serwis Chwalinski Katowice", "email", "x", "draft")
+    e313 = None
+except teczka.Blad as ex:
+    e313 = str(ex)
+check("lista podobnych znajduje nazwe z ogonkiem po slowie bez ogonka",
+      e313 is not None and "Chwaliński" in e313, str(e313))
 
 print("\n" + ("WSZYSTKO PRZESZLO" if not FAILS else f"BLEDY: {FAILS}"))
 sys.exit(1 if FAILS else 0)
