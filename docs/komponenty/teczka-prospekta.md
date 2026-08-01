@@ -39,6 +39,30 @@ dla tego, po co narzedzie powstalo**. Dlatego identyfikator rozstrzygamy wobec O
 i zawsze mowimy, w ktorym trafil. Nie dosypujemy contacts pod prospekty - to zrobiloby drugie
 zrodlo prawdy o tym samym podmiocie.
 
+## Most do katalogow na dysku (DDL 037, 01/08/2026)
+
+`sales_pipeline.katalog` trzyma sciezke **wzgledna** do folderu klienta, np. `Klienci\Chwalinski`.
+Korzen (`C:\Claude-CoWork\TyNieMusisz`) jest cecha maszyny i w wierszu go NIE MA.
+
+**System NIGDY nie tworzy, nie przenosi i nie kasuje katalogow.** Folder powstaje wtedy, kiedy
+powstaje pierwszy plik, i robi to czlowiek albo Manager. Baza przechowuje wylacznie NAPIS.
+
+**Nazwa ustalana RAZ przy pierwszym kontakcie i nigdy niezmieniana** (polecenie Tomasza 01/08).
+Nie jest to kosmetyka: skoro nic nie przenosi folderow, podmiana napisu zostawilaby wiersz
+wskazujacy na nieistniejaca lokalizacje - dokladnie ten rozjazd, ktoremu most zapobiega.
+Proba zmiany wraca bledem, ktory tlumaczy kolejnosc: najpierw przenies folder, potem recznym SQL
+popraw wiersz. Ta sama regula stoi w SQL (`AND katalog IS NULL`), nie tylko w kodzie.
+
+**DLACZEGO sciezki nie da sie wyliczyc** (odczyt 01/08): `Stepownia_Dudzik` to w bazie
+"Wrocławska Stepownia", `La_Cultura_Wrobel` to "Dance Company La Cultura". Katalogi niosa
+NAZWISKO WLASCICIELA, ktorego w bazie nie ma w ogole. Zadna transliteracja tego nie odtworzy.
+
+Walidacja przy zapisie: bez polskich znakow (napis ma byc identyczny z dyskiem), bez litery
+dysku, bez `..`, tylko litery bez ogonkow, cyfry, `_`, `-`, `.`, spacja i ukosnik. Ukosniki
+zwykle sa zamieniane na windowsowe.
+
+Powiazanie czterech istniejacych katalogow: `docs/ops/SQL_katalogi_klientow_01082026.sql`.
+
 ## Wejscia-wyjscia i tabele
 
 - `engagement_log` - ksiega wpisow. DDL 036 dodaje:
@@ -115,6 +139,12 @@ czat (MCP) -> teczka -> GET /lacznik/teczka?kontakt=... -> teczka.teczka_text:
   siedzi w `response`. Pierwsza wersja `_wpisy` czytala wylacznie `content` - **tap-test na zywych
   danych StandART 31/07 pokazal siedem wpisow, w kazdym sama etykieta i ani slowa z tresci maili.**
   Odtad `_tresc_wpisu` pokazuje oba: wejscie cytatem, nasz tekst normalnie. Test tego pilnuje.
+- **Walidacja katalogu stoi PRZED zapisem tekstu, nie po.** Pierwsza wersja sprawdzala sciezke
+  dopiero po wstawieniu wiersza do `engagement_log`, wiec bledna sciezka zostawiala zapisany
+  tekst I blad naraz - czlowiek widzial blad, ponawial i robil duplikat. Zlapane wlasnym testem
+  01/08. Kolejnosc sprawdzen w `_sprawdz_katalog` tez ma znaczenie: litera dysku sprawdzana
+  jest PRZED filtrem znakow, inaczej `C:\...` odbijalo sie komunikatem o "niedozwolonych
+  znakach" zamiast o sciezce bezwzglednej (AP-312 w komunikacie bledu).
 - **Brak nastepnego kroku jest WYPISANY** ("BRAK ustalonego nastepnego kroku"), nie zostawiony
   jako pusta linia. Pusty wiersz w raporcie lejka byl jedna z przyczyn tego, ze przez tygodnie
   nikt nie zauwazyl prospektow bez terminu (diagnoza 26/07).

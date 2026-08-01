@@ -36,6 +36,12 @@ _STATUSY = ("draft", "sent")
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 _AGENT = "AGS:manager"
 
+# Katalog klienta: sciezka WZGLEDNA, np. 'Klienci\\Chwalinski'. Bez polskich znakow, bo nazwa
+# ma byc identyczna z ta na dysku, a system NIGDY katalogow nie tworzy ani nie przenosi -
+# rozjazd o jeden ogonek zostawilby wiersz wskazujacy na nieistniejacy folder.
+_POLSKIE = "ąćęłńóśźżĄĆĘŁŃÓŚŹŻ"
+_KATALOG_OK = re.compile(r"^[A-Za-z0-9_\-. \\/]+$")
+
 
 class Blad(Exception):
     """Blad kontraktu - tresc jest przeznaczona dla czlowieka i wraca do czatu."""
@@ -124,7 +130,8 @@ def znajdz(ident):
 
 
 # ---------------------------------------------------------------------------------- zapis
-def zapisz(ident, kanal, tresc, status="draft", next_step=None, next_step_date=None, temat=None):
+def zapisz(ident, kanal, tresc, status="draft", next_step=None, next_step_date=None, temat=None,
+           katalog=None):
     """Zapisuje tekst przy kontakcie, z data. Zwraca potwierdzenie dla czlowieka.
 
     next_step jest opcjonalny, ale to JEDYNA droga, ktora ustala nastepny krok z trescia -
@@ -141,6 +148,9 @@ def zapisz(ident, kanal, tresc, status="draft", next_step=None, next_step_date=N
     body = str(tresc or "").strip()
     if not body:
         raise Blad("Pusta tresc - nie ma czego zapisac.")
+    # Katalog walidowany PRZED zapisem: inaczej bledna sciezka zostawia zapisany tekst
+    # I blad naraz, a czlowiek ponawia probe i robi duplikat.
+    plan_katalogu = _waliduj_katalog(cel, katalog) if _norm(katalog) else None
 
     action_type, channel = _KANALY[k]
     nota = f"teczka: {k} ({st})" + (f" | temat: {_norm(temat)[:120]}" if temat else "")
@@ -156,8 +166,70 @@ def zapisz(ident, kanal, tresc, status="draft", next_step=None, next_step_date=N
     krok = ""
     if next_step or next_step_date:
         krok = _ustaw_krok(cel, next_step, next_step_date)
+    kat = _zapisz_katalog(cel, plan_katalogu) if plan_katalogu else ""
     return (f"Zapisane w teczce: {cel['nazwa']} ({cel['rodzaj']}) | {k} | {st} | "
-            f"{len(body)} znakow.{krok}")
+            f"{len(body)} znakow.{krok}{kat}")
+
+
+def _sprawdz_katalog(sciezka):
+    """Waliduje sciezke katalogu. Zwraca znormalizowana albo rzuca Blad.
+
+    System NIGDY nie tworzy, nie przenosi i nie kasuje katalogow - zapisuje wylacznie NAPIS.
+    Dlatego walidacja jest jedyna obrona przed wierszem, ktory wskazuje w prozne miejsce."""
+    s = _norm(sciezka).replace("/", "\\").strip("\\")
+    if not s:
+        raise Blad("Pusta sciezka katalogu.")
+    zle = [z for z in s if z in _POLSKIE]
+    if zle:
+        raise Blad(f"Nazwa katalogu ma polskie znaki ({''.join(sorted(set(zle)))}). "
+                   f"Katalogi nazywamy bez ogonkow, zeby napis w bazie byl identyczny "
+                   f"z nazwa na dysku - system katalogow NIE TWORZY, wiec sam ich nie poprawi.")
+    # Litera dysku PRZED filtrem znakow: dwukropek i tak nie przechodzi przez filtr, ale
+    # komunikat "niedozwolone znaki" nie powiedzialby czlowiekowi, o co naprawde chodzi.
+    # Kolejnosc sprawdzen decyduje o tym, ktore zdanie zobaczy - to ta sama rodzina wad,
+    # co AP-312: etykieta ma znaczyc to, co obiecuje.
+    if re.match(r"^[A-Za-z]:", s):
+        raise Blad(f"Podaj sciezke WZGLEDNA (np. Klienci\\Chwalinski), nie z litera dysku. "
+                   f"Korzen jest cecha maszyny, nie prospekta.")
+    if ".." in s:
+        raise Blad("Sciezka nie moze zawierac \"..\".")
+    if not _KATALOG_OK.match(s):
+        raise Blad(f"Niedozwolone znaki w sciezce \"{s}\". Dozwolone: litery bez ogonkow, "
+                   f"cyfry, podkreslenie, myslnik, kropka, spacja i ukosnik.")
+    return s
+
+
+def _waliduj_katalog(cel, sciezka):
+    """Sprawdza WSZYSTKO, zanim cokolwiek trafi do bazy. Zwraca (nowa, obecna).
+
+    Rozdzielone od zapisu SWIADOMIE: pierwsza wersja walidowala PO wstawieniu wiersza do
+    engagement_log, wiec bledna sciezka zostawiala zapisany tekst i blad na wyjsciu naraz.
+    Czlowiek widzial blad, ponawial - i robil duplikat wpisu. Zlapane wlasnym testem 01/08.
+
+    Katalog ustala sie RAZ i nigdy nie zmienia (polecenie Tomasza 01/08). Powod nie jest
+    kosmetyczny: skoro system katalogow nie przenosi, to podmiana napisu zostawilaby wiersz
+    wskazujacy na nieistniejaca lokalizacje - czyli dokladnie ten rozjazd dysku z baza,
+    ktoremu ten most ma zapobiec."""
+    if cel["rodzaj"] != "lejek":
+        raise Blad("Katalog trzymamy przy prospekcie z LEJKA. Ten identyfikator wskazuje "
+                   "na kontakt spolecznosciowy, ktory katalogu nie ma.")
+    nowa = _sprawdz_katalog(sciezka)
+    obecna = _norm((cel.get("wiersz") or {}).get("katalog"))
+    if obecna and obecna.lower() != nowa.lower():
+        raise Blad(f"{cel['nazwa']} ma juz katalog \"{obecna}\" i NIE zmieniam go na \"{nowa}\". "
+                   f"Nazwa katalogu jest ustalana raz przy pierwszym kontakcie. Jesli naprawde "
+                   f"trzeba ja zmienic, najpierw przenies folder na dysku, potem popraw wiersz "
+                   f"recznym SQL - swiadomie, a nie mimochodem przy zapisie maila.")
+    return nowa, obecna
+
+
+def _zapisz_katalog(cel, plan):
+    nowa, obecna = plan
+    if obecna:
+        return f"\nKatalog: {obecna} (bez zmian)"
+    db.execute("UPDATE sales_pipeline SET katalog=%s, updated_at=NOW() WHERE id=%s::uuid",
+               (nowa, cel["id"]))
+    return f"\nKatalog ustalony: {nowa} (raz na zawsze - system go nie zmieni)"
 
 
 def _ustaw_krok(cel, next_step, next_step_date):
@@ -226,7 +298,10 @@ def _tresc_wpisu(w):
 def _naglowek(cel):
     w = cel["wiersz"]
     if cel["rodzaj"] == "lejek":
-        pola = [("Etap", w.get("stage")), ("Oferta", w.get("offer_tier")),
+        # Katalog PIERWSZY: to jedyna rzecz w teczce, ktora prowadzi poza baze - do plikow.
+        # Brak jest wypisany slowami, bo pusta linia nie odroznia "nie ma" od "nie sprawdzilem".
+        pola = [("Katalog", w.get("katalog") or "BRAK - nie ustalony"),
+                ("Etap", w.get("stage")), ("Oferta", w.get("offer_tier")),
                 ("Wartosc", f"{w['value']} {w.get('currency') or ''}".strip() if w.get("value") else None),
                 ("Strona", w.get("prospect_url")), ("Zrodlo", w.get("source"))]
     else:

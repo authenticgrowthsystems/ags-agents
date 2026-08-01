@@ -76,10 +76,10 @@ K1 = "22222222-2222-2222-2222-222222222222"
 LEJEK = [
     {"id": P1, "prospect_name": "Studio Tanca StandART", "stage": "prospect",
      "prospect_url": "https://standart.pl", "next_step": None, "next_followup_at": None,
-     "offer_tier": None, "value": None, "currency": "PLN", "source": "import"},
+     "offer_tier": None, "value": None, "currency": "PLN", "source": "import", "katalog": None},
     {"id": P2, "prospect_name": "Egurrola Dance Studio Krakow", "stage": "parked",
      "prospect_url": None, "next_step": None, "next_followup_at": None,
-     "offer_tier": None, "value": None, "currency": "PLN", "source": "import"},
+     "offer_tier": None, "value": None, "currency": "PLN", "source": "import", "katalog": None},
 ]
 KONTAKTY = [
     {"id": K1, "name": "jasonfeifer", "status": "Cold", "email": None, "phone": None,
@@ -146,6 +146,11 @@ def execute(sql, params=None):
                     "channel": p[1], "agent": p[2], "content": p[3], "response": None,
                     "notes": p[4], "contact_id": p[5], "pipeline_id": p[6], "status": p[7],
                     "author_display": p[8]})
+        return
+    if "UPDATE sales_pipeline SET katalog" in sql:
+        for r in LEJEK:
+            if r["id"] == p[1]:
+                r["katalog"] = p[0]
         return
     if "UPDATE sales_pipeline" in sql:
         for r in LEJEK:
@@ -255,6 +260,61 @@ try:
     check("nieznany status odrzucony", False, "przeszedl")
 except teczka.Blad:
     check("nieznany status odrzucony", True)
+
+# --------------------------------------------------- most miedzy katalogiem a lejkiem (DDL 037)
+print("\n[katalog] most do plikow na dysku:")
+
+t0 = teczka.teczka_text("StandART")
+check("teczka mowi WPROST, ze katalogu nie ma", "Katalog: BRAK - nie ustalony" in t0, t0[:400])
+
+teczka.zapisz("StandART", "email", "pierwszy kontakt", "sent", katalog="Klienci/StandART")
+check("katalog zapisany", LEJEK[0]["katalog"] == "Klienci\\StandART", str(LEJEK[0]["katalog"]))
+check("ukosnik zamieniony na windowsowy", "/" not in (LEJEK[0]["katalog"] or ""))
+check("teczka pokazuje katalog", "Katalog: Klienci\\StandART" in teczka.teczka_text("StandART"))
+
+
+def kat(sciezka, ident="StandART"):
+    """Wlasna tresc-znacznik, zeby policzyc DOKLADNIE zapisy z tej sekcji."""
+    try:
+        teczka.zapisz(ident, "email", "PROBA_KATALOGU", "draft", katalog=sciezka)
+        return None
+    except teczka.Blad as e:
+        return str(e)
+
+
+# Regula Tomasza: ustalane RAZ przy pierwszym kontakcie i NIGDY niezmieniane. Nie jest to
+# kosmetyka - system katalogow nie przenosi, wiec podmiana napisu zostawilaby wiersz
+# wskazujacy na nieistniejacy folder, czyli dokladnie ten rozjazd, ktoremu most zapobiega.
+e = kat("Klienci/StandART_nowy")
+check("proba ZMIANY katalogu odrzucona", e is not None, str(e))
+check("blad tlumaczy, ze najpierw przenosi sie folder", e and "przenies folder" in e, str(e))
+check("stara wartosc NIE zostala nadpisana", LEJEK[0]["katalog"] == "Klienci\\StandART")
+
+check("ta sama wartosc ponownie nie jest bledem", kat("Klienci\\StandART") is None)
+
+e = kat("Klienci/Chwaliński")
+check("polskie znaki odrzucone", e is not None and "polskie znaki" in (e or ""), str(e))
+check("blad wymienia winny znak", e and "ń" in e, str(e))
+
+e = kat("C:\\Claude-CoWork\\TyNieMusisz\\Klienci\\Egurrola", ident="Egurrola Dance Studio Krakow")
+check("sciezka bezwzgledna odrzucona", e is not None and "WZGLEDNA" in (e or ""), str(e))
+
+e = kat("Klienci\\..\\..\\Windows", ident="Egurrola Dance Studio Krakow")
+check("wyjscie w gore drzewa odrzucone", e is not None, str(e))
+
+e = kat("Klienci\\Test<>|", ident="Egurrola Dance Studio Krakow")
+check("niedozwolone znaki odrzucone", e is not None and "Niedozwolone" in (e or ""), str(e))
+
+e = kat("Klienci\\jasonfeifer", ident="jasonfeifer")
+check("katalog przy kontakcie spolecznosciowym odrzucony", e is not None, str(e))
+check("blad mowi, ze katalog nalezy do LEJKA", e and "LEJKA" in e, str(e))
+
+# Sedno: walidacja katalogu stoi PRZED zapisem. Szesc odrzuconych prob powyzej nie moze
+# zostawic ani jednego wiersza - inaczej czlowiek dostaje blad, ponawia i robi duplikat.
+# Pierwsza wersja walidowala PO wstawieniu wiersza; ten test ja na tym zlapal.
+zapisow = len([r for r in LOG if r.get("content") == "PROBA_KATALOGU"])
+check("szesc odrzuconych prob nie zapisalo NIC, zapisala sie tylko jedna udana",
+      zapisow == 1, f"wierszy: {zapisow}, oczekiwano 1")
 
 print("\n" + ("WSZYSTKO PRZESZLO" if not FAILS else f"BLEDY: {FAILS}"))
 sys.exit(1 if FAILS else 0)

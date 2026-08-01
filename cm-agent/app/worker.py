@@ -227,7 +227,7 @@ def lacznik_zapisz_tekst(body: dict, x_lacznik_secret: str = Header(default=""),
             body.get("contact_id") or body.get("kontakt") or body.get("ident"),
             body.get("kanal"), body.get("tresc"), body.get("status") or "draft",
             next_step=body.get("next_step"), next_step_date=body.get("next_step_date"),
-            temat=body.get("temat"))}
+            temat=body.get("temat"), katalog=body.get("katalog"))}
     except teczka.Blad as e:
         # 400 z trescia DLA CZLOWIEKA: czat ma pokazac liste podobnych, a nie "bad request".
         raise HTTPException(status_code=400, detail=str(e))

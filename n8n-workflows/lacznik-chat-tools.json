@@ -9,7 +9,7 @@
         0,
         0
       ],
-      "webhookId": "c15774c9-b525-4d5b-b04a-c71832048a19",
+      "webhookId": "1958ff70-92db-4964-8bd4-5d7c850d7cc8",
       "parameters": {
         "path": "lacznik-<LACZNIK_E2_SECRET>"
       }
@@ -154,7 +154,7 @@
         0,
         520
       ],
-      "webhookId": "6793e0bc-5471-4a43-9768-6df429e59b68",
+      "webhookId": "2dd6a39d-bccd-4f8d-bd74-4c08e4ed23a9",
       "parameters": {
         "httpMethod": "POST",
         "path": "chat-raport",
@@ -207,7 +207,7 @@
         0,
         720
       ],
-      "webhookId": "26f9248d-068d-4de4-bcb3-b7b35137b8d4",
+      "webhookId": "687eaaae-b7db-4b7e-aeff-d6d1cd1bcd62",
       "parameters": {
         "httpMethod": "GET",
         "path": "stan-gry",
