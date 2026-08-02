@@ -34,7 +34,15 @@ slot takze kanalowi X przy materiale wielokanalowym.
 
 ---
 
-## D-002: Test kadencji pada po zamknieciu okna publikacji
+## D-002 [ZAMKNIETE 02/08/2026]: Test kadencji pada po zamknieciu okna publikacji
+
+**NAPRAWIONE.** `slots.py` i `reslot.py` dostaly jedno posrednictwo `_teraz()`, ktore w produkcji
+zwraca dokladnie to co wczesniej (`datetime.now(WARSAW)`), a w tescie jest podmieniane na staly
+moment (sroda 14:00 dla kadencji, sroda 09:00 dla re-slottera). Oba testy nie odwoluja sie juz
+**w ogole** do zegara systemowego - zero wystapien `now()`. Zestaw: **18/18 zielonych**,
+po raz pierwszy. Ponizej oryginalny opis, dla historii.
+
+
 
 **Zapisany 26/07/2026** (zlapany przy uruchamianiu calego zestawu o 23:20).
 

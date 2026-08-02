@@ -28,6 +28,16 @@ from . import db
 from .slots import _parse_window, _daily_cap
 
 WARSAW = ZoneInfo("Europe/Warsaw")
+
+def _teraz():
+    """Jedno miejsce, w ktorym modul pyta o czas (D-002, naprawione 02/08/2026).
+
+    Produkcja nie zmienia zachowania - to nadal `datetime.now(WARSAW)`. Istnieje po to,
+    zeby TEST mogl podstawic staly moment. Dwa testy (`test_kadencja_sufit`, `test_reslot`)
+    padaly zaleznie od PORY DNIA, bo liczyly sloty z okna 13:00-22:00 wzgledem zegara
+    systemowego. Czerwony test, ktory zawsze bywa czerwony, uczy ignorowania czerwonych."""
+    return datetime.datetime.now(WARSAW)
+
 ACTIVE_STATUSES = ("review", "scheduled", "queued", "held")
 MIN_GAP_MIN = 30  # nowy slot nie blizej niz 30 min od istniejacego tego dnia
 
@@ -67,7 +77,7 @@ def _cfg(brand_id, channel):
 def _rows(brand_id, channel):
     """Wiersze kolejki do rozplanowania: przyszle albo bez slotu. Kolejnosc = intencja
     (scheduled_for rosnaco, NULL na koniec, potem id) - trzyma serie w porzadku."""
-    now = datetime.datetime.now(WARSAW)
+    now = _teraz()
     today0 = datetime.datetime.combine(now.date(), datetime.time(0, 0), WARSAW)
     return db.fetchall(
         """SELECT id, content_item_id, scheduled_for, status, left(content, 70) AS tresc
@@ -107,7 +117,7 @@ def plan(brand_id="AGS", channel="x", per_day=None):
     na_dzien = min(per_day, cap) if per_day else cap
     ws, we = _parse_window(cfg.get("publish_windows"), channel)
     grid = _grid(ws, we, na_dzien)   # dokladnie `na_dzien` gniazd, wszystkie w oknie
-    now = datetime.datetime.now(WARSAW)
+    now = _teraz()
     seq = _sequence(_rows(brand_id, channel))
 
     changes = []

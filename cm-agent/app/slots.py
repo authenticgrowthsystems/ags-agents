@@ -11,6 +11,16 @@ from zoneinfo import ZoneInfo
 from . import db
 
 WARSAW = ZoneInfo("Europe/Warsaw")
+
+def _teraz():
+    """Jedno miejsce, w ktorym modul pyta o czas (D-002, naprawione 02/08/2026).
+
+    Produkcja nie zmienia zachowania - to nadal `datetime.now(WARSAW)`. Istnieje po to,
+    zeby TEST mogl podstawic staly moment. Dwa testy (`test_kadencja_sufit`, `test_reslot`)
+    padaly zaleznie od PORY DNIA, bo liczyly sloty z okna 13:00-22:00 wzgledem zegara
+    systemowego. Czerwony test, ktory zawsze bywa czerwony, uczy ignorowania czerwonych."""
+    return datetime.datetime.now(WARSAW)
+
 DEFAULT_WINDOWS = {"x": "09:00-21:00", "linkedin": "08:00-18:00"}
 BUSY_STATUSES = ("planned", "drafting", "needs_approval", "approved", "dispatching")
 GRANULARITY_MIN = 30
@@ -126,7 +136,7 @@ def next_slot(brand_id, channels_list, is_article=False, prefer_today=True):
         "SELECT channel, config FROM channels WHERE brand_id=%s AND channel = ANY(%s)",
         (brand_id, list(channels_list)))
     caps = {r["channel"]: _daily_cap(r.get("config") or {}, r["channel"]) for r in cfg_rows}
-    now = datetime.datetime.now(WARSAW)
+    now = _teraz()
     start_day = now.date() if prefer_today else (now + datetime.timedelta(days=1)).date()
     grids = [g for *_, g in rules if g]
     grid_times = sorted({t for g in grids for t in g}) if grids else None
@@ -182,7 +192,7 @@ def humanize_slot(dt, spread_min=15):
         cand = dt + datetime.timedelta(minutes=random.randint(-spread_min, spread_min))
         if cand.minute % 15 != 0:
             break
-    now = datetime.datetime.now(WARSAW)
+    now = _teraz()
     if cand <= now:  # jitter nie cofa publikacji w przeszlosc (Scheduler strzela od razu)
         cand = dt if dt > now else now + datetime.timedelta(minutes=random.randint(2, 7))
     return cand
@@ -191,7 +201,7 @@ def humanize_slot(dt, spread_min=15):
 def assign_if_needed(item):
     """Dla 'approved': slot NULL albo miniony -> przydziel najblizszy wolny i zapisz.
     Zwraca (slot|None, changed:bool). Wolane z petli workera PRZED dispatchem."""
-    now = datetime.datetime.now(WARSAW)
+    now = _teraz()
     cur = item.get("scheduled_for")
     if cur is not None and cur.astimezone(WARSAW) > now - datetime.timedelta(minutes=10):
         return cur, False  # slot aktualny (10 min laski na przelot petli)

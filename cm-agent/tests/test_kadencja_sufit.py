@@ -17,6 +17,12 @@ except Exception:
     _zi.ZoneInfo = lambda key: _dt.timezone(_dt.timedelta(hours=2), key)
 WARSAW = _zi.ZoneInfo("Europe/Warsaw")
 
+# D-002 NAPRAWIONE 02/08/2026: test liczyl sloty wzgledem ZEGARA SYSTEMOWEGO, wiec po zamknieciu
+# okna publikacji (X: 13:00-22:00) padal zawsze, niezaleznie od kodu. Od teraz moment jest STALY
+# i wstrzykiwany do modulu. Sroda 14:00 - dzien roboczy (sobota jest wycieta dla LinkedIna)
+# i godzina w srodku okna, wiec "slot jeszcze dzis" ma sens.
+TERAZ = _dt.datetime(2026, 8, 5, 14, 0, tzinfo=WARSAW)
+
 pkg = types.ModuleType("app")
 pkg.__path__ = [str(BASE)]
 sys.modules["app"] = pkg
@@ -46,6 +52,10 @@ sys.modules["app.db"] = db_stub
 
 from app import slots  # noqa: E402
 
+# Wstrzykniecie stalego momentu (D-002). Bez tej linii TERAZ byloby sama dekoracja,
+# bo modul pytalby zegar systemowy dokladnie tak jak wczesniej.
+slots._teraz = lambda: TERAZ
+
 FAILS = []
 
 
@@ -68,27 +78,27 @@ check("LinkedIn -> 1", slots._daily_cap({}, "linkedin") == 1)
 check("linkedin_page -> 1", slots._daily_cap({}, "linkedin_page") == 1)
 
 print("\n[sufit kadencji] dzien pelny przechodzi na jutro:")
-jutro = (_dt.datetime.now(WARSAW) + _dt.timedelta(days=1)).date()
+jutro = (TERAZ + _dt.timedelta(days=1)).date()
 pojutrze = jutro + _dt.timedelta(days=1)
 # dzis i jutro pelne (5 postow), pojutrze puste -> next_slot ma wskazac pojutrze
 STATE["busy_ci"] = []
-STATE["busy_pq"] = _sloty_dnia(_dt.datetime.now(WARSAW).date(), 5) + _sloty_dnia(jutro, 5)
+STATE["busy_pq"] = _sloty_dnia(TERAZ.date(), 5) + _sloty_dnia(jutro, 5)
 slot = slots.next_slot("AGS", ["x"], prefer_today=True)
 check("pelny dzis i jutro -> slot dopiero pojutrze",
       slot is not None and slot.date() == pojutrze, slot)
 
 print("\n[sufit kadencji] dzien z miejscem dostaje slot:")
-STATE["busy_pq"] = _sloty_dnia(_dt.datetime.now(WARSAW).date(), 2)  # tylko 2 dzis, limit 5
+STATE["busy_pq"] = _sloty_dnia(TERAZ.date(), 2)  # tylko 2 dzis, limit 5
 slot2 = slots.next_slot("AGS", ["x"], prefer_today=True)
 check("2 z 5 zajete dzis -> slot jeszcze dzis",
-      slot2 is not None and slot2.date() == _dt.datetime.now(WARSAW).date(), slot2)
+      slot2 is not None and slot2.date() == TERAZ.date(), slot2)
 
 print("\n[sufit kadencji] symulacja rozlewania serii (rdzen zgloszenia Tomasza):")
 # Zaczynamy od 3 postow zaplanowanych na dzis; dokladamy serie 5 czesci PO KOLEI.
 # Kazda czesc bierze next_slot i "zajmuje" go (jak stage_variant). Sprawdzamy, ze na dzien
 # nie wejdzie wiecej niz 5 (limit), reszta przechodzi na kolejne dni.
 STATE["busy_ci"] = []
-STATE["busy_pq"] = _sloty_dnia(_dt.datetime.now(WARSAW).date(), 3)
+STATE["busy_pq"] = _sloty_dnia(TERAZ.date(), 3)
 przydzielone = []
 for _ in range(5):  # 5-czesciowa seria
     s = slots.next_slot("AGS", ["x"], prefer_today=True)
@@ -98,7 +108,7 @@ for _ in range(5):  # 5-czesciowa seria
 per_dzien = {}
 for s in przydzielone:
     per_dzien[s.date()] = per_dzien.get(s.date(), 0) + 1
-dzis = _dt.datetime.now(WARSAW).date()
+dzis = TERAZ.date()
 check("dzis dostalo tylko 2 czesci (3 juz byly, sufit 5)", per_dzien.get(dzis, 0) == 2, per_dzien)
 check("zaden dzien nie przekroczyl sufitu 5",
       all(v <= 5 for v in per_dzien.values()), per_dzien)

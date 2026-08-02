@@ -14,6 +14,10 @@ except Exception:
     _zi.ZoneInfo = lambda key: _dt.timezone(_dt.timedelta(hours=2), key)
 WARSAW = _zi.ZoneInfo("Europe/Warsaw")
 
+# D-002 NAPRAWIONE 02/08/2026: przypadek "#4 w przyszlosci, ludzka minuta, w oknie" padal okolo
+# poludnia i po poludniu, bo siatka gniazd z okna 13:00-22:00 czesciowo wypadala juz w przeszlosci.
+TERAZ = _dt.datetime(2026, 8, 5, 9, 0, tzinfo=WARSAW)
+
 pkg = types.ModuleType("app")
 pkg.__path__ = [str(BASE)]
 sys.modules["app"] = pkg
@@ -46,6 +50,10 @@ sys.modules["app.db"] = db_stub
 
 from app import reslot  # noqa: E402
 
+# Wstrzykniecie stalego momentu (D-002). Bez tej linii TERAZ byloby sama dekoracja,
+# bo modul pytalby zegar systemowy dokladnie tak jak wczesniej.
+reslot._teraz = lambda: TERAZ
+
 FAILS = []
 
 
@@ -62,7 +70,7 @@ def _slot(day, h, m):
 # Kolejka jak PO pierwszym re-slocie: serie ROZPROSZONE (scheduled_for nie odzwierciedla juz
 # kolejnosci narracyjnej), a id ja trzyma. Seria SS (id 1-6, 6 czesci) rozbita na rozne dni,
 # w tym czesc #1 (hook) PO czesci #2 wg scheduled_for. Seria TT (id 10-12). Jeden bez slotu.
-baza = (_dt.datetime.now(WARSAW) + _dt.timedelta(days=1)).date()
+baza = (TERAZ + _dt.timedelta(days=1)).date()
 d2 = baza + _dt.timedelta(days=1)
 d3 = baza + _dt.timedelta(days=2)
 QUEUE = [
@@ -116,7 +124,7 @@ check("okno 13-22, 5 gniazd -> wszystkie w oknie", all(_d2.time(13, 0) <= g <= _
 check("okno 13-22, 5 gniazd -> dokladnie 5", len(grid5) == 5, grid5)
 
 print("\n[reslot v2] nowe sloty poprawne (okno 13-22):")
-now = _dt.datetime.now(WARSAW)
+now = TERAZ
 for _id, _ci, _old, new, _t in changes:
     check(f"#{_id} w przyszlosci, ludzka minuta, w oknie",
           new > now and new.minute % 15 != 0 and 13 <= new.hour <= 22, new)
