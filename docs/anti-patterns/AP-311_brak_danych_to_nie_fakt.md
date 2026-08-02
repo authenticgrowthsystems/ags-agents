@@ -66,3 +66,30 @@ ktora znaczy co innego - to AP-312.
    Przy kazdym nowym polu: gdzie to sie WPISUJE, nie tylko gdzie sie czyta.
 5. **Gdy stan w glowie rozjezdza sie ze stanem w bazie, wygrywa sonda.** Nie pamiec, nie
    dokumentacja, nie raport sprzed dwoch dni. Odczyt.
+
+
+---
+
+## AP-311 NA OPAK (ustanowione 02/08/2026, decyzja Managera)
+
+**Obecnosc danych nie jest problemem, dopoki nie sprawdzisz, ze cokolwiek je czyta.**
+
+Anty-wzorzec w pierwotnym brzmieniu chroni przed uznaniem BRAKU za fakt. Symetryczna pomylka
+kosztuje tyle samo: uznanie OBECNOSCI za problem.
+
+**Dowod (D-011, 02/08/2026).** Zapisalem w dlugu: "61 sierot w engagement_log - wiersze bez
+kontaktu i bez prospekta, zajmuja miejsce w licznikach (348 wpisow), nie da sie ich przypisac
+do zadnej sprawy". Brzmialo jak wada. Odczyt pokazal trzy rzeczy:
+
+1. Wszystkie 61 ma PUSTE `author_display` - nie ma czego dopinac.
+2. To nie sa osierocone interakcje, tylko zapisy WLASNEJ aktywnosci: "test draft",
+   opisy zrzutow ekranu, nasze wlasne opublikowane posty. **Nie maja drugiej strony
+   i nie powinny jej miec.**
+3. **Zaden licznik ich nie widzi** - oba zapytania zliczajace sa zawezone `WHERE contact_id=...`.
+
+**Liczba "348 wpisow" pochodzila z MOJEJ WLASNEJ SONDY, nie z zadnego widoku systemu.**
+Zmierzylem cos, czego nikt nie oglada, i zapisalem pomiar jako dlug.
+
+**Zasada:** zanim nazwiesz obecnosc danych wada, znajdz KONSUMENTA. Jesli zaden odczyt ich nie
+dotyka, nie ma wady - jest co najwyzej zapach modelowania. Naprawa czegos, czego nikt nie czyta,
+to czysty koszt i nowe ryzyko.

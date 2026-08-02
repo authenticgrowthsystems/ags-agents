@@ -75,3 +75,28 @@ czego rozbic. Podatnych, bo dopasowujacych **NAZWE WLASNA**, jest **siedem**:
 - **AP-311** (brak danych to nie fakt): "nie znajduje prospekta" wyglada jak brak prospekta.
 - **AP-312** (nazwa klamie): tu klamie nie nazwa stanu, tylko **cichy brak trafienia** -
   zapytanie bez wynikow nie jest bledem w SQL, wiec `UPDATE` bez trafien konczy sie sukcesem.
+
+
+---
+
+## PODNIESIONE DO KANONU 02/08/2026 (decyzja Managera, brzmienie z raportu BE)
+
+> **Narzedzie do wykrycia bledu mialo ten sam blad.**
+
+Manager wskazal to zdanie jako najmocniejsze z raportu i polecil zapisac je doslownie, bo
+opisuje **osobna klase wad, grozniejsza od zwyklej literowki**.
+
+Zwykla literowka wychodzi przy pierwszym uruchomieniu. Ta klasa **przechodzi pierwszy przebieg
+poprawnie** i chowa sie przed wlasna kontrola:
+
+- `INSERT ... WHERE NOT EXISTS (... ILIKE '%Chwalin%')` przy pustej bazie zwraca prawde
+  i wiersz sie zaklada. **Test akceptacyjny przechodzi**, bo sprawdza, czy wiersz powstal.
+- Defekt ujawnia sie dopiero przy DRUGIM uruchomieniu, jako duplikat.
+- A zapytanie kontrolne na koncu tego samego pliku uzywalo **tego samego wzorca**, wiec
+  nie pokazaloby ani pierwszego wiersza, ani drugiego.
+
+**Regula operacyjna, ktora z tego wynika:** zapytanie kontrolne MUSI uzywac **innego mechanizmu**
+niz operacja, ktora sprawdza. Kontrola napisana tym samym wzorcem, co dzialanie, potwierdza
+wylacznie samo siebie.
+
+Ta sama zasada jest punktem 6 `docs/ops/RUNBOOK_migracje.md`.

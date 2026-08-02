@@ -100,3 +100,30 @@ Wszystkie osiem punktow powyzej pochodzi z jednego wdrozenia. Punkty 3, 4, 5 i 7
 **adwersarze uruchomieni przeciwko wlasnemu planowi** - moja pierwsza wersja wybierala mniej
 szkodliwa kolejnosc zamiast usunac okno, i miala goly UPDATE bez transakcji.
 Punkty 1 i 2 dolozyl Manager **po udanym wdrozeniu**, patrzac na to, czego nikt nie sprawdzil.
+
+
+---
+
+## 9. ZABEZPIECZENIE DANYCH I ZABEZPIECZENIE DOSTEPNOSCI DZIALAJA PRZECIWKO SOBIE
+
+**Wpisane do kanonu 02/08/2026 decyzja Managera, w brzmieniu BE** (uwaga wyszla od Managera,
+sformulowanie z raportu uznal za lepsze od swojego).
+
+> **Im lepiej zabezpieczona migracja, tym wieksza szansa, ze zatrzyma sie w polowie -
+> bo to WLASNA bramka bezpieczenstwa jest najbardziej prawdopodobnym wyzwalaczem.**
+
+Rozwiniecie: lancuch `&&` w sekwencji `stop -> migracja -> start` jest **poprawny dla danych**.
+Gdy migracja padnie, nic sie nie zapisze. Ale **kontener zostanie WYLACZONY**, bo `&&` przerywa
+reszte lancucha razem z `docker run`. Dane sa bezpieczne, system martwy, i nikt tego nie zauwazy
+do pierwszej wiadomosci do bota.
+
+Najbardziej prawdopodobny wyzwalacz **nie jest awaria z zewnatrz**. Jest nim `RAISE EXCEPTION`
+z naszej wlasnej bramki na liczbie wierszy (punkt 4) - czyli **im staranniej zabezpieczylismy
+dane, tym latwiej przewrocimy dostepnosc**.
+
+**Praktycznie:**
+- komenda ratunkowa (`docker run ...`) ma byc **przygotowana i wklejalna PRZED** startem migracji,
+  nie szukana w panice;
+- przy KAZDYM przerwaniu sekwencji **pierwsza czynnoscia jest podniesienie kontenera**,
+  nie diagnoza - baza jest wtedy nietknieta, wiec stary obraz jest bezpieczny;
+- te dwa cele **trzeba wazyc swiadomie**, a nie zakladac, ze jedno zabezpieczenie sluzy obu.

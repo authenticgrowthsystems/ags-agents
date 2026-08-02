@@ -8,6 +8,28 @@ albo kiedy zabolisz. Wpis znika z listy dopiero razem z poprawka.
 
 ---
 
+## REGULA BRANIA DLUGU (ustanowiona 02/08/2026 przez Managera)
+
+**Dlug opisany raz i nieodswiezany starzeje sie tak samo jak kod.**
+
+Biorac pozycje z tej listy: **NAJPIERW sprawdz, czy opis nadal opisuje rzeczywistosc, i dopiero
+potem naprawiaj. Jesli opis sie rozjechal - popraw OPIS i zglos, zanim ruszysz kod.**
+
+Trzy dowody z jednego dnia (02/08/2026):
+
+- **D-003** mial notatke "dzis USPIONA, `contact_person` NULL we wszystkich dwunastu wierszach"
+  z 26/07. Odczyt 02/08: **33 wiersze z wypelniona osoba na 133**. Objaw byl juz ZYWY od
+  tygodnia, a falszywe "brak kontaktu" pokazywalo sie przy prawdziwych prospektach.
+- **D-011** w ogole NIE BYL WADA - odczyt obalil przeslanke wpisu (patrz AP-311 na opak).
+- **D-005** byl naprawialny, tylko nie WSTECZ, jak zakladal wpis. Wystarczylo przestac wymagac
+  naprawy wstecznej i pozwolic karcie rozbroic sie przy pierwszym tapnieciu.
+
+Czyli na dziewiec zamknietych tego dnia **trzy wpisy myllily** o wlasnym przedmiocie. Notatka
+w dlugu jest danymi jak kazde inne - i jak kazde inne wymaga sprawdzenia przed uzyciem
+(AP-311 w obie strony).
+
+---
+
 ## D-001 [ZAMKNIETE 02/08/2026]: Regula weekendowa pilnowana tylko w jednym z czterech miejsc
 
 **NAPRAWIONE.** Powstala JEDNA funkcja `slots.day_ok(channels, day, is_article)` i wolaja ja
