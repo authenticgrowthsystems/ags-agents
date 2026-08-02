@@ -6,6 +6,30 @@
 --   2) docker stop cm-agent            <- od tej chwili NIKT nie moze wstawic gotowca
 --   3) docker exec -i pg_n8n psql -U n8n -d ags_crd < ~/ags-agents/docs/ops/SQL_d009_kanal_email_02082026.sql
 --   4) docker rm cm-agent && docker run -d --name cm-agent ... (pelna komenda w raporcie)
+--
+-- ---------------------------------------------------------------------------
+-- DWIE ZASADY OPERACYJNE, DOPISANE 02/08 NA POLECENIE MANAGERA (po udanym wdrozeniu,
+-- zeby nie czekac na wpadke przy nastepnej migracji):
+--
+-- (A) ZWERYFIKUJ KOPIE, ZANIM ZATRZYMASZ PISARZA. Kopia, ktora TWIERDZI, ze istnieje,
+--     a nie da sie jej rozpakowac, jest gorsza niz jej brak - daje falszywe poczucie odwrotu.
+--     Zawsze:
+--        gunzip -t ~/backups/<plik>.sql.gz && echo "KOPIA OK"
+--     Samo `ls -lh` sprawdza WYLACZNIE to, ze plik ma rozmiar. Strumien z `pg_dump | gzip`
+--     potrafi urwac sie w polowie i zostawic plik, ktory wyglada zdrowo.
+--
+-- (B) LANCUCH `&&` CHRONI DANE, ALE NIE CHRONI DOSTEPNOSCI. Jesli cokolwiek padnie
+--     MIEDZY `docker stop` a `docker run`, lancuch sie zatrzyma i **cm-agent zostanie
+--     WYLACZONY** - dane beda bezpieczne, a system martwy, dopoki ktos tego nie zauwazy.
+--     Najbardziej prawdopodobny wyzwalacz to nasza wlasna bramka na liczbie wierszy:
+--     RAISE EXCEPTION konczy psql niezerowym kodem, wiec `&&` przerywa CALA reszte.
+--     Dlatego przy KAZDYM przerwaniu sekwencji PIERWSZA rzecza, a nie ostatnia, jest:
+--        docker rm cm-agent 2>/dev/null; docker run -d --name cm-agent --restart unless-stopped \
+--          -m 512m --network n8n_network -p 127.0.0.1:8089:8089 --env-file ./.env \
+--          -v "$PWD/logs":/app/logs cm-agent:latest && sleep 10 && curl -fsS http://localhost:8089/health
+--     Dopiero potem diagnozuj, co przerwalo migracje. Baza jest w tym momencie NIETKNIETA
+--     (transakcja sie wycofala), wiec podniesienie starego kontenera jest bezpieczne.
+-- ---------------------------------------------------------------------------
 -- ============================================================================
 --
 -- DLACZEGO TAK, A NIE "razem w jednym oknie": miedzy rebuildem a UPDATE-em jest okno,
