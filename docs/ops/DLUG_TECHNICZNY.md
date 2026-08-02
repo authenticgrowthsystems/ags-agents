@@ -267,7 +267,27 @@ kolumna `status_source` symetryczna do `slot_source`, albo etykieta operacji (np
 Manager 29/07: *"Ty wiesz, co wycofales, bo sam to robiles. CM patrzy na te sama baze i nie
 widzi roznicy miedzy materialem wycofanym a odrzuconym przy przegladzie miesiac temu."*
 
-## D-005: Karty decyzji wygaszone PRZED 27/07 zostaja klikalne
+## D-005 [ZAMKNIETE 02/08/2026]: Karty decyzji wygaszone PRZED 27/07 zostaja klikalne
+
+**NAPRAWIONE INACZEJ, NIZ ZAKLADAL TEN WPIS.** Wpis mowil: "poprawka dziala od `f4e88e1` w PRZOD,
+karty wygaszone wczesniej zostaja martwe i klikalne" - i uznawal to za nienaprawialne, bo nie
+mamy juz ich identyfikatorow.
+
+To bylo prawdziwe tylko przy zalozeniu, ze naprawa musi dzialac WSTECZ. Nie musi.
+**Przy pierwszym tapnieciu martwej karty mamy jej numer** - w `tg_message_id` wiersza decyzji
+albo w samym callbacku. Galaz "juz rozstrzygnieta" w `decisions.handle` dotad TYLKO odpowiadala
+tekstem; teraz **zdejmuje klawiature z tapnietej karty**.
+
+Efekt: kazda martwa karta czysci sie sama przy pierwszym kontakcie z czlowiekiem. Zamiast
+naprawy wstecznej - **samoleczenie**. Komunikat mowi wprost, ze guziki zostaly zdjete.
+
+**Ograniczenie, powiedziane wprost:** karty sprzed zapisywania `tg_message_id` maja je puste.
+Jesli n8n nie przekaze `message_id` w tresci callbacku, taka karta zostanie klikalna - komunikat
+mowi wtedy "o ile znam jej numer". Dodanie `message_id` do payloadu n8n domknelo by to w stu
+procentach i jest tanie, ale wymaga PUT do workflow HITL, wiec nie w tym oknie.
+
+Ponizej oryginalny opis, dla historii.
+
 
 **Zapisany 27/07/2026.**
 
@@ -310,7 +330,27 @@ ale **kazde liczenie wysylki per kanal bedzie klamac** - maile rozpadna sie na d
 
 ---
 
-## D-010: `contacts` ma TRZY kolumny na stan tej samej osoby
+## D-010 [ZAMKNIETE 02/08/2026]: `contacts` ma TRZY kolumny na stan tej samej osoby
+
+**ZAMKNIETE KOMENTARZEM W SCHEMACIE (DDL 039), swiadomie BEZ usuwania kolumny.**
+
+Odczyt 02/08 rozstrzygnal, ktora z trzech jest problemem: **`pipeline_stage` nie czyta NIKT** -
+grep po calym `cm-agent/app/` daje zero trafien poza schematem. `relationship_stage` (stadium
+relacji) i `status` (temperatura) to dwie ROZNE osie i ich wspolistnienie da sie obronic.
+
+**Dlaczego komentarz, a nie DROP:** usuniecie jest nieodwracalne i zabiera 45 wartosci
+o nieznanym dzis pochodzeniu. Kolumna nie szkodzi, dopoki nikt jej nie czyta - zaszkodzi
+w chwili, gdy KTOS ja przeczyta, biorac za zrodlo prawdy o etapie. Nazwa `pipeline_stage`
+brzmi dokladnie jak etap w lejku i wlasnie to czyni ja grozna: to zaproszenie do pomylki,
+nie zwykly balast.
+
+**Lekarstwo podane tam, gdzie nastepny agent NAPRAWDE zajrzy** - w `COMMENT ON COLUMN`,
+nie w pliku dokumentacji, ktorego moze nie otworzyc. Wszystkie trzy kolumny dostaly opis
+mowiacy, ktora jest zrodlem prawdy i po co sa pozostale. To jest AP-312 rozwiazany na poziomie
+schematu.
+
+Ponizej oryginalny opis, dla historii.
+
 
 **Zapisany 01/08/2026** (polecenie Tomasza: nie ruszac, zgłosic po moscie).
 

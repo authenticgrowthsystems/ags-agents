@@ -200,8 +200,22 @@ def handle(body, wake=None):
         _tg("sendMessage", {"chat_id": chat, "text": f"❌ Decyzja #{dec_id} nie istnieje."})
         return
     if row["status"] != "pending":
+        # D-005 NAPRAWIONE 02/08/2026: dotad ta galaz TYLKO odpowiadala tekstem, wiec martwa karta
+        # zostawala z zywo wygladajacymi guzikami i dalo sie ja tapnac w kolko. Teraz PIERWSZE
+        # tapniecie ja rozbraja - problemu nie da sie naprawic wstecz (nie znamy identyfikatorow
+        # kart sprzed zapisywania `tg_message_id`), ale kazda martwa karta czysci sie sama przy
+        # pierwszym kontakcie z czlowiekiem. Zamiast naprawy wstecznej: samoleczenie.
+        mid = body.get("message_id") or row.get("tg_message_id")
+        if mid:
+            try:
+                _tg("editMessageReplyMarkup", {"chat_id": chat, "message_id": mid,
+                                               "reply_markup": {"inline_keyboard": []}})
+            except Exception:
+                traceback.print_exc()
         _tg("sendMessage", {"chat_id": chat,
-                            "text": f"Decyzja #{dec_id} juz rozstrzygnieta ({row['status']}: {row.get('answer')})."})
+                            "text": f"Decyzja #{dec_id} juz rozstrzygnieta ({row['status']}: "
+                                    f"{row.get('answer')}). Zdjalem guziki z tej karty"
+                                    + ("." if mid else " - o ile znam jej numer.")})
         return
     opts = row["options"] if isinstance(row["options"], list) else json.loads(row["options"])
     label = next((o["label"] for o in opts if o["key"] == key), key)
