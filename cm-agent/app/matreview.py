@@ -142,7 +142,47 @@ def _find_done_item(theme_fragment, brand_id="AGS"):
 
 
 _VIEW_STATUS_PL = {"approved": "ZATWIERDZONY (czeka na publikacje)",
-                   "dispatching": "W PUBLIKACJI", "published": "OPUBLIKOWANY"}
+                   # D-006 (02/08): "W PUBLIKACJI" obiecywalo sekundy, a ten stan normalnie
+                   # trwa DNI - material czeka, az WSZYSTKIE wiersze jego serii sie opublikuja.
+                   # Manager zglosil 27/07 "zawieszony post"; odczyt pokazal siedem materialow,
+                   # wszystkie zdrowe, najstarszy 51 godzin i poprawnie, bo sloty siegaly
+                   # 4 sierpnia. Etykieta mowi teraz, CO SIE STALO, a nie co sie wlasnie dzieje.
+                   "dispatching": "ROZESLANY DO KOLEJKI", "published": "OPUBLIKOWANY"}
+
+# Stany wiersza kolejki, ktore NIE sa jeszcze terminalne (ta sama lista, co w conversation.py).
+_PQ_CZEKA = ("review", "held", "scheduled", "queued", "dispatching")
+
+
+def _stan_rozsylki(item_id):
+    """Ile wierszy materialu jeszcze czeka i na kiedy najblizszy (D-006).
+
+    Sedno zgloszenia Managera z 27/07: "ani system, ani CM nie potrafili powiedziec, czy jest
+    w trakcie wysylki, czy zawisl". Sama nazwa stanu tego nie rozstrzyga i rozstrzygnac nie moze.
+    Rozstrzyga to, ILE WIERSZY zostalo i KIEDY maja pojsc. Jedno zapytanie, nie N+1."""
+    try:
+        r = db.fetchone(
+            f"""SELECT COUNT(*) AS wszystkie,
+                       COUNT(*) FILTER (WHERE status IN {_PQ_CZEKA}) AS czeka,
+                       MIN(scheduled_for) FILTER (WHERE status IN {_PQ_CZEKA}) AS najblizszy,
+                       MAX(scheduled_for) FILTER (WHERE status IN {_PQ_CZEKA}) AS ostatni
+                  FROM post_queue WHERE content_item_id=%s::uuid""", (str(item_id),))
+    except Exception:
+        traceback.print_exc()
+        return ""
+    if not r or not int(r.get("wszystkie") or 0):
+        return ""
+    czeka = int(r.get("czeka") or 0)
+    if not czeka:
+        # Zero oczekujacych przy tym statusie to JEDYNY przypadek, ktory naprawde wyglada
+        # na zawieszenie - i dopiero teraz da sie go odroznic od zdrowego czekania.
+        return (f"\n⚠️ wszystkie {r['wszystkie']} wpisow ma juz stan koncowy, a material nadal "
+                f"czeka - to wyglada na zawieszenie, zglos")
+    czesci = [f"czeka {czeka} z {r['wszystkie']} wpisow"]
+    for etykieta, klucz in (("najblizszy", "najblizszy"), ("ostatni", "ostatni")):
+        d = r.get(klucz)
+        if d:
+            czesci.append(f"{etykieta} {d.astimezone(WARSAW).strftime('%d/%m %H:%M')}")
+    return "\n⏳ " + ", ".join(czesci)
 
 
 def _view_card(it, brand_id="AGS"):
@@ -154,7 +194,11 @@ def _view_card(it, brand_id="AGS"):
     ch = " + ".join(_target_label(brand_id, c) for c in (it.get("target_channels") or []))
     body = (it.get("canonical_body") or "(brak tresci)").strip()
     n_media = sum(1 for m in (it.get("media") or []) if (m or {}).get("file_id"))
-    text = (f"🔒 {_VIEW_STATUS_PL.get(it['status'], it['status'].upper())} - podglad, bez decyzji\n\n"
+    # D-006: przy stanie rozsylki sama etykieta nie wystarcza - dokladamy, ile wierszy czeka
+    # i na kiedy. To jest roznica miedzy "wysylam od dwoch minut" a "wisi od trzydziestu".
+    rozsylka = _stan_rozsylki(it["id"]) if it.get("status") == "dispatching" else ""
+    text = (f"🔒 {_VIEW_STATUS_PL.get(it['status'], it['status'].upper())} - podglad, bez decyzji"
+            f"{rozsylka}\n\n"
             f"🕐 {when}\n📣 {ch}" + (f"\n🖼 zalaczniki: {n_media}" if n_media else "") + "\n"
             f"📌 {it['master_theme'][:200]}\n\n{body[:500]}"
             + ("..." if len(body) > 500 else ""))

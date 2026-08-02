@@ -102,7 +102,27 @@ Sprzedawcy: przeczytaj notatki, ZANIM zaproponujesz przygotowanie czegokolwiek.
 Warunek wejscia: po pierwszej platnej sprzedazy, zgodnie z kanonem "nie budujemy systemow przed
 pierwsza sprzedaza".
 
-## D-006: Status `dispatching` ma nazwe, ktora obiecuje co innego niz znaczy
+## D-006 [ZAMKNIETE 02/08/2026]: Status `dispatching` ma nazwe, ktora obiecuje co innego niz znaczy
+
+**NAPRAWIONA CZESC WIDOKOWA, bez dotykania kontraktu.** Dwie zmiany w `matreview.py`:
+
+1. Etykieta "W PUBLIKACJI" -> **"ROZESLANY DO KOLEJKI"**. Mowi, CO SIE STALO, a nie co sie
+   wlasnie dzieje - czyli nie obiecuje juz sekund przy stanie, ktory trwa dniami.
+2. Nowy `_stan_rozsylki()` dokleja do karty **ile wierszy czeka z ilu i na kiedy** (najblizszy
+   ORAZ ostatni termin - z ostatniego wiadomo, jak dlugo stan jeszcze potrwa). Jedno zapytanie
+   na material, nie N+1.
+
+**Sedno:** zgloszenie brzmialo "nie da sie powiedziec, czy wysyla, czy zawisl". Sama nazwa tego
+nie rozstrzygnie i rozstrzygnac NIE MOZE. Rozstrzyga liczba wierszy i ich terminy - i teraz sa
+widoczne. Przy okazji powstal jedyny przypadek, ktory naprawde wyglada na zawieszenie i da sie
+go odroznic: **zero oczekujacych wierszy przy materiale nadal w tym stanie** - karta ostrzega
+wprost. Test: `cm-agent/tests/test_stan_rozsylki.py` (13 asercji).
+
+**NIE ZAMYKA D-008** (przemianowanie samej WARTOSCI statusu). To osobna sprawa i osobne okno -
+uzasadnienie ponizej w D-008. Zmiana etykiety wyswietlanej NIE dotyka kontraktu miedzy warstwami.
+
+Ponizej oryginalny opis, dla historii.
+
 
 **Zapisany 27/07/2026** (zgloszenie Managera; polecenie: zapisac jako dlug, nie naprawiac dzis).
 
