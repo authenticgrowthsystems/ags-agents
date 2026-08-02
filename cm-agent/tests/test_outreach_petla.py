@@ -96,7 +96,7 @@ outreach_cleanup.db = db
 UTC = _dt.timezone.utc
 
 
-def _g(i, kto="Klub Sportowy StandART", kanal="Other", godz=9):
+def _g(i, kto="Klub Sportowy StandART", kanal="Email", godz=9):
     return {"id": f"0000000-{i}", "author_display": kto, "channel": kanal,
             "created_at": _dt.datetime(2026, 7, 24, godz, 0, tzinfo=UTC), "podglad": f"tekst {i}"}
 
@@ -105,12 +105,12 @@ def _g(i, kto="Klub Sportowy StandART", kanal="Other", godz=9):
 print("\n[4.2] szukanie zywych gotowcow zaweza sie do wlasnych wierszy i jednego kanalu:")
 FETCHALL.clear()
 ROWS["gotowce"] = [_g(1), _g(2, godz=11)]
-sales._open_outreach_rows("Klub Sportowy StandART", "Other")
+sales._open_outreach_rows("Klub Sportowy StandART", "Email")
 sql, params = FETCHALL[-1]
 check("dopasowanie po author_display, nie po substringu tresci", "author_display=%s" in sql, sql)
 check("filtr rodzaju odcina wiersze Lacznika", "notes" in sql and "ILIKE" in sql, sql)
 check("zawezenie do jednego kanalu", "channel=%s" in sql, sql)
-check("parametr kanalu przekazany", params[-1] == "Other", str(params))
+check("parametr kanalu przekazany", params[-1] == "Email", str(params))
 
 FETCHALL.clear()
 sales._open_outreach_rows("Klub Sportowy StandART")
@@ -202,6 +202,44 @@ z2, s2b, g2 = outreach_cleanup.plan()
 check("dwa przebiegi daja ten sam plan (idempotencja dry-run)",
       [r["id"] for r in zamk] == [r["id"] for r in z2] and
       [r["id"] for r in zost] == [r["id"] for r in s2b])
+
+# ---------------- D-009: kanal zapisu i kanal wyszukiwania to TA SAMA wartosc ----------------
+print("\n[D-009] slownik kanalow nie jest etykieta, tylko kluczem dopasowania:")
+
+# Wartosci dozwolone przez ograniczenie engagement_log_channel_check (DDL 001 + 036).
+DOZWOLONE = {"X", "LinkedIn", "Instagram", "Facebook", "Email", "Telegram",
+             "Phone", "Other", "SMS", "WhatsApp"}
+check("kazda wartosc slownika przechodzi ograniczenie tabeli",
+      set(sales._ENG_CHANNEL.values()) <= DOZWOLONE,
+      str(set(sales._ENG_CHANNEL.values()) - DOZWOLONE))
+
+# Sedno D-009: 'email' mapowal sie na 'Other', mimo ze 'Email' istnieje w ograniczeniu
+# od DDL 001. Ten sam kanal mial przez to w ksiedze dwie etykiety, bo teczka.py pisze 'Email'.
+check("email mapuje sie na 'Email', nie na 'Other' (D-009)",
+      sales._ENG_CHANNEL.get("email") == "Email", str(sales._ENG_CHANNEL))
+
+# NIEZMIENNIK, ktorego zlamanie odtwarza wade StandART z 24/07: ta sama zmienna musi
+# trafic do wyszukiwania poprzednich gotowcow I do zapisu nowego. Gdy sie rozjada,
+# nowy gotowiec nie znajduje starego i prospekt zbiera otwarte wiersze bez konca.
+import inspect  # noqa: E402
+_zrodlo = inspect.getsource(sales._outreach) if hasattr(sales, "_outreach") else ""
+if not _zrodlo:
+    for _n in dir(sales):
+        _o = getattr(sales, _n)
+        if callable(_o) and getattr(_o, "__module__", "") == sales.__name__:
+            try:
+                _s = inspect.getsource(_o)
+            except Exception:
+                continue
+            if "_open_outreach_rows(" in _s and "INSERT INTO engagement_log" in _s:
+                _zrodlo = _s
+                break
+check("znaleziono funkcje piszaca gotowca", bool(_zrodlo))
+check("kanal liczony JEDEN raz ze slownika", _zrodlo.count("_ENG_CHANNEL.get(") == 1, _zrodlo[:200])
+check("ta sama zmienna idzie do wyszukiwania i do zapisu",
+      "_open_outreach_rows(row[\"prospect_name\"], _eng_kanal)" in _zrodlo
+      and "(_eng_kanal," in _zrodlo,
+      "rozjazd miedzy kanalem wyszukiwania a kanalem zapisu")
 
 print("\n" + ("WSZYSTKO PRZESZLO" if not FAILS else f"BLEDY: {FAILS}"))
 sys.exit(1 if FAILS else 0)

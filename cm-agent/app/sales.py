@@ -799,7 +799,18 @@ def _prospect_results(inp):
 
 
 # ---------------- outreach (gotowiec HITL) ----------------
-_ENG_CHANNEL = {"email": "Other", "linkedin_dm": "LinkedIn", "x_dm": "X"}
+# UWAGA: to NIE jest slownik samych etykiet. Wartosc stad jest KLUCZEM DOPASOWANIA
+# w `_open_outreach_rows`, ktora po niej znajduje poprzednie ZYWE gotowce tego prospekta,
+# zeby je uniewaznic. Zmiana wartosci BEZ migracji istniejacych wierszy odcina stare gotowce
+# od wyszukiwania i odtwarza wade z 24/07 (StandART: siedem otwartych gotowcow i piec bramek
+# w cztery godziny).
+#
+# D-009 NAPRAWIONE 02/08/2026: `email` mapowal sie na 'Other', mimo ze wartosc 'Email' istnieje
+# w ograniczeniu tabeli od DDL 001. Ten sam kanal mial przez to w ksiedze dwie etykiety, bo
+# `teczka.py` zapisuje maile poprawnie jako 'Email' - kazde liczenie wysylki per kanal klamalo.
+# Slownik i migracja dziewieciu istniejacych wierszy poszly JEDNYM krokiem (regula Tomasza
+# z 02/08: "slownik i migracja ida w jednym kroku albo nie ida wcale").
+_ENG_CHANNEL = {"email": "Email", "linkedin_dm": "LinkedIn", "x_dm": "X"}
 
 # Prog trafnosci bazy wiedzy dla tekstow do klienta. Kalibracja 24/07 z zywego korpusu:
 # materialy o Adamietzu wracaly na zapytanie o szkole tanca z podobienstwem 0.40-0.45.
