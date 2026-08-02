@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 from psycopg.types.json import Jsonb
 
-from . import db, config, logbot
+from . import db, config, logbot, slots
 from . import brand as _brand
 
 WARSAW = ZoneInfo("Europe/Warsaw")
@@ -428,10 +428,19 @@ def _end_of_queue_slot(item_id, brand_id="AGS"):
     now = datetime.datetime.now(WARSAW)
     m = row.get("m") if row else None
     base = m.astimezone(WARSAW) if m and m > now else now
-    orig = db.fetchone("SELECT scheduled_for FROM content_items WHERE id=%s", (item_id,))
+    orig = db.fetchone("SELECT scheduled_for, target_channels FROM content_items WHERE id=%s",
+                       (item_id,))
     o = orig["scheduled_for"].astimezone(WARSAW) if orig and orig.get("scheduled_for") else None
     hh, mm = (o.hour, o.minute) if o else (10, 0)
-    return (base + datetime.timedelta(days=1)).replace(hour=hh, minute=mm, second=0, microsecond=0)
+    kand = (base + datetime.timedelta(days=1)).replace(hour=hh, minute=mm, second=0, microsecond=0)
+    # D-001: ten guzik robil z PIATKU SOBOTE jednym tapnieciem, bo brał MAX(slot)+1 dzien
+    # i nie pytal o dzien tygodnia. Przesuwamy do najblizszego DOZWOLONEGO dnia.
+    kanaly = (orig or {}).get("target_channels") or []
+    for _ in range(8):
+        if slots.day_ok(kanaly, kand, is_article=False):
+            return kand
+        kand = kand + datetime.timedelta(days=1)
+    return kand
 
 
 def handle(payload, wake_event=None):

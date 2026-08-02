@@ -8,7 +8,28 @@ albo kiedy zabolisz. Wpis znika z listy dopiero razem z poprawka.
 
 ---
 
-## D-001: Regula weekendowa pilnowana tylko w jednym z czterech miejsc
+## D-001 [ZAMKNIETE 02/08/2026]: Regula weekendowa pilnowana tylko w jednym z czterech miejsc
+
+**NAPRAWIONE.** Powstala JEDNA funkcja `slots.day_ok(channels, day, is_article)` i wolaja ja
+teraz wszystkie cztery trasy zapisujace slot:
+
+| trasa | jak bylo | jak jest |
+|---|---|---|
+| `slots.next_slot` | jedyna, ktora znala regule | bez zmian (`_li_ok`) |
+| planer | slot od modelu, walidowany TYLKO jako ISO | odrzuca pozycje z `[dzien]` w powodzie |
+| guzik "koniec kolejki" | `MAX(slot)+1 dzien` - z PIATKU robil SOBOTE | przesuwa do najblizszego dozwolonego dnia |
+| re-slotter | siatka gniazd bez sprawdzenia dnia | pomija dni zakazane |
+
+**Szczegol, ktory latwo bylo przeoczyc:** trasy trzymaja kanal w ROZNYCH ksztaltach - lista
+(planer, karta) albo napis (re-slotter). Gdyby `day_ok` przyjmowalo tylko liste, re-slotter
+cicho ominalby guard, mimo ze "wywolanie jest". Funkcja przyjmuje oba ksztalty, a test to pilnuje.
+
+Test: `cm-agent/tests/test_regula_dnia.py` (19 asercji), w tym asercja **AP-309** sprawdzajaca
+w ZRODLE, ze kazda z czterech tras faktycznie o regule pyta - zeby nastepna nowa trasa nie
+powtorzyla tego dlugu po cichu.
+
+Ponizej oryginalny opis, dla historii.
+
 
 **Zapisany 26/07/2026** (decyzja Managera: nie naprawiac teraz, zapisac).
 

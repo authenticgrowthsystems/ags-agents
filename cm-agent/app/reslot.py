@@ -25,6 +25,7 @@ import sys
 from zoneinfo import ZoneInfo
 
 from . import db
+from . import slots as _slots
 from .slots import _parse_window, _daily_cap
 
 WARSAW = ZoneInfo("Europe/Warsaw")
@@ -127,6 +128,11 @@ def plan(brand_id="AGS", channel="x", per_day=None):
         placed = None
         for _ in range(180):  # bezpiecznik: max 180 dni w przod
             slots_today = used_by_day.get(probe, [])
+            # D-001: re-slotter budowal siatke gniazd bez pytania o dzien tygodnia,
+            # wiec potrafil wrzucic LinkedIn na sobote wbrew kanonowi.
+            if not _slots.day_ok(channel, probe, is_article=False):
+                probe = probe + datetime.timedelta(days=1)
+                continue
             if len(slots_today) < na_dzien:
                 for gt in grid:
                     cand = datetime.datetime.combine(probe, gt, WARSAW)

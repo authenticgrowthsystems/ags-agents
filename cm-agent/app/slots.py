@@ -116,6 +116,25 @@ def _busy(brand_id, channel, day_start, day_end):
                    for r in (rows + rows2) if r.get("scheduled_for")})
 
 
+def day_ok(channels, day, is_article=False):
+    """Czy tego DNIA wolno publikowac na tych kanalach (kanon 19/07). JEDNO zrodlo prawdy.
+
+    D-001 NAPRAWIONE 02/08/2026: regula sobotnia zyla WYLACZNIE wewnatrz `next_slot`, a sloty
+    zapisywaly cztery rozne trasy. Trzy z nich dnia tygodnia NIE ZNALY:
+      * planer - slot przychodzi od modelu, walidowany tylko jako ISO,
+      * guzik "koniec kolejki" - bierze MAX(slot)+1 dzien, wiec z PIATKU robil SOBOTE
+        jednym tapnieciem,
+      * re-slotter - siatka gniazd bez sprawdzenia dnia.
+    Post na LinkedIn w sobote wychodzil wiec wbrew kanonowi, bez zadnego ostrzezenia.
+
+    `channels` przyjmuje pojedynczy kanal ALBO liste - trasy maja rozne ksztalty danych
+    i nie chcemy, zeby ktoras ominela guard tylko dlatego, ze trzyma kanal jako napis."""
+    chans = [channels] if isinstance(channels, str) else list(channels or [])
+    if any(str(c).startswith("linkedin") for c in chans):
+        return _li_ok(day, is_article)
+    return True
+
+
 def _li_ok(day, is_article):
     """Kanon 11d: LinkedIn pon-pt post, sobota NIC, niedziela artykul."""
     if day.weekday() == 5:

@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 from psycopg.types.json import Jsonb
 
-from . import db, config, tasks, content_memory
+from . import db, config, tasks, content_memory, slots as _slots
 from .brand import load_brand
 from . import brand as _brand
 from .generate import client
@@ -316,6 +316,13 @@ def build_plan(brand_id="AGS", days=7, force=False):
         except (ValueError, TypeError):
             invalid_dropped += 1
             dropped_themes.append(f"[slot] {theme[:70]}")
+            continue
+        # D-001: slot przychodzi OD MODELU i byl walidowany wylacznie jako ISO - regula
+        # sobotnia nie mial go kto sprawdzic. Prompt to za malo: model bywa gluchy na limity
+        # (tak samo jak przy bramce meta wyzej, ktora powstala z tego samego powodu).
+        if not _slots.day_ok(targets, slot, is_article=str(it.get("format") or "post") == "article"):
+            invalid_dropped += 1
+            dropped_themes.append(f"[dzien] {theme[:70]}")
             continue
         if str(it.get("format") or "post") == "article":
             theme = "[ARTYKUL] " + theme
