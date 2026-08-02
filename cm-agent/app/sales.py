@@ -147,7 +147,7 @@ def _knowledge_stats():
 def pipeline_text():
     rows = db.fetchall(
         f"""SELECT prospect_name, stage, offer_tier, value, currency, next_followup_at, updated_at,
-                  notes, contact_email, contact_phone
+                  notes, contact_email, contact_phone, contact_person
            FROM sales_pipeline WHERE brand_id='AGS' AND stage NOT IN ({_SQL_POZA_GRA})
            ORDER BY array_position(ARRAY['negotiation','proposal','qualified','prospect']::text[], stage),
                     updated_at DESC LIMIT 30""")
@@ -198,7 +198,12 @@ def pipeline_text():
             bits.append(f"⚠️ cisza {stale} dni")
         # Kontakt widoczny w lejku (DDL 029): dane z wizytowki i researchu maja sluzyc TU,
         # a nie tylko w naglowku gotowca - inaczej baza wie, a czlowiek nie.
-        kontakt = " ".join(x for x in [f"☎️{r.get('contact_phone')}" if r.get("contact_phone") else "",
+        # D-003 (02/08): `contact_person` bylo POBIERANE, ale nie POKAZYWANE, wiec prospekt
+        # z zapisana osoba (albo z ciepłym dojsciem) dostawal "brak kontaktu" - etykieta klamala
+        # tak samo jak "BRAK nastepnego kroku" przed 27/07. Osoba idzie PIERWSZA: dojscie
+        # przez czlowieka jest cenniejsze niz numer ze strony.
+        kontakt = " ".join(x for x in [f"👤{r.get('contact_person')}" if r.get("contact_person") else "",
+                                       f"☎️{r.get('contact_phone')}" if r.get("contact_phone") else "",
                                        f"✉️{r.get('contact_email')}" if r.get("contact_email") else ""] if x)
         if kontakt:
             bits.append(kontakt)
@@ -556,6 +561,10 @@ TOOL_PIPELINE_ADD = {
                   "description": "Default prospect."},
         "value": {"type": ["number", "null"], "description": "Szacowana wartosc wspolpracy (PLN)."},
         "currency": {"type": ["string", "null"], "description": "PLN albo USD; default PLN."},
+        "contact_person": {"type": ["string", "null"],
+                           "description": "Osoba do kontaktu albo DOJSCIE (np. 'przez Piotra Hamryszaka')."},
+        "contact_email": {"type": ["string", "null"]},
+        "contact_phone": {"type": ["string", "null"]},
         "note": {"type": ["string", "null"]}},
         "required": ["prospect_name"]},
 }
@@ -573,6 +582,10 @@ TOOL_PIPELINE_MOVE = {
         "currency": {"type": ["string", "null"]},
         "next_followup_at": {"type": ["string", "null"],
                              "description": "ISO 8601 Europe/Warsaw, np. 2026-07-23T10:00."},
+        "contact_person": {"type": ["string", "null"],
+                           "description": "Osoba do kontaktu albo DOJSCIE (np. 'przez Piotra Hamryszaka')."},
+        "contact_email": {"type": ["string", "null"]},
+        "contact_phone": {"type": ["string", "null"]},
         "note": {"type": ["string", "null"]}},
         "required": ["prospect_fragment"]},
 }
@@ -1529,10 +1542,13 @@ def _pipeline_add(inp):
         return f"\"{name[:60]}\" juz jest w lejku - uzyj pipeline_move."
     stage = inp.get("stage") if inp.get("stage") in _STAGES else "prospect"
     row = db.fetchone(
-        """INSERT INTO sales_pipeline (brand_id, prospect_name, prospect_url, stage, value, currency, notes)
-           VALUES ('AGS',%s,%s,%s,%s,%s,%s) RETURNING id""",
+        """INSERT INTO sales_pipeline (brand_id, prospect_name, prospect_url, stage, value, currency,
+                                       notes, contact_person, contact_email, contact_phone)
+           VALUES ('AGS',%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
         (name[:200], inp.get("url"), stage, inp.get("value"),
-         (inp.get("currency") or "PLN")[:10], (inp.get("note") or None)))
+         (inp.get("currency") or "PLN")[:10], (inp.get("note") or None),
+         (inp.get("contact_person") or None), (inp.get("contact_email") or None),
+         (inp.get("contact_phone") or None)))
     return f"📊 Dodane do lejka: {name[:80]} [{stage}]" + \
            (f", {inp['value']:.0f} {inp.get('currency') or 'PLN'}" if inp.get("value") else "") + "."
 
@@ -1547,6 +1563,15 @@ def _pipeline_move(inp):
         sets.append("stage=%s")
         params.append(stage)
         bits.append(f"{row['stage']} -> {stage}")
+    # D-003: pola kontaktowe dopisywalne RECZNIE. Dotad wolal je wylacznie automat
+    # (`_zapisz_kontakt` z researchu), wiec ciepłe dojscie podane przez czlowieka
+    # - "do Adamietza przez Piotra Hamryszaka" - nie mialo gdzie zamieszkac i zylo poza systemem.
+    for pole, etykieta in (("contact_person", "osoba"), ("contact_email", "mail"),
+                           ("contact_phone", "telefon")):
+        if inp.get(pole):
+            sets.append(f"{pole}=%s")
+            params.append(str(inp[pole])[:200])
+            bits.append(f"{etykieta}: {str(inp[pole])[:60]}")
     if inp.get("offer_tier"):
         sets.append("offer_tier=%s")
         params.append(str(inp["offer_tier"])[:120])

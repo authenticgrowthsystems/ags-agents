@@ -83,7 +83,26 @@ sa te sama poprawka: wstrzykniecie zegara zamiast `datetime.now()`.
 
 ---
 
-## D-003: Kolumny kontaktowe lejka bez drogi zapisu przez czlowieka
+## D-003 [ZAMKNIETE 02/08/2026]: Kolumny kontaktowe lejka bez drogi zapisu przez czlowieka
+
+**NAPRAWIONE, oba objawy.**
+
+1. **Etykieta klamala.** `pipeline_text` POBIERALO `contact_person`, ale go NIE POKAZYWALO,
+   wiec prospekt z zapisana osoba dostawal "⚠️ brak kontaktu". Ta sama rodzina co AP-312
+   i "BRAK nastepnego kroku" z 27/07: dane byly poprawne, klamal WIDOK. Osoba wyswietla sie
+   teraz PIERWSZA - dojscie przez czlowieka jest cenniejsze niz numer ze strony.
+2. **Nie bylo recznej drogi zapisu.** `pipeline_add` i `pipeline_move` dostaly pola
+   `contact_person` / `contact_email` / `contact_phone`. Opis pola mowi wprost, ze mieszka tam
+   takze DOJSCIE ("przez Piotra Hamryszaka") - to byl konkretny przypadek, ktory ten dlug zrodzil.
+
+**Wpis byl PRZETERMINOWANY w czesci "dzis uspiona":** notatka z 26/07 mowila, ze `contact_person`
+jest NULL we wszystkich dwunastu wierszach. Odczyt z 02/08 pokazal **33 wiersze z wypelniona
+osoba** na 133 - czyli drugi objaw byl juz ZYWY i falszywe "brak kontaktu" zdazylo sie pokazac.
+
+Test: `cm-agent/tests/test_kontakt_lejka.py` (14 asercji). Zestaw 21/21.
+
+Ponizej oryginalny opis, dla historii.
+
 
 **Zapisany 26/07/2026** (sekcja 4.7 diagnozy; wada realna, dzis USPIONA).
 
