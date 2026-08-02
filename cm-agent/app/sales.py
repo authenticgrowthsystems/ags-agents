@@ -1353,6 +1353,14 @@ def _draft_outreach(inp, chat_id):
         return (f"Nie znajduje w lejku prospekta \"{(inp.get('prospect_fragment') or '')[:60]}\" "
                 f"- najpierw pipeline_add albo prospect_research.")
     channel = inp.get("channel") or "email"
+    # Kanal przychodzi PROSTO z wywolania modelu i dotad nie byl sprawdzany, a nizej stal cichy
+    # fallback na 'Other'. Do 02/08 bylo to nieszkodliwe, bo 'Other' BYLO kubelkiem maili.
+    # Po naprawie D-009 juz nim nie jest, wiec literowka w nazwie kanalu wpisalaby gotowca
+    # do kubelka, ktorego nie szuka ZADNE zapytanie - i zadna kolejna migracja by go stamtad
+    # nie wyjela, bo nie da sie go odroznic od wiersza RAPORTU PRACY.
+    if channel not in _ENG_CHANNEL:
+        return (f"Nieznany kanal outreachu \"{channel}\". Dozwolone: "
+                f"{', '.join(sorted(_ENG_CHANNEL))}. Nic nie zapisalem.")
     lang = inp.get("language") or "pl"
     brand = load_brand(BRAND)
     grounding = research.grounding_with_sources(row["research_job_id"], limit=10) \
@@ -1456,7 +1464,9 @@ def _draft_outreach(inp, chat_id):
     _tg_send(chat_id, _outreach_naglowek(row, channel, _ostrzezenie, wiz))
     _tg_send(chat_id, draft)
     _tg_send(chat_id, _outreach_stopka(row))
-    _eng_kanal = _ENG_CHANNEL.get(channel, "Other")
+    # Bez `.get` z domyslna wartoscia: bramka wyzej gwarantuje obecnosc klucza, a cichy fallback
+    # na 'Other' bylby dokladnie ta droga, ktora tworzy wiersz nieodnajdywalny po migracji D-009.
+    _eng_kanal = _ENG_CHANNEL[channel]
     # 26/07 (sekcja 4.2 diagnozy): nowy gotowiec UNIEWAZNIA poprzedni w tym samym kanale.
     # Bez tego kazde przepisanie zostawialo wieczny wiersz 'proposed' z wlasna bramka -
     # StandART uzbieral tak siedem wierszy i piec bramek w cztery godziny 24/07.

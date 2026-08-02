@@ -61,7 +61,7 @@ Legenda kosztu: **S** = do 30 minut, **M** = pół sesji, **L** = osobny build.
   Chcę spróbować dopiąć je po `author_display` z normalizacją ogonków (AP-313), a resztę
   **oznaczyć jawnie jako historyczne, nie kasować**. Najpierw podgląd, ile się dopnie.
 
-- [ ] **10. D-009: mail Sprzedawcy ląduje w kanale `Other`, tekst z teczki w `Email`.** `M`
+- [x] **10. D-009 ZROBIONE 02/08. Mail Sprzedawcy lądował w kanale `Other`, tekst z teczki w `Email`.** `M`
   Ten sam kanał ma w księdze dwie etykiety. Nie ruszałem, bo ta wartość jest kluczem
   dopasowania przy unieważnianiu gotowców - podmiana bez migracji istniejących wierszy
   odtworzyłaby wadę StandART z 24/07. Wymaga jednego kroku: słownik + migracja razem.

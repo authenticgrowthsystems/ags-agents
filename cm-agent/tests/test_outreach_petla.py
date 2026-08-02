@@ -235,10 +235,17 @@ if not _zrodlo:
                 _zrodlo = _s
                 break
 check("znaleziono funkcje piszaca gotowca", bool(_zrodlo))
-check("kanal liczony JEDEN raz ze slownika", _zrodlo.count("_ENG_CHANNEL.get(") == 1, _zrodlo[:200])
+
+# Liczymy w KODZIE, nie w tekscie zrodla. Pierwsza wersja tej asercji liczyla wystapienia
+# w calym napisie i spadla na... wlasnym komentarzu, ktory cytowal to samo wyrazenie.
+_kod = "\n".join(l for l in _zrodlo.splitlines() if not l.strip().startswith("#"))
+check("kanal liczony JEDEN raz ze slownika", _kod.count("_ENG_CHANNEL[") == 1, _kod[:200])
+check("BEZ cichego fallbacku na 'Other' - bramka wyzej gwarantuje klucz",
+      "_ENG_CHANNEL.get(" not in _kod, "wrocil .get z domyslna wartoscia")
+check("nieznany kanal odrzucany PRZED zapisem", "if channel not in _ENG_CHANNEL:" in _kod)
 check("ta sama zmienna idzie do wyszukiwania i do zapisu",
-      "_open_outreach_rows(row[\"prospect_name\"], _eng_kanal)" in _zrodlo
-      and "(_eng_kanal," in _zrodlo,
+      "_open_outreach_rows(row[\"prospect_name\"], _eng_kanal)" in _kod
+      and "(_eng_kanal," in _kod,
       "rozjazd miedzy kanalem wyszukiwania a kanalem zapisu")
 
 print("\n" + ("WSZYSTKO PRZESZLO" if not FAILS else f"BLEDY: {FAILS}"))

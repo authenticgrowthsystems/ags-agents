@@ -148,7 +148,14 @@ czat (MCP) -> teczka -> GET /lacznik/teczka?kontakt=... -> teczka.teczka_text:
 - **Brak nastepnego kroku jest WYPISANY** ("BRAK ustalonego nastepnego kroku"), nie zostawiony
   jako pusta linia. Pusty wiersz w raporcie lejka byl jedna z przyczyn tego, ze przez tygodnie
   nikt nie zauwazyl prospektow bez terminu (diagnoza 26/07).
-- **`_ENG_CHANNEL` w sales.py mapuje `email` na `'Other'`, nie `'Email'`** (stan zastany, poza
-  zakresem tej zmiany). Gotowce mailowe Sprzedawcy leza wiec w kanale `Other`, a teksty z teczki
-  w `Email`. Rozjazd jest kosmetyczny (teczka laczy po kluczu, nie po kanale), ale przy liczeniu
-  wysylki per kanal trzeba o nim pamietac. Dlug: D-009.
+- **`_ENG_CHANNEL` w sales.py NIE JEST slownikiem etykiet - to KLUCZ DOPASOWANIA.** Wartosc stad
+  trafia do `_open_outreach_rows`, ktora po niej znajduje poprzednie ZYWE gotowce prospekta,
+  zeby je uniewaznic. **Zmiana wartosci bez migracji istniejacych wierszy odcina stare gotowce
+  od wyszukiwania i odtwarza wade StandART z 24/07** (siedem otwartych gotowcow, piec bramek,
+  cztery godziny).
+  **D-009 zamkniete 02/08/2026:** `email` mapuje sie na `'Email'`, dziewiec istniejacych wierszy
+  zmigrowane w tym samym oknie wdrozeniowym, przy ZATRZYMANYM cm-agencie (zatrzymanie usuwa okno
+  zamiast wybierac mniejsze zlo - baza stoi w innym kontenerze niz pisarz).
+  Wczesniejsza wersja tego wpisu nazywala rozjazd "kosmetycznym". **Byla w bledzie** i mogla
+  zachecic do cofniecia slownika jednym commitem, bez migracji. Test w `test_outreach_petla.py`
+  pilnuje teraz niezmiennika: kanal zapisu i kanal wyszukiwania to ta sama wartosc.

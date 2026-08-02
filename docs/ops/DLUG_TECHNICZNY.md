@@ -224,7 +224,13 @@ mylace. Znikna z pola widzenia same, gdy czat sie przewinie.
 
 ---
 
-## D-009: Gotowiec mailowy Sprzedawcy laduje w kanale `Other`, tekst z teczki w `Email`
+## D-009 [ZAMKNIETE 02/08/2026]: Gotowiec mailowy w kanale `Other`, tekst z teczki w `Email`
+
+**NAPRAWIONE, commit ea13447 + migracja przy zatrzymanym cm-agencie.** Slownik `email -> Email`
+i dziewiec istniejacych wierszy w JEDNYM oknie wdrozeniowym. Okno usuniete przez zatrzymanie
+kontenera (baza stoi w innym kontenerze niz pisarz), nie przez wybor mniejszego zla.
+Wyszlo przy okazji: `channel` outreachu nie byl walidowany - dolozona bramka. Ponizej oryginal.
+
 
 **Zapisany 31/07/2026** (stan zastany, zauwazony przy budowie teczki prospekta).
 
@@ -309,3 +315,25 @@ a nie ponownym rozstrzyganiem 24 przypadkow z pamieci.
 **Warunek wejscia buildu wielomarkowego:** PO pierwszej zamknietej sprzedazy, nie wczesniej.
 Uzasadnienie Tomasza: *"Wielomarkowosc nie przybliza do pierwszej faktury, a przepiecie danych
 bez gotowego kodu ja oddala"*.
+
+---
+
+## D-014: `action_type` mowi co innego niz `channel` dla tego samego maila
+
+**Zapisany 02/08/2026** (znaleziony przez adwersarzy przy naprawie D-009).
+
+`sales.py` wstawia gotowca z literalem `action_type='other'` **dla kazdego kanalu**, podczas gdy
+`teczka.py` mapuje maila na `action_type='email'`. Obie kolumny lezą w tej samej tabeli i sa
+pokazywane na tej samej osi czasu w teczce prospekta.
+
+**Dlaczego NIE naprawilem tego razem z D-009:** to druga kolumna, wiec druga migracja. Wciagniecie
+jej do tego samego okna podwoiloby zakres zmiany, ktora dotyka klucza dopasowania gotowcow -
+a wlasnie ten klucz jest miejscem, gdzie blad kosztuje najwiecej. Regula "slownik i migracja
+w jednym kroku" nie znaczy "wszystkie slowniki naraz".
+
+**Czym grozi:** dzis niczym operacyjnie - `action_type` nie filtruje zadnego zapytania w torze
+outreachu. Ale kazdy przyszly raport typu "ile maili wyszlo" da inny wynik zaleznie od tego,
+czy policzy po `channel` czy po `action_type`.
+
+**Docelowo:** `action_type` z tego samego slownika co `channel` + migracja istniejacych wierszy,
+w jednym kroku. Rozroznik ten sam, trzypasowy, co przy D-009.
