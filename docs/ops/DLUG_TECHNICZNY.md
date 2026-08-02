@@ -266,18 +266,41 @@ zrodlo prawdy o etapie. To AP-312 czekajace na wywolanie.
 
 ---
 
-## D-011: 61 sierot w `engagement_log`
+## D-011 [ZAMKNIETE 02/08/2026 - NIE BYLO WADY]: "61 sierot" w `engagement_log`
 
-**Zapisany 01/08/2026** (polecenie Tomasza: nie ruszac, zgłosic po moscie).
+**Zapisany 01/08/2026 przeze mnie. Zamkniety 02/08 po odczycie, ktory obalil wlasna przeslanke.
+Zero zmian w kodzie i w bazie - i to jest wlasciwy wynik tego zadania.**
 
-Na 348 wierszy `engagement_log`: 278 wisi na `contact_id`, 9 na `pipeline_id`, a **61 nie wisi
-na niczym** - ani kontakt, ani prospekt. To wpisy sprzed DDL 026 i DDL 036, gdy klucze jeszcze
-nie istnialy, a wiazanie szlo po napisie w `author_display`.
+### Co pokazal odczyt
 
-**Czym grozi:** teczka ich nie pokaze przy nikim, bo laczy po kluczu. Sa w bazie, zajmuja
-miejsce w licznikach ("348 wpisow"), a nie da sie ich przypisac do zadnej sprawy.
-**Docelowo:** proba dopiecia po `author_display` z normalizacja ogonkow (AP-313), reszta
-oznaczona jawnie jako historyczna - nie kasowana.
+1. **Wszystkie 61 wierszy ma PUSTE `author_display`.** Nie ma czego dopinac. Zero pasuje
+   do `contacts`, zero do `sales_pipeline` - nie dlatego, ze nazwy sie roznia, tylko dlatego,
+   ze nazwy NIE MA. Normalizacja ogonkow (AP-313), ktora zapisalem jako narzedzie naprawy,
+   nie ma tu czego normalizowac.
+2. **To nie sa osierocone interakcje, tylko zapisy WLASNEJ aktywnosci.** Probka tresci:
+   `"test draft"`, `"Raw insights queue for X Agent v1.0"`, `"Opis: Obrazek przedstawia posty
+   na LinkedIn"`, `"My AI agent said 'published.'"`. Opublikowane posty, analizy zrzutow ekranu,
+   wewnetrzne znaczniki kolejki. Wszystkie 61 maja `status='logged'`, czyli "zapisuje fakt".
+   **One nie maja drugiej strony - i nie powinny miec.**
+3. **Zaden licznik ich nie widzi.** Oba zapytania zliczajace (`crm.py:137` i `crm.py:178,181`)
+   sa zawezone `WHERE contact_id=...`, wiec wiersz bez kontaktu jest z nich wykluczony.
+   W `n8n` tej tabeli nie czyta nic. Nie istnieje zadne globalne `COUNT(*)` bez zawezenia.
+
+### Dlaczego to trafilo na liste dlugu
+
+Zdanie "zajmuja miejsce w licznikach (348 wpisow)" bylo **moje** i bylo nieprawdziwe: 348 to
+liczba z MOJEJ sondy, nie z zadnego widoku systemu. Zapisalem brak powiazania jako wade,
+nie sprawdzajac, czy cokolwiek tego powiazania POTRZEBUJE.
+
+**To jest AP-311 zastosowane na opak.** Anty-wzorzec mowi: brak danych nie jest faktem, dopoki
+nie sprawdzisz, ze system moglby je pokazac. Symetrycznie: **obecnosc danych nie jest problemem,
+dopoki nie sprawdzisz, ze cokolwiek je czyta.**
+
+### Co z tego zostaje naprawde (drobne, nie dlug operacyjny)
+
+Wiersze `x_post` i `linkedin_post` w `engagement_log` dubluja to, co ma wlasna tabele
+`published_posts`. To zapach modelowania, nie usterka: nic sie przez to nie psuje, zaden odczyt
+nie klamie. Odnotowane, zeby nie odkrywac tego trzeci raz.
 
 ---
 
