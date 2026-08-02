@@ -238,7 +238,31 @@ oraz migracja danych i PUT do n8n z rytualem backup / PUT / deactivate+activate.
 **Powiazane:** D-006 (widok nie pokazuje, od kiedy material wisi i na co czeka) - te dwie
 naprawy warto zrobic razem, bo obie dotykaja tego samego stanu i tej samej niejasnosci.
 
-## D-007: Operacja hurtowa nie zostawia sladu czytelnego dla DRUGIEGO agenta
+## D-007 [ZAMKNIETE 02/08/2026]: Operacja hurtowa nie zostawia sladu czytelnego dla DRUGIEGO agenta
+
+**NAPRAWIONE: rejestr operacji + stempel na wierszach (DDL 040, `app/operacje.py`).**
+
+`bulk_operations` trzyma op_id CZYTELNY DLA CZLOWIEKA (np. `wycofanie-serii-29072026`), date,
+autora, opis PO LUDZKU, uzyty warunek i liczbe wierszy. `content_items.op_id` i `post_queue.op_id`
+nios� ten identyfikator. Drugi agent wycina dokladny zbior JEDNYM warunkiem i czyta, co to bylo.
+
+**DLACZEGO REJESTR, A NIE `status_source`:** kolumna symetryczna do `slot_source` powiedzialaby,
+jakiego RODZAJU pisarz ustawil status. To za malo - dwie operacje tego samego rodzaju znowu
+bylyby nieodroznialne, a nikt nie przeczytalby, CO i DLACZEGO sie stalo.
+
+**RETROAKTYWNIE OZNACZONE WYCOFANIE Z 29/07 - i to bylo pilne.** Wpis mowil wprost, ze
+`updated_at::date` to proteza dzialajaca "tylko dopoki pamietamy date operacji". DDL 040
+utrwala ten zbior, POKI JESZCZE WIEMY. Za miesiac tej wiedzy juz by nie bylo i 21 materialow
+zostaloby na zawsze nieodroznialnych od pieciu starych odrzucen.
+
+**Czego NIE zrobiono, powiedziane wprost:** istniejace skrypty hurtowe (`outreach_cleanup`,
+`prospect_import`) NIE zostaly przerobione na `operacje.zarejestruj`. Mechanizm jest gotowy
+i przetestowany, ale kazdy skrypt trzeba podpiac osobno - to nastepny krok, nie ten.
+
+Test: `cm-agent/tests/test_operacje.py` (18 asercji). Zestaw 22/22.
+
+Ponizej oryginalny opis, dla historii.
+
 
 **Zapisany 29/07/2026** (zgloszenie Managera, szosta odslona AP-311).
 
