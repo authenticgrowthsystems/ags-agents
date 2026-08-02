@@ -318,7 +318,19 @@ bez gotowego kodu ja oddala"*.
 
 ---
 
-## D-014: `action_type` mowi co innego niz `channel` dla tego samego maila
+## D-014 [ZAMKNIETE 02/08/2026]: `action_type` mowi co innego niz `channel` dla tego samego maila
+
+**NAPRAWIONE. Przyczyna byla WSPOLNA z D-009:** para (action_type, channel) miala DWA zrodla -
+kanal ze slownika, typ literalem w INSERT - wiec miala jak sie rozjechac i rozjechala sie
+dwukrotnie. Od 02/08 para siedzi w jednym slowniku `_ENG_KANALY`, w tym samym ksztalcie co
+`teczka._KANALY`. Migracja: `docs/ops/SQL_d014_action_type_02082026.sql`.
+
+**Odczyt pokazal, ze to ETYKIETA, nie klucz** (inaczej niz przy D-009): jedyne zapytanie
+filtrujace po `action_type` (crm.py:180) jest zawezone do `contact_id`, a wszystkie dziewiec
+gotowcow ma je puste; w calej bazie zero wierszy pasuje do `action_type ILIKE %dm%`. Dlatego
+zatrzymywanie kontenera NIE bylo tu potrzebne - powiedziane wprost, zamiast powtarzania
+ciezszej procedury dla powagi. Ponizej oryginal.
+
 
 **Zapisany 02/08/2026** (znaleziony przez adwersarzy przy naprawie D-009).
 

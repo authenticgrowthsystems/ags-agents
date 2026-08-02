@@ -239,14 +239,39 @@ check("znaleziono funkcje piszaca gotowca", bool(_zrodlo))
 # Liczymy w KODZIE, nie w tekscie zrodla. Pierwsza wersja tej asercji liczyla wystapienia
 # w calym napisie i spadla na... wlasnym komentarzu, ktory cytowal to samo wyrazenie.
 _kod = "\n".join(l for l in _zrodlo.splitlines() if not l.strip().startswith("#"))
-check("kanal liczony JEDEN raz ze slownika", _kod.count("_ENG_CHANNEL[") == 1, _kod[:200])
+check("para (typ, kanal) brana JEDEN raz z jednego slownika",
+      _kod.count("_ENG_KANALY[") == 1, _kod[:200])
 check("BEZ cichego fallbacku na 'Other' - bramka wyzej gwarantuje klucz",
-      "_ENG_CHANNEL.get(" not in _kod, "wrocil .get z domyslna wartoscia")
-check("nieznany kanal odrzucany PRZED zapisem", "if channel not in _ENG_CHANNEL:" in _kod)
-check("ta sama zmienna idzie do wyszukiwania i do zapisu",
-      "_open_outreach_rows(row[\"prospect_name\"], _eng_kanal)" in _kod
-      and "(_eng_kanal," in _kod,
-      "rozjazd miedzy kanalem wyszukiwania a kanalem zapisu")
+      "_ENG_KANALY.get(" not in _kod and "_ENG_CHANNEL.get(" not in _kod,
+      "wrocil .get z domyslna wartoscia")
+check("nieznany kanal odrzucany PRZED zapisem", "if channel not in _ENG_KANALY:" in _kod)
+
+# D-014: `action_type` byl LITERALEM 'other' w INSERT, a kanal szedl ze slownika. Dwa zrodla
+# dla jednej pary maja jak sie rozjechac - i rozjechaly sie dwukrotnie (D-009 i D-014).
+check("action_type NIE jest juz literalem w INSERT",
+      "VALUES ('other'," not in _kod, "literal 'other' wrocil do INSERT")
+check("typ akcji idzie z tej samej krotki co kanal",
+      "_eng_typ, _eng_kanal = _ENG_KANALY[channel]" in _kod, _kod[:300])
+check("email ma typ 'email', nie 'other' (D-014)",
+      sales._ENG_KANALY["email"][0] == "email", str(sales._ENG_KANALY))
+check("kanal wyprowadzony ze slownika par, nie osobno",
+      all(sales._ENG_CHANNEL[k] == v[1] for k, v in sales._ENG_KANALY.items()),
+      "widok kanalowy rozjechal sie ze zrodlem")
+
+# Typy musza przechodzic ograniczenie engagement_log_action_type_check (DDL 001).
+TYPY_OK = {"x_post", "x_reply", "x_comment", "x_dm", "linkedin_post", "linkedin_comment",
+           "linkedin_dm", "email", "telegram", "call", "follow", "unfollow", "mention",
+           "reaction", "other"}
+check("kazdy typ przechodzi ograniczenie tabeli",
+      {v[0] for v in sales._ENG_KANALY.values()} <= TYPY_OK,
+      str({v[0] for v in sales._ENG_KANALY.values()} - TYPY_OK))
+# Sprawdzamy INTENCJE, nie uklad przecinkow: ta sama zmienna ma trafic do wyszukiwania
+# poprzednich gotowcow I do parametrow INSERT-a. Pierwsza wersja tej asercji szukala
+# "(_eng_kanal," czyli POZYCJI w krotce - i spadla, gdy przed kanalem stanal typ akcji.
+_szuka = "_open_outreach_rows(row[\"prospect_name\"], _eng_kanal)" in _kod
+_pisze = any("_eng_kanal" in l and "outreach {channel}" in l for l in _kod.splitlines())
+check("ta sama zmienna idzie do wyszukiwania i do zapisu", _szuka and _pisze,
+      f"szukanie={_szuka}, zapis={_pisze}")
 
 print("\n" + ("WSZYSTKO PRZESZLO" if not FAILS else f"BLEDY: {FAILS}"))
 sys.exit(1 if FAILS else 0)

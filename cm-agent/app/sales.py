@@ -810,7 +810,22 @@ def _prospect_results(inp):
 # `teczka.py` zapisuje maile poprawnie jako 'Email' - kazde liczenie wysylki per kanal klamalo.
 # Slownik i migracja dziewieciu istniejacych wierszy poszly JEDNYM krokiem (regula Tomasza
 # z 02/08: "slownik i migracja ida w jednym kroku albo nie ida wcale").
-_ENG_CHANNEL = {"email": "Email", "linkedin_dm": "LinkedIn", "x_dm": "X"}
+# D-014 NAPRAWIONE 02/08/2026: para (action_type, channel) trzymana W JEDNYM MIEJSCU.
+# PRZYCZYNA OBU DLUGOW NARAZ byla ta sama: kanal szedl ze slownika, a `action_type` byl
+# LITERALEM 'other' wpisanym wprost w INSERT - dwa zrodla dla jednej pary maja jak sie rozjechac
+# i rozjechaly sie dwukrotnie. Ten sam ksztalt, co `teczka._KANALY`, wiec oba tory sa teraz
+# opisane tak samo.
+#
+# UWAGA na 'other' w INNYCH torach: `conversation.py` zapisuje `action_type='other'` dla
+# propozycji DM SWIADOMIE (komentarz przy INTAKE-UX 21/07, 217 wierszy). Tamtego NIE ruszamy -
+# D-014 dotyczy wylacznie dziewieciu wierszy Agenta Sprzedazy.
+_ENG_KANALY = {
+    "email":       ("email",       "Email"),
+    "linkedin_dm": ("linkedin_dm", "LinkedIn"),
+    "x_dm":        ("x_dm",        "X"),
+}
+# Widok tylko-kanalowy, dla czytelnosci wywolan, ktore o typ nie pytaja.
+_ENG_CHANNEL = {k: v[1] for k, v in _ENG_KANALY.items()}
 
 # Prog trafnosci bazy wiedzy dla tekstow do klienta. Kalibracja 24/07 z zywego korpusu:
 # materialy o Adamietzu wracaly na zapytanie o szkole tanca z podobienstwem 0.40-0.45.
@@ -1358,9 +1373,9 @@ def _draft_outreach(inp, chat_id):
     # Po naprawie D-009 juz nim nie jest, wiec literowka w nazwie kanalu wpisalaby gotowca
     # do kubelka, ktorego nie szuka ZADNE zapytanie - i zadna kolejna migracja by go stamtad
     # nie wyjela, bo nie da sie go odroznic od wiersza RAPORTU PRACY.
-    if channel not in _ENG_CHANNEL:
+    if channel not in _ENG_KANALY:
         return (f"Nieznany kanal outreachu \"{channel}\". Dozwolone: "
-                f"{', '.join(sorted(_ENG_CHANNEL))}. Nic nie zapisalem.")
+                f"{', '.join(sorted(_ENG_KANALY))}. Nic nie zapisalem.")
     lang = inp.get("language") or "pl"
     brand = load_brand(BRAND)
     grounding = research.grounding_with_sources(row["research_job_id"], limit=10) \
@@ -1466,7 +1481,8 @@ def _draft_outreach(inp, chat_id):
     _tg_send(chat_id, _outreach_stopka(row))
     # Bez `.get` z domyslna wartoscia: bramka wyzej gwarantuje obecnosc klucza, a cichy fallback
     # na 'Other' bylby dokladnie ta droga, ktora tworzy wiersz nieodnajdywalny po migracji D-009.
-    _eng_kanal = _ENG_CHANNEL[channel]
+    # Typ i kanal wychodza z JEDNEJ krotki, wiec nie maja jak sie rozjechac (D-014).
+    _eng_typ, _eng_kanal = _ENG_KANALY[channel]
     # 26/07 (sekcja 4.2 diagnozy): nowy gotowiec UNIEWAZNIA poprzedni w tym samym kanale.
     # Bez tego kazde przepisanie zostawialo wieczny wiersz 'proposed' z wlasna bramka -
     # StandART uzbieral tak siedem wierszy i piec bramek w cztery godziny 24/07.
@@ -1478,8 +1494,8 @@ def _draft_outreach(inp, chat_id):
             # author_display (napis z nazwa), wiec teczka musialaby dopasowywac po tekscie.
             """INSERT INTO engagement_log (action_type, channel, agent, content, response, notes,
                                            contact_id, pipeline_id, status, author_display)
-               VALUES ('other',%s,'AGS:sprzedaz',%s,%s,%s,%s,%s,'proposed',%s)""",
-            (_eng_kanal, f"outreach {channel}: {row['prospect_name'][:200]}",
+               VALUES (%s,%s,'AGS:sprzedaz',%s,%s,%s,%s,%s,'proposed',%s)""",
+            (_eng_typ, _eng_kanal, f"outreach {channel}: {row['prospect_name'][:200]}",
              draft[:3000], f"{_OUTREACH_NOTE} (Agent Sprzedazy, HITL)",
              row.get("contact_id"), row["id"], row["prospect_name"][:200]))
     except Exception:
