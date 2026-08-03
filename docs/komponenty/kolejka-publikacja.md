@@ -53,8 +53,27 @@ Przypomnij jutro), nigdy auto-decyzja.
   sobota nic, niedziela artykul (reczny).
 - `humanize_slot`: ludzkie minuty +/-15 od slotu planu, NIGDY rowny kwadrans -
   stosowany przy KAZDYM wpisie slotu do post_queue. content_items trzyma CZYSTY
-  slot planu (roznica ZAMIERZONA).
-- `assign_if_needed`: approved bez slotu dostaje go automatycznie.
+  slot planu (roznica ZAMIERZONA). **LOSUJE przy kazdym wywolaniu** - kto potrzebuje
+  tej wartosci poza zapisem, musi dostac JA, a nie zawolac funkcje drugi raz.
+- `assign_if_needed`: approved bez slotu dostaje go automatycznie. Zwraca
+  `(slot, changed, realny)` - `slot` to czysty plan zapisany do `content_items`,
+  `realny` to DOKLADNIE ta wartosc, ktora poszla do `post_queue`.
+
+### DWA CZASY, jeden post - ktora powierzchnia pokazuje ktory
+
+Publikacja nastepuje o czasie z KOLEJKI. Slot planu jest siatka, nie obietnica.
+
+| powierzchnia | pokazuje | prawda o publikacji |
+|---|---|---|
+| meldunek bota "CM przydzielil slot" | czas z kolejki (od 03/08/2026) | TAK |
+| raport dzienny, `stan_gry` | czas z kolejki | TAK |
+| karta materialu (`/karty`) | czysty slot z `content_items` | NIE, do 15 min obok |
+
+Ostatni wiersz to **otwarty dlug D-015**. Zgloszenie Tomasza 03/08 dotyczylo meldunku
+("powinienem miec realna godzine") i meldunek zostal naprawiony; karta czyta material,
+wiec pokazanie na niej czasu kolejki wymaga dodatkowego odczytu (wzorzec `_stan_rozsylki`
+z D-006) i jest osobna decyzja. **Nie zakladaj, ze dwie godziny widziane w bocie dla tego
+samego posta oznaczaja wade** - sprawdz najpierw, ktora powierzchnia je pokazala.
 
 ## Serie X i straznik dlugich (channels.stage_variant)
 
