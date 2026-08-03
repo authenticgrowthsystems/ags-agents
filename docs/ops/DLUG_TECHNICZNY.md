@@ -250,6 +250,15 @@ w znaczeniu "czekam na bramke zatwierdzenia". `handed_off` to slowo, ktore kodeb
 sama, zanim ktokolwiek przemianowal wartosc: *"dispatch = HAND-OFF, nie publikacja"* (`worker`)
 i *"Every mode here just HANDS OFF"* (`channels`).
 
+**WDROZONE 03/08/2026 wieczorem**, okno 19:28:30-19:42 (13 minut, publikacje staly, kolejka byla
+pusta, nic nie przepadlo). Przebieg: `docs/ops/OKNO_d008_03082026.md`, sekcja na koncu.
+
+**CZWARTE USTALENIE, z samego okna: MIGRACJA DANYCH BYLA ZEROWA.** Odczyt przy stojacych
+pisarzach pokazal **zero** wierszy w starej wartosci - siedem materialow z 27/07 przez tydzien
+dopublikowalo swoje serie i siedzi w `published`. Wpis ponizej opisywal stan sprzed tygodnia
+i zestarzal sie tak samo jak D-003 czy D-011. Przemianowanie bylo potrzebne w KODZIE,
+w ograniczeniu CHECK i w wezle n8n - w danych nie bylo czego przemianowywac.
+
 **TRZY USTALENIA, KTORE ROZJECHALY SIE Z OPISEM PONIZEJ** (regula brania dlugu zadziala):
 
 1. **Inwentarz "30 miejsc" mieszal DWA ROZLACZNE SLOWNIKI.** Z 32 trafien w `cm-agent/app/`
