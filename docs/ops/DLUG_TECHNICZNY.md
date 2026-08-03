@@ -338,6 +338,36 @@ na ten plik.
 **Warunek wejscia:** minal co najmniej jeden PELNY cykl publikacji na nowym obrazie
 (`approved -> handed_off -> published` bez recznej pomocy) i nikt nie planuje juz cofac obrazu.
 
+## D-015: Karta materialu pokazuje slot z SIATKI PLANOWANIA, a post wychodzi o godzinie z KOLEJKI
+
+**Zapisany 03/08/2026** (zgloszenie Tomasza: "powinienem tez realna godzine miec w meldunku").
+**Meldunek bota zostal naprawiony tego samego wieczora. KARTA nie.**
+
+Kanon 19/07 mowi, ze publikacje wychodza o NIEPELNYCH godzinach: `post_queue.scheduled_for`
+dostaje czas po humanizacji (do 15 minut obok), a `content_items.scheduled_for` trzyma czysty
+slot planu. **Ta roznica jest ZAMIERZONA** - to nie jest rozjazd do naprawienia.
+
+Wada jest w tym, ktory z dwoch czasow widzi czlowiek:
+
+| powierzchnia | pokazuje | czy to prawda o publikacji |
+|---|---|---|
+| meldunek bota o slocie | **czas z kolejki** (od 03/08) | TAK |
+| raport dzienny, `stan_gry` | czas z kolejki | TAK |
+| **karta materialu (`/karty`)** | **czysty slot z `content_items`** | **NIE, do 15 minut obok** |
+
+Dowod z 03/08: bot zameldowal `Tue 04/08 16:00`, a w kolejce stalo `04/08 15:49`. Tomasz
+zobaczyl obie liczby i zapytal, ktora jest prawdziwa - **i to jest caly problem**. To AP-312
+w wydaniu liczbowym: powierzchnia obiecuje godzine, ktora nie nastapi.
+
+**Dlaczego nie naprawione od razu:** karta czyta material, a realny czas siedzi w wierszu
+kolejki - potrzebny jest dodatkowy odczyt per karta (wzorzec `_stan_rozsylki` z D-006, jedno
+zapytanie, nie N+1). To osobna zmiana w innej warstwie niz meldunek i osobna decyzja, czy karta
+ma pokazywac czas kolejki, oba czasy, czy zostac przy slocie planu.
+
+**Czym grozi, jesli zostawimy:** przy czterech publikacjach dziennie czlowiek regularnie widzi
+dwie rozne godziny dla tego samego posta i za kazdym razem musi sie zastanowic, ktora obowiazuje.
+Dokladnie ten koszt, ktory D-006 i D-008 usuwaly przy nazwie stanu.
+
 ## D-007 [ZAMKNIETE 02/08/2026]: Operacja hurtowa nie zostawia sladu czytelnego dla DRUGIEGO agenta
 
 **NAPRAWIONE: rejestr operacji + stempel na wierszach (DDL 040, `app/operacje.py`).**

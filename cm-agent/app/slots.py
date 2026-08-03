@@ -220,15 +220,23 @@ def humanize_slot(dt, spread_min=15):
 
 def assign_if_needed(item):
     """Dla 'approved': slot NULL albo miniony -> przydziel najblizszy wolny i zapisz.
-    Zwraca (slot|None, changed:bool). Wolane z petli workera PRZED dispatchem."""
+    Zwraca (slot|None, changed:bool, realny|None). Wolane z petli workera PRZED dispatchem.
+
+    TRZECI ELEMENT (zgloszenie Tomasza 03/08): `slot` to czas z SIATKI PLANOWANIA, a post
+    wychodzi o czasie z KOLEJKI - czyli po humanizacji, do 15 minut obok (kanon 19/07:
+    publikacje o niepelnych godzinach). Meldunek podawal ten pierwszy, wiec obiecywal godzine,
+    ktora nie nastapi. `realny` niesie DOKLADNIE te wartosc, ktora poszla do `post_queue` -
+    `humanize_slot` losuje przy kazdym wywolaniu, wiec zawolanie go drugi raz w meldunku
+    dalby TRZECIA, jeszcze inna godzine. To jest AP-312: nazwa (tu: liczba) obiecuje co innego,
+    niz sie stanie."""
     now = _teraz()
     cur = item.get("scheduled_for")
     if cur is not None and cur.astimezone(WARSAW) > now - datetime.timedelta(minutes=10):
-        return cur, False  # slot aktualny (10 min laski na przelot petli)
+        return cur, False, None  # slot aktualny (10 min laski na przelot petli)
     is_article = str(item.get("master_theme") or "").startswith("[ARTYKUL]")
     slot = next_slot(item["brand_id"], item.get("target_channels") or ["x"], is_article=is_article)
     if slot is None:
-        return cur, False
+        return cur, False, None
     db.execute("UPDATE content_items SET scheduled_for=%s, updated_at=NOW() WHERE id=%s",
                (slot, item["id"]))
     # FIX 07/07: trzymaj post_queue w zgodzie z content_item (zrodlo prawdy). Bez tego wiersze
@@ -239,8 +247,10 @@ def assign_if_needed(item):
     # bo humanize_slot rozrzuca +/-15 min i kanon idzie na jeden wpis na material, ale gdyby
     # serie wrocily, to jest miejsce do rozsuwania czesci. slot_source (DDL 035) sprawia,
     # ze nastepnym razem widac to odczytem, a nie eliminacja tras.
+    # JEDNO losowanie, dwa uzycia: ta sama wartosc idzie do kolejki i do meldunku.
+    realny = humanize_slot(slot)
     db.execute("""UPDATE post_queue SET scheduled_for=%s, slot_source='planner'
                   WHERE content_item_id=%s
                   AND status IN ('review','held','scheduled','queued','dispatching')""",
-               (humanize_slot(slot), item["id"]))
-    return slot, True
+               (realny, item["id"]))
+    return slot, True, realny

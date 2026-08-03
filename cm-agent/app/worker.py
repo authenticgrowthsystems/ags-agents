@@ -362,11 +362,15 @@ def process_item(item):
     if st == "approved":
         # decyzja Tomasza 06/07: Tomasz zatwierdza TRESC, CM proponuje KIEDY. Slot NULL/miniony
         # NIE publikuje natychmiast - CM przydziela najblizszy wolny wg okien+kadencji i melduje.
-        slot, changed = slots.assign_if_needed(item)
+        slot, changed, realny = slots.assign_if_needed(item)
         if changed and slot:
-            logbot.send(f"🗓 CM przydzielil slot: {slot.strftime('%a %d/%m %H:%M')} - "
+            # Zgloszenie Tomasza 03/08: meldunek ma podawac godzine, o ktorej post NAPRAWDE
+            # wyjdzie - czyli czas z kolejki (po humanizacji), a nie czysty slot z siatki
+            # planowania. Roznica siega 15 minut (kanon 19/07: niepelne godziny).
+            kiedy = realny or slot
+            logbot.send(f"🗓 CM przydzielil slot: {kiedy.strftime('%a %d/%m %H:%M')} - "
                         f"{item['master_theme'][:70]} (zmiana? napisz do CM: 'przesun na ...')")
-            return f"slot_assigned({slot:%d/%m %H:%M})"
+            return f"slot_assigned({kiedy:%d/%m %H:%M})"
         # backlog b: dispatch = HAND-OFF, nie publikacja. Item przechodzi w STATUS_HANDED_OFF
         # (poza ACTIONABLE), a reconcile_publications zamelduje realny sukces/porazke po callbacku.
         # D-008: to JEDYNY w calym systemie pisarz tej wartosci - stad migracja da sie domknac
