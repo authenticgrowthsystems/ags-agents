@@ -104,6 +104,29 @@ Punkty 1 i 2 dolozyl Manager **po udanym wdrozeniu**, patrzac na to, czego nikt 
 
 ---
 
+## 10. psql NIE PODSTAWIA ZMIENNYCH WEWNATRZ BLOKU CYTOWANEGO DOLARAMI
+
+**Dopisane 03/08/2026, po wpadce na zywo przy D-008** (okno bylo otwarte, pisarze staly).
+
+```sql
+-- NIE DZIALA: dla psql tresc miedzy $$ to zwykly tekst
+DO $$ BEGIN IF n <> :oczekiwana THEN ... END $$;     -- syntax error at or near ":"
+
+-- DZIALA: podstawianie w ZWYKLYM zapytaniu, blok czyta gotowa wartosc
+CREATE TEMP TABLE _bramka(oczekiwana integer) ON COMMIT DROP;
+INSERT INTO _bramka VALUES (:oczekiwana);
+DO $$ DECLARE oczek integer; BEGIN SELECT oczekiwana INTO oczek FROM _bramka; ... END $$;
+```
+
+Ta konkretna wpadka byla **glosna i nieszkodliwa**: `ON_ERROR_STOP` przerwal na pierwszym bledzie,
+transakcja sie wycofala. Wazne jest co innego - **bramka bezpieczenstwa nie zadzialala, bo nie
+doszla do wykonania.** Gdyby ten sam blad siedzial po drugiej stronie sztuczki (bramka niby jest,
+ale porownuje z wartoscia pusta), migracja przeszlaby BEZ kontroli i nikt by tego nie zauwazyl.
+
+**Praktycznie: bramke trzeba zobaczyc, jak DZIALA, zanim sie jej zaufa.** Uruchom plik najpierw
+z **zla** liczba i sprawdz, ze SIE ZATRZYMUJE. Bramka, ktorej nikt nie widzial przy pracy, jest
+zalozeniem, nie zabezpieczeniem - to ten sam blad co AP-311, tylko o wlasnym narzedziu.
+
 ## 9. ZABEZPIECZENIE DANYCH I ZABEZPIECZENIE DOSTEPNOSCI DZIALAJA PRZECIWKO SOBIE
 
 **Wpisane do kanonu 02/08/2026 decyzja Managera, w brzmieniu BE** (uwaga wyszla od Managera,

@@ -49,13 +49,24 @@ BEGIN;
 -- lancuch `&&` pekl tutaj, PIERWSZA czynnoscia jest podniesienie kontenera i wlaczenie workflow
 -- (komendy ratunkowe gotowe w OKNO_d008_03082026.md), a diagnoza DOPIERO potem. Baza jest
 -- w tym momencie nietknieta.
+--
+-- UWAGA, WADA ZLAPANA NA ZYWO 03/08 przy pierwszym uruchomieniu tego pliku:
+-- **psql NIE podstawia zmiennych `:nazwa` wewnatrz bloku cytowanego dolarami** (`DO $$ ... $$`).
+-- Dla psql tresc miedzy `$$` to zwykly tekst, wiec `:oczekiwana` dolatywalo do serwera doslownie
+-- i konczylo sie `syntax error at or near ":"`. Podstawianie dziala w ZWYKLYCH zapytaniach -
+-- stad przekazanie liczby przez tabele tymczasowa. Blad byl glosny i nieszkodliwy (transakcja
+-- sie wycofala), ale gdyby bramka byla po drugiej stronie tej sztuczki, cisza byla by grozniejsza.
+CREATE TEMP TABLE _d008_bramka(oczekiwana integer) ON COMMIT DROP;
+INSERT INTO _d008_bramka VALUES (:oczekiwana);
+
 DO $$
-DECLARE n integer;
+DECLARE n integer; oczek integer;
 BEGIN
+  SELECT oczekiwana INTO oczek FROM _d008_bramka;
   SELECT COUNT(*) INTO n FROM content_items WHERE status = 'dispatching';
-  RAISE NOTICE 'Wierszy do migracji: %', n;
-  IF n <> :oczekiwana THEN
-    RAISE EXCEPTION 'STOP: oczekiwano % wierszy, jest %. Czy cm-agent stoi i czy Scheduler jest wylaczony? MIGRACJA WYCOFANA, nic nie zapisano.', :oczekiwana, n;
+  RAISE NOTICE 'Wierszy do migracji: % (oczekiwano: %)', n, oczek;
+  IF n <> oczek THEN
+    RAISE EXCEPTION 'STOP: oczekiwano % wierszy, jest %. Czy cm-agent stoi i czy Scheduler jest wylaczony? MIGRACJA WYCOFANA, nic nie zapisano.', oczek, n;
   END IF;
 END $$;
 
