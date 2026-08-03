@@ -65,6 +65,12 @@ BEGIN
   SELECT oczekiwana INTO oczek FROM _d008_bramka;
   SELECT COUNT(*) INTO n FROM content_items WHERE status = 'dispatching';
   RAISE NOTICE 'Wierszy do migracji: % (oczekiwano: %)', n, oczek;
+  -- BRAMKA MUSI PADAC ZAMKNIETA. `n <> NULL` daje NULL, czyli NIE-PRAWDE, czyli `IF` sie NIE
+  -- wykonuje i migracja przechodzi BEZ KONTROLI - po cichu. Porownanie z pustka jest grozniejsze
+  -- niz brak porownania, bo w logu stoi "bramka: OK". To jest AP-314.
+  IF oczek IS NULL THEN
+    RAISE EXCEPTION 'STOP: bramka nie dostala liczby (oczek IS NULL). MIGRACJA WYCOFANA.';
+  END IF;
   IF n <> oczek THEN
     RAISE EXCEPTION 'STOP: oczekiwano % wierszy, jest %. Czy cm-agent stoi i czy Scheduler jest wylaczony? MIGRACJA WYCOFANA, nic nie zapisano.', oczek, n;
   END IF;
