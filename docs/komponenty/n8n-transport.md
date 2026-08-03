@@ -12,15 +12,36 @@ w n8n - mozgi mieszkaja w kontenerach Python (cm-agent, ags-researcher).
 
 | Workflow | ID | Rola |
 |---|---|---|
-| HITL handler | `U5pUZjy2yAhR1sWg` | JEDYNY konsument bota Telegram (~252 wezly) |
+| HITL handler | `U5pUZjy2yAhR1sWg` | JEDYNY konsument bota Telegram (~252 wezly). **PISZE do `content_items`** (wezel `Cm Resolve Gate`, z pominieciem cm-agenta) |
 | Subagent X Publisher | `G3nEIt5lIkiKemiK` | OAuth1 POST /2/tweets (+ media v2 chunked) |
 | Subagent LinkedIn Publisher | `Uv9TvUMI8MRSqCLz` | Bearer POST /v2/ugcPosts; GENERYCZNY per cel (secret_prefix) |
-| Scheduler | `x1jJEbcWAe3FnpCa` | co minute: post_queue 'scheduled' -> publish |
+| Scheduler | `x1jJEbcWAe3FnpCa` | co minute: post_queue 'scheduled' -> publish. **PISZE do `content_items`** (wezly `Mark Published` / `Mark Published LI` domykaja material na `published`) |
 | CM Reports Cron | `ERweY5vHomrpw1SC` | 08:00 daily / nd 20:00 weekly / nd 20:15 plan |
 | Drift check cron | - | 03:00 (sync Notion) |
 | Backup | - | 03:30 |
 | Researcher - * (5 adapterow) | - | web_search / firecrawl / gemini_dr / openai_dr / manus |
 | AGS Lacznik Chat Tools | `yxJUJmZpSUe0tw9K` | MCP serwer narzedzi czatu (stan_gry, wyslij_raport_pracy) + webhooki wariantu B (chat-raport, stan-gry); szczegoly lacznik.md |
+
+## KTO PISZE DO `content_items` (dopisane 03/08/2026, po D-008)
+
+**Pisarzy jest TRZECH, nie jeden.** Ta lista istnieje, bo przy migracji D-008 dwaj z nich
+umkneli dwóm niezaleznym odczytom - szukano po WARTOSCI (`dispatching`), a wezel bota
+tego slowa w ogole nie zawiera. **Szukaj po nazwie TABELI, nie po wartosci.**
+
+| pisarz | co zapisuje | czy widac go grepem po wartosci |
+|---|---|---|
+| kontener `cm-agent` (`worker.py`) | caly cykl zycia materialu | tak |
+| n8n `AGS Scheduler v1` | `published` po udanej publikacji | tak |
+| n8n `AGS HITL Handler v1.0` | `approved` / `rejected` przy tapnieciu guzika | **NIE** |
+
+**Konsekwencja operacyjna:** kazda migracja dotykajaca `content_items` musi uwzglednic
+n8n, a nie tylko `docker stop cm-agent`. Procedura wzorcowa: `docs/ops/OKNO_d008_03082026.md`.
+
+**Pulapka wezla `Mark Published`:** ma w JEDNYM zapytaniu wartosci z DWOCH roznych slownikow -
+`ci.status` (material) i `q.status IN (...)` (kolejka), obie do 03/08 o tej samej nazwie
+`dispatching`. Podmiana "po calym tekscie" zrywa dopasowanie kolejki bez zadnego bledu,
+bo SQL zostaje poprawny. Skrypt `n8n-workflows/patches/d008-handed-off-03082026.cjs` robi
+to chirurgicznie i sam odmawia, gdy liczby sie nie zgadzaja.
 
 ## HITL: struktura routingu
 
