@@ -36,8 +36,8 @@ Model MVP rozwijany: rdzen dziala od dnia 1, funkcje doplywaja w cenie.
 | Komponent | Status | Glowny brak |
 |---|---|---|
 | planner | KOMPLETNY | - |
-| kolejka-publikacja | KOMPLETNY | - |
-| karty-hitl | KOMPLETNY | - |
+| kolejka-publikacja | KOMPLETNY | **D-015** (03/08): karta materialu pokazuje slot PLANU, a post wychodzi o czasie z KOLEJKI - do 15 min obok. Meldunek bota i raporty pokazuja juz czas prawdziwy, karta nie |
+| karty-hitl | KOMPLETNY | j.w. - D-015 dotyczy tej samej karty. Stan materialu od 03/08 nazywa sie `handed_off` (D-008), etykieta bez zmian |
 | decyzje-nauka | CZESCIOWY | mechanizm LIVE; nauka mloda (progi semi-auto nieosiagniete - potrzeba decyzji) |
 | metryki | CZESCIOWY | X = auto (kolektor); LinkedIn = import xlsx reczny do App 2 CMA |
 | dedup | KOMPLETNY | strojenie progu przez /set czeka na patch allowlisty (SQL dziala) |
