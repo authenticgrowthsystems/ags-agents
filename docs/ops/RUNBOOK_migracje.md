@@ -89,6 +89,12 @@ Gotowy do wklejenia, z uwaga, ze cofa TAKZE wiersze zapisane juz przez nowy kod.
 
 ## 8. Dokumentacja idzie w tym samym commicie
 
+> **PODNIESIONE DO KANONU OGOLNEGO 03/08/2026 (decyzja Tomasza).** Ten punkt nie dotyczy juz
+> wylacznie migracji - obowiazuje KAZDY build. Pelna regula, z bramka w meldunku i lista trzech
+> dokumentow do sprawdzenia: `docs/ops/KANON_dokumentacja_w_tym_samym_commicie.md`.
+> Powod: `docs/SYSTEM_DATAFLOW.md` stal nieruszony od 27/07 przez najbardziej pracowity tydzien
+> projektu - bo dokumentacje pisze sie, gdy JEST produktem zadania, a nie gdy jest skutkiem ubocznym.
+
 Szczegolnie zdania typu "rozjazd jest kosmetyczny" - jesli wlasnie naprawiasz cos, co dokumentacja
 nazywa nieistotnym, **to zdanie jest zaproszeniem do cofniecia poprawki jednym commitem.**
 
