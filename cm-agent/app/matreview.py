@@ -130,15 +130,16 @@ def pending_items(brand_id=None):
 
 def _find_done_item(theme_fragment, brand_id="AGS"):
     """Task #89 symptom 4 (12/07): karta NIE otwierala sie dla approved. Szukaj materialu poza
-    przegladem (approved/dispatching/published) po fragmencie tematu - widok bez decyzji."""
+    przegladem (approved/handed_off/published) po fragmencie tematu - widok bez decyzji."""
     if not theme_fragment:
         return None
     return db.fetchone(
         """SELECT id, master_theme, status, target_channels, scheduled_for, canonical_body, media
            FROM content_items
-           WHERE brand_id=%s AND status IN ('approved','dispatching','published')
+           WHERE brand_id=%s AND status IN ('approved',%s,'published')
              AND master_theme ILIKE %s
-           ORDER BY updated_at DESC LIMIT 1""", (brand_id, f"%{theme_fragment}%"))
+           ORDER BY updated_at DESC LIMIT 1""",
+        (brand_id, config.STATUS_HANDED_OFF, f"%{theme_fragment}%"))
 
 
 _VIEW_STATUS_PL = {"approved": "ZATWIERDZONY (czeka na publikacje)",
@@ -147,9 +148,11 @@ _VIEW_STATUS_PL = {"approved": "ZATWIERDZONY (czeka na publikacje)",
                    # Manager zglosil 27/07 "zawieszony post"; odczyt pokazal siedem materialow,
                    # wszystkie zdrowe, najstarszy 51 godzin i poprawnie, bo sloty siegaly
                    # 4 sierpnia. Etykieta mowi teraz, CO SIE STALO, a nie co sie wlasnie dzieje.
-                   "dispatching": "ROZESLANY DO KOLEJKI", "published": "OPUBLIKOWANY"}
+                   # D-008 (03/08): wartosc w bazie mowi juz to samo, co etykieta - 'handed_off'.
+                   config.STATUS_HANDED_OFF: "ROZESLANY DO KOLEJKI", "published": "OPUBLIKOWANY"}
 
-# Stany wiersza kolejki, ktore NIE sa jeszcze terminalne (ta sama lista, co w conversation.py).
+# Stany wiersza KOLEJKI, ktore NIE sa jeszcze terminalne (ta sama lista, co w conversation.py).
+# D-008: 'dispatching' ponizej ZOSTAJE - to slownik post_queue, nie content_items.
 _PQ_CZEKA = ("review", "held", "scheduled", "queued", "dispatching")
 
 
@@ -196,7 +199,7 @@ def _view_card(it, brand_id="AGS"):
     n_media = sum(1 for m in (it.get("media") or []) if (m or {}).get("file_id"))
     # D-006: przy stanie rozsylki sama etykieta nie wystarcza - dokladamy, ile wierszy czeka
     # i na kiedy. To jest roznica miedzy "wysylam od dwoch minut" a "wisi od trzydziestu".
-    rozsylka = _stan_rozsylki(it["id"]) if it.get("status") == "dispatching" else ""
+    rozsylka = _stan_rozsylki(it["id"]) if it.get("status") == config.STATUS_HANDED_OFF else ""
     text = (f"🔒 {_VIEW_STATUS_PL.get(it['status'], it['status'].upper())} - podglad, bez decyzji"
             f"{rozsylka}\n\n"
             f"🕐 {when}\n📣 {ch}" + (f"\n🖼 zalaczniki: {n_media}" if n_media else "") + "\n"
@@ -270,7 +273,7 @@ def send_review_card(chat_id=None, theme_fragment=None, only_with_media=False, d
             item_id = str(it["id"])
             break
         if item_id is None:
-            # Task #89: nie ma w przegladzie -> szukaj w approved/dispatching/published (view-only)
+            # Task #89: nie ma w przegladzie -> szukaj w approved/handed_off/published (view-only)
             done = _find_done_item(theme_fragment)
             if not done:
                 return False
@@ -424,7 +427,8 @@ def _end_of_queue_slot(item_id, brand_id="AGS"):
     row = db.fetchone(
         """SELECT MAX(scheduled_for) AS m FROM content_items
            WHERE brand_id=%s AND scheduled_for IS NOT NULL
-             AND status IN ('planned','drafting','needs_approval','approved','dispatching')""", (brand_id,))
+             AND status IN ('planned','drafting','needs_approval','approved',%s)""",
+        (brand_id, config.STATUS_HANDED_OFF))
     now = datetime.datetime.now(WARSAW)
     m = row.get("m") if row else None
     base = m.astimezone(WARSAW) if m and m > now else now

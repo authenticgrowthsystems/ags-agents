@@ -11,12 +11,14 @@ import datetime
 import json
 from zoneinfo import ZoneInfo
 
-from . import db, tasks, content_memory
+from . import db, tasks, content_memory, config
 from . import brand as _brand
 from .matreview import _state_get, _state_set, send_intake_buttons, pending_items
 
 WARSAW = ZoneInfo("Europe/Warsaw")
-ACTIVE_FOR_SLOTS = ("planned", "drafting", "needs_approval", "approved", "dispatching")
+# Stany MATERIALU zajmujace slot. D-008: ostatnia pozycja bierze sie z config.STATUS_HANDED_OFF,
+# zeby nowa nazwa nie musiala byc pamietana w pieciu miejscach naraz.
+ACTIVE_FOR_SLOTS = ("planned", "drafting", "needs_approval", "approved", config.STATUS_HANDED_OFF)
 NUDGE_WINDOW = (9, 0, 11, 30)   # odprawa poranna miedzy 09:00 a 11:30
 PROPOSALS_PER_GAP = 2
 

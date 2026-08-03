@@ -283,12 +283,17 @@ Sprawdź kolumny PRZED pisaniem SQL (AP-304). Pełny opis: docs/db/SCHEMA_ags_cr
   adapter_path, execution_mode, config jsonb (publish_windows, **publish_mode**, language_publish,
   **own_handle**, secret_prefix, agent_kind, follower_count, stats_mode, rules[], voice_note)
 - **content_items**: id **UUID**, brand_id, master_theme, status (planned|needs_research|
-  researching|drafting|needs_approval|approved|dispatching|published|rejected|failed|proposed|
-  draft|brief|archived), canonical_body, target_channels[], scheduled_for, media jsonb
+  researching|drafting|needs_approval|approved|**handed_off**|published|rejected|failed|proposed|
+  draft|brief|archived), canonical_body, target_channels[], scheduled_for, media jsonb.
+  **`handed_off` do 03/08/2026 nazywało się `dispatching`** (D-008/AP-312). Nazwa żyje
+  w `config.STATUS_HANDED_OFF` - nie wklejaj jej literałem do nowych zapytań.
 - **post_queue** (KOLEJKA): id serial, **brand**, **platform**, content, topic, status
   (review|scheduled|queued|held|dispatching|published|failed|rejected), content_item_id,
   scheduled_for, media jsonb. UWAGA: 'review' przy materiale ZATWIERDZONYM = "czeka na start
   serii", nie "czeka na akcept" (etykiety tłumaczy reports._pq_label).
+  **UWAGA DRUGA (D-008): `dispatching` W TEJ TABELI ZOSTAJE** - to osobny słownik i znaczy
+  co innego niż stan materiału. Żywy węzeł n8n `Mark Published` trzyma obie wartości w JEDNYM
+  zapytaniu, więc podmiana "po całym tekście" zrywa dopasowanie kolejki bez żadnego błędu.
 - **published_posts**: KSIĘGA publikacji (post_id/URL, engagement_metrics, embedding)
 - **contacts**: name, x_handle, **handles jsonb** (mapa tożsamości per kanał - kanon WHO IS WHO),
   icp_tier (Buyer|Peer|Competitor|Partner), relationship_stage (cold->commented->replied->dm->

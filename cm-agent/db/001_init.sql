@@ -22,9 +22,14 @@ CREATE TABLE IF NOT EXISTS content_items (
   target_channels TEXT[] NOT NULL DEFAULT '{}',    -- e.g. {x,linkedin}
   research_job_id UUID,                            -- link to research_jobs (Researcher)
   inspiration_id  UUID,                            -- link to inspirations
+  -- D-008 (03/08/2026): 'handed_off' zastapilo 'dispatching' (AP-312 - nazwa obiecywala stan
+  -- przelotny, a stan trwa DNI). Stara wartosc stoi tu PRZEJSCIOWO, zeby droga odwrotu istniala;
+  -- znika w osobnym oknie: docs/ops/SQL_d008b_sprzatanie_check_PO_OKNIE.sql.
+  -- Zrodlo prawdy dla tego ograniczenia na produkcji: cm-agent/db/042_status_handed_off.sql.
   status          VARCHAR(30) NOT NULL DEFAULT 'planned'
                     CHECK (status IN ('planned','needs_research','researching','drafting',
-                                      'needs_approval','approved','dispatching','published','rejected','failed')),
+                                      'needs_approval','approved','handed_off','dispatching',
+                                      'published','rejected','failed')),
   scheduled_for   TIMESTAMPTZ,
   voice_hash      TEXT,                            -- voice snapshot version at generation
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),

@@ -17,10 +17,17 @@ Przypomnij jutro), nigdy auto-decyzja.
 ## Wejscia-wyjscia i tabele
 
 - `content_items`: state machine tresci; worker claimuje 'approved' DOPIERO gdy
-  `scheduled_for <= NOW()` -> 'dispatching' -> 'published'.
+  `scheduled_for <= NOW()` -> 'handed_off' -> 'published'.
+  **`handed_off` do 03/08/2026 nazywalo sie `dispatching`** (D-008/AP-312: nazwa
+  obiecywala stan przelotny, a stan trwa DNI - material czeka, az WSZYSTKIE
+  wiersze jego serii przestana sie ruszac). Nazwa zyje w `config.STATUS_HANDED_OFF`.
 - `post_queue` (INWENTARZ + HARMONOGRAM): wiersz per wariant kanalowy;
   statusy: review / scheduled / queued / held / dispatching / published /
   failed / rejected. `content_item_id` linkuje do materialu.
+  **UWAGA: `dispatching` w TEJ tabeli to INNY slownik i ZOSTAJE** - znaczy
+  "jeden wiersz oddany subagentowi", a nie "material czeka na cala serie".
+  D-008 go nie dotknelo. Zywy wezel n8n `Mark Published` ma OBIE wartosci
+  w jednym zapytaniu, wiec podmiana "po calym tekscie" zrywa kolejke po cichu.
 - `published_posts`: PRAWDA "co opublikowane" (post_id/URL, embedding,
   engagement_metrics) - zasila dedup i content memory.
 - `channels.config.publish_mode` decyduje droga: `webhook` (POST adapter

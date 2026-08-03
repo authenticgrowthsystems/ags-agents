@@ -26,7 +26,10 @@ Dwa widoki decyzyjne w Telegramie:
 ## Funkcje kart (stan v9+)
 
 - Widoki: kompakt/rozwin, filtr dnia, filtr "tylko z mediami"; karta wszystkich
-  marek z tagiem 🏷; karta approved/dispatching/published = view-only 🔒.
+  marek z tagiem 🏷; karta approved/handed_off/published = view-only 🔒
+  (`handed_off` do 03/08/2026 nazywalo sie `dispatching` - D-008; etykieta
+  widoczna dla czlowieka to "ROZESLANY DO KOLEJKI" plus liczba wierszy
+  oczekujacych i ich terminy - D-006).
 - Guziki intake przy zapisie materialu: Kolejka / Teraz / Odrzuc
   (`send_intake_buttons`).
 - 🎨 Generuj (grafika na zadanie), ➕ Media (dolaczenie zdjecia; galeria tylko

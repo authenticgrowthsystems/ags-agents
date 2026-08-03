@@ -222,8 +222,9 @@ def build_plan(brand_id="AGS", days=7, force=False):
         covered = (db.fetchone(
             """SELECT COUNT(*) AS n FROM content_items
                WHERE brand_id=%s AND status IN ('proposed','planned','needs_research','drafting',
-                                                'needs_approval','approved','dispatching')
-                 AND scheduled_for >= %s AND scheduled_for < %s""", (brand_id, start, end)) or {}).get("n") or 0
+                                                'needs_approval','approved',%s)
+                 AND scheduled_for >= %s AND scheduled_for < %s""",
+            (brand_id, config.STATUS_HANDED_OFF, start, end)) or {}).get("n") or 0
         if covered >= 10:
             chat = _admin_chat()
             if chat:

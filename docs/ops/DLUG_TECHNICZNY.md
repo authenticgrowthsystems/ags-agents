@@ -180,8 +180,9 @@ widoczne. Przy okazji powstal jedyny przypadek, ktory naprawde wyglada na zawies
 go odroznic: **zero oczekujacych wierszy przy materiale nadal w tym stanie** - karta ostrzega
 wprost. Test: `cm-agent/tests/test_stan_rozsylki.py` (13 asercji).
 
-**NIE ZAMYKA D-008** (przemianowanie samej WARTOSCI statusu). To osobna sprawa i osobne okno -
-uzasadnienie ponizej w D-008. Zmiana etykiety wyswietlanej NIE dotyka kontraktu miedzy warstwami.
+**NIE ZAMYKALO D-008** (przemianowanie samej WARTOSCI statusu). Zmiana etykiety wyswietlanej
+nie dotykala kontraktu miedzy warstwami. **D-008 zostalo zamkniete 03/08/2026** - wartosc
+w bazie nazywa sie dzis `handed_off` i mowi to samo, co etykieta z D-006.
 
 Ponizej oryginalny opis, dla historii.
 
@@ -233,7 +234,50 @@ zmiana kontraktu miedzy tabelami i n8n, wiec osobna decyzja.
 bedzie regularnie pytal "czy to wisi", a odpowiedz bedzie za kazdym razem wymagala sondy do bazy.
 Prawdziwy zwis utonie kiedys w tych falszywych alarmach.
 
-## D-008: Status `dispatching` do przemianowania
+## D-008 [ZAMKNIETE 03/08/2026]: Status `dispatching` przemianowany na `handed_off`
+
+**NAPRAWIONE.** Wartosc `content_items.status` nazywa sie `handed_off`, zyje w jednym miejscu
+(`config.STATUS_HANDED_OFF`), a stara nazwa nie ma prawa wrocic ani do kodu, ani do DDL -
+pilnuje tego `cm-agent/tests/test_d008_handed_off.py` (24 asercje).
+
+**DLACZEGO `handed_off`, a nie `rozeslane` z tego wpisu ani `awaiting_publication`**
+(decyzja Tomasza 03/08, po adwersarzach): stan konczy sie, gdy wiersze kolejki przestaja sie
+ruszac - **obojetnie czym**. `worker._DISPATCH_OK` zawiera `held`, czyli gotowiec do RECZNEJ
+wklejki: przy LinkedInie material wychodzi ze stanu po kilkudziesieciu sekundach, a publikacja
+dopiero czeka na czlowieka. Nazwa obiecujaca publikacje odtworzylaby **AP-312 wewnatrz poprawki
+na AP-312**. Osobno: `agent_registry.current_gate` uzywa juz przedrostka `awaiting_*`
+w znaczeniu "czekam na bramke zatwierdzenia". `handed_off` to slowo, ktore kodebaza wybrala
+sama, zanim ktokolwiek przemianowal wartosc: *"dispatch = HAND-OFF, nie publikacja"* (`worker`)
+i *"Every mode here just HANDS OFF"* (`channels`).
+
+**TRZY USTALENIA, KTORE ROZJECHALY SIE Z OPISEM PONIZEJ** (regula brania dlugu zadziala):
+
+1. **Inwentarz "30 miejsc" mieszal DWA ROZLACZNE SLOWNIKI.** Z 32 trafien w `cm-agent/app/`
+   do materialu nalezalo **20**, do `post_queue` - **11**, jedno bylo neutralnym komentarzem.
+   `post_queue.status` MA WLASNA wartosc `dispatching` i znaczy ona co innego (jeden wiersz
+   oddany subagentowi). Podmiana wszystkich 32 zerwalaby dopasowanie w kolejce publikacji.
+2. **Zywy workflow n8n ma OBIE wartosci w JEDNYM zapytaniu.** `AGS Scheduler v1`
+   (`x1jJEbcWAe3FnpCa`), wezly `Mark Published` i `Mark Published LI`:
+   `ci.status='dispatching'` (do zmiany) oraz `q.status IN (...,'dispatching')` (do zostawienia).
+   Podmiana "po calym tekscie" nie dawalaby zadnego bledu - SQL nadal bylby poprawny.
+3. **Pisarzy do `content_items` jest TRZECH, nie jeden.** Poza `cm-agentem` pisza tam dwa
+   workflow n8n: `AGS Scheduler v1` (cron co minute) i `AGS HITL Handler v1.0` (guziki bota,
+   wezel `Cm Resolve Gate`, z pominieciem `cm-agenta`). Trzeci umknal wszystkim wczesniejszym
+   odczytom, bo **nie zawiera slowa `dispatching`** - trzeba bylo szukac nazwy TABELI, nie
+   wartosci. Ostatecznie gaszone byly dwa pierwsze; trzeci ma predykat
+   `status='needs_approval'`, wiec nie potrafi ani utworzyc, ani skonsumowac migrowanej wartosci.
+
+**Jak wykonane:** `cm-agent/db/042_status_handed_off.sql` (nowa wartosc OBOK starej),
+`docs/ops/SQL_d008_handed_off_03082026.sql` (migracja z bramka na liczbie wierszy, kontrola
+INNYM mechanizmem, SQL odwrotny), `n8n-workflows/patches/d008-handed-off-03082026.cjs`
+(chirurgiczny PUT, ktory odmawia dzialania, gdy liczby sie nie zgadzaja), procedura okna:
+`docs/ops/OKNO_d008_03082026.md`.
+
+**Powiazane:** D-006 (widok, ZAMKNIETE 02/08), **D-008b** (usuniecie starej wartosci
+z ograniczenia `CHECK` - swiadomie odlozone, ponizej).
+
+Ponizej oryginalny opis, dla historii.
+
 
 **Zapisany 29/07/2026** (decyzja Managera: "nie dzis, ale dopisz do listy z data").
 Bezposrednia konsekwencja ustanowienia **AP-312**.
@@ -259,6 +303,31 @@ oraz migracja danych i PUT do n8n z rytualem backup / PUT / deactivate+activate.
 
 **Powiazane:** D-006 (widok nie pokazuje, od kiedy material wisi i na co czeka) - te dwie
 naprawy warto zrobic razem, bo obie dotykaja tego samego stanu i tej samej niejasnosci.
+
+## D-008b: Stara wartosc `dispatching` nadal stoi w ograniczeniu CHECK na `content_items`
+
+**Zapisany 03/08/2026** (decyzja Tomasza przy zamykaniu D-008: "usuniecie starej wartosci
+z CHECK to OSOBNE OKNO, innego dnia, z limitem czasu blokady").
+
+Ograniczenie `content_items_status_check` zna dzis **obie** wartosci: `handed_off` (uzywana)
+i `dispatching` (nieuzywana, zero wierszy). To jest stan **swiadomie przejsciowy**.
+
+**Dlaczego nie od razu.** Dopoki stara wartosc siedzi w ograniczeniu, **droga odwrotu istnieje**:
+zamrozony obraz `cm-agent:prev-d008` da sie podniesc, bo baza nadal przyjmie to, co on zapisuje.
+Zwezenie slownika odbiera te mozliwosc, a robi to w chwili, gdy nowy kod ma za soba minuty
+dzialania, nie doby.
+
+**Czym grozi, jesli zostawimy:** slownik z martwa wartoscia uczy, ze slowniki wolno zasmiecac.
+Za pol roku nikt nie bedzie pamietal, ktora z dwoch jest ta zywa - a to jest zarodek nowego
+AP-312. Osobno: dopoki wpis jest otwarty, nie wolno skasowac obrazu `cm-agent:prev-d008`.
+
+**Gotowe do uruchomienia:** `docs/ops/SQL_d008b_sprzatanie_check_PO_OKNIE.sql` (ma `lock_timeout`
+i bramke odmawiajaca dzialania, gdy ktokolwiek siedzi jeszcze w starej wartosci). Po nim trzeba
+zdjac stara wartosc takze z czterech plikow DDL - kazdy ma w tym miejscu komentarz wskazujacy
+na ten plik.
+
+**Warunek wejscia:** minal co najmniej jeden PELNY cykl publikacji na nowym obrazie
+(`approved -> handed_off -> published` bez recznej pomocy) i nikt nie planuje juz cofac obrazu.
 
 ## D-007 [ZAMKNIETE 02/08/2026]: Operacja hurtowa nie zostawia sladu czytelnego dla DRUGIEGO agenta
 

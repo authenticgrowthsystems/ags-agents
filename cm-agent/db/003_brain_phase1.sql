@@ -22,10 +22,15 @@ ALTER TABLE processed_updates OWNER TO ags_crd_user;
 -- 3) content_items: first_comment (approved together with the material; published under the post in Phase 3)
 --    + status 'proposed' (plan position before plan acceptance; used by the Phase 2 planner)
 ALTER TABLE content_items ADD COLUMN IF NOT EXISTS first_comment TEXT;
+-- D-008 (03/08/2026): 'handed_off' zastapilo 'dispatching' (AP-312). Stara wartosc stoi tu
+-- PRZEJSCIOWO, zeby droga odwrotu istniala; znika w osobnym oknie:
+-- docs/ops/SQL_d008b_sprzatanie_check_PO_OKNIE.sql.
+-- Zrodlo prawdy dla tego ograniczenia na produkcji: cm-agent/db/042_status_handed_off.sql.
 ALTER TABLE content_items DROP CONSTRAINT IF EXISTS content_items_status_check;
 ALTER TABLE content_items ADD CONSTRAINT content_items_status_check
   CHECK (status IN ('proposed','planned','needs_research','researching','drafting',
-                    'needs_approval','approved','dispatching','published','rejected','failed'));
+                    'needs_approval','approved','handed_off','dispatching',
+                    'published','rejected','failed'));
 
 -- 4) log channel: token of the EXISTING alert bot #2 (decision D1). Tomasz pastes the real token
 --    in place of the placeholder BEFORE running; never commit the real value.

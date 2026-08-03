@@ -226,10 +226,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_notion ON contacts(notion_page_id
 ALTER TABLE content_items ADD COLUMN IF NOT EXISTS meta_type VARCHAR(40);
 ALTER TABLE content_items ADD COLUMN IF NOT EXISTS notion_page_id TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_content_items_notion ON content_items(notion_page_id) WHERE notion_page_id IS NOT NULL;
+-- D-008 (03/08/2026): 'handed_off' zastapilo 'dispatching' (AP-312). Stara wartosc stoi tu
+-- PRZEJSCIOWO, zeby droga odwrotu istniala; znika w osobnym oknie:
+-- docs/ops/SQL_d008b_sprzatanie_check_PO_OKNIE.sql.
+-- Zrodlo prawdy dla tego ograniczenia na produkcji: cm-agent/db/042_status_handed_off.sql.
 ALTER TABLE content_items DROP CONSTRAINT IF EXISTS content_items_status_check;
 ALTER TABLE content_items ADD CONSTRAINT content_items_status_check
   CHECK (status IN ('proposed','planned','needs_research','researching','drafting','needs_approval',
-                    'approved','dispatching','published','rejected','failed','draft','brief','archived'));
+                    'approved','handed_off','dispatching','published','rejected','failed',
+                    'draft','brief','archived'));
 
 -- brand_config = klucz/wartosc: website_canon/footer_canon/ghl_config/sync_to_notion wchodza jako WIERSZE
 -- podczas ETL (INSERT ... ON CONFLICT wzorcem /set). Flaga sprzedawalnosci od razu:

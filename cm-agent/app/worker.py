@@ -367,18 +367,24 @@ def process_item(item):
             logbot.send(f"🗓 CM przydzielil slot: {slot.strftime('%a %d/%m %H:%M')} - "
                         f"{item['master_theme'][:70]} (zmiana? napisz do CM: 'przesun na ...')")
             return f"slot_assigned({slot:%d/%m %H:%M})"
-        # backlog b: dispatch = HAND-OFF, nie publikacja. Item zostaje 'dispatching' (poza ACTIONABLE),
-        # reconcile_publications zamelduje realny sukces/porazke po callbacku (Scheduler/subagent).
-        db.set_item_status(item["id"], "dispatching")
+        # backlog b: dispatch = HAND-OFF, nie publikacja. Item przechodzi w STATUS_HANDED_OFF
+        # (poza ACTIONABLE), a reconcile_publications zamelduje realny sukces/porazke po callbacku.
+        # D-008: to JEDYNY w calym systemie pisarz tej wartosci - stad migracja da sie domknac
+        # zatrzymaniem pisarzy zamiast szukania "mniej szkodliwej kolejnosci".
+        db.set_item_status(item["id"], config.STATUS_HANDED_OFF)
         handoff = channels.dispatch_item(item)
         logbot.send(_dispatch_ack(item, handoff))
-        return f"dispatching({len(handoff)})"
+        return f"{config.STATUS_HANDED_OFF}({len(handoff)})"
     return "noop"
 
 
 # ---------------- backlog b: meldunek po CALLBACKU (nie przy delegacji) ----------------
 # Slownik statusow post_queue: w locie / terminalny-OK / terminalny-porazka. Nieznany status = traktuj
 # jak 'w locie' (konserwatywnie - timeout alert zlapie realny zwis, np. X media_errors).
+# D-008: to jest slownik KOLEJKI, nie materialu. 'dispatching' ponizej ZOSTAJE - post_queue ma
+# wlasna wartosc o tej nazwie i znaczy ona co innego (jeden wiersz oddany subagentowi).
+# _DISPATCH_OK zawiera 'held' (gotowiec do recznej wklejki), wiec stan materialu konczy sie tez
+# BEZ publikacji - dlatego material nazywa sie handed_off, a nie awaiting_publication.
 _DISPATCH_PENDING = ("review", "dispatching", "scheduled", "queued")
 _DISPATCH_OK = ("published", "held")
 _DISPATCH_FAIL = ("failed", "error", "rejected")
@@ -493,11 +499,12 @@ def _dispatch_timeout_alert(item, pending):
 
 
 def reconcile_publications():
-    """backlog b: awansuj 'dispatching' -> 'published' DOPIERO gdy wiersze post_queue osiagnely stan
-    terminalny (realny callback Schedulera/subagenta), i DOPIERO WTEDY meldunek - z porazkami wlacznie.
-    Optymistyczny 'opublikowal' przy delegacji ukrywal nieudane publikacje X (media_errors)."""
+    """backlog b: awansuj STATUS_HANDED_OFF -> 'published' DOPIERO gdy wiersze post_queue osiagnely
+    stan terminalny (realny callback Schedulera/subagenta), i DOPIERO WTEDY meldunek - z porazkami
+    wlacznie. Optymistyczny 'opublikowal' przy delegacji ukrywal nieudane publikacje X (media_errors)."""
     rows = db.fetchall(
-        "SELECT id, brand_id, master_theme, updated_at FROM content_items WHERE status='dispatching'")
+        "SELECT id, brand_id, master_theme, updated_at FROM content_items WHERE status=%s",
+        (config.STATUS_HANDED_OFF,))
     for item in rows:
         pq = db.fetchall(
             "SELECT id, platform, status, content, media, scheduled_for FROM post_queue WHERE content_item_id=%s",
@@ -606,7 +613,7 @@ def loop():
         worked = False
         try:
             research.ingest_research_responses()  # researching -> drafting on Researcher callback
-            reconcile_publications()              # backlog b: dispatching -> published PO callbacku (+ zwis alert)
+            reconcile_publications()              # backlog b: handed_off -> published PO callbacku (+ zwis alert)
             _welcome_new_channels()               # R5: nowy kanal -> propozycja reuse archiwum
             _stale_approval_watch()               # kanon 19/07: >24h ciszy = pytanie guzikami, NIGDY auto-publikacja
             matreview.sunday_guard()              # S4: niedzielne przypomnienia + fallback 23:00

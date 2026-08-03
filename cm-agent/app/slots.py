@@ -8,7 +8,7 @@ import datetime
 import random
 from zoneinfo import ZoneInfo
 
-from . import db
+from . import db, config
 
 WARSAW = ZoneInfo("Europe/Warsaw")
 
@@ -22,7 +22,8 @@ def _teraz():
     return datetime.datetime.now(WARSAW)
 
 DEFAULT_WINDOWS = {"x": "09:00-21:00", "linkedin": "08:00-18:00"}
-BUSY_STATUSES = ("planned", "drafting", "needs_approval", "approved", "dispatching")
+# Stany MATERIALU trzymajace slot (content_items). D-008: nazwa z jednego zrodla.
+BUSY_STATUSES = ("planned", "drafting", "needs_approval", "approved", config.STATUS_HANDED_OFF)
 GRANULARITY_MIN = 30
 LOOKAHEAD_DAYS = 14
 

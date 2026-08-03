@@ -1,6 +1,10 @@
 """Test D-006 (02/08/2026): stan rozsylki materialu widoczny, nie domyslany.
 
-POWOD: 27/07 Manager zglosil "zawieszony post" - status `dispatching` nie mial limitu czasu,
+D-008 (03/08/2026): sama WARTOSC statusu nazywa sie juz `handed_off`. Ten test siega po nia
+przez `config.STATUS_HANDED_OFF`, a nie przez literal - dzieki temu nastepne przemianowanie
+nie wymaga tknięcia tego pliku. Kontraktu nazwy pilnuje `test_d008_handed_off.py`.
+
+POWOD: 27/07 Manager zglosil "zawieszony post" - status materialu nie mial limitu czasu,
 a ani system, ani CM nie potrafili powiedziec, czy material jest w trakcie wysylki, czy zawisl.
 Odczyt pokazal siedem materialow w tym stanie, WSZYSTKIE ZDROWE: najstarszy siedzial 51 godzin
 i bylo to poprawne, bo re-slotter rozrzucil jego serie az do 4 sierpnia.
@@ -61,7 +65,7 @@ pkg = types.ModuleType("app")
 pkg.__path__ = [str(BASE)]
 sys.modules["app"] = pkg
 
-from app import db, matreview  # noqa: E402
+from app import db, config, matreview  # noqa: E402
 
 FAILS = []
 STAN = {}
@@ -85,12 +89,11 @@ D1 = _dt.datetime(2026, 8, 3, 14, 15, tzinfo=WARSAW)
 D2 = _dt.datetime(2026, 8, 7, 19, 40, tzinfo=WARSAW)
 
 print("\n[etykieta] nazwa nie moze obiecywac sekund przy stanie, ktory trwa dniami:")
+_ETYKIETA = matreview._VIEW_STATUS_PL.get(config.STATUS_HANDED_OFF)
 check("stan rozsylki NIE nazywa sie juz 'W PUBLIKACJI'",
-      matreview._VIEW_STATUS_PL.get("dispatching") != "W PUBLIKACJI",
-      matreview._VIEW_STATUS_PL.get("dispatching"))
+      _ETYKIETA != "W PUBLIKACJI", _ETYKIETA)
 check("nowa etykieta mowi, CO SIE STALO, a nie co sie dzieje",
-      "ROZESLANY" in (matreview._VIEW_STATUS_PL.get("dispatching") or ""),
-      matreview._VIEW_STATUS_PL.get("dispatching"))
+      "ROZESLANY" in (_ETYKIETA or ""), _ETYKIETA)
 
 print("\n[zdrowe czekanie] widac ILE i NA KIEDY:")
 ustaw(wszystkie=5, czeka=3, najblizszy=D1, ostatni=D2)

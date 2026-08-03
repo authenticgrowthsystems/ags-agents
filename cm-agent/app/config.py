@@ -54,12 +54,26 @@ HTTP_PORT = _i("HTTP_PORT", 8089)            # Researcher = 8088
 POLL_INTERVAL_S = _i("POLL_INTERVAL_S", 30)  # slow backstop; /request + callbacks wake the loop
 RESEARCH_TIER = os.getenv("CM_RESEARCH_TIER", "medium")  # CM is capped to <=medium (critical-restriction)
 
-# content_items states the loop actively advances. 'dispatching' is NO LONGER here (backlog b):
+# D-008 (03/08/2026): JEDNO ZRODLO nazwy stanu "rozeslane do kolejki" w content_items.status.
+# Stara nazwa 'dispatching' brzmiala jak stan PRZELOTNY ("wysylam"), a stan normalnie trwa DNI -
+# Manager 27/07 wyciagnal z niej rozsadny, ale falszywy wniosek o zawieszonym poscie (AP-312).
+# 'handed_off' to slowo, ktore ta kodebaza wybrala sama, zanim ktokolwiek przemianowal wartosc:
+# "dispatch = HAND-OFF, nie publikacja" (worker) i "Every mode here just HANDS OFF" (channels).
+# NIE 'awaiting_*': stan konczy sie, gdy wiersze kolejki przestaja sie ruszac - OBOJETNIE CZYM
+# (_DISPATCH_OK zawiera 'held', czyli gotowiec reczny), wiec obietnica publikacji bylaby AP-312
+# odtworzonym wewnatrz poprawki na AP-312. Osobno: agent_registry.current_gate uzywa juz
+# przedrostka awaiting_* w ZNACZENIU "czekam na bramke zatwierdzenia".
+#
+# UWAGA PRZY CZYTANIU KODU: post_queue.status MA WLASNA wartosc 'dispatching' i to jest INNY
+# slownik - jeden wiersz kolejki oddany subagentowi. D-008 jej NIE dotyka.
+STATUS_HANDED_OFF = "handed_off"
+
+# content_items states the loop actively advances. STATUS_HANDED_OFF is NO LONGER here (backlog b):
 # once dispatched, the item waits for the REAL publish callback (post_queue -> 'published' via Scheduler /
 # sub-agent adapter) reconciled by worker.reconcile_publications - NOT re-claimed by the loop.
 ACTIONABLE_STATUSES = ("planned", "needs_research", "drafting", "approved")
 
-# backlog b: how long an item may sit in 'dispatching' (waiting for the publish callback) before CM
+# backlog b: how long an item may sit in STATUS_HANDED_OFF (waiting for the publish callback) before CM
 # raises a loud alert on the log bot - this is what surfaces a silent X publish/media failure.
 DISPATCH_TIMEOUT_H = _i("DISPATCH_TIMEOUT_H", 2)
 

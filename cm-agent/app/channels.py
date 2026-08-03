@@ -236,7 +236,7 @@ def dispatch_item(item):
     """On approval: publish this item's staged 'review' rows by channel publish_mode.
     webhook mode -> DELEGATE to the channel sub-agent adapter (e.g. X); post_queue mode -> 'scheduled'
     (existing per-minute Scheduler); draft mode -> 'held' (manual, e.g. LinkedIn until its API is wired).
-    NOTE (backlog b): dispatching is NOT publishing. Every mode here just HANDS OFF - the real publish
+    NOTE (backlog b): dispatch is NOT publishing. Every mode here just HANDS OFF - the real publish
     happens later (Scheduler minute-cron / sub-agent callback / Tomasz pasting). Returns a per-channel
     handoff summary so the caller reports the truth ('wyslane/zaplanowane/czeka recznie'), not a premature
     'opublikowal'. reconcile_publications fires the real success/failure report on the callback."""

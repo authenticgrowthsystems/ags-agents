@@ -1062,14 +1062,14 @@ def _generate_material_image(inp, chat_id):
     frag = (inp.get("theme_fragment") or "").strip()
     guidance = (inp.get("guidance") or "").strip() or None
     base_q = """SELECT id, master_theme, canonical_body, media, status FROM content_items
-                WHERE brand_id='AGS' AND status IN ('draft','planned','drafting','needs_approval','approved','dispatching')"""
+                WHERE brand_id='AGS' AND status IN ('draft','planned','drafting','needs_approval','approved',%s)"""
     if frag:
         row = db.fetchone(base_q + " AND master_theme ILIKE %s ORDER BY updated_at DESC LIMIT 1",
-                          (f"%{frag}%",))
+                          (config.STATUS_HANDED_OFF, f"%{frag}%"))
     else:
         row = db.fetchone(base_q + """ AND EXISTS (SELECT 1 FROM jsonb_array_elements(media) m
                                                    WHERE (m->>'generated')='true')
-                          ORDER BY updated_at DESC LIMIT 1""")
+                          ORDER BY updated_at DESC LIMIT 1""", (config.STATUS_HANDED_OFF,))
         if not row:
             row = db.fetchone(base_q + " ORDER BY updated_at DESC LIMIT 1")
     if not row:
@@ -1255,10 +1255,10 @@ def _reschedule_material(inp):
         """SELECT id, master_theme, brand_id, target_channels, scheduled_for, status
            FROM content_items
            WHERE brand_id='AGS' AND status IN
-             ('draft','planned','drafting','needs_approval','approved','dispatching')
+             ('draft','planned','drafting','needs_approval','approved',%s)
              AND master_theme ILIKE %s
            ORDER BY updated_at DESC LIMIT 1""",
-        (f"%{frag}%",))
+        (config.STATUS_HANDED_OFF, f"%{frag}%"))
     if not row:
         return f"Nie znajduje w kolejce materialu pasujacego do \"{frag[:80]}\" (moze juz opublikowany albo odrzucony?)."
     from . import slots
@@ -1383,9 +1383,9 @@ def _replace_material(inp):
     row = db.fetchone(
         """SELECT id, master_theme, scheduled_for FROM content_items
            WHERE brand_id='AGS' AND status IN
-             ('draft','planned','drafting','needs_approval','approved','dispatching')
+             ('draft','planned','drafting','needs_approval','approved',%s)
              AND master_theme ILIKE %s ORDER BY updated_at DESC LIMIT 1""",
-        (f"%{frag}%",))
+        (config.STATUS_HANDED_OFF, f"%{frag}%"))
     if not row:
         return f"Nie znajduje w kolejce postu do podmiany pasujacego do \"{frag[:80]}\"."
     old_theme = row["master_theme"]
