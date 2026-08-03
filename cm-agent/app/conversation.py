@@ -1071,7 +1071,8 @@ def _generate_material_image(inp, chat_id):
                                                    WHERE (m->>'generated')='true')
                           ORDER BY updated_at DESC LIMIT 1""", (config.STATUS_HANDED_OFF,))
         if not row:
-            row = db.fetchone(base_q + " ORDER BY updated_at DESC LIMIT 1")
+            row = db.fetchone(base_q + " ORDER BY updated_at DESC LIMIT 1",
+                              (config.STATUS_HANDED_OFF,))
     if not row:
         return "Nie znajduje materialu w kolejce do ktorego mam zrobic grafike - podaj fragment tematu."
     media = list(row.get("media") or [])
