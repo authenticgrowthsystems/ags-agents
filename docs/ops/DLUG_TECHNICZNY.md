@@ -313,10 +313,30 @@ oraz migracja danych i PUT do n8n z rytualem backup / PUT / deactivate+activate.
 **Powiazane:** D-006 (widok nie pokazuje, od kiedy material wisi i na co czeka) - te dwie
 naprawy warto zrobic razem, bo obie dotykaja tego samego stanu i tej samej niejasnosci.
 
-## D-008b: Stara wartosc `dispatching` nadal stoi w ograniczeniu CHECK na `content_items`
+## D-008b: Stara wartosc `dispatching` w ograniczeniu CHECK - **ZAMKNIETE 10/08/2026**
 
-**Zapisany 03/08/2026** (decyzja Tomasza przy zamykaniu D-008: "usuniecie starej wartosci
-z CHECK to OSOBNE OKNO, innego dnia, z limitem czasu blokady").
+**Zapisany 03/08/2026, zamkniety 10/08/2026.**
+
+> ### WYKONANE 10/08/2026
+>
+> Warunek wejscia spelniony z nawiazka: nie jeden, a **dwa** pelne cykle publikacji bez recznej
+> pomocy (`#344` 04/08 16:01, `#358` 05/08 16:01). Skrypt przeszedl, ograniczenie zna dzis
+> czternascie wartosci i **nie ma wsrod nich `dispatching`**. Rozklad przy operacji: `rejected`
+> 139, `published` 87, `archived` 35, `draft` 28, `proposed` 20, `needs_approval` 1, `brief` 1 -
+> zero w `approved` i zero w `handed_off`, wiec nic nie wisialo w locie.
+>
+> Zdjete takze z czterech plikow DDL (`001`, `003`, `010`; `042` zostaje z OBIEMA wartosciami
+> celowo - to zapis okna migracyjnego, nie stan docelowy, i ma teraz o tym ramke w naglowku).
+> Obraz `cm-agent:prev-d008` mozna skasowac.
+>
+> **Wada znaleziona w samym skrypcie przy wykonaniu (AP-314 w pliku, ktory go zwalcza):**
+> `DROP CONSTRAINT` i `ADD CONSTRAINT` staly poza transakcja. `DROP` udaje sie zawsze, `ADD`
+> moze paść na dowolnym wierszu z wartoscia spoza listy - bez transakcji skutek to tabela
+> **bez zadnego ograniczenia** przy bledzie wygladajacym na "nic sie nie stalo". Dolozone przed
+> uruchomieniem: `BEGIN/COMMIT`, odczyt rozkladu wartosci przed operacja i druga bramka, ktora
+> **nazywa** wartosc spoza listy zamiast surowego `violates check constraint` juz po fakcie.
+
+### Zapis pierwotny (03/08) - kontekst decyzji
 
 Ograniczenie `content_items_status_check` zna dzis **obie** wartosci: `handed_off` (uzywana)
 i `dispatching` (nieuzywana, zero wierszy). To jest stan **swiadomie przejsciowy**.

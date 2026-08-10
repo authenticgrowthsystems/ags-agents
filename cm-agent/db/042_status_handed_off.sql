@@ -22,6 +22,17 @@
 -- w OSOBNYM oknie, innego dnia (decyzja Tomasza 03/08):
 --   docs/ops/SQL_d008b_sprzatanie_check_PO_OKNIE.sql
 --
+-- ############################################################################
+-- ##  TEN PLIK JEST ZAPISEM OKNA, NIE STANEM DOCELOWYM.                     ##
+-- ##  Ograniczenie ponizej trzyma OBIE wartosci CELOWO i tak ma zostac -    ##
+-- ##  bez tego nie da sie odtworzyc przebiegu migracji z 03/08.             ##
+-- ##                                                                        ##
+-- ##  STAN PRODUKCJI OD 10/08/2026: D-008b WYKONANE, 'dispatching' zdjete.  ##
+-- ##  Kto odtwarza baze od zera, uruchamia 042, a POTEM                     ##
+-- ##  docs/ops/SQL_d008b_sprzatanie_check_PO_OKNIE.sql - dopiero to daje    ##
+-- ##  slownik zgodny z produkcja.                                           ##
+-- ############################################################################
+--
 -- Uruchomienie (PRZED migracja danych, przy zatrzymanych pisarzach):
 --   docker exec -i pg_n8n psql -U n8n -d ags_crd < ~/ags-agents/cm-agent/db/042_status_handed_off.sql
 -- Idempotentne.
