@@ -49,3 +49,10 @@ n8n-workflows/x-agent/N8N_CREDENTIALS_SETUP.md
 **/AGS_Credentials_Internal.md
 # Poufne materialy sprzedazowe per prospekt - NIE do publicznego origin (decyzja 25/07)
 docs/research/prospekci/MATERIAL_DLA_PIOTRA_*.md
+
+# Kopie bezpieczenstwa workflow n8n sprzed edycji (10/08). Skrypty patchujace zapisuja
+# `bk_<nazwa>_<znacznik-czasu>.json` PRZED kazda podmiana - to zabezpieczenie na czas okna,
+# a nie zapis historii. Historie trzyma git. Przez cztery miesiace uzbieralo sie ich dziesiec
+# w drzewie roboczym i KAZDA sesja widziala je jako "niezacommitowana praca", co za kazdym
+# razem kosztowalo odczyt i decyzje. Kopia z okna nalezy do katalogu roboczego, nie do repo.
+n8n-workflows/**/bk_*.json
