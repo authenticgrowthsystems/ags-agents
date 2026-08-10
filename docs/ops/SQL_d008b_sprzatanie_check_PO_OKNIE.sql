@@ -28,7 +28,20 @@
 -- z odczytami bota. Wolimy czysty blad po pieciu sekundach niz zakleszczona aplikacja.
 SET lock_timeout = '5s';
 
-\echo '--- BRAMKA: nie zwezaj slownika, dopoki ktokolwiek siedzi w starej wartosci ---'
+\echo '--- ODCZYT PRZED: jakie wartosci NAPRAWDE stoja dzis w kolumnie ---'
+-- Dolozone 10/08. Bramka nizej pytala tylko o STARA wartosc, a `ADD CONSTRAINT` waliduje
+-- WSZYSTKIE istniejace wiersze. Jedna zapomniana wartosc wywala operacje w polowie.
+SELECT status, COUNT(*) AS n FROM content_items GROUP BY status ORDER BY 2 DESC;
+
+-- DOLOZONE 10/08 (AP-314 zastosowane do TEGO pliku): `DROP` i `ADD` stoja teraz w JEDNEJ
+-- transakcji. Wczesniej byly osobno i to jest wada tej samej klasy co bramka, ktorej nikt nie
+-- widzial przy pracy: `DROP CONSTRAINT` udaje sie ZAWSZE, a `ADD CONSTRAINT` moze paść na
+-- dowolnym wierszu z wartoscia spoza listy. Bez transakcji skutek jest taki, ze tabela zostaje
+-- **bez zadnego ograniczenia**, skrypt konczy sie bledem wygladajacym na "nic sie nie stalo",
+-- a slownik jest od tej chwili otwarty na wszystko - po cichu, az do pierwszej literowki w kodzie.
+BEGIN;
+
+\echo '--- BRAMKA 1: nie zwezaj slownika, dopoki ktokolwiek siedzi w starej wartosci ---'
 DO $$
 DECLARE n integer;
 BEGIN
@@ -38,11 +51,29 @@ BEGIN
   END IF;
 END $$;
 
+\echo '--- BRAMKA 2: kazda ZYWA wartosc musi byc na nowej liscie ---'
+-- Pyta INNYM mechanizmem niz `ADD CONSTRAINT` (RUNBOOK punkt 6) i daje komunikat Z NAZWA
+-- wartosci, zamiast surowego "violates check constraint" juz po zdjeciu starego ograniczenia.
+DO $$
+DECLARE brakujace text;
+BEGIN
+  SELECT string_agg(DISTINCT status, ', ') INTO brakujace
+    FROM content_items
+   WHERE status NOT IN ('proposed','planned','needs_research','researching','drafting',
+                        'needs_approval','approved','handed_off','published','rejected',
+                        'failed','draft','brief','archived');
+  IF brakujace IS NOT NULL THEN
+    RAISE EXCEPTION 'STOP: w tabeli zyja wartosci spoza nowej listy: %. Dopisz je albo posprzataj wiersze. NIC NIE ZMIENIONO.', brakujace;
+  END IF;
+END $$;
+
 ALTER TABLE content_items DROP CONSTRAINT IF EXISTS content_items_status_check;
 ALTER TABLE content_items ADD CONSTRAINT content_items_status_check
   CHECK (status IN ('proposed','planned','needs_research','researching','drafting','needs_approval',
                     'approved','handed_off','published','rejected','failed',
                     'draft','brief','archived'));
+
+COMMIT;
 
 \echo '--- KONTROLA: ograniczenie zna juz TYLKO nowa wartosc ---'
 SELECT pg_get_constraintdef(oid) AS ograniczenie

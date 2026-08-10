@@ -147,6 +147,53 @@ def strip_meta_header(text, max_linii=3):
     return wynik or (text or "").strip()
 
 
+# ---- AP-315: BEZPIECZNIK GATUNKU (decyzja Managera 10/08) ------------------------------
+# DOWOD: post LinkedIn z 04/08 zyl szesc dni pod nazwiskiem Tomasza, 87 wyswietlen, a jego
+# trescia byla NOTATKA RECENZYJNA CM: "I've reviewed the canonical text and Voice Bible.
+# (...) strong content. However, I need to flag an issue before...".
+# DLACZEGO NIC GO NIE ZLAPALO: strip_meta_header zdejmuje meta-linie o KSZTALCIE naglowka
+# ("## Wersja LinkedIn:", "Oto post:") - tamten tekst byl proza, wiec przeszedl calym sobie.
+# enforce sprawdza myslniki, zakazane slownictwo i polszczyzne, czyli FORME. GATUNKU tekstu
+# ("czy to jest tekst dla czlowieka, czy model mowiacy o tekscie") nie sprawdzal NIKT.
+# To NIE jest filtr jakosci i NIE poprawia tekstu - poprawianie notatki daloby ladniejsza
+# notatke.
+#
+# DWIE KLASY, NIE JEDNA (korekta Managera 10/08 - pierwsza wersja je wymieszala):
+#
+#   TWARDE  = nazwy NASZEJ MASZYNERII. Nie pojawia sie w prawdziwym tekscie dla czlowieka
+#             w zadnym sensownym zdaniu. Blokada bez furtki, drugie zatwierdzenie NIE pomaga.
+#   MIEKKIE = zwykle slowa jezyka, ktorych Tomasz uzywa naprawde. Pierwsze trafienie blokuje
+#             i melduje FRAZE; zatwierdzenie TEGO SAMEGO tekstu drugi raz przepuszcza
+#             z glosnym ostrzezeniem.
+#
+# PROG PRZYNALEZNOSCI DO TWARDYCH JEST WYSOKI (korekta Managera 10/08, druga tura). "kolejka"
+# i "meldunek" wygladaja na nasze slownictwo tylko z wnetrza tego repo. TNM pisze PO POLSKU
+# do uslug lokalnych, gdzie "kolejka klientow", "kolejka chetnych na zajecia" i "stac w kolejce"
+# sa naturalne. Twarda blokada na zwyklym rzeczowniku odpalilaby raz, w najgorszym momencie,
+# i wygladalaby jak zepsuty system - a nie jak zabezpieczenie. Do twardych trafia wylacznie to,
+# co nie ma sensownego uzycia POZA nasza maszyneria.
+#
+# DLACZEGO AKURAT TAK. Wpadka 04/08 wzięła się z ODRUCHOWEGO tapniecia "zatwierdz", wiec sama
+# furtka "tapnij drugi raz" odtwarzalaby ten tryb awarii. Roznica jest w meldunku: przy pierwszym
+# trafieniu czlowiek dostaje KONKRETNA fraze, wiec drugie tapniecie jest swiadome, nie slepe.
+# Przy twardych nawet to nie wystarcza - i to nie jest teoria: tekst, ktory wyszedl 04/08,
+# zawiera "Voice Bible", czyli fraze TWARDA. Po tym podziale zaden podwojny tap go nie wypusci.
+_GATUNEK_TWARDE = ("voice bible", "masterprompt", "stan_gry", "matreview", "bramka:")
+_GATUNEK_MIEKKIE = ("canonical", "i've reviewed", "i have reviewed", "i need to flag",
+                    "strong content", "zatwierdzam", "proponuje zmiane", "kolejka", "meldunek")
+_OGONKI = str.maketrans("ąćęłńóśźż", "acelnoszz")
+
+
+def bezpiecznik_gatunku(text):
+    """AP-315: zwraca (twarde, miekkie) - dwie listy fraz zdradzajacych, ze to NOTATKA
+    O TRESCI, a nie tresc. Obie puste = przepuszczamy bez sladu.
+    Porownanie leci na tekscie ZLOZONYM DO ASCII, bo AP-313: 'proponuję zmianę'
+    i 'proponuje zmiane' to ta sama fraza i obie musza trafiac."""
+    t = (text or "").lower().translate(_OGONKI)
+    return ([f for f in _GATUNEK_TWARDE if f in t],
+            [f for f in _GATUNEK_MIEKKIE if f in t])
+
+
 # ---- Heurystyka interpunkcji PL (paczka #1 Managera pkt 8, 24/07) ----------------------
 # FLAGA, NIE BLOKADA i NIE poprawka: brakujacy przecinek przed spojnikiem podrzednym to
 # najczestszy blad w polskich tekstach generowanych modelem. Deterministycznie (zero LLM,

@@ -341,7 +341,31 @@ na ten plik.
 ## D-015: Karta materialu pokazuje slot z SIATKI PLANOWANIA, a post wychodzi o godzinie z KOLEJKI
 
 **Zapisany 03/08/2026** (zgloszenie Tomasza: "powinienem tez realna godzine miec w meldunku").
-**Meldunek bota zostal naprawiony tego samego wieczora. KARTA nie.**
+**Meldunek naprawiony 03/08, POPRAWIONY PONOWNIE 10/08. Karta nadal nie.**
+
+> ### KOREKTA 10/08/2026 - ten wpis byl przez tydzien POL-PRAWDA
+>
+> Zdanie "post wychodzi o godzinie z KOLEJKI" (takze w tytule dlugu) jest **nieprawdziwe
+> w polowie przypadkow**. Realny czas publikacji to **`max(slot planu, czas kolejki)`** plus
+> do minuty na tik Schedulera, bo pilnuja go DWIE bramki z warunkiem `<= NOW()`:
+> `db.claim_item` nie bierze materialu `approved` przed slotem planu, a Scheduler publikuje
+> dopiero wiersz w stanie `scheduled`, ktory powstaje w dispatchu, czyli PO tamtej bramce.
+> `humanize_slot` losuje symetrycznie +/-15 min, wiec gdy trafi WCZESNIEJ, ta godzina jest martwa.
+>
+> **Dowod, dwa na dwa:** `#344` kolejka 15:49, slot 16:00 -> publikacja 04/08 **16:01**;
+> `#358` kolejka 15:50, slot 16:00 -> publikacja 05/08 **16:01**. Poszlaka: wszystkie
+> zaobserwowane publikacje (13:48, 16:10, 16:31, 16:59, 17:48, 19:12, 20:23, 10:01) wypadaja
+> PO najblizszym okraglym slocie, ani jedna przed.
+>
+> Poprawka `d5cd43e` z 03/08 byla wiec dobra dokladnie tak samo czesto jak kod, ktory poprawiala:
+> stara wersja mylila sie, gdy kolejka wypadala pozniej, nowa - gdy wczesniej. Domkniete regula
+> w `worker._godzina_publikacji`; `cm-agent/tests/test_godzina_publikacji.py` trzyma obie stare
+> wersje jako anty-regresje, zeby nastepna "uproszczajaca" poprawka od razu widziala, ze byly juz
+> probowane. **Lekcja: przy dwoch liczbach opisujacych to samo sprawdz, ktora BRAMKA je czyta,
+> zanim uznasz jedna za prawdziwa.**
+>
+> Tabela nizej pochodzi z 03/08 i pokazuje TAMTEN stan wiedzy - zostawiona swiadomie,
+> zeby bylo widac, jak wygladala pol-prawda, ktora przez tydzien nikomu nie zgrzytala.
 
 Kanon 19/07 mowi, ze publikacje wychodza o NIEPELNYCH godzinach: `post_queue.scheduled_for`
 dostaje czas po humanizacji (do 15 minut obok), a `content_items.scheduled_for` trzyma czysty

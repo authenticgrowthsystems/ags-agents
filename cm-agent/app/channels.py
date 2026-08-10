@@ -232,6 +232,31 @@ def _ensure_li_graphic(item, r):
     return  # celowy no-op: zero auto-generowania obrazu (kanon 25/07)
 
 
+def sprawdz_gatunek(item):
+    """AP-315 (10/08): przepusc przez bezpiecznik gatunku DOKLADNIE te teksty, ktore wyjda
+    publicznie - czyli tresc WIERSZY KOLEJKI, nie canonical_body. Wariant bywa inny niz
+    canonical (stage_variant przepisuje go per kanal), a publikuje sie wariant.
+
+    Zwraca liste slownikow {qid, platform, twarde, miekkie, odcisk}; pusta = droga wolna.
+    `odcisk` jest liczony z TRESCI, nie z trafien: furtka "drugie zatwierdzenie" ma puszczac
+    TEN SAM tekst, ktory czlowiek widzial w meldunku. Tekst przepisany, ktory trafia w te sama
+    fraze, jest NOWYM tekstem i ma zostac zatrzymany po raz pierwszy."""
+    from . import compliance as _c   # jak w stage_variant: import lokalny, nie modulowy
+    import hashlib
+    rows = db.fetchall(
+        "SELECT id, platform, content FROM post_queue WHERE content_item_id=%s AND status='review'",
+        (item["id"],))
+    zle = []
+    for r in rows:
+        tresc = r.get("content") or ""
+        twarde, miekkie = _c.bezpiecznik_gatunku(tresc)
+        if twarde or miekkie:
+            zle.append({"qid": r["id"], "platform": r["platform"],
+                        "twarde": twarde, "miekkie": miekkie,
+                        "odcisk": hashlib.sha1(tresc.encode("utf-8")).hexdigest()[:16]})
+    return zle
+
+
 def dispatch_item(item):
     """On approval: publish this item's staged 'review' rows by channel publish_mode.
     webhook mode -> DELEGATE to the channel sub-agent adapter (e.g. X); post_queue mode -> 'scheduled'

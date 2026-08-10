@@ -59,21 +59,80 @@ Przypomnij jutro), nigdy auto-decyzja.
   `(slot, changed, realny)` - `slot` to czysty plan zapisany do `content_items`,
   `realny` to DOKLADNIE ta wartosc, ktora poszla do `post_queue`.
 
-### DWA CZASY, jeden post - ktora powierzchnia pokazuje ktory
+### DWA CZASY, jeden post - REGULA (D-015 domkniete 10/08/2026)
 
-Publikacja nastepuje o czasie z KOLEJKI. Slot planu jest siatka, nie obietnica.
+**Publikacja nastepuje o `max(slot planu, czas kolejki)`, plus do minuty na tik Schedulera.**
+Zadna z dwoch liczb nie jest prawda sama w sobie i to jest sedno dlugu, ktory zyl tu tydzien.
+
+Pilnuja tego DWIE niezalezne bramki, obie z warunkiem `<= NOW()`:
+
+1. `db.claim_item` - material `approved` z PRZYSZLYM `content_items.scheduled_for` **nie jest
+   w ogole brany przez petle**. Trzyma go do SLOTU PLANU.
+2. Scheduler n8n - publikuje `post_queue WHERE status='scheduled' AND scheduled_for <= NOW()`.
+   Wiersz wchodzi w stan `scheduled` dopiero w dispatchu, czyli PO otwarciu bramki nr 1.
+
+Wniosek: czas kolejki liczy sie **tylko wtedy, gdy jest pozniejszy** niz slot planu. Gdy
+`humanize_slot` wylosuje wczesniej (a losuje symetrycznie +/-15 min, wiec w polowie przebiegow),
+ta wczesniejsza godzina jest MARTWA.
 
 | powierzchnia | pokazuje | prawda o publikacji |
 |---|---|---|
-| meldunek bota "CM przydzielil slot" | czas z kolejki (od 03/08/2026) | TAK |
-| raport dzienny, `stan_gry` | czas z kolejki | TAK |
-| karta materialu (`/karty`) | czysty slot z `content_items` | NIE, do 15 min obok |
+| meldunek bota "CM przydzielil slot" | `max(slot, kolejka)` (od 10/08/2026) | TAK |
+| raport dzienny, `stan_gry` | czas z kolejki | tylko gdy kolejka wypadla POZNIEJ |
+| karta materialu (`/karty`) | czysty slot z `content_items` | tylko gdy kolejka wypadla WCZESNIEJ |
 
-Ostatni wiersz to **otwarty dlug D-015**. Zgloszenie Tomasza 03/08 dotyczylo meldunku
-("powinienem miec realna godzine") i meldunek zostal naprawiony; karta czyta material,
-wiec pokazanie na niej czasu kolejki wymaga dodatkowego odczytu (wzorzec `_stan_rozsylki`
-z D-006) i jest osobna decyzja. **Nie zakladaj, ze dwie godziny widziane w bocie dla tego
-samego posta oznaczaja wade** - sprawdz najpierw, ktora powierzchnia je pokazala.
+**DOWOD, NIE TEORIA (10/08, dwa na dwa):** `#344` kolejka 15:49, slot planu 16:00, opublikowane
+04/08 o **16:01**; `#358` kolejka 15:50, slot 16:00, opublikowane 05/08 o **16:01**. Poszlaka
+potwierdzajaca: wszystkie zaobserwowane publikacje (13:48, 16:10, 16:31, 16:59, 17:48, 19:12,
+20:23, 10:01) wypadaja PO najblizszym okraglym slocie, ani jedna przed - przy losowaniu
+symetrycznym polowa powinna wypasc wczesniej.
+
+**Historia tego dlugu jest sama w sobie lekcja.** Do 03/08 meldunek podawal czysty slot planu.
+Poprawka `d5cd43e` przestawila go na czas kolejki i wygladala na domkniecie sprawy. Obie wersje
+myla sie w polowie przypadkow, kazda w druga strone. Regula i dowod: `worker._godzina_publikacji`,
+zachowanie: `cm-agent/tests/test_godzina_publikacji.py` (200 losowan + obie stare wersje jako
+anty-regresja, zeby nastepna "uproszczajaca" poprawka od razu widziala, ze byly juz probowane).
+
+Karta materialu nadal czyta sam material, wiec przy kolejce wypadajacej pozniej pokazuje o do
+15 minut za wczesnie. To reszta D-015 i osobna decyzja (wymaga wzorca `_stan_rozsylki` z D-006).
+
+## BEZPIECZNIK GATUNKU - ostatnia bramka przed swiatem (AP-315, 10/08/2026)
+
+Przed zapisem `handed_off` (`worker.process_item`) tresc KAZDEGO wiersza kolejki przechodzi
+przez `compliance.bezpiecznik_gatunku`. Pyta o jedno: czy to jest tekst dla czlowieka, czy
+model mowiacy o tekscie. **To jest inne pytanie niz wszystkie pozostale kontrole tresci** -
+one pytaja o forme (myslniki, slownictwo, dlugosc, polszczyzna, meta-naglowki).
+
+Dlaczego akurat tam:
+
+- tamtedy przechodzi **kazda** publikacja, takze material zatwierdzony guzikiem w n8n
+  (`AGS HITL Handler`), ktory omija cm-agenta;
+- sprawdzana jest tresc **wiersza kolejki**, nie `canonical_body` - publikuje sie wariant,
+  a `stage_variant` przepisuje go per kanal.
+
+Dwie klasy fraz, kryterium jedno: **czy slowo ma sensowne uzycie POZA nasza maszyneria.**
+
+| klasa | frazy | zachowanie |
+|---|---|---|
+| TWARDE | `Voice Bible`, `masterprompt`, `stan_gry`, `matreview`, `Bramka:` | blokada bez furtki |
+| MIEKKIE | `canonical`, `I've reviewed`, `I have reviewed`, `I need to flag`, `strong content`, `zatwierdzam`, `proponuje zmiane`, `kolejka`, `meldunek` | blokada, ale zatwierdzenie TEGO SAMEGO tekstu drugi raz przepuszcza z ostrzezeniem |
+
+`kolejka` i `meldunek` sa MIEKKIE swiadomie (decyzja Managera 10/08): TNM pisze po polsku do
+uslug lokalnych, gdzie "kolejka klientow" i "stac w kolejce" sa naturalne. Twarda blokada na
+zwyklym rzeczowniku odpalilaby raz, w najgorszym momencie, i wygladalaby jak zepsuty system.
+
+Mechanika furtki: przy zatrzymaniu material wraca do `needs_approval`, a w jego `media` laduje
+znacznik `ap315_blok` z **odciskiem TRESCI** (nie listy trafien). Drugie zatwierdzenie przepuszcza
+tylko wtedy, gdy odcisk sie zgadza - tekst przepisany jest nowym tekstem i zatrzymuje sie od nowa.
+Znacznik siedzi w `media`, bo musi przezyc powrot do `needs_approval` i tapniecie guzika w n8n.
+Przy pisaniu tekstu od nowa `_draft` go zdejmuje razem ze stara trescia.
+
+Odcisk laczony jest SORTOWANY - zapytanie o wiersze nie ma `ORDER BY`, wiec bez sortowania dwa
+przebiegi na tych samych danych dalyby dwa rozne odciski i furtka nie otworzylaby sie nigdy,
+wygladajac przy tym jak dzialajacy bezpiecznik (AP-314).
+
+Zachowanie: `cm-agent/tests/test_bezpiecznik_gatunku.py` - szesc scenariuszy przez prawdziwa
+petle `process_item`, karmione tekstem, ktory naprawde wyszedl na LinkedIna 04/08.
 
 ## Serie X i straznik dlugich (channels.stage_variant)
 

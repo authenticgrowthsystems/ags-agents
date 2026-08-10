@@ -298,8 +298,10 @@ def _draft(item):
     # sugestia wizualu per material (06/07); podmiana starej sugestii przy regeneracji
     try:
         hint = generate.generate_media_hint(brand, canonical, content_item_id=item["id"])
+        # AP-315: znacznik zatrzymania odchodzi razem ze stara trescia. Tekst pisany od nowa
+        # jest NOWYM tekstem, wiec nie moze dziedziczyc zgody wydanej na poprzedni.
         media = [m for m in (item.get("media") or [])
-                 if (m or {}).get("kind") not in ("suggestion", "dup_warning") and not str((m or {}).get("kind", "")).startswith("review_")]
+                 if (m or {}).get("kind") not in ("suggestion", "dup_warning", _AP315_KIND) and not str((m or {}).get("kind", "")).startswith("review_")]
         if hint:
             media.append({"kind": "suggestion", "text": hint})
         # BRAMKA DUPLIKACJI (kanon 19/07): TEMAT vs OPUBLIKOWANE (30 dni, pgvector) -> ostrzezenie
@@ -365,12 +367,32 @@ def process_item(item):
         slot, changed, realny = slots.assign_if_needed(item)
         if changed and slot:
             # Zgloszenie Tomasza 03/08: meldunek ma podawac godzine, o ktorej post NAPRAWDE
-            # wyjdzie - czyli czas z kolejki (po humanizacji), a nie czysty slot z siatki
-            # planowania. Roznica siega 15 minut (kanon 19/07: niepelne godziny).
-            kiedy = realny or slot
+            # wyjdzie. Poprawka z 03/08 (d5cd43e) podawala czas z KOLEJKI i byla dobra tylko
+            # w polowie przypadkow - domkniecie 10/08, patrz _godzina_publikacji.
+            kiedy = _godzina_publikacji(slot, realny)
             logbot.send(f"🗓 CM przydzielil slot: {kiedy.strftime('%a %d/%m %H:%M')} - "
                         f"{item['master_theme'][:70]} (zmiana? napisz do CM: 'przesun na ...')")
             return f"slot_assigned({kiedy:%d/%m %H:%M})"
+        # AP-315 (10/08): OSTATNIA bramka przed swiatem. Tedy przechodzi KAZDA publikacja -
+        # takze material zatwierdzony guzikiem w n8n z pominieciem cm-agenta - wiec to jedyne
+        # miejsce, ktore widzi wszystko. Bezpiecznik NIE poprawia tekstu: zawraca material do
+        # czlowieka i mowi glosno, ktora fraza go zatrzymala. Sprawdzany jest WIERSZ KOLEJKI,
+        # bo publikuje sie wariant, a nie canonical_body.
+        zle = channels.sprawdz_gatunek(item)
+        if zle:
+            twarde = [f for z in zle for f in z["twarde"]]
+            # Odcisk SORTOWANY: zapytanie o wiersze nie ma ORDER BY, wiec bez sortowania
+            # dwa przebiegi na tych samych danych dalyby dwa rozne odciski i furtka
+            # "drugie zatwierdzenie" nigdy by sie nie otworzyla.
+            odcisk = ";".join(sorted(z["odcisk"] for z in zle))
+            if twarde or _znacznik_ap315(item) != odcisk:
+                db.set_item_status(item["id"], "needs_approval",
+                                   media=_media_ze_znacznikiem(item, odcisk))
+                logbot.send(_meldunek_bezpiecznika(item, zle, bool(twarde)))
+                return f"zablokowany_gatunek({'twarde' if twarde else 'miekkie'},{len(zle)})"
+            # Tylko miekkie i DOKLADNIE ten sam tekst, ktory czlowiek widzial w meldunku wraz
+            # z nazwa frazy. Przepuszczamy, ale glosno - to nie moze wygladac jak zwykla publikacja.
+            logbot.send(_ostrzezenie_ap315(item, zle))
         # backlog b: dispatch = HAND-OFF, nie publikacja. Item przechodzi w STATUS_HANDED_OFF
         # (poza ACTIONABLE), a reconcile_publications zamelduje realny sukces/porazke po callbacku.
         # D-008: to JEDYNY w calym systemie pisarz tej wartosci - stad migracja da sie domknac
@@ -399,6 +421,92 @@ def _chan_label(brand_id, platform):
         return planner._target_label(brand_id, platform)
     except Exception:
         return platform
+
+
+def _godzina_publikacji(slot, realny):
+    """D-015, domkniecie 10/08: godzina, o ktorej post NAPRAWDE wyjdzie, to MAX z dwoch liczb -
+    slotu planu i czasu kolejki. Nie jedna z nich na stale.
+
+    DLACZEGO. Publikacje pilnuja DWIE niezalezne bramki, obie z warunkiem "<= NOW()":
+      1) `db.claim_item`: material `approved` z PRZYSZLYM `content_items.scheduled_for` NIE jest
+         w ogole brany przez petle. To trzyma go do SLOTU PLANU.
+      2) Scheduler n8n: publikuje `post_queue WHERE status='scheduled' AND scheduled_for <= NOW()`.
+         Wiersz staje sie 'scheduled' dopiero w dispatchu, czyli PO otwarciu bramki nr 1.
+    Wynika z tego, ze czas kolejki liczy sie tylko wtedy, gdy jest POZNIEJSZY niz slot planu.
+    Gdy `humanize_slot` wylosuje wczesniej (a losuje symetrycznie +/-15 min, wiec w polowie
+    przypadkow), ta wczesniejsza godzina jest MARTWA - bramka nr 1 i tak trzyma material.
+
+    DOWOD, NIE TEORIA (10/08, dwa na dwa):
+      #344  kolejka 15:49, slot planu 16:00  ->  opublikowane 04/08 **16:01**
+      #358  kolejka 15:50, slot planu 16:00  ->  opublikowane 05/08 **16:01**
+    Poszlaka potwierdzajaca: WSZYSTKIE zaobserwowane publikacje (13:48, 16:10, 16:31, 16:59,
+    17:48, 19:12, 20:23, 10:01) wypadaja PO najblizszym okraglym slocie, ani jedna przed.
+    Przy losowaniu symetrycznym polowa powinna wypasc wczesniej - bramka nr 1 je zjada.
+
+    Stad d5cd43e bylo poprawne dokladnie w polowie przypadkow, tak samo jak kod, ktory poprawialo:
+    stary meldunek mylil sie o 15 minut, gdy kolejka wypadala pozniej; nowy mylil sie o 15 minut,
+    gdy wypadala wczesniej. Prawdziwa odpowiedzia jest max, a nie wybor jednego ze zrodel.
+    Sam tik Schedulera dokłada do minuty i tego celowo NIE dodajemy - meldunek ma podawac
+    godzine, od ktorej post moze wyjsc, a nie udawac precyzje sekundowa."""
+    if realny and slot and realny > slot:
+        return realny
+    return slot or realny
+
+
+_AP315_KIND = "ap315_blok"
+
+
+def _znacznik_ap315(item):
+    """Odcisk tresci, ktora bezpiecznik zatrzymal POPRZEDNIM razem. Pusty napis = pierwszy raz.
+    Znacznik siedzi w `media` materialu, bo ma przezyc powrot do needs_approval i tapniecie
+    guzika w n8n - a te dwie drogi nie przechodza przez zadna pamiec cm-agenta."""
+    for m in (item.get("media") or []):
+        if (m or {}).get("kind") == _AP315_KIND:
+            return str((m or {}).get("odcisk") or "")
+    return ""
+
+
+def _media_ze_znacznikiem(item, odcisk):
+    """Jeden znacznik na material: stary leci, nowy wchodzi. Bez tego kazde zatrzymanie
+    dokladaloby wpis i po kilku probach `media` bylby smietnikiem."""
+    media = [m for m in (item.get("media") or []) if (m or {}).get("kind") != _AP315_KIND]
+    return media + [{"kind": _AP315_KIND, "odcisk": odcisk}]
+
+
+def _frazy_wiersza(z):
+    czesci = []
+    if z["twarde"]:
+        czesci.append("TWARDE: " + ", ".join(z["twarde"]))
+    if z["miekkie"]:
+        czesci.append("miekkie: " + ", ".join(z["miekkie"]))
+    return " | ".join(czesci)
+
+
+def _meldunek_bezpiecznika(item, zle, ma_twarde):
+    """AP-315: meldunek ma powiedziec CO zatrzymalo material, a nie ze "cos jest nie tak".
+    Cichy powrot do needs_approval wygladalby jak zwykle czekanie na decyzje - a to jest
+    zatrzymanie publikacji i Tomasz musi wiedziec, ze slot przepadnie.
+    Fraza pada Z NAZWY celowo: to ona zamienia odruchowe tapniecie "zatwierdz" w swiadome."""
+    lines = [f"🛑 BEZPIECZNIK GATUNKU zatrzymal publikacje: {item['master_theme'][:90]}",
+             "   Tresc wyglada na NOTATKE O TRESCI, nie na tekst dla czlowieka."]
+    for z in zle:
+        lab = _chan_label(item["brand_id"], z["platform"])
+        lines.append(f"   • {lab} (wiersz #{z['qid']}): {_frazy_wiersza(z)}")
+    if ma_twarde:
+        lines.append("   Fraza TWARDA to nazwa naszej maszynerii - drugie zatwierdzenie NIC nie da. "
+                     "Tekst trzeba napisac od nowa.")
+    else:
+        lines.append("   Jesli to swiadomy wybor slowa, zatwierdz TEN SAM tekst drugi raz - przejdzie. "
+                     "Kazda zmiana tekstu liczy sie od nowa.")
+    return "\n".join(lines)
+
+
+def _ostrzezenie_ap315(item, zle):
+    """Drugie zatwierdzenie miekkiej frazy. Publikacja idzie, ale slad ma zostac glosny -
+    inaczej za miesiac nikt nie odtworzy, dlaczego to wyszlo mimo bezpiecznika."""
+    frazy = sorted({f for z in zle for f in z["miekkie"]})
+    return (f"⚠️ BEZPIECZNIK PRZEPUSZCZA na Twoje drugie zatwierdzenie: {item['master_theme'][:80]}\n"
+            f"   Fraza miekka: {', '.join(frazy)}. Ten sam tekst, ktory zatrzymalem poprzednio.")
 
 
 def _dispatch_ack(item, handoff):

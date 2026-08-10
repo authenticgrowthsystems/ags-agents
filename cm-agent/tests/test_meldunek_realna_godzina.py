@@ -146,7 +146,13 @@ check("brak wolnego slotu -> trojka z changed=False", isinstance(w3, tuple) and 
 print("\n[zrodlo] worker melduje godzine realna, nie czysty slot (AP-309):")
 src = (APP / "worker.py").read_text(encoding="utf-8")
 check("worker rozpakowuje trojke", "slot, changed, realny = slots.assign_if_needed(item)" in src)
-check("worker liczy godzine meldunku z 'realny'", re.search(r"kiedy\s*=\s*realny\s+or\s+slot", src) is not None)
+# DOMKNIECIE 10/08 (D-015): przez tydzien staly tu slowa `kiedy = realny or slot`, czyli
+# "meldunek zawsze podaje czas kolejki". Dowod z 04 i 05/08 (oba posty wyszly 16:01 przy
+# kolejce 15:49 i 15:50) pokazal, ze czas kolejki liczy sie TYLKO gdy jest pozniejszy niz slot
+# planu - reszte zjada bramka claim_item. Regula i dowod: worker._godzina_publikacji,
+# zachowanie: cm-agent/tests/test_godzina_publikacji.py.
+check("worker liczy godzine meldunku regula max(slot, kolejka)",
+      re.search(r"kiedy\s*=\s*_godzina_publikacji\(slot,\s*realny\)", src) is not None)
 blok = src[src.find("slot, changed, realny"):src.find("slot, changed, realny") + 900]
 check("tresc meldunku uzywa 'kiedy', a nie 'slot'",
       "kiedy.strftime" in blok and "slot.strftime" not in blok)
