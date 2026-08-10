@@ -96,6 +96,26 @@ anty-regresja, zeby nastepna "uproszczajaca" poprawka od razu widziala, ze byly 
 Karta materialu nadal czyta sam material, wiec przy kolejce wypadajacej pozniej pokazuje o do
 15 minut za wczesnie. To reszta D-015 i osobna decyzja (wymaga wzorca `_stan_rozsylki` z D-006).
 
+## BRAMKA WYJSCIA FILTRA - przyczyna zrodlowa AP-315 (10/08/2026)
+
+`compliance._rewrite` obsluguje TRZY filtry (`polish_pl`, przepisanie zakazanego slownictwa,
+test szatni) i do 10/08 oddawal odpowiedz modelu **doslownie** (`return out or text`). Gdy model
+zamiast poprawic tekst odpowiadal O tekscie ("nie podales mi tekstu do poprawy (...) otrzymasz
+zwrotnie wylacznie poprawiony tekst"), ta odpowiedz stawala sie trescia posta.
+
+Od 10/08 stoi tam bramka na **pokryciu slow**: jaka czesc roznych slow wejscia (min. 4 znaki,
+zlozone do ASCII) przetrwala w wyjsciu. Ponizej `PROG_POKRYCIA_FILTRA = 0.35` filtr oddaje tekst
+**wejsciowy** nietkniety i pisze do `agent_logs` typ `COMPLIANCE_ODPOWIEDZ_NIE_PRZEROBKA`
+z poczatkiem odrzuconej odpowiedzi.
+
+Zmierzone: rozmowa modelu **0.023**, korekta polszczyzny 0.977, ostre przepisanie 0.651,
+skrocenie o polowe 0.372. Kierunek pomylki wybrany swiadomie - falszywy alarm kosztuje jeden
+tekst nieprzefiltrowany plus wpis w logu, falszywe przepuszczenie kosztuje publiczny post.
+
+**To NIE jest lista fraz i o to chodzi.** Bezpiecznik gatunku (nizej) na tej samej karcie dal
+`([], [])`, bo awaria miala inne slownictwo. Pokrycie mierzy relacje wyjscia do wejscia,
+wiec nowe slownictwo go nie omija.
+
 ## BEZPIECZNIK GATUNKU - ostatnia bramka przed swiatem (AP-315, 10/08/2026)
 
 Przed zapisem `handed_off` (`worker.process_item`) tresc KAZDEGO wiersza kolejki przechodzi

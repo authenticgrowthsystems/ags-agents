@@ -11,6 +11,9 @@ from .generate import client
 
 _DASH = re.compile(r"\s*[—–]\s*")  # em dash + en dash with surrounding space
 _PL_DIACRITICS = re.compile(r"[ąćęłńóśżź]")
+# Skladanie do ASCII. Uzywane w DWOCH miejscach (bramka wyjscia filtra i bezpiecznik gatunku),
+# stad na gorze pliku - AP-313 dotyczy obu tak samo.
+_OGONKI = str.maketrans("ąćęłńóśźż", "acelnoszz")
 
 # Guard trybu edycji (lekcja #60, 10/07): Tomasz w trybie 'wklej nowa tresc' napisal POLECENIE
 # ("Na podstawie tego co napisalem przygotuj draft...") i pending-edit wzial je za tresc posta.
@@ -53,6 +56,58 @@ def looks_polish(text):
     return sum(1 for w in (" się ", " że ", " jest ", " nie ", " który ", " ktora ") if w in low) >= 2
 
 
+# ---- BRAMKA WYJSCIA FILTRA (AP-315, 10/08/2026) ----------------------------------------
+# DOWOD: karta materialu "Granica miedzy dwoma agentami" przyszla z wariantem LinkedIn o tresci
+# "Rozumiem Twoja prosbe, ale widze niejasnosc: nie podales mi tekstu do poprawy. (...) Przeslij
+# go, a otrzymasz zwrotnie wylacznie poprawiony tekst (zero komentarzy, zero em dashy, zero
+# angielskich kalk)". Trzy ostatnie sformulowania to DOSLOWNE echo promptu `polish_pl` ponizej.
+# Model nie poprawil tekstu - odpowiedzial O tekscie, a `_rewrite` oddal te odpowiedz jako tresc.
+#
+# `_rewrite` obsluguje starannie przypadek, w ktorym filtr PADNIE (AP-306: wpis do agent_logs,
+# zeby cisza nie wygladala jak sukces). Nie obslugiwal przypadku, w ktorym filtr ODPOWIE.
+#
+# DLACZEGO POKRYCIE SLOW, A NIE LISTA FRAZ. Lista fraz lapie to slownictwo, ktore juz raz padlo -
+# bezpiecznik gatunku z rana nie zlapal tej karty ANI JEDNYM trafieniem, bo awaria miala zupelnie
+# inne slowa ("Potrzebuje od Ciebie" zamiast "I've reviewed"). Pokrycie mierzy co innego i tego
+# nie da sie obejsc nowym slownictwem: **przerobka zachowuje slowa oryginalu, rozmowa o przerobce
+# ich nie ma.** Kazdy z trzech promptow wolajacych `_rewrite` obiecuje zachowanie sensu i dlugosci
+# ("NIE zmieniaj sensu, tonu ani dlugosci", "keeping the meaning and voice"), wiec to jest KONTRAKT
+# tych filtrow, a nie zgadywanie. Prog 0.35 jest hojny: nawet ostre przepisanie zakazanego
+# slownictwa zostawia grubo ponad polowe slow, a rozmowa o zadaniu schodzi w okolice zera.
+PROG_POKRYCIA_FILTRA = 0.35
+_SLOWO_RE = re.compile(r"[0-9A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]{4,}")
+
+
+def pokrycie_slow(wejscie, wyjscie):
+    """Jaka czesc ROZNYCH slow wejscia (min. 4 znaki) przetrwala w wyjsciu. 0.0-1.0.
+    Puste wejscie daje 1.0 - nie ma czego pilnowac i bramka nie moze na tym padac.
+    Porownanie na tekscie zlozonym do ASCII (AP-313)."""
+    we = {w.lower().translate(_OGONKI) for w in _SLOWO_RE.findall(wejscie or "")}
+    if not we:
+        return 1.0
+    wy = {w.lower().translate(_OGONKI) for w in _SLOWO_RE.findall(wyjscie or "")}
+    return len(we & wy) / len(we)
+
+
+def _zglos_nie_przerobke(task_name, content_item_id, text, out):
+    """Filtr odpowiedzial zamiast poprawic. Tekst WEJSCIOWY idzie dalej nietkniety, ale
+    zdarzenie musi byc widoczne - inaczej powtarza sie AP-306: cisza nieodrozninalna od sukcesu."""
+    try:
+        db.execute(
+            """INSERT INTO agent_logs (agent_id, log_type, rationale, context)
+               VALUES ('cm','COMPLIANCE_ODPOWIEDZ_NIE_PRZEROBKA',%s,%s)""",
+            (f"Filtr '{task_name}' ODPOWIEDZIAL zamiast poprawic (AP-315). Tekst wejsciowy "
+             f"przepuszczony bez zmian. Pokrycie slow: {pokrycie_slow(text, out):.2f} "
+             f"(prog {PROG_POKRYCIA_FILTRA}).",
+             Jsonb({"task": task_name,
+                    "content_item_id": str(content_item_id) if content_item_id else None,
+                    "pokrycie": round(pokrycie_slow(text, out), 3),
+                    "dlugosc_wejscia": len(text or ""), "dlugosc_wyjscia": len(out or ""),
+                    "poczatek_odrzuconej_odpowiedzi": (out or "")[:400]})))
+    except Exception:
+        traceback.print_exc()
+
+
 def _rewrite(prompt, text, content_item_id, task_name="compliance"):
     try:
         model, tier, source = tasks.model_for("compliance")
@@ -62,6 +117,12 @@ def _rewrite(prompt, text, content_item_id, task_name="compliance"):
         )
         tasks.log_task(task_name, tier, model, source, getattr(resp, "usage", None), content_item_id)
         out = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
+        # BRAMKA WYJSCIA (AP-315): odpowiedz ma byc PRZEROBKA tego tekstu, a nie wypowiedzia
+        # o zadaniu. Nie poprawiamy jej - poprawiona rozmowa to nadal rozmowa - tylko oddajemy
+        # tekst wejsciowy i zglaszamy. Ta sama zasada co przy bezpieczniku gatunku.
+        if out and pokrycie_slow(text, out) < PROG_POKRYCIA_FILTRA:
+            _zglos_nie_przerobke(task_name, content_item_id, text, out)
+            return text
         return out or text
     except Exception as e:
         # AP-306: filtr moze nie zadzialac, ale nie moze zniknac bez sladu - inaczej tekst
@@ -178,10 +239,15 @@ def strip_meta_header(text, max_linii=3):
 # trafieniu czlowiek dostaje KONKRETNA fraze, wiec drugie tapniecie jest swiadome, nie slepe.
 # Przy twardych nawet to nie wystarcza - i to nie jest teoria: tekst, ktory wyszedl 04/08,
 # zawiera "Voice Bible", czyli fraze TWARDA. Po tym podziale zaden podwojny tap go nie wypusci.
+#
+# CZEGO TA LISTA NIE ZLAPIE (zmierzone 10/08, kilka godzin po wdrozeniu): karta "Granica miedzy
+# dwoma agentami" przyszla z wariantem, ktory byl rozmowa modelu z operatorem ("Potrzebuje
+# od Ciebie", "Przeslij go") i bezpiecznik dal na niej `([], [])` - ZERO trafien. Inna awaria
+# tego samego rodzaju, o zupelnie innym slownictwie. Dlatego prawdziwa naprawa siedzi wyzej,
+# w bramce wyjscia `_rewrite` (pokrycie slow), a ta lista jest ostatnia siatka, nie pierwsza.
 _GATUNEK_TWARDE = ("voice bible", "masterprompt", "stan_gry", "matreview", "bramka:")
 _GATUNEK_MIEKKIE = ("canonical", "i've reviewed", "i have reviewed", "i need to flag",
                     "strong content", "zatwierdzam", "proponuje zmiane", "kolejka", "meldunek")
-_OGONKI = str.maketrans("ąćęłńóśźż", "acelnoszz")
 
 
 def bezpiecznik_gatunku(text):

@@ -82,7 +82,77 @@ linii. Ten sam odruch: pytanie o stan zamiast pytania o zawartosc.
 7. **Przy diagnozie czytaj TRESC, nie tylko status.** Status odpowiada na pytanie "gdzie to
    jest", nie "co to jest".
 
+## DRUGA TURA TEGO SAMEGO DNIA - przyczyna zrodlowa znaleziona
+
+Kilka godzin po wdrozeniu bezpiecznika przyszla karta materialu "Granica miedzy dwoma agentami"
+z wariantem LinkedIn o tresci:
+
+> "Rozumiem Twoja prosbe, ale widze niejasnosc: **nie podales mi tekstu do poprawy**. (...)
+> Przeslij go, a otrzymasz zwrotnie **wylacznie poprawiony tekst** (zero komentarzy, zero em
+> dashy, zero angielskich kalk)."
+
+Trzy ostatnie sformulowania to **doslowne echo promptu `compliance.polish_pl`**. Model nie
+poprawil tekstu - odpowiedzial O tekscie. A `_rewrite` oddawal to dalej jako tresc posta:
+
+```python
+out = "".join(b.text for b in resp.content if ...).strip()
+return out or text          # <- zadnego sprawdzenia, czy to przerobka
+```
+
+**To jest kanal, ktorym niemal na pewno wyszla takze publikacja z 04/08.** `_rewrite` obsluguje
+trzy filtry (`polish_pl`, przepisanie zakazanego slownictwa, test szatni) i kazdy z nich potrafil
+w ten sposob podmienic tresc posta na wypowiedz modelu o poscie. Ironia jest kompletna: funkcja
+ma starannie zrobiona obsluge przypadku, w ktorym filtr **padnie** (AP-306, wpis do `agent_logs`,
+zeby cisza nie wygladala jak sukces) - i zadnej obslugi przypadku, w ktorym filtr **odpowie**.
+
+### Lista fraz NIE zlapala tej awarii. Zmierzone, nie zalozone
+
+`bezpiecznik_gatunku` na tym tekscie zwrocil **`([], [])`** - zero trafien na obu listach.
+Inna awaria tego samego rodzaju, o zupelnie innym slownictwie: nie "I've reviewed", tylko
+"Potrzebuje od Ciebie" i "Przeslij go". **Zamknieta lista zawsze bedzie o krok za modelem.**
+
+### Naprawa strukturalna: BRAMKA WYJSCIA na pokryciu slow
+
+Zamiast dopisywac frazy - zmierzyc co innego, czego nowe slownictwo nie omija:
+**przerobka zachowuje slowa oryginalu, rozmowa o przerobce ich nie ma.**
+
+`pokrycie_slow(wejscie, wyjscie)` liczy, jaka czesc roznych slow wejscia (min. 4 znaki, zlozone
+do ASCII wg AP-313) przetrwala w wyjsciu. Ponizej progu `0.35` filtr **oddaje tekst wejsciowy
+nietkniety** i zglasza zdarzenie do `agent_logs` z wlasnym typem `COMPLIANCE_ODPOWIEDZ_NIE_PRZEROBKA`,
+razem z poczatkiem odrzuconej odpowiedzi - inaczej diagnoza nastepnym razem zaczyna sie od zera.
+
+To nie jest heurystyka, tylko **kontrakt tych filtrow**: kazdy z trzech promptow obiecuje
+zachowanie sensu i dlugosci ("NIE zmieniaj sensu, tonu ani dlugosci", "keeping the meaning
+and voice"). Zmierzona separacja na prawdziwych danych:
+
+| przypadek | pokrycie |
+|---|---|
+| **rozmowa modelu (prawdziwa karta 10/08)** | **0.023 - odrzucona** |
+| korekta polszczyzny | 0.977 |
+| ostre przepisanie zakazanego slownictwa | 0.651 |
+| skrocenie tekstu o polowe | 0.372 |
+
+Czterdziestokrotna roznica miedzy awaria a najlepsza uczciwa przerobka. **Uczciwie: skrocenie
+o polowe siada 0.022 nad progiem** - zaden z trzech filtrow nie ma prawa skracac, ale gdyby
+kiedys mial, prog trzeba przeliczyc. Kierunek pomylki jest tu swiadomie wybrany: falszywy alarm
+kosztuje jeden tekst nieprzefiltrowany plus wpis w logu, falszywe przepuszczenie kosztuje
+publiczny post.
+
+**Zasada ogolniejsza, warta wiecej niz sama poprawka:** kazde wywolanie modelu, ktorego wynik
+wraca do potoku jako DANE, potrzebuje bramki wyjscia. Nie dlatego, ze model bywa gluchy, tylko
+dlatego, ze "odpowiedz o zadaniu" i "wynik zadania" sa dla kodu nieodroznialne - oba sa napisem.
+
 ## Realizacja u nas
+
+**Warstwa 1 - bramka wyjscia filtra (przyczyna zrodlowa):**
+
+- `compliance.pokrycie_slow` + `PROG_POKRYCIA_FILTRA` - miara, nie lista
+- `compliance._rewrite` - przy pokryciu ponizej progu oddaje WEJSCIE i zglasza
+- `compliance._zglos_nie_przerobke` - `agent_logs`, typ `COMPLIANCE_ODPOWIEDZ_NIE_PRZEROBKA`
+- `cm-agent/tests/test_bramka_wyjscia_filtra.py` - prawdziwa odpowiedz-rozmowa z karty 10/08
+  kontra cztery uczciwe przerobki, obie strony progu
+
+**Warstwa 2 - bezpiecznik gatunku (ostatnia siatka przed swiatem):**
 
 - `compliance.bezpiecznik_gatunku` - dwie listy, zwraca `(twarde, miekkie)`
 - `channels.sprawdz_gatunek` - czyta wiersze kolejki + odcisk tresci
@@ -91,4 +161,5 @@ linii. Ten sam odruch: pytanie o stan zamiast pytania o zawartosc.
   karmione tekstem, ktory naprawde wyszedl 04/08
 
 Wyciek z 04/08 lapie sie na frazie **twardej** (`Voice Bible`), wiec zaden podwojny tap
-go nie wypusci - i to jest asercja w tescie, nie deklaracja.
+go nie wypusci - i to jest asercja w tescie, nie deklaracja. Karta z 10/08 nie lapie sie
+na ZADNEJ frazie i zatrzymuje ja dopiero warstwa 1 - stad kolejnosc warstw w tej liscie.
