@@ -358,10 +358,24 @@ na ten plik.
 **Warunek wejscia:** minal co najmniej jeden PELNY cykl publikacji na nowym obrazie
 (`approved -> handed_off -> published` bez recznej pomocy) i nikt nie planuje juz cofac obrazu.
 
-## D-015: Karta materialu pokazuje slot z SIATKI PLANOWANIA, a post wychodzi o godzinie z KOLEJKI
+## D-015 [CZESCIOWO ZAMKNIETE 10/08/2026]: ktora godzine widzi czlowiek
 
 **Zapisany 03/08/2026** (zgloszenie Tomasza: "powinienem tez realna godzine miec w meldunku").
-**Meldunek naprawiony 03/08, POPRAWIONY PONOWNIE 10/08. Karta nadal nie.**
+**MELDUNEK ZAMKNIETY 10/08. KARTA w `/karty` zostaje otwarta.**
+
+> ### DOWOD W BIEGU 10/08, 18:09
+>
+> Material "Granica miedzy dwoma agentami" dostal meldunek **"CM przydzielil slot: Tue 11/08 16:00"**.
+> Pelna godzina jest sama w sobie dowodem: `humanize_slot` ma warunek `cand.minute % 15 != 0`,
+> wiec **nigdy nie zwraca rownej godziny**. Skoro meldunek podal 16:00, nie podal czasu kolejki -
+> podal slot planu, bo kolejka wypadla wczesniej. To jest dokladnie ten przypadek, w ktorym
+> poprzednia wersja (`d5cd43e`) obiecywalaby godzine, ktora nie moze nastapic.
+> Domkniecie end-to-end: publikacja 11/08 ok. 16:00-16:01.
+>
+> Co ZOSTAJE otwarte: karta w `/karty` czyta `content_items`, wiec przy kolejce wypadajacej
+> POZNIEJ niz slot planu pokazuje do 15 minut za wczesnie. Wymaga dodatkowego odczytu per karta
+> (wzorzec `_stan_rozsylki` z D-006) i osobnej decyzji, czy karta ma pokazywac czas kolejki,
+> oba czasy, czy zostac przy slocie.
 
 > ### KOREKTA 10/08/2026 - ten wpis byl przez tydzien POL-PRAWDA
 >
@@ -670,3 +684,35 @@ czy policzy po `channel` czy po `action_type`.
 
 **Docelowo:** `action_type` z tego samego slownika co `channel` + migracja istniejacych wierszy,
 w jednym kroku. Rozroznik ten sam, trzypasowy, co przy D-009.
+
+## D-016: Potwierdzenie po tapnieciu obiecuje publikacje "za chwile" niezaleznie od slotu
+
+**Zapisany 10/08/2026** (Tomasz zobaczyl obie wiadomosci obok siebie o 18:09).
+
+Po tapnieciu guzika zatwierdzenia bot odpowiada:
+
+> ✅ Zatwierdzono. **Publikacja za chwile.** Potwierdzenie przyjdzie na kanale logowym.
+
+Sekunde pozniej, w tym samym czacie:
+
+> 🗓 CM przydzielil slot: **Tue 11/08 16:00**
+
+"Za chwile" i "za dwadziescia dwie godziny" w jednym oddechu. **To jest AP-312 w wydaniu
+czasowym**: etykieta obiecuje co innego, niz sie stanie - dokladnie ta sama klasa, ktora
+przerabialismy tego dnia przy D-006, D-008 i D-015.
+
+**Gdzie siedzi:** w wezle n8n `AGS HITL Handler v1.0`, nie w cm-agencie. Guzik zatwierdzenia
+**omija kontener** (patrz `docs/komponenty/n8n-transport.md` - trzeci pisarz do `content_items`),
+wiec tekst potwierdzenia jest stalym napisem w definicji workflow. cm-agent nie ma jak go
+poprawic i nie da sie tego naprawic rebuildem.
+
+**Dlaczego to nie jest kosmetyka:** przy kadencji czterech publikacji dziennie czlowiek dostaje
+te pare wiadomosci kilka razy dziennie. Zdanie, ktore systematycznie klamie, uczy ignorowac
+CALY kanal logowy - a to jest ten sam kanal, ktorym ida alarmy zwisu i meldunki bezpiecznika
+gatunku. Koszt nie jest w tej jednej wiadomosci, tylko w zaufaniu do reszty.
+
+**Docelowo:** wezel `Cm Resolve Gate` ma odpowiadac neutralnie ("Zatwierdzono. CM przydzieli
+slot i zamelduje.") albo czytac `content_items.scheduled_for` i podac godzine. Pierwsze jest
+jednym napisem, drugie dodatkowym odczytem. **Osobne okno n8n** - po kazdym PUT trzeba
+deactivate + activate ([[project_n8n_reactivate_after_put]]), wiec nie doklada sie tego
+przy okazji.

@@ -37,6 +37,13 @@ tego slowa w ogole nie zawiera. **Szukaj po nazwie TABELI, nie po wartosci.**
 **Konsekwencja operacyjna:** kazda migracja dotykajaca `content_items` musi uwzglednic
 n8n, a nie tylko `docker stop cm-agent`. Procedura wzorcowa: `docs/ops/OKNO_d008_03082026.md`.
 
+**Konsekwencja druga (10/08, D-016): teksty widziane przez czlowieka tez sa TUTAJ, nie w kodzie.**
+Wezel `Cm Resolve Gate` odpowiada po tapnieciu guzika stalym napisem "Zatwierdzono. Publikacja
+za chwile." - takze wtedy, gdy CM sekunde pozniej melduje slot za dobe. To AP-312 w wydaniu
+czasowym i **nie da sie tego naprawic rebuildem kontenera**, bo napis siedzi w definicji
+workflow. Szukajac zrodla mylacej wiadomosci w bocie: sprawdz n8n, ZANIM zaczniesz czytac
+`cm-agent/app`. Wpis: `docs/ops/DLUG_TECHNICZNY.md` D-016.
+
 **Pulapka wezla `Mark Published`:** ma w JEDNYM zapytaniu wartosci z DWOCH roznych slownikow -
 `ci.status` (material) i `q.status IN (...)` (kolejka), obie do 03/08 o tej samej nazwie
 `dispatching`. Podmiana "po calym tekscie" zrywa dopasowanie kolejki bez zadnego bledu,

@@ -36,9 +36,10 @@ Model MVP rozwijany: rdzen dziala od dnia 1, funkcje doplywaja w cenie.
 | Komponent | Status | Glowny brak |
 |---|---|---|
 | planner | KOMPLETNY | - |
-| kolejka-publikacja | KOMPLETNY | **D-015** (03/08): karta materialu pokazuje slot PLANU, a post wychodzi o czasie z KOLEJKI - do 15 min obok. Meldunek bota i raporty pokazuja juz czas prawdziwy, karta nie |
-| karty-hitl | KOMPLETNY | j.w. - D-015 dotyczy tej samej karty. Stan materialu od 03/08 nazywa sie `handed_off` (D-008), etykieta bez zmian |
-| decyzje-nauka | CZESCIOWY | mechanizm LIVE; nauka mloda (progi semi-auto nieosiagniete - potrzeba decyzji) |
+| kolejka-publikacja | KOMPLETNY | **D-015 CZESCIOWO ZAMKNIETE 10/08**: realny czas publikacji to `max(slot planu, czas kolejki)` plus tik Schedulera i meldunek podaje juz te wartosc (`worker._godzina_publikacji`; dowod: #344 i #358 wyszly 16:01 przy kolejce 15:49 i 15:50). Zostaje KARTA w `/karty`, ktora czyta sam material |
+| karty-hitl | KOMPLETNY | j.w. - reszta D-015 dotyczy tej karty. Stan materialu od 03/08 nazywa sie `handed_off` (D-008), etykieta bez zmian. **D-016** (10/08): potwierdzenie po tapnieciu mowi "Publikacja za chwile" takze wtedy, gdy slot wypada za dobe |
+| compliance i bezpieczniki | **KOMPLETNY dla znanych trybow awarii** | trzy warstwy przed publikacja (AP-315, 10/08): bramka wyjscia filtra na pokryciu slow, bezpiecznik gatunku z progiem nagromadzenia, filtr jezykowy regulek nauczonych. Kazda zweryfikowana ZLYM wsadem na produkcji. **Nie chronia przed trybem, ktorego jeszcze nie widzielismy** - to sa siatki, nie dowod poprawnosci |
+| decyzje-nauka | **CZESCIOWY / RYZYKO** | mechanizm LIVE, ale AP-315 pokazal, ze **petla nauki jest wektorem wstrzykniecia**: regulki z `style_learned` sa POLECENIAMI i trafialy do generacji w zlym jezyku, co dwa razy skonczylo sie publikacja wypowiedzi modelu zamiast tresci. Od 10/08 filtr jezykowy przy wstrzykiwaniu; docelowo wpisy maja dostawac jezyk PRZY ZAPISIE. Progi semi-auto nadal nieosiagniete |
 | metryki | CZESCIOWY | X = auto (kolektor); LinkedIn = import xlsx reczny do App 2 CMA |
 | dedup | KOMPLETNY | strojenie progu przez /set czeka na patch allowlisty (SQL dziala) |
 | rozmowa-cm | CZESCIOWY | komendy configu routowane deterministycznie; poza nimi LLM moze "zameldowac bez narzedzia" (test prawdy: paragon) |
