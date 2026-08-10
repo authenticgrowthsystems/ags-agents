@@ -124,7 +124,28 @@ pisarzu. **Nie szukaj „mniej szkodliwej kolejności" - okno da się usunąć c
   ale CM dostał nowy masterprompt i **zaczyna produkować** - sprawdź stan, zanim zatrzymasz
   pisarza.
 
-## 9. Kontakt
+## 9. Model i ustawienia dla tej instancji
+
+**Opus 5 (`claude-opus-5`), effort `xhigh`.** Nie Fable 5. Powody, po sprawdzeniu w dokumentacji:
+
+- **Fable jest zbyt drogi na to zadanie** (dwa razy tyle: 10/50 wobec 5/25 USD za milion
+  tokenow) i **nie ma tu przewagi** - jego zysk jest na pracy nierozwiazanej i nowatorskiej,
+  a D-008 jest ryzykowne, ale mechaniczne.
+- **Ten brief jest nakazowy** - dziewiec sekcji, kolejnosc wykonania, lista kontrolna.
+  Dokumentacja Fable mowi wprost, ze taki ksztalt promptu **obniza u niego jakosc wyniku**.
+  Kolejnosc jest tu celowa i ma byc wykonana co do punktu, wiec Opus jest wlasciwym adresatem.
+- `xhigh` to zalecane ustawienie dla pracy programistycznej i agentowej.
+
+**Dwie sklonnosci Opusa 5, ktore przy TYM buildzie sa realnym ryzykiem** - trzymaj je na oku:
+
+1. **Chetnie zleca podagentom.** Tu nie ma czego zlecac: to jedna spojna zmiana w jednym oknie.
+   Rownolegle podagenty na wspoldzielonym drzewie to droga do polowicznej migracji.
+   **Rob to sam.** Podagent ewentualnie do odczytu (wlasny grep, przeglad n8n), nigdy do zapisu.
+2. **Potrafi rozszerzyc zakres.** Sekcja 8 mowi, czego nie ruszac - traktuj ja doslownie.
+   Jesli po drodze zobaczysz cos wartego naprawy, **zapisz to do dlugu i zglos**, nie naprawiaj
+   przy okazji. Ta zmiana ma byc wylacznie przemianowaniem.
+
+## 10. Kontakt
 
 Wynik zgłoś Tomaszowi jednym meldunkiem. **Ta instancja (BE) koordynuje i audytuje** - jeśli
 inwentarz z sekcji 3 nie zgodzi się z twoim odczytem, to jest ustalenie warte zgłoszenia,

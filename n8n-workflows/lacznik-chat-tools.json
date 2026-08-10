@@ -9,7 +9,7 @@
         0,
         0
       ],
-      "webhookId": "1958ff70-92db-4964-8bd4-5d7c850d7cc8",
+      "webhookId": "4c348f2d-f7e5-4d32-bf52-4391bc27646f",
       "parameters": {
         "path": "lacznik-<LACZNIK_E2_SECRET>"
       }
@@ -97,7 +97,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ contact_id: $fromAI('contact_id', 'Nazwa prospekta albo UUID z lejka lub kontaktow', 'string'), kanal: $fromAI('kanal', 'Kanal: email, sms, whatsapp, dm albo telefon', 'string'), tresc: $fromAI('tresc', 'Pelna tresc tekstu, ktory poszedl albo ma pojsc do kontaktu', 'string'), status: $fromAI('status', 'draft gdy szkic, sent gdy juz wyslane', 'string'), temat: $fromAI('temat', 'Temat wiadomosci. PUSTY CIAG jesli nie dotyczy', 'string'), next_step: $fromAI('next_step', 'Nastepny ustalony krok. PUSTY CIAG jesli nie ustalasz', 'string'), next_step_date: $fromAI('next_step_date', 'Termin nastepnego kroku RRRR-MM-DD GG:MM. PUSTY CIAG jesli nie ustalasz', 'string') }) }}",
+        "jsonBody": "={{ JSON.stringify({ contact_id: $fromAI('contact_id', 'Nazwa prospekta albo UUID z lejka lub kontaktow', 'string'), kanal: $fromAI('kanal', 'Kanal: email, sms, whatsapp, dm albo telefon', 'string'), tresc: $fromAI('tresc', 'Pelna tresc tekstu, ktory poszedl albo ma pojsc do kontaktu', 'string'), status: $fromAI('status', 'draft gdy szkic, sent gdy juz wyslane', 'string'), temat: $fromAI('temat', 'Temat wiadomosci. PUSTY CIAG jesli nie dotyczy', 'string'), next_step: $fromAI('next_step', 'Nastepny ustalony krok. PUSTY CIAG jesli nie ustalasz', 'string'), next_step_date: $fromAI('next_step_date', 'Termin nastepnego kroku RRRR-MM-DD GG:MM. PUSTY CIAG jesli nie ustalasz', 'string'), katalog: $fromAI('katalog', 'Sciezka WZGLEDNA katalogu klienta bez polskich znakow, np. Klienci\\\\Chwalinski. Ustalana RAZ przy pierwszym kontakcie i juz nigdy niezmieniana. PUSTY CIAG, jesli prospekt katalog juz ma albo go nie potrzebuje - system katalogow NIE TWORZY, robi to czlowiek', 'string') }) }}",
         "options": {
           "response": {
             "response": {
@@ -154,7 +154,7 @@
         0,
         520
       ],
-      "webhookId": "2dd6a39d-bccd-4f8d-bd74-4c08e4ed23a9",
+      "webhookId": "c6c89ebb-7eb8-45d1-9026-2619195a2292",
       "parameters": {
         "httpMethod": "POST",
         "path": "chat-raport",
@@ -207,7 +207,7 @@
         0,
         720
       ],
-      "webhookId": "687eaaae-b7db-4b7e-aeff-d6d1cd1bcd62",
+      "webhookId": "f2fa2c41-00d4-4d19-9640-08cb29610ce6",
       "parameters": {
         "httpMethod": "GET",
         "path": "stan-gry",
