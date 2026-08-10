@@ -101,12 +101,35 @@ DOBRY_0308 = ("Twelve automation ideas rotting in a doc. Half made sense three w
 MIEKKI = ("The canonical example of this failure is an agent that reports success before the "
           "callback ever arrives. Build for the callback, not for the optimism.")
 
-print("\n[dowod] tekst, ktory NAPRAWDE wyszedl, jest zatrzymany - i to TWARDO:")
+print("\n[dowod] tekst, ktory NAPRAWDE wyszedl, jest zatrzymany BEZ FURTKI:")
 twarde, miekkie = compliance.bezpiecznik_gatunku(WYCIEK)
-check("wyciek z 04/08 lapie fraze TWARDA", "voice bible" in twarde, repr(twarde))
-check("wyciek lapie takze frazy miekkie", len(miekkie) >= 3, repr(miekkie))
-for f in ("i've reviewed", "canonical", "strong content", "i need to flag"):
-    check(f"wyciek lapie miekka '{f}'", f in miekkie, repr(miekkie))
+check("wyciek z 04/08 lapie piec fraz miekkich", len(miekkie) >= 5, repr(miekkie))
+for f in ("voice bible", "i've reviewed", "canonical", "strong content", "i need to flag"):
+    check(f"wyciek lapie '{f}'", f in miekkie, repr(miekkie))
+check("i to wystarcza, zeby stracil furtke", compliance.bez_furtki(twarde, miekkie),
+      f"tw={twarde} mk={miekkie}")
+
+print("\n[korekta 10/08] prawdziwy dobry post z 'voice bible' NIE traci furtki:")
+# Audyt 152 publikacji znalazl 'voice bible' w opublikowanym poscie Tomasza z 11/07 - jako
+# pojecie content-ops, nie nazwe naszego pliku. Fraza zeszla przez to do miekkich. Ten test
+# pilnuje, zeby przeniesienie nie oslabilo obrony przed wyciekiem: jedno trafienie kontra piec.
+POST_1107 = ("One person, one agent, 12 posts this week. The secret isn't smarter AI. "
+             "It's architecture: clear stages, compliance checks, one voice bible. "
+             "Responsibility stays human. #AIAgents")
+tw7, mk7 = compliance.bezpiecznik_gatunku(POST_1107)
+check("post z 11/07 nie lapie zadnej frazy twardej", tw7 == [], repr(tw7))
+check("lapie dokladnie jedna miekka", mk7 == ["voice bible"], repr(mk7))
+check("i ZACHOWUJE furtke", not compliance.bez_furtki(tw7, mk7), f"tw={tw7} mk={mk7}")
+
+print("\n[prog] jedna fraza to wybor slowa, trzy to gatunek:")
+check("zero miekkich - furtki nie ma po co rozwazac", not compliance.bez_furtki([], []))
+check("jedna miekka zachowuje furtke", not compliance.bez_furtki([], ["canonical"]))
+check("dwie miekkie zachowuja furtke", not compliance.bez_furtki([], ["canonical", "kolejka"]))
+check("trzy miekkie traca furtke",
+      compliance.bez_furtki([], ["canonical", "kolejka", "meldunek"]))
+check("jedna TWARDA traci furtke niezaleznie od liczby", compliance.bez_furtki(["masterprompt"], []))
+check("prog stoi na trzech", compliance.PROG_MIEKKICH_JAK_TWARDE == 3,
+      repr(compliance.PROG_MIEKKICH_JAK_TWARDE))
 
 print("\n[brak falszywych alarmow] prawdziwe dobre posty przechodza nietkniete:")
 check("post #358 przechodzi", compliance.bezpiecznik_gatunku(DOBRY_358) == ([], []),
@@ -115,12 +138,12 @@ check("post z 03/08 przechodzi", compliance.bezpiecznik_gatunku(DOBRY_0308) == (
       repr(compliance.bezpiecznik_gatunku(DOBRY_0308)))
 
 print("\n[rozdzial klas] nazwy maszynerii sa TWARDE:")
-for fraza in ("Voice Bible", "masterprompt", "stan_gry", "matreview", "Bramka:"):
+for fraza in ("masterprompt", "stan_gry", "matreview", "Bramka:"):
     tw, mk = compliance.bezpiecznik_gatunku(f"Zwykle zdanie. {fraza} i dalej reszta akapitu.")
     check(f"'{fraza}' jest twarda", bool(tw) and not mk, f"tw={tw} mk={mk}")
 
 print("\n[rozdzial klas] zwykle slowa jezyka sa MIEKKIE:")
-for fraza in ("canonical", "I've reviewed", "I have reviewed", "I need to flag",
+for fraza in ("voice bible", "canonical", "I've reviewed", "I have reviewed", "I need to flag",
               "strong content", "zatwierdzam", "proponuje zmiane", "kolejka", "meldunek"):
     tw, mk = compliance.bezpiecznik_gatunku(f"Zwykle zdanie. {fraza} i dalej reszta akapitu.")
     check(f"'{fraza}' jest miekka", bool(mk) and not tw, f"tw={tw} mk={mk}")
@@ -140,7 +163,7 @@ print("\n[AP-313] ogonki nie omijaja bezpiecznika:")
 check("'proponuję zmianę' (z ogonkami) trafia",
       "proponuje zmiane" in compliance.bezpiecznik_gatunku("Przeczytalem i proponuję zmianę.")[1])
 check("'VOICE BIBLE' wielkimi literami trafia",
-      "voice bible" in compliance.bezpiecznik_gatunku("Zgodnie z VOICE BIBLE to jest ok.")[0])
+      "voice bible" in compliance.bezpiecznik_gatunku("Zgodnie z VOICE BIBLE to jest ok.")[1])
 
 print("\n[odpornosc] pusty wsad nie wysadza bezpiecznika:")
 check("None przechodzi", compliance.bezpiecznik_gatunku(None) == ([], []))
@@ -204,16 +227,29 @@ check("poszlo ostrzezenie o przepuszczeniu",
       any("PRZEPUSZCZA" in m for m in MELDUNKI), repr(MELDUNKI))
 
 print("\n[C] TWARDA fraza mimo znacznika -> nadal ZATRZYMANE (furtki nie ma):")
-TWARDY = "Zgodnie z Voice Bible ten material jest gotowy do publikacji."
+TWARDY = "Zgodnie z masterpromptem ten material jest gotowy do publikacji."
 wynik = przebieg(TWARDY, media=_znacznik_dla(TWARDY))
 check("material NIE zostal oddany", DISPATCH == [], repr(DISPATCH))
 check("material wrocil do needs_approval", ZAPISY and ZAPISY[0][0] == "needs_approval", repr(ZAPISY))
 check("meldunek mowi wprost, ze drugie zatwierdzenie nic nie da",
       any("NIC nie da" in m for m in MELDUNKI), repr(MELDUNKI))
+check("meldunek nazywa fraze jako TWARDA", any("TWARDA" in m for m in MELDUNKI), repr(MELDUNKI))
 
-print("\n[D] PRAWDZIWY wyciek z 04/08 mimo znacznika -> ZATRZYMANY na twardej:")
+print("\n[D] PRAWDZIWY wyciek z 04/08 mimo znacznika -> ZATRZYMANY na NAGROMADZENIU:")
+# Po zejsciu 'voice bible' do miekkich wyciek nie ma juz zadnej frazy twardej. Furtke odbiera
+# mu wylacznie prog: piec miekkich naraz. To jest ta asercja, ktora pilnuje, zeby korekta listy
+# z 10/08 nie oslabila obrony przed tym konkretnym tekstem.
 wynik = przebieg(WYCIEK, media=_znacznik_dla(WYCIEK))
 check("wyciek NIE zostalby oddany nawet przy drugim tapnieciu", DISPATCH == [], repr(DISPATCH))
+check("i to BEZ zadnej frazy twardej",
+      compliance.bezpiecznik_gatunku(WYCIEK)[0] == [], repr(compliance.bezpiecznik_gatunku(WYCIEK)[0]))
+check("meldunek tlumaczy, ze zadecydowala LICZBA fraz",
+      any("naraz" in m for m in MELDUNKI), repr(MELDUNKI))
+
+print("\n[D2] prawdziwy dobry post z 'voice bible' -> drugie zatwierdzenie PRZEPUSZCZA:")
+wynik = przebieg(POST_1107, media=_znacznik_dla(POST_1107))
+check("post z 11/07 zostal oddany", len(DISPATCH) == 1, repr(DISPATCH))
+check("z glosnym ostrzezeniem", any("PRZEPUSZCZA" in m for m in MELDUNKI), repr(MELDUNKI))
 
 print("\n[E] miekka fraza, ale tekst ZMIENIONY -> liczy sie od nowa:")
 INNY = MIEKKI.replace("optimism.", "optimism. One more sentence changes the text.")

@@ -134,12 +134,22 @@ Dwie klasy fraz, kryterium jedno: **czy slowo ma sensowne uzycie POZA nasza masz
 
 | klasa | frazy | zachowanie |
 |---|---|---|
-| TWARDE | `Voice Bible`, `masterprompt`, `stan_gry`, `matreview`, `Bramka:` | blokada bez furtki |
-| MIEKKIE | `canonical`, `I've reviewed`, `I have reviewed`, `I need to flag`, `strong content`, `zatwierdzam`, `proponuje zmiane`, `kolejka`, `meldunek` | blokada, ale zatwierdzenie TEGO SAMEGO tekstu drugi raz przepuszcza z ostrzezeniem |
+| TWARDE | `masterprompt`, `stan_gry`, `matreview`, `Bramka:` | blokada bez furtki |
+| MIEKKIE | `voice bible`, `canonical`, `I've reviewed`, `I have reviewed`, `I need to flag`, `strong content`, `zatwierdzam`, `proponuje zmiane`, `kolejka`, `meldunek` | blokada, ale zatwierdzenie TEGO SAMEGO tekstu drugi raz przepuszcza z ostrzezeniem |
+
+**Furtke odbiera takze LICZBA** (`compliance.bez_furtki`, `PROG_MIEKKICH_JAK_TWARDE = 3`):
+trzy albo wiecej fraz miekkich w jednym tekscie traktujemy jak twarda. Jedna fraza to wybor
+slowa, trzy to gatunek. Dzieki temu wyciek z 04/08 (piec miekkich, ZERO twardych) nadal nie ma
+wyjscia, a dobry post z jedna fraza je ma.
 
 `kolejka` i `meldunek` sa MIEKKIE swiadomie (decyzja Managera 10/08): TNM pisze po polsku do
 uslug lokalnych, gdzie "kolejka klientow" i "stac w kolejce" sa naturalne. Twarda blokada na
 zwyklym rzeczowniku odpalilaby raz, w najgorszym momencie, i wygladalaby jak zepsuty system.
+
+`voice bible` zeszlo do miekkich 10/08 **po audycie 152 publikacji**, ktory znalazl ja
+w prawdziwym poscie Tomasza z 11/07 ("clear stages, compliance checks, one voice bible") -
+jako pojecie content-ops, nie nazwe naszego pliku. Korpus obalil przeslanke wpisu.
+Prog trzech sprawdzony na tym samym korpusie PRZED wdrozeniem: `BEZ FURTKI: 0`.
 
 Mechanika furtki: przy zatrzymaniu material wraca do `needs_approval`, a w jego `media` laduje
 znacznik `ap315_blok` z **odciskiem TRESCI** (nie listy trafien). Drugie zatwierdzenie przepuszcza

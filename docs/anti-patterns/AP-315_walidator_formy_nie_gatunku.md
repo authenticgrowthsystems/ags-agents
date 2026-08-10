@@ -142,6 +142,45 @@ publiczny post.
 wraca do potoku jako DANE, potrzebuje bramki wyjscia. Nie dlatego, ze model bywa gluchy, tylko
 dlatego, ze "odpowiedz o zadaniu" i "wynik zadania" sa dla kodu nieodroznialne - oba sa napisem.
 
+## TRZECIA TURA: audyt wstecz obalil moja wlasna liste twardych
+
+Audyt 152 publikacji z czterech miesiecy odpowiedzial na pytanie "co jeszcze wyszlo tym kanalem":
+**nic**. Wyciek z 04/08 jest jedyna znana podmiana tresci na wypowiedz modelu. Ale przy okazji
+znalazl cos, czego nie szukal.
+
+Fraza `voice bible` stala na TWARDEJ liscie jako pewniak - "nazwa naszego pliku, nie pojawi sie
+w prawdziwym tekscie dla czlowieka". Audyt znalazl ja w **opublikowanym poscie Tomasza z 11/07**:
+
+> "One person, one agent, 12 posts this week. The secret isn't smarter AI. It's architecture:
+> clear stages, compliance checks, **one voice bible**. Responsibility stays human."
+
+Mala litera, z rodzajnikiem, w szeregu z dwoma innymi pojeciami warsztatowymi. To pojecie
+content-ops, nie nazwa naszego pliku. Twarda blokada znaczy brak furtki - czyli ten post,
+napisany dzis, bylby **nie do opublikowania**. Dokladnie ten tryb awarii, ktory Manager
+przewidzial przy `kolejce`, tyle ze trafil we fraze, co do ktorej bylem najbardziej pewny.
+
+**Kryterium sie nie zmienilo, zmienil sie stan wiedzy: korpus obalil przeslanke wpisu** - tak samo
+jak odczyt obalil przeslanke przy D-011 i przy migracji D-008. To juz trzeci raz w tym projekcie.
+
+### Czego to nie wolno bylo zepsuc
+
+Samo przeniesienie `voice bible` do miekkich rozbroilo obrone przed wyciekiem z 04/08 - to
+wlasnie ta fraza dawala mu twardosc. Liczby pokazaly jednak, gdzie naprawde lezy granica:
+
+| tekst | frazy twarde | frazy miekkie |
+|---|---|---|
+| wyciek 04/08 | 0 | **5** (voice bible, canonical, i've reviewed, i need to flag, strong content) |
+| dobry post 11/07 | 0 | **1** (voice bible) |
+
+Jedna fraza miekka to prawdopodobnie swiadomy wybor slowa. **Piec to nie zbieg okolicznosci,
+tylko gatunek.** Stad `PROG_MIEKKICH_JAK_TWARDE = 3` i funkcja `compliance.bez_furtki`: trafienie
+traci furtke przez fraze twarda **albo** przez nagromadzenie miekkich. To licznik, a nie kolejne
+slowo na liscie - zmiana slownictwa go nie omija.
+
+Prog przepuszczony przez CALY korpus PRZED wdrozeniem: **152 publikacje, `BEZ FURTKI: 0`**,
+jedyne trafienie to post z 11/07 z jedna fraza i zachowana furtka. Bramka, ktorej nie widzialo
+sie na prawdziwych danych, jest zalozeniem (AP-314).
+
 ## Realizacja u nas
 
 **Warstwa 1 - bramka wyjscia filtra (przyczyna zrodlowa):**

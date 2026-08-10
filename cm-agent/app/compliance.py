@@ -245,9 +245,27 @@ def strip_meta_header(text, max_linii=3):
 # od Ciebie", "Przeslij go") i bezpiecznik dal na niej `([], [])` - ZERO trafien. Inna awaria
 # tego samego rodzaju, o zupelnie innym slownictwie. Dlatego prawdziwa naprawa siedzi wyzej,
 # w bramce wyjscia `_rewrite` (pokrycie slow), a ta lista jest ostatnia siatka, nie pierwsza.
-_GATUNEK_TWARDE = ("voice bible", "masterprompt", "stan_gry", "matreview", "bramka:")
-_GATUNEK_MIEKKIE = ("canonical", "i've reviewed", "i have reviewed", "i need to flag",
-                    "strong content", "zatwierdzam", "proponuje zmiane", "kolejka", "meldunek")
+#
+# `voice bible` ZESZLO DO MIEKKICH 10/08, po audycie 152 publikacji. Byla na twardej liscie jako
+# pewniak ("nazwa naszego pliku, nie pojawi sie w tekscie dla czlowieka") - i audyt znalazl ja
+# w PRAWDZIWYM opublikowanym poscie Tomasza z 11/07: "It's architecture: clear stages, compliance
+# checks, one voice bible. Responsibility stays human." Mala litera, z rodzajnikiem, w szeregu
+# z dwoma innymi pojeciami warsztatowymi. To jest pojecie content-ops, nie nazwa naszego pliku.
+# Kryterium sie nie zmienilo, zmienil sie stan wiedzy: **korpus obalil przeslanke wpisu**, tak samo
+# jak odczyt obalil przeslanke przy D-011 i D-008.
+_GATUNEK_TWARDE = ("masterprompt", "stan_gry", "matreview", "bramka:")
+_GATUNEK_MIEKKIE = ("voice bible", "canonical", "i've reviewed", "i have reviewed",
+                    "i need to flag", "strong content", "zatwierdzam", "proponuje zmiane",
+                    "kolejka", "meldunek")
+
+# LICZBA MIEKKICH, OD KTOREJ TRAFIENIE TRACI FURTKE (decyzja Managera 10/08).
+# Jedna fraza miekka to prawdopodobnie swiadomy wybor slowa. Trzy to nie zbieg okolicznosci,
+# tylko GATUNEK. Zmierzone na dwoch prawdziwych tekstach, ktore roznia sie o rzad wielkosci:
+#   wyciek 04/08          -> 5 miekkich (voice bible, canonical, i've reviewed, i need to flag,
+#                            strong content)  -> bez furtki, tak jak przed zmiana
+#   dobry post 11/07      -> 1 miekka (voice bible)                     -> furtka zostaje
+# To licznik, a nie kolejne slowo na liscie - zmiana slownictwa go nie omija.
+PROG_MIEKKICH_JAK_TWARDE = 3
 
 
 def bezpiecznik_gatunku(text):
@@ -258,6 +276,14 @@ def bezpiecznik_gatunku(text):
     t = (text or "").lower().translate(_OGONKI)
     return ([f for f in _GATUNEK_TWARDE if f in t],
             [f for f in _GATUNEK_MIEKKIE if f in t])
+
+
+def bez_furtki(twarde, miekkie):
+    """Czy to trafienie ma byc BEZ FURTKI, czyli takie, ktorego drugie zatwierdzenie nie wypusci.
+    Dwie drogi do tego samego: fraza z twardej listy ALBO nagromadzenie miekkich (patrz
+    PROG_MIEKKICH_JAK_TWARDE). Osobna funkcja, a nie warunek wpisany w workerze, zeby dalo sie
+    ja pokazac przy pracy na obu prawdziwych tekstach - AP-314."""
+    return bool(twarde) or len(miekkie or ()) >= PROG_MIEKKICH_JAK_TWARDE
 
 
 # ---- Heurystyka interpunkcji PL (paczka #1 Managera pkt 8, 24/07) ----------------------

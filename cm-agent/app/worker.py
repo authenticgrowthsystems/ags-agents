@@ -380,16 +380,19 @@ def process_item(item):
         # bo publikuje sie wariant, a nie canonical_body.
         zle = channels.sprawdz_gatunek(item)
         if zle:
-            twarde = [f for z in zle for f in z["twarde"]]
+            # Bez furtki, gdy CHOCBY JEDEN wiersz na to zasluguje - kazdy wiersz to osobny
+            # tekst, ktory wyjdzie osobno. Fraza twarda albo nagromadzenie miekkich; regula
+            # i progi siedza w compliance, zeby dalo sie je pokazac przy pracy.
+            bez_wyjscia = any(compliance.bez_furtki(z["twarde"], z["miekkie"]) for z in zle)
             # Odcisk SORTOWANY: zapytanie o wiersze nie ma ORDER BY, wiec bez sortowania
             # dwa przebiegi na tych samych danych dalyby dwa rozne odciski i furtka
             # "drugie zatwierdzenie" nigdy by sie nie otworzyla.
             odcisk = ";".join(sorted(z["odcisk"] for z in zle))
-            if twarde or _znacznik_ap315(item) != odcisk:
+            if bez_wyjscia or _znacznik_ap315(item) != odcisk:
                 db.set_item_status(item["id"], "needs_approval",
                                    media=_media_ze_znacznikiem(item, odcisk))
-                logbot.send(_meldunek_bezpiecznika(item, zle, bool(twarde)))
-                return f"zablokowany_gatunek({'twarde' if twarde else 'miekkie'},{len(zle)})"
+                logbot.send(_meldunek_bezpiecznika(item, zle, bez_wyjscia))
+                return f"zablokowany_gatunek({'bez_furtki' if bez_wyjscia else 'miekkie'},{len(zle)})"
             # Tylko miekkie i DOKLADNIE ten sam tekst, ktory czlowiek widzial w meldunku wraz
             # z nazwa frazy. Przepuszczamy, ale glosno - to nie moze wygladac jak zwykla publikacja.
             logbot.send(_ostrzezenie_ap315(item, zle))
@@ -482,7 +485,7 @@ def _frazy_wiersza(z):
     return " | ".join(czesci)
 
 
-def _meldunek_bezpiecznika(item, zle, ma_twarde):
+def _meldunek_bezpiecznika(item, zle, bez_wyjscia):
     """AP-315: meldunek ma powiedziec CO zatrzymalo material, a nie ze "cos jest nie tak".
     Cichy powrot do needs_approval wygladalby jak zwykle czekanie na decyzje - a to jest
     zatrzymanie publikacji i Tomasz musi wiedziec, ze slot przepadnie.
@@ -492,8 +495,14 @@ def _meldunek_bezpiecznika(item, zle, ma_twarde):
     for z in zle:
         lab = _chan_label(item["brand_id"], z["platform"])
         lines.append(f"   • {lab} (wiersz #{z['qid']}): {_frazy_wiersza(z)}")
-    if ma_twarde:
+    if bez_wyjscia and any(z["twarde"] for z in zle):
         lines.append("   Fraza TWARDA to nazwa naszej maszynerii - drugie zatwierdzenie NIC nie da. "
+                     "Tekst trzeba napisac od nowa.")
+    elif bez_wyjscia:
+        # Nagromadzenie miekkich. Meldunek ma nazwac POWOD, bo inaczej brak furtki przy samych
+        # "zwyklych slowach" wyglada na wade bezpiecznika, a nie na jego dzialanie.
+        lines.append(f"   Fraz miekkich naraz: {max(len(z['miekkie']) for z in zle)}. Jedna to wybor "
+                     "slowa, tyle naraz to gatunek - drugie zatwierdzenie NIC nie da. "
                      "Tekst trzeba napisac od nowa.")
     else:
         lines.append("   Jesli to swiadomy wybor slowa, zatwierdz TEN SAM tekst drugi raz - przejdzie. "
