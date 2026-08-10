@@ -114,7 +114,12 @@ if len(WYSLANE) == 2:
     x_txt, li_txt = WYSLANE
     check("badge X w naglowku", x_txt.startswith("🐦 X MELDUNEK DNIA"), x_txt[:40])
     check("badge LinkedIn w naglowku", li_txt.startswith("🔗 LinkedIn MELDUNEK DNIA"), li_txt[:40])
-    check("meldunek mowi CO POSZLO", "Poszlo: 1 publikacja" in x_txt, x_txt)
+    # 10/08: napis zmieniony z "Poszlo:" na "System opublikowal:" (zgloszenie Tomasza, AP-312).
+    # Meldunek powiedzial "Poszlo: nic w ostatnich 24h" w dniu, w ktorym wyszly dwa artykuly
+    # opublikowane RECZNIE - zdanie bylo prawdziwe o systemie i falszywe o swiecie.
+    # Ta asercja zlapala zmiane, i o to w niej chodzilo.
+    check("meldunek mowi, CZYJE dzialanie liczy", "System opublikowal: 1 publikacja" in x_txt, x_txt)
+    check("meldunek NIE wraca do bezpodmiotowego 'Poszlo'", "Poszlo:" not in x_txt, x_txt)
     check("meldunek niesie metryki", "impressions" in x_txt or "66" in x_txt, x_txt)
     check("meldunek mowi CO CZEKA", "Czeka: 1 w kolejce" in x_txt, x_txt)
     check("meldunek mowi CZEGO POTRZEBA", "Potrzebuje decyzji:" in x_txt, x_txt)
@@ -129,7 +134,13 @@ proactive.db.fetchall = lambda sql, p=None: (
     [{"channel": "x"}] if "FROM channels" in sql else [])
 crm.pending_text = lambda brand, ch: "Nic nie wisi - wszystkie propozycje rozstrzygniete."
 proactive.subagent_briefs("AGS")
-check("brak publikacji nazwany wprost", "Poszlo: nic" in WYSLANE[0], WYSLANE[0])
+check("brak publikacji nazwany wprost i Z PODMIOTEM",
+      "System nie publikowal nic w ostatnich 24h" in WYSLANE[0], WYSLANE[0])
+# Przy CALKIEM pustej ksiedze meldunek ma powiedziec, ze publikacji recznych nie widzi -
+# inaczej czlowiek czyta "nic nie wyszlo" i ma racje, ze system klamie (zgloszenie 10/08).
+check("i przyznaje sie do slepoty na publikacje reczne",
+      "spoza systemu sa dla mnie niewidzialne" in WYSLANE[0], WYSLANE[0])
+check("z gotowa komenda zapisu", "wyszlo <kanal> <link>" in WYSLANE[0], WYSLANE[0])
 check("pusta kolejka = luka, nie sukces", "to jest luka, nie sukces" in WYSLANE[0], WYSLANE[0])
 check("brak wiszacych decyzji tez jest powiedziany",
       "Potrzebuje decyzji: nic." in WYSLANE[0], WYSLANE[0])

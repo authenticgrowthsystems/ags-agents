@@ -269,22 +269,42 @@ def subagent_briefs(brand_id="AGS"):
         agent = f"subagent:{brand_id}:{ch}"
         etykieta = conversation._AGENT_BADGES.get(agent, f"🤖 {ch}")
         prefiks = _PREFIKS_DLA_KANALU.get(ch, ch)
-        pub = db.fetchall(
-            """SELECT content, engagement_metrics FROM published_posts
-               WHERE brand=%s AND platform=%s AND published_at > NOW() - interval '24 hours'
-               ORDER BY published_at""", (brand_id, ch))
+        # AP-312 (zgloszenie Tomasza 10/08): meldunek mowil "Poszlo: nic w ostatnich 24h" w dniu,
+        # w ktorym wyszly DWA artykuly opublikowane RECZNIE. Publikacja spoza systemu nie zostawia
+        # wiersza w ksiedze, wiec brak WLASNEGO dzialania byl meldowany jako brak dzialania
+        # W OGOLE - a to sa dwie rozne rzeczy i tylko jedna jest problemem.
+        # `metadata->>'source'` je rozdziela: `manual_*` to publikacje odnotowane przez czlowieka
+        # (`wklejone <id>` albo `wyszlo <kanal> <url>`), reszta to publikacje systemu.
+        pub_all = db.fetchall(
+            """SELECT content, engagement_metrics, COALESCE(metadata->>'source','') AS zrodlo
+                 FROM published_posts
+                WHERE brand=%s AND platform=%s AND published_at > NOW() - interval '24 hours'
+                ORDER BY published_at""", (brand_id, ch))
+        pub = [p for p in pub_all if not str(p.get("zrodlo") or "").startswith("manual")]
+        reczne = [p for p in pub_all if str(p.get("zrodlo") or "").startswith("manual")]
         kolejka = reports._queue_upcoming(brand_id, ch)
         czeka = [q for q in kolejka if q.get("status") == "review"]
         nast = next((q for q in kolejka if q.get("scheduled_for")), None)
         wisi = crm.pending_text(brand_id, ch)
         lines = [f"{etykieta} MELDUNEK DNIA ({now.strftime('%d/%m')})"]
+        # Zdanie mowi, CZYJE dzialanie liczy. "System opublikowal" zamiast "Poszlo", bo meldunek
+        # widzi tylko ksiege - a ksiega zna wylacznie to, co przez system przeszlo albo zostalo
+        # przez czlowieka ODNOTOWANE.
         if pub:
-            lines.append(f"Poszlo: {len(pub)} " + ("publikacja" if len(pub) == 1 else "publikacji")
+            lines.append(f"System opublikowal: {len(pub)} "
+                         + ("publikacja" if len(pub) == 1 else "publikacji")
                          + f", metryki: {reports._fmt_metrics(reports._sum_metrics(pub))}")
             najlepszy = max(pub, key=lambda p: reports._sum_metrics([p]).get("impressions") or 0)
             lines.append(f"Najmocniejszy: {' '.join((najlepszy.get('content') or '').split())[:90]}")
         else:
-            lines.append("Poszlo: nic w ostatnich 24h.")
+            lines.append("System nie publikowal nic w ostatnich 24h.")
+        if reczne:
+            lines.append(f"Recznie odnotowane: {len(reczne)} "
+                         + ("publikacja" if len(reczne) == 1 else "publikacji"))
+        elif not pub:
+            # Tylko gdy ksiega jest CALKIEM pusta. Przy publikacji systemu ta linia bylaby szumem.
+            lines.append("Publikacje spoza systemu sa dla mnie niewidzialne - jesli cos wyszlo "
+                         "recznie, napisz `wyszlo <kanal> <link>`, dopisze do ksiegi.")
         if nast:
             kiedy = nast["scheduled_for"].astimezone(WARSAW).strftime("%d/%m %H:%M")
             lines.append(f"Czeka: {len(kolejka)} w kolejce, najblizszy slot {kiedy}"

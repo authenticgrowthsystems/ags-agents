@@ -270,6 +270,33 @@ petle `process_item`, karmione tekstem, ktory naprawde wyszedl na LinkedIna 04/0
   deterministyczna komenda `wklejone <id>` (pq->published + ksiega, source
   manual_paste). ZWIS publikacji liczony OD SLOTU wiersza, nie od dispatchu.
 
+## Publikacja SPOZA systemu (10/08/2026)
+
+**Dwie rozne komendy, bo to dwie rozne sytuacje** - mylenie ich to najprostsza droga
+do wpisu w ksiedze, ktory nie odpowiada niczemu:
+
+| komenda | kiedy | co jest w bazie przed |
+|---|---|---|
+| `wklejone <id>` | gotowiec Z KOLEJKI, wklejony recznie | wiersz `post_queue` w stanie `held`, tresc, material |
+| `wyszlo <kanal> <link> [temat]` | publikacja, ktora **calkiem ominela system** | NIC - tylko link do czegos, co juz wisi |
+
+Zrodla w `published_posts.metadata->>'source'`: `manual_paste` i `manual_external`.
+Wpis z `wyszlo` ma **pusta tresc swiadomie** - nie zgadujemy jej z linku, a pusty `content`
+nie dostaje embeddingu, wiec nie zasmieca bramki duplikacji.
+
+Dwie bramki, obie odmawiaja bez zapisu: **kanal musi istniec** w `channels` (literowka
+`linkedln` wpisalaby wiersz, ktorego zaden raport nie pokaze, bo raporty chodza po kanalach
+z tej tabeli) oraz **ten sam link nie wchodzi dwa razy** (dublowalby statystyki).
+
+### Dlaczego to powstalo
+
+Zgloszenie Tomasza 10/08: meldunek dnia powiedzial **"Poszlo: nic w ostatnich 24h"** w dniu,
+w ktorym wyszly DWA artykuly opublikowane recznie. Zdanie bylo prawdziwe o SYSTEMIE i falszywe
+o SWIECIE - AP-312. Od 10/08 meldunek nazywa podmiot: **"System opublikowal: N"** albo
+**"System nie publikowal nic w ostatnich 24h"**, publikacje odnotowane recznie ida w osobnej
+linii, a przy calkiem pustej ksiedze meldunek **przyznaje sie do slepoty** i podaje gotowa
+komende. Zachowanie: `cm-agent/tests/test_publikacja_reczna.py`.
+
 ## Punkty zaczepienia w kodzie
 
 - `cm-agent/app/worker.py`: `process_item` (state machine), `_draft` (generacja

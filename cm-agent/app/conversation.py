@@ -687,9 +687,72 @@ def _wklejone_route(text):
             f"publikacji zrobiony. Jak masz link do posta, wklej go, dopisze do wpisu.")
 
 
+_WYSZLO_RE = re.compile(
+    r"^\s*(?:wyszlo|wyszło|opublikowane|opublikowalem|opublikowałem)\s+"
+    # Kanal ma minimum JEDEN znak, nie dwa: kanal X nazywa sie doslownie `x` i wzorzec
+    # wymagajacy dwoch znakow nie lapal `wyszlo x <link>` w ogole. Zlapane testem na
+    # PRAWDZIWYCH nazwach kanalow, nie na wymyslonych.
+    r"(?:([A-Za-z]{2,10})\s*:\s*)?([a-z_]{1,20})\s+"
+    r"(https?://\S+)\s*(.*)$", re.IGNORECASE)
+
+
+def _wyszlo_route(text):
+    """Zapis publikacji, ktora wyszla CALKIEM POZA systemem: `wyszlo <kanal> <link> [temat]`.
+
+    ZGLOSZENIE TOMASZA 10/08: meldunek dnia powiedzial "Poszlo: nic w ostatnich 24h" w dniu,
+    w ktorym wyszly DWA artykuly opublikowane recznie. System mylil brak WLASNEGO dzialania
+    z brakiem dzialania w ogole, bo ksiega `published_posts` nie ma jak sie dowiedziec
+    o publikacji, ktora ja ominela. To AP-312: meldunek mowil prawde o SOBIE, a brzmial
+    jak prawda o SWIECIE.
+
+    ROZNI SIE OD `wklejone <id>`: tamto domyka GOTOWCA Z KOLEJKI - jest wiersz, jest tresc,
+    jest material. Tutaj nie ma niczego poza linkiem do czegos, co juz wisi publicznie.
+    Stad osobne zrodlo `manual_external`, po ktorym meldunek te dwie rzeczy rozroznia.
+
+    Tresc zostaje PUSTA swiadomie: nie zgadujemy jej z linku. Pusty `content` nie dostaje
+    embeddingu (`content_memory._backfill_embeddings` wymaga `content <> ''`), wiec wpis
+    nie zasmieca bramki duplikacji i nie udaje materialu, ktorego nie widzielismy."""
+    m = _WYSZLO_RE.match(text)
+    if not m:
+        return None
+    brand = (m.group(1) or "AGS").upper()
+    kanal = m.group(2).lower()
+    url = m.group(3).rstrip(".,;)")
+    temat = " ".join((m.group(4) or "").split())[:200]
+
+    # BRAMKA 1: kanal musi istniec. Literowka wpisalaby do ksiegi wiersz, ktorego ZADEN raport
+    # nigdy nie pokaze (raporty chodza po kanalach z tabeli `channels`) - czyli cichy smiec.
+    if not db.fetchone("SELECT 1 FROM channels WHERE brand_id=%s AND channel=%s", (brand, kanal)):
+        znane = db.fetchall("SELECT channel FROM channels WHERE brand_id=%s ORDER BY channel",
+                            (brand,))
+        lista = ", ".join(r["channel"] for r in znane) or "(zadnych)"
+        return (f"Nie znam kanalu '{kanal}' dla marki {brand}. Znane kanaly: {lista}. "
+                f"Nic nie zapisalem.")
+
+    # BRAMKA 2: ten sam link dwa razy = dwie publikacje w statystykach zamiast jednej.
+    ist = db.fetchone("SELECT id, published_at FROM published_posts WHERE post_url=%s", (url,))
+    if ist:
+        kiedy = str(ist.get("published_at"))[:16]
+        return (f"⚙️ Ten link juz jest w ksiedze jako wpis #{ist['id']} ({kiedy}). Nic nie zmieniam.")
+
+    row = db.fetchone(
+        """INSERT INTO published_posts (platform, brand, content, topic, post_url, post_id,
+                                        published_at, metadata)
+           VALUES (%s,%s,'',%s,%s,'',NOW(),'{"source":"manual_external"}'::jsonb)
+           RETURNING id""", (kanal, brand, temat, url))
+    nr = (row or {}).get("id")
+    return (f"⚙️ Odnotowane: publikacja reczna na {brand}:{kanal}, wpis w ksiedze #{nr}"
+            + (f", temat: {temat}" if temat else "") + ".\n"
+            "Czas zapisalem jako TERAZ - jesli wyszlo wczesniej, powiedz, poprawie. "
+            "Tresci nie zgaduje z linku; jak wkleisz tekst, dopisze go do wpisu.")
+
+
 def _config_route(text):
     """Zwraca odpowiedz (paragon ⚙️ z _target_update) gdy fraza rozpoznana, inaczej None -> LLM."""
     r = _wklejone_route(text)
+    if r is not None:
+        return r
+    r = _wyszlo_route(text)
     if r is not None:
         return r
     m = _USTAW_OKNO_RE.match(text)
