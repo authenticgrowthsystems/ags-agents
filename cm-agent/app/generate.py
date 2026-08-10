@@ -36,9 +36,65 @@ TRUTH_GUARD = (
     "build-in-public brand. When unsure whether something happened - it did not.")
 
 
-def _learned_style(brand_id="AGS"):
+def _jezyk_marki(brand_id="AGS"):
+    """Dominujacy jezyk publikacji marki. Potrzebny tam, gdzie generacja nie ma wlasnego kanalu -
+    tekst-matka powstaje RAZ, a adaptacje per kanal dopiero po nim."""
+    try:
+        rows = _db.fetchall("SELECT config FROM channels WHERE brand_id=%s", (brand_id,)) or []
+    except Exception:
+        return "en"
+    jezyki = [(((r or {}).get("config") or {}).get("language_publish") or "en").lower() for r in rows]
+    return max(set(jezyki), key=jezyki.count) if jezyki else "en"
+
+
+def _po_polsku(tekst):
+    """Import LOKALNY: compliance importuje generate na poziomie modulu, wiec zaleznosc odwrotna
+    musi byc leniwa - ten sam wzorzec co `from . import compliance as _c` w channels."""
+    from . import compliance as _c
+    return _c.looks_polish(str(tekst or ""))
+
+
+_EN_FUNKCYJNE = (" the ", " and ", " of ", " to ", " is ", " it ", " not ", " with ", " for ",
+                 " that ", " this ", " his ", " use ", " over ")
+
+
+def _wyglada_na_angielski(tekst):
+    """POZYTYWNY test angielszczyzny, uzywany JEDNOKIERUNKOWO: do promptu o wyjsciu angielskim
+    wchodzi tylko wpis, ktory wyglada na angielski. Wpis NIEROZPOZNANY zostaje na zewnatrz.
+
+    DLACZEGO NIE `not _po_polsku(...)`. Tak bylo w pierwszej wersji i test na PRAWDZIWYCH regulkach
+    z produkcji ja obalil: `Zamiast "poprawiania promptu o jedno zdanie" pisze "iteracyjnego
+    poprawiania"` nie ma ANI JEDNEGO polskiego znaku diakrytycznego i ani jednego z szesciu slow
+    funkcyjnych, ktorych szuka `looks_polish`. Polskie zdanie niewidzialne dla wzorca opartego
+    na ogonkach - rodzina AP-313. Bramka padala OTWARTA: wpis nierozpoznany szedl do promptu EN,
+    czyli dokladnie tam, gdzie robi szkode.
+
+    CENA, SWIADOMIE PRZYJETA: krotka regulka po angielsku bez slow funkcyjnych ("Use concrete
+    numbers.") tez zostanie na zewnatrz. Utrata jednej preferencji stylu kosztuje odcien tekstu.
+    Przeciek polskiego polecenia kosztuje publiczny post - dwa razy juz kosztowal. Docelowo wpisy
+    powinny dostawac jezyk PRZY ZAPISIE, wtedy zgadywanie znika; do tego czasu zgadujemy
+    w bezpieczna strone."""
+    if _po_polsku(tekst):
+        return False
+    t = f" {str(tekst or '').lower()} "
+    return sum(1 for w in _EN_FUNKCYJNE if w in t) >= 2
+
+
+def _learned_style(brand_id="AGS", jezyk=None):
     """Nauka poziom 2 (06/07): regulki wydestylowane z RECZNYCH korekt Tomasza (VOICE_EDIT),
-    trzymane w brand_config 'style_learned' - dokladane do KAZDEJ generacji."""
+    trzymane w brand_config 'style_learned' - dokladane do KAZDEJ generacji.
+
+    AP-315, trzecia przyczyna (10/08). Te regulki maja ksztalt POLECENIA ("Zamiast X pisze Y",
+    "Przed spojnikiem 'i' nie stawia sie przecinka") i sa PO POLSKU, bo powstaly z korekt polskich
+    tekstow. Wstrzykniete do promptu, ktorego wyjscie ma byc ANGIELSKIE, przestaja byc preferencja
+    stylu i staja sie DRUGIM ZADANIEM - model wykonuje je zamiast napisac post. Oba znane wycieki
+    (04/08 i 10/08) to ten mechanizm: obie tresci to model WYLICZAJACY, co dostal, a nie tekst.
+
+    Stad `jezyk`: wchodza tylko regulki w jezyku, w ktorym ma powstac tekst. Jezyk wpisu czytamy
+    Z NIEGO SAMEGO (`_wyglada_na_angielski`, kierunek niesymetryczny - patrz tam), a nie z kolumny:
+    dziala na danych, ktore juz leza w bazie, bez DDL i bez uzupelniania wstecz.
+    `jezyk=None` zachowuje stare zachowanie i jest tylko dla wywolan, ktore naprawde nie znaja
+    jezyka wyjscia - dzis takich nie ma."""
     import json as _json
     row = _db.fetchone("SELECT config_value FROM brand_config WHERE brand_id=%s AND config_key='style_learned'",
                        (brand_id,))
@@ -46,16 +102,26 @@ def _learned_style(brand_id="AGS"):
         rules = (_json.loads(row["config_value"]).get("rules") or []) if row and row.get("config_value") else []
     except Exception:
         rules = []
+    if jezyk:
+        # Kierunek NIEsymetryczny i to jest cel: do EN wchodzi tylko to, co pozytywnie angielskie;
+        # cala reszta (polskie + nierozpoznane) laduje po stronie polskiej. Bramka pada ZAMKNIETA.
+        chce_polskie = str(jezyk).lower().startswith("pl")
+        rules = [r for r in rules if _wyglada_na_angielski(r) != chce_polskie]
     if not rules:
         return ""
     return ("\nOWNER STYLE PREFERENCES (learned from his manual edits - follow them):\n"
             + "\n".join(f"- {r}" for r in rules[-15:]))
 
 
-def _learning_digest(brand_id="AGS"):
+def _learning_digest(brand_id="AGS", jezyk=None):
     """Task #87 (12/07): petla nauki poziom 3 - PRZED generacja czytamy ostatnie decyzje Tomasza
     z agent_learning_log (N=20): co odrzucal, co edytowal (jego finalne wersje = wzorzec).
-    Tabela przed DDL 020 = cichy pusty string."""
+    Tabela przed DDL 020 = cichy pusty string.
+
+    `jezyk` z tego samego powodu co w `_learned_style` (AP-315): to sa FRAGMENTY TEKSTOW Tomasza,
+    wiec fragment polski w promptcie o wyjsciu angielskim jest dla modelu tekstem do obrobki,
+    a nie wzorcem stylu. Dzis ta funkcja zwraca dla AGS pusty napis, ale dziura jest ta sama
+    i zostawianie jej otwartej "bo akurat pusto" to AP-311."""
     try:
         rows = _db.fetchall(
             """SELECT correction_type, LEFT(COALESCE(final_content, proposed_content), 110) AS frag, notes
@@ -63,6 +129,9 @@ def _learning_digest(brand_id="AGS"):
             (brand_id,))
     except Exception:
         return ""
+    if jezyk:
+        chce_polskie = str(jezyk).lower().startswith("pl")
+        rows = [r for r in rows if _wyglada_na_angielski(r.get("frag")) != chce_polskie]
     if not rows:
         return ""
     counts = {}
@@ -84,7 +153,10 @@ def generate_canonical(brand, master_theme, research_context="", content_item_id
     msg = f"Write a canonical post for the theme: {master_theme}."
     if research_context:
         msg += f"\n\nGround it in this evidence (use what is relevant, do not list sources):\n{research_context[:6000]}"
-    msg += f"\n\n{TRUTH_GUARD}{_learned_style(brand.get('brand_id', 'AGS'))}{_learning_digest(brand.get('brand_id', 'AGS'))}\n\nReturn ONLY the post body. Brand voice. Zero em dashes."
+    # AP-315: tekst-matka nie ma wlasnego kanalu, wiec jezyk bierzemy z dominujacego jezyka
+    # publikacji marki. Bez tego polskie regulki stylu wjezdzaja do generacji angielskiej.
+    _jez = _jezyk_marki(brand.get("brand_id", "AGS"))
+    msg += f"\n\n{TRUTH_GUARD}{_learned_style(brand.get('brand_id', 'AGS'), _jez)}{_learning_digest(brand.get('brand_id', 'AGS'), _jez)}\n\nReturn ONLY the post body. Brand voice. Zero em dashes."
     resp = client().messages.create(
         model=model, max_tokens=1500,
         thinking={"type": "disabled"},  # Sonnet 5 defaults thinking ON when omitted; keep it off (preserves budget)
@@ -527,7 +599,9 @@ def generate_variant(brand, canonical_body, channel, content_item_id=None):
     lang = _language_publish(brand.get("brand_id", "AGS"), channel)
     lang_guide = LANGUAGE_GUIDE.get(lang, f"Write the adaptation in language code '{lang}'.")
     msg = (f"Adapt the canonical post below for {channel}. {guide}\n{lang_guide}\n{TRUTH_GUARD}"
-           f"{_learned_style(brand.get('brand_id', 'AGS'))}{_learning_digest(brand.get('brand_id', 'AGS'))}\n"
+           # AP-315: `lang` jest tu znane DOKLADNIE (jezyk publikacji tego kanalu), wiec regulki
+           # stylu wchodza tylko w tym jezyku. To jest miejsce, w ktorym powstaly oba wycieki.
+           f"{_learned_style(brand.get('brand_id', 'AGS'), lang)}{_learning_digest(brand.get('brand_id', 'AGS'), lang)}\n"
            f"Keep the brand voice. Zero em dashes. Return ONLY the adapted text.\n\nCANONICAL:\n{canonical_body}")
     resp = client().messages.create(
         model=model, max_tokens=2000,

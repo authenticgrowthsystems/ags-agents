@@ -82,7 +82,14 @@ linii. Ten sam odruch: pytanie o stan zamiast pytania o zawartosc.
 7. **Przy diagnozie czytaj TRESC, nie tylko status.** Status odpowiada na pytanie "gdzie to
    jest", nie "co to jest".
 
-## DRUGA TURA TEGO SAMEGO DNIA - przyczyna zrodlowa znaleziona
+## DRUGA TURA TEGO SAMEGO DNIA - hipoteza, ktora upadla kilka godzin pozniej
+
+> **UWAGA, CZYTAJ RAZEM Z CZWARTA TURA NIZEJ.** Ta sekcja opisuje `_rewrite` jako przyczyne
+> zrodlowa. **To bylo bledne** i zostaje tu swiadomie, zeby bylo widac, jak pewnie brzmiala
+> hipoteza, ktora nie byla prawdziwa. Bramka wyjscia w `_rewrite` zamyka realna dziure i zostaje
+> w kodzie - ale w ZADNYM z dwoch znanych wyciekow nie byla sprawca. Prawdziwa przyczyna jest
+> w sekcji "CZWARTA TURA".
+
 
 Kilka godzin po wdrozeniu bezpiecznika przyszla karta materialu "Granica miedzy dwoma agentami"
 z wariantem LinkedIn o tresci:
@@ -180,6 +187,80 @@ slowo na liscie - zmiana slownictwa go nie omija.
 Prog przepuszczony przez CALY korpus PRZED wdrozeniem: **152 publikacje, `BEZ FURTKI: 0`**,
 jedyne trafienie to post z 11/07 z jedna fraza i zachowana furtka. Bramka, ktorej nie widzialo
 sie na prawdziwych danych, jest zalozeniem (AP-314).
+
+## CZWARTA TURA: PRAWDZIWA przyczyna - polska instrukcja w angielskim promptcie
+
+Odczyt produkcji zamknal sprawe. `brand_config.style_learned` dla AGS zawiera szesc regulek
+wydestylowanych z RECZNYCH korekt Tomasza. Wszystkie sa **po polsku** i wszystkie maja ksztalt
+**polecenia**:
+
+> - Zamiast "Trzeba zaprojektowac" pisze "To wymaga konkretnej pracy. Trzeba zaprojektowac"
+> - Zamiast "kiedy cos nie zadziala, i kto" pisze "kiedy cos nie zadziala i kto"
+> - **Przed spojnikiem "i" nie stawia sie przecinka.**
+
+`generate._learned_style` doklada ten blok do **KAZDEJ** generacji - i do wariantu per kanal,
+i do tekstu-matki. Kanal LinkedIn publikuje po angielsku. Model dostaje wiec prompt zlozony z:
+polecenia "napisz post po angielsku" **oraz** polskiej listy instrukcji o poprawianiu polszczyzny.
+To sa dwa zadania. Model wykonuje drugie.
+
+Trzy pozostale bloki wstrzykiwane obok (`rules[]`, `voice_note`, `learning_digest`) sa **puste** -
+caly ladunek szedl stad.
+
+### Zgodnosc ze spisem, ktory model sam zrobil
+
+| model powiedzial, ze dostal | to jest |
+|---|---|
+| "Instrukcja, jak mam poprawiac polski" | regula przecinka + szesc par *Zamiast X pisze Y* |
+| "Moja analiza jakiegos polskiego tekstu (ktory sam sobie wymyslilem)" | cytaty w tych parach, bez tekstu zrodlowego |
+| "Pytanie o angielski/polski do LinkedIna" | `lang_guide` |
+
+### Dowod, ze `_rewrite` NIE mogl byc sprawca
+
+Tekst z 04/08 zaczyna sie od **"I've reviewed the canonical text and Voice Bible"**. Voice Bible
+wchodzi do wywolania przez `system_blocks(brand)`. **`compliance._rewrite` nie przekazuje bloku
+systemowego w ogole** - ma wylacznie `messages=[...]`. Model wolany przez `_rewrite` fizycznie
+nie widzi Voice Bible i nie moglby o niej napisac. Oba wycieki wyszly ta sama droga:
+`generate_variant` z zanieczyszczonym promptem. Oba teksty to model **wyliczajacy, co dostal**.
+
+### Naprawa: regulki wchodza tylko w jezyku wyjscia
+
+`_learned_style(brand_id, jezyk)` i `_learning_digest(brand_id, jezyk)`. Jezyk wariantu jest znany
+dokladnie (`_language_publish` per kanal); tekst-matka nie ma kanalu, wiec bierze dominujacy jezyk
+publikacji marki (`_jezyk_marki`). Jezyk wpisu czytamy Z NIEGO SAMEGO - bez DDL, bez uzupelniania
+kolumny wstecz, dziala na danych, ktore juz leza w bazie.
+
+### Kierunek testu jezyka jest NIEsymetryczny i to jest cala pointa
+
+Pierwsza wersja filtrowala przez `not compliance.looks_polish(...)`. Test na PRAWDZIWYCH
+regulkach ja obalil w pierwszym przebiegu:
+
+> `Zamiast "poprawiania promptu o jedno zdanie" pisze "iteracyjnego poprawiania" (bardziej precyzyjnie)`
+
+Ta regulka nie ma **ani jednego** polskiego znaku diakrytycznego i ani jednego z szesciu slow
+funkcyjnych, ktorych szuka `looks_polish`. Polskie zdanie niewidzialne dla wzorca opartego
+na ogonkach - **rodzina AP-313**. Bramka padala OTWARTA: wpis nierozpoznany szedl do promptu
+angielskiego, czyli dokladnie tam, gdzie robi szkode.
+
+Stad `_wyglada_na_angielski`: **POZYTYWNY** test angielszczyzny, uzywany jednokierunkowo.
+Do promptu EN wchodzi tylko wpis, ktory wyglada na angielski; nierozpoznany zostaje na zewnatrz.
+Cena przyjeta swiadomie: krotka angielska regulka bez slow funkcyjnych tez wypadnie. Utrata
+preferencji stylu kosztuje odcien tekstu, przeciek polskiego polecenia kosztuje publiczny post -
+i kosztowal juz dwa razy.
+
+**Docelowo wpisy powinny dostawac jezyk PRZY ZAPISIE.** Wtedy zgadywanie znika. Do tego czasu
+zgadujemy w bezpieczna strone i to jest zapisane w kodzie, a nie domyslne.
+
+### Wnioski poza sama poprawka
+
+1. **Petla uczenia sie jest wektorem wstrzykniecia.** Wszystko, co system zapamietuje z korekt
+   czlowieka i wklada z powrotem do promptu, moze byc POLECENIEM zamiast preferencja. To nie jest
+   wada tej jednej funkcji, tylko wlasciwosc kazdej petli "ucz sie z poprawek".
+2. **Regulki stylu maja jezyk i to jest ich czesc, nie metadana.** Regula o przecinku przed "i"
+   jest bez sensu w angielskim tekscie i model ma racje, pytajac, o co chodzi.
+3. **Trzy diagnozy tego samego dnia, dwie bledne.** Kolejno: bezpiecznik gatunku (nie zlapal),
+   `_rewrite` (nie mial dostepu do Voice Bible), dopiero `_learned_style`. Kazda kolejna byla
+   pewniejsza od poprzedniej i dwie pierwsze byly falszywe. **Odczyt produkcji rozstrzygnal
+   za kazdym razem** - kod pozwalal na wszystkie trzy.
 
 ## Realizacja u nas
 
