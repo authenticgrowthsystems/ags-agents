@@ -6,6 +6,48 @@ Agents must screen output against this library BEFORE HITL preview.
 
 ---
 
+## INDEKS AP-306..AP-315 - na czym ten projekt sie przejechal
+
+**Jesli czytasz to pierwszy raz, zacznij tutaj.** Serie 001-104 i 201-203 dotycza glosu i tresci;
+seria 301+ dotyczy INZYNIERII i to ona tlumaczy, dlaczego kod wyglada tak, a nie inaczej.
+Ponizej dziesiec ostatnich, po kolei, jedno zdanie na kazdy. Pelne opisy z dowodami
+produkcyjnymi sa w `docs/anti-patterns/`.
+
+| AP | Jednym zdaniem | Pelny opis |
+|---|---|---|
+| **306** | Kontener jednorazowy zaklada sekrety wczytane przez workera i pada PO CICHU, produkujac wynik w ksztalcie sukcesu; rozszerzony 24/07 do reguly **cichy `except` to blad projektowy**. | [AP-306](../docs/anti-patterns/AP-306_oneshot_container_secrets.md) |
+| **307** | Nowy kontrakt zbudowany bez przelaczenia ZYWEGO konsumenta starego - cala maszyneria slotow dzialala, a `publish_mode='webhook'` omijal ja w calosci i wystrzelil piec postow w godzine. | *(brak pliku - jedyny w tym zakresie)* |
+| **308** | Masowa zmiana zywych danych bez DETERMINISTYCZNEGO dry-runu; blad przydzialu jest niewidoczny w kodzie i w testach syntetycznych, ujawnia sie dopiero na pelnych prawdziwych danych. | [AP-308](../docs/anti-patterns/AP-308_bulk_write_needs_deterministic_dry_run.md) |
+| **309** | Poprawka w JEDNYM miejscu, gdy ta sama wada zyje w wielu - policz grepem, ile miejsc ja ma, zanim uznasz poprawke za zrobiona. | [AP-309](../docs/anti-patterns/AP-309_one_fix_many_sites.md) |
+| **310** | Straznik z `LIMIT`-em PRZED odsiewem zaglodzi sie na wlasnych zaleglosciach i skonczy przebieg z zerem, ktore wyglada jak "brak roboty". | [AP-310](../docs/anti-patterns/AP-310_watchdog_limit_before_filter.md) |
+| **311** | Brak danych to NIE fakt o swiecie, dopoki nie sprawdzisz, czy system mial jak je pokazac - pustka w widoku ma dwie przyczyny i tylko jedna jest prawda. | [AP-311](../docs/anti-patterns/AP-311_brak_danych_to_nie_fakt.md) |
+| **312** | Nazwa stanu albo etykieta obiecuje co innego, niz znaczy; czytajacy wyciaga wniosek RACJONALNY i FALSZYWY, a autor nazwy nie widzi problemu. | [AP-312](../docs/anti-patterns/AP-312_nazwa_stanu_klamie.md) |
+| **313** | Zalozenie ASCII przy polskich nazwach wlasnych - `%Chwalin%` nie trafia w "Chwaliński", a **narzedzie do wykrycia bledu mialo ten sam blad**. | [AP-313](../docs/anti-patterns/AP-313_zalozenie_ascii_przy_polskich_nazwach.md) |
+| **314** | Bramka bezpieczenstwa, ktorej nikt nie widzial PRZY PRACY, jest zalozeniem - odpal ja ze ZLYM wsadem, zanim zaufasz jej przy dobrym. | [AP-314](../docs/anti-patterns/AP-314_bramka_ktorej_nikt_nie_widzial.md) |
+| **315** | Walidator sprawdza FORME tekstu, a nie jego GATUNEK - notatka modelu ma forme bez zarzutu i przechodzi komplet kontroli, bo kazda pyta o cos innego. | [AP-315](../docs/anti-patterns/AP-315_walidator_formy_nie_gatunku.md) |
+
+### Wspolny mianownik tej dziesiatki
+
+Osiem z dziesieciu to **jedna klasa: cisza wyglada jak sukces.** Filtr, ktory padl, oddaje tekst
+niezmieniony (306). Straznik, ktory zaglodzil sie limitem, konczy z zerem (310). Pustka w widoku
+czytana jak fakt o swiecie (311). Bramka, ktora sie nie wykonala, nie zostawia sladu (314).
+Walidator, ktory zadal zle pytanie, swieci na zielono (315).
+
+**Praktyczna konsekwencja przy kazdej zmianie:** zapytaj nie "czy przeszlo", tylko **"czy ta
+kontrola MIALA JAK zglosic problem"** - i sprawdz to, karmiac ja czyms zepsutym. W tym repo
+to nie jest rytual: 10/08 jedenascie celowych przywrocen wady zlapalo trzy realne bledy
+w bramkach, ktore chwile wczesniej swiecily na zielono.
+
+Dwie pozostale to rodzina **"naprawilem, ale nie wszedzie"** (307, 309) i one tez maja wspolna
+recepte: `grep -rn` przed uznaniem poprawki za skonczona.
+
+**AP-301..305 nie sa w tej tabeli swiadomie** - dotycza pojedynczych narzedzi (n8n typeVersion,
+cytowanie SQL, ograniczenia CHECK, dostep Notion, slownictwo user-facing), a nie sposobu
+pracy z systemem. Sa nizej w tym pliku, z wlasnymi pelnymi opisami. Dziesiatka wyzej jest
+krotka celowo: ma sie dac przeczytac za jednym razem i zapamietac.
+
+---
+
 ## Voice / Conversation Anti-Patterns (from Pawel Voice Agent tests #1-7)
 
 ### AP-001: Hallucinating actions you don't have
