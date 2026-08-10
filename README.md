@@ -65,40 +65,74 @@ Live tracker: [Notion AGS Build in Public Tracker - TBD link]
 
 ```
 ags-agents/
-├── brand-canon/           # Source of truth: AGS, TNM, RDC, Personal voice canons
-├── prompts/               # Versioned system prompts per agent (v1.0 → v2.0)
-├── n8n-workflows/         # JSON exports of production workflows (version control)
-├── anti-patterns/         # Lessons learned across all agents
-├── memory/                # Build log + per-agent persistent state
-├── skills/                # Custom Anthropic Skills (if we build any)
-├── mcps/                  # Custom MCP servers (if we build any)
-├── scripts/               # One-off scripts (workflow export automation, migrations)
-├── packages/
-│   ├── manager/           # Lightweight CLI utilities for MANAGER AGS
-│   └── shared/            # Shared parsers / validators
-└── CLAUDE.md              # Cowork mode context for this repo
+├── cm-agent/              # THE SYSTEM. Content Manager: FastAPI + state-machine loop.
+│   ├── app/               #   worker.py (petla), generate.py, compliance.py, channels.py, slots.py
+│   ├── db/                #   DDL numerowane 001..042 - uruchamiane po kolei
+│   └── tests/             #   30 plikow, stdlib only: `python cm-agent/tests/test_*.py`
+├── ags-researcher/        # Researcher: 6 zrodel, cost-cascade, wolany przez cm-agent
+├── docs/                  # ZACZNIJ TUTAJ (patrz "Od czego zaczac" nizej)
+│   ├── komponenty/        #   opis kazdego modulu - CZYTAJ ZAMIAST kodu
+│   ├── ops/               #   RUNBOOK migracji, DLUG_TECHNICZNY, okna wdrozeniowe
+│   ├── anti-patterns/     #   AP-306..AP-315, pelne opisy
+│   ├── db/                #   SCHEMA_ags_crd.md
+│   └── cm/                #   raporty do Managera, chronologicznie
+├── anti-patterns/         # library.md - indeks anty-wzorcow, jedno zdanie na kazdy
+├── brand-canon/           # Zrodlo prawdy glosu: AGS, TNM, RDC, Personal
+├── n8n-workflows/         # Eksporty JSON zywych workflow + `patches/` (skrypty .cjs)
+├── memory/                # build-log.md + stan per agent
+├── prompts/               # Wersjonowane prompty systemowe per agent
+├── packages/              # Narzedzia CLI (manager, shared)
+├── scripts/               # Jednorazowki: eksport workflow, migracje
+├── etl/                   # Import danych
+└── CLAUDE.md              # Kontekst trybu Cowork dla tego repo
 ```
+
+### Od czego zaczac (nowa osoba, dwie godziny)
+
+1. `docs/GOTOWOSC_PRODUKTU.md` - co dziala, co czesciowo, czego nie ma
+2. `anti-patterns/library.md` - na czym ten projekt sie juz przejechal. **To jest najszybsza
+   droga do zrozumienia, dlaczego kod wyglada tak, a nie inaczej**
+3. `docs/komponenty/` - opis modulu zamiast czytania zrodel
+4. `docs/ops/DLUG_TECHNICZNY.md` - co jest swiadomie niedokonczone i dlaczego
+5. `docs/ops/RUNBOOK_migracje.md` - **przed kazda zmiana w bazie, bez wyjatkow**
+
+### Archiwum
+
+Galezie `build/*` i wczesne `claude/*` zostaly skasowane 10/08/2026 jako wchloniete w calosci.
+Jedna nie byla: architektura X Agenta sprzed 10/06/2026 (wlasny serwer kolejki, inne workflow
+`n8n-workflows/x-agent/`) zyje pod tagiem **`archiwum/x-agent-przed-10062026`** - zastapil ja
+model fire-and-forget z osobnym publisherem HITL. Szukasz starego rozwiazania kolejki:
+`git show archiwum/x-agent-przed-10062026`.
 
 ---
 
-## Status (19/05/2026)
+## Status (10/08/2026)
 
-| Component | Status |
-|-----------|--------|
-| Repo scaffold | DONE |
-| AGS Brand Canon v1.2 centralized | DONE |
-| Anti-pattern library seeded (11 entries) | DONE |
-| Build log started | DONE |
-| n8n production infrastructure | DONE (managed by AA AGS Core, runs on Mikrus) |
-| AGS Apply Intake v1 + Error Handler v1 | DONE (published in n8n, JSON export TBD) |
-| Wave 0.5 GHL Pipeline Rebuild | IN PROGRESS (Faza 0, Tomasz building products in GHL Payments) |
-| X Agent build | PARKED (AA X Agent Builder Charter v1.2, reactivation pending) |
-| LinkedIn Agent build | BACKLOG |
-| Voice AI Pawel (Royal Dance) | DEPLOYED (separate from this repo, lives in GHL) |
+Poprzednia wersja tej tabeli byla z **19/05** i mowila, ze X Agent jest zaparkowany,
+a LinkedIn w backlogu - oba sa od miesiecy jedynymi zywymi kanalami. Szczegoly i to,
+czego tu NIE MA, sa w `docs/GOTOWOSC_PRODUKTU.md`; ta tabela jest tylko zgruba.
+
+| Komponent | Status |
+|---|---|
+| **cm-agent** (Content Manager) | **LIVE** na produkcji, kontener `cm-agent` na Mikrusie |
+| LinkedIn (AGS) | **LIVE**, publikacja automatyczna przez Scheduler n8n |
+| X (AGS) | **LIVE**, publikacja automatyczna; kolejka pusta od 29/07 (decyzja, nie awaria) |
+| Researcher | **LIVE**, 6 zrodel, kaskada kosztowa |
+| Lacznik (MCP: `stan_gry`, `wyslij_raport_pracy`) | **LIVE** |
+| Bramka HITL (Telegram) | **LIVE** - czlowiek zatwierdza KAZDA tresc, kanon 19/07 |
+| Bezpieczniki tresci (AP-315) | **LIVE** od 10/08: bramka wyjscia filtra, bezpiecznik gatunku, filtr jezykowy regulek |
+| Metryki | X automatycznie; LinkedIn recznie (wniosek o API zlozony 22/07) |
+| Agent Sprzedazy | L1, dziala; pierwsza sprzedaz jeszcze nie zamknieta |
+| Wielomarkowosc (TNM, RDC) | kod jednomarkowy - D-013, czeka na pierwsza sprzedaz |
 
 ---
 
 ## Active priorities
+
+> **Ta lista jest z 19/05/2026 i NIE jest aktualna.** Zostaje nietknieta swiadomie: priorytety
+> ustala wlasciciel, nie sesja porzadkowa, wiec zgadywanie ich byloby gorsze niz jawna data.
+> Stan faktyczny prac czytaj z `docs/ops/DLUG_TECHNICZNY.md` (co otwarte i dlaczego)
+> oraz z najnowszego raportu w `docs/cm/` - to one sa zywe.
 
 1. **P0 Wave 0.5 GHL Pipeline Rebuild** - 4-tier funnel (Free Guide / $97 / $297 / $2K+). Direct revenue path.
 2. **P1 AGS Agent Factory (this repo + AA X Agent Builder reactivation)** - parallel system-as-content track
