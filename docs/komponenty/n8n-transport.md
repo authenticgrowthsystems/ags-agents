@@ -47,9 +47,25 @@ Patch: `n8n-workflows/patches/d016-potwierdzenie-bez-obietnicy-11082026.cjs`.
 
 ## ⚠️ EKSPORTY W `n8n-workflows/` SA PRZESTARZALE - nie czytaj ich jak stanu systemu
 
-Ustalone 11/08. `x-agent/ags-hitl-handler-v1.json` ma `updatedAt` **2026-06-11**, 143 wezly
-i **nie zawiera wezla `Cm Resolve Gate`**, ktory na produkcji obsluguje guziki zatwierdzania.
-Napisu "Publikacja za chwile" nie ma NIGDZIE w repozytorium.
+Ustalone 11/08 przez odczyt API. `x-agent/ags-hitl-handler-v1.json` ma `updatedAt` **2026-06-11**
+i **143 wezly**; **zywa definicja ma ich 254**. Wezel obslugujacy guziki zatwierdzania nazywa sie
+`Telegram Cm Confirm` i w eksporcie **nie istnieje**. Napisu "za chwile" nie ma NIGDZIE w repo.
+
+### Jak ZOBACZYC, ze aktywna migawka jest inna niz definicja
+
+Odpowiedz `GET /api/v1/workflows/<id>` niesie **dwie kopie**: `nodes` (definicja, ktora edytujesz)
+oraz `activeVersion` (migawka, na ktorej workflow FAKTYCZNIE chodzi). Po samym `PUT` pierwsza
+sie zmienia, a druga NIE - i to jest cala tresc reguly "deactivate + activate po kazdym PUT".
+Nie trzeba w to wierzyc, da sie policzyc:
+
+```bash
+node -e "fetch(process.env.N8N_BASE_URL+'/api/v1/workflows/U5pUZjy2yAhR1sWg',
+  {headers:{'X-N8N-API-KEY':process.env.N8N_API_KEY}}).then(r=>r.json()).then(w=>{
+    const n=(o,i)=>JSON.stringify(o||null).split(i).length-1;
+    console.log('nodes:', n(w.nodes,'SZUKANY_NAPIS'), '| activeVersion:', n(w.activeVersion,'SZUKANY_NAPIS'));})"
+```
+
+Przy D-016 obie liczby zgodzily sie dopiero PO `activate` - i dopiero to bylo dowodem wdrozenia.
 
 **Zasada praktyczna:** eksporty sa migawka z dnia eksportu, nie zrodlem prawdy. Zrodlem prawdy
 jest definicja w n8n. Wszystkie skrypty w `patches/` czytaja ZYWA definicje przez API i to jest

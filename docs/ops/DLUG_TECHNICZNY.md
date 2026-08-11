@@ -685,9 +685,46 @@ czy policzy po `channel` czy po `action_type`.
 **Docelowo:** `action_type` z tego samego slownika co `channel` + migracja istniejacych wierszy,
 w jednym kroku. Rozroznik ten sam, trzypasowy, co przy D-009.
 
-## D-016: Potwierdzenie po tapnieciu obiecuje publikacje "za chwile" niezaleznie od slotu
+## D-016 [ZAMKNIETE 11/08/2026]: potwierdzenie obiecywalo "za chwile", gdy material nie mial jeszcze slotu
 
-**Zapisany 10/08/2026** (Tomasz zobaczyl obie wiadomosci obok siebie o 18:09).
+**Zapisany 10/08/2026, zamkniety 11/08/2026.**
+
+> ### WYKONANE 11/08 - i diagnoza z 10/08 wymagala SPROSTOWANIA
+>
+> Wpis z 10/08 mowil, ze wezel odpowiada "stalym napisem". **Odczyt zywej definicji to obalil.**
+> `Telegram Cm Confirm` (`parameters.jsonBody`) juz czytal slot i byl warunkowy:
+>
+> ```js
+> 'Zatwierdzono. Publikacja ' + ($json.scheduled_for
+>      ? ('w slocie: ' + <data pl-PL, Europe/Warsaw>)
+>      : 'za chwile') + '. Potwierdzenie przyjdzie na kanale logowym.'
+> ```
+>
+> Przy materiale ZE SLOTEM zdanie bylo prawdziwe i uzyteczne. Falszywa byla **wylacznie galaz
+> zapasowa**. Tomasz trafil w nia dlatego, ze material mial `scheduled_for = NULL` - wyzerowany
+> tego samego dnia rano przez `SQL_wycofanie_344_10082026.sql`. Dlug byl wiec WEZSZY, niz go
+> opisalem: nie "napis klamie zawsze", tylko "klamie dokladnie wtedy, gdy slot dopiero powstanie".
+>
+> **Zmiana:** `: 'za chwile')` → `: 'w slocie, ktory CM zaraz przydzieli')`. Jedno slowo, nie cale
+> zdanie. Swiadomie NIE obiecujemy meldunku o godzinie, choc w tej galezi zwykle przychodzi: gdy
+> `next_slot` nie znajdzie wolnego gniazda, `changed` zostaje False i meldunek nie idzie. Obietnica
+> meldunku bylaby tym samym bledem przesunietym o jedno zdanie.
+>
+> **Dowod:** `nodes` **i** `activeVersion` pokazuja stary napis **0**, nowy **1**. Sprawdzenie
+> `activeVersion` jest tu mocniejsze niz odpowiedz 200 i flaga `active` - to ta migawka decyduje,
+> na czym bot naprawde chodzi ([[project_n8n_reactivate_after_put]]).
+>
+> Patch: `n8n-workflows/patches/d016-potwierdzenie-bez-obietnicy-11082026.cjs`
+> (`sprawdz` / `patch` / `cofnij`). Kopia sprzed zmiany lezy obok jako `bk_hitl_d016_*.json`.
+>
+> **Dwie rzeczy ustalone przy okazji, obie warte wiecej niz sama poprawka:**
+> 1. **Patche n8n uruchamia sie Z MASZYNY TOMASZA, nie z serwera.** Serwer nie ma ani `node`,
+>    ani pliku `.env`; n8n wystawia API po HTTPS. Instrukcja w naglowku patcha z 03/08 wskazywala
+>    sciezke windowsowa i byla poprawna - probowalem odpalic to na serwerze i dopiero
+>    `command not found` mi to uswiadomil.
+> 2. **Zywy workflow ma 254 wezly, eksport w repo 143** - patrz sekcja nizej.
+
+### Zapis pierwotny (10/08) - kontekst zgloszenia
 
 Po tapnieciu guzika zatwierdzenia bot odpowiada:
 

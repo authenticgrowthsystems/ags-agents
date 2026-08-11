@@ -1,4 +1,9 @@
-# MACIERZ GOTOWOSCI PRODUKTU (stan: 20/07/2026 ~15:00, +DFY Retencja z buildu BE-PRODUKT)
+# MACIERZ GOTOWOSCI PRODUKTU
+
+**Sekcje 1-2 (co sprzedajemy) sa ze stanu 20/07/2026 - NIE weryfikowane od tamtej pory.**
+**Sekcja 3 (komponenty) zweryfikowana 11/08/2026.** Rozdzielone swiadomie: co sprzedajemy ustala
+wlasciciel, stan komponentow ustala odczyt kodu. Mieszanie dwoch dat pod jednym naglowkiem
+sprawialo, ze cala tabela wygladala na rownie swieza.
 
 Kanon: DOKUMENTACJA ZYJE pkt 6 - kazdy build aktualizuje ten plik w tym samym commicie.
 Skala: KOMPLETNY (LIVE + tapy + dokumentacja) / CZESCIOWY (rdzen dziala, braki wymienione)
@@ -37,7 +42,7 @@ Model MVP rozwijany: rdzen dziala od dnia 1, funkcje doplywaja w cenie.
 |---|---|---|
 | planner | KOMPLETNY | - |
 | kolejka-publikacja | KOMPLETNY | **D-015 CZESCIOWO ZAMKNIETE 10/08**: realny czas publikacji to `max(slot planu, czas kolejki)` plus tik Schedulera i meldunek podaje juz te wartosc (`worker._godzina_publikacji`; dowod: #344 i #358 wyszly 16:01 przy kolejce 15:49 i 15:50). Zostaje KARTA w `/karty`, ktora czyta sam material |
-| karty-hitl | KOMPLETNY | j.w. - reszta D-015 dotyczy tej karty. Stan materialu od 03/08 nazywa sie `handed_off` (D-008), etykieta bez zmian. **D-016** (10/08): potwierdzenie po tapnieciu mowi "Publikacja za chwile" takze wtedy, gdy slot wypada za dobe |
+| karty-hitl | KOMPLETNY | j.w. - reszta D-015 dotyczy tej karty. Stan materialu od 03/08 nazywa sie `handed_off` (D-008), etykieta bez zmian. D-016 **zamkniete 11/08**: galaz zapasowa potwierdzenia mowi juz prawde (`w slocie, ktory CM zaraz przydzieli`) |
 | compliance i bezpieczniki | **KOMPLETNY dla znanych trybow awarii** | trzy warstwy przed publikacja (AP-315, 10/08): bramka wyjscia filtra na pokryciu slow, bezpiecznik gatunku z progiem nagromadzenia, filtr jezykowy regulek nauczonych. Kazda zweryfikowana ZLYM wsadem na produkcji. **Nie chronia przed trybem, ktorego jeszcze nie widzielismy** - to sa siatki, nie dowod poprawnosci |
 | decyzje-nauka | **CZESCIOWY / RYZYKO** | mechanizm LIVE, ale AP-315 pokazal, ze **petla nauki jest wektorem wstrzykniecia**: regulki z `style_learned` sa POLECENIAMI i trafialy do generacji w zlym jezyku, co dwa razy skonczylo sie publikacja wypowiedzi modelu zamiast tresci. Od 10/08 filtr jezykowy przy wstrzykiwaniu; docelowo wpisy maja dostawac jezyk PRZY ZAPISIE. Progi semi-auto nadal nieosiagniete |
 | metryki | CZESCIOWY | X = auto (kolektor); LinkedIn = import xlsx reczny do App 2 CMA |

@@ -181,8 +181,7 @@ Anty-wzorce: `anti-patterns/library.md` (indeks) + `docs/anti-patterns/AP-*.md` 
 - **ZAMKNIETE dlugi:** D-001, D-002, D-003, D-005, D-006, D-007, D-008, D-008b, D-009, D-010,
   D-011 (nie bylo wady), D-014, D-015 czesciowo.
 - **OTWARTE:** D-004, D-012, D-013 (wielomarkowosc - czeka na pierwsza sprzedaz),
-  D-015 reszta (karta w `/karty`), **D-016** (bot mowi "Publikacja za chwile" przy slocie za dobe -
-  siedzi w n8n, nie da sie naprawic rebuildem). Pelne opisy: `docs/ops/DLUG_TECHNICZNY.md`.
+  D-015 reszta (karta w `/karty`), D-016 **ZAMKNIETE 11/08**. Pelne opisy: `docs/ops/DLUG_TECHNICZNY.md`.
 - **LEGACY OFF:** stary AGS X Agent (kolejka Notion, cron 14/18/22) wylaczony od 25/06 -
   opis w `archiwum-dataflow.md` sekcja B. Architektura sprzed 10/06 zachowana pod tagiem
   `archiwum/x-agent-przed-10062026`.

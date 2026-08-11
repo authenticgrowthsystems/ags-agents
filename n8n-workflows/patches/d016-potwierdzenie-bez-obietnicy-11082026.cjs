@@ -19,15 +19,16 @@
 // Okno liczy sie w sekundach - ale odpal to, gdy nie czekasz na zadna decyzje.
 // ============================================================================
 //
-// CZEGO TEN SKRYPT NIE ZAKLADA. Eksport HITL Handlera w repo jest z 11/06 i NIE ZAWIERA wezla,
-// ktory ten napis trzyma - definicja zywa rozjechala sie z repo o dwa miesiace. Dlatego skrypt
-// NIE szuka wezla po nazwie. Przeszukuje CALA definicje rekurencyjnie, po tresci, i w trybie
-// `sprawdz` drukuje sciezke do kazdego trafienia razem z pelnym otoczeniem. Najpierw patrzysz,
-// potem podmieniasz.
+// CZEGO TEN SKRYPT NIE ZAKLADA. Eksport HITL Handlera w repo ma 143 wezly i `updatedAt` z 11/06;
+// ZYWA definicja ma ich **254** i zawiera wezly, ktorych w repo nie ma w ogole. Dlatego skrypt
+// NIE szuka wezla po nazwie - przeszukuje cala definicje rekurencyjnie, po tresci, i w trybie
+// `sprawdz` drukuje sciezke do kazdego trafienia z otoczeniem. Najpierw patrzysz, potem podmieniasz.
 //
-// UZYCIE (Bash, z katalogu repozytorium):
-//   set -a && . <(grep -E '^(N8N_BASE_URL|N8N_API_KEY)=' \
-//       "C:/Claude-CoWork/AGS/ags-agents/.env" | sed 's/\r$//') && set +a
+// UZYCIE - **Z MASZYNY TOMASZA (Git Bash), NIE Z SERWERA.** Sprawdzone 11/08: na serwerze nie ma
+// ani `node`, ani pliku `.env`. n8n wystawia API po HTTPS, wiec patch nie ma tam czego szukac.
+//
+//   cd "C:/Claude-CoWork/AGS/ags-agents"
+//   set -a && . <(grep -E '^(N8N_BASE_URL|N8N_API_KEY)=' .env | sed 's/\r$//') && set +a
 //   node n8n-workflows/patches/d016-potwierdzenie-bez-obietnicy-11082026.cjs sprawdz  # tylko odczyt
 //   node n8n-workflows/patches/d016-potwierdzenie-bez-obietnicy-11082026.cjs patch    # PUT + powrot do gry
 //   node n8n-workflows/patches/d016-potwierdzenie-bez-obietnicy-11082026.cjs cofnij   # ratunek
@@ -40,15 +41,29 @@ const fs = require('fs');
 const ID = 'U5pUZjy2yAhR1sWg';
 const NAZWA = 'AGS HITL Handler v1.0';
 
-// Szukamy po FRAGMENCIE, nie po calym zdaniu: nie wiem, czy zywa definicja ma polskie znaki
-// (bot dostal pelna polszczyzne 2c62b3f, ale ten napis moze byc starszy). Oba warianty naraz.
-const WARIANTY = ['Publikacja za chwilę.', 'Publikacja za chwile.'];
+// CO ODCZYT ZASTAL 11/08 (wezel `Telegram Cm Confirm`, `parameters.jsonBody`) - i dlaczego
+// pierwsza wersja tego patcha byla ZLA. Napis NIE jest bezwarunkowy. Wezel juz czyta slot:
+//
+//   'Zatwierdzono. Publikacja ' + ($json.scheduled_for
+//        ? ('w slocie: ' + <data pl-PL, Europe/Warsaw>)
+//        : 'za chwile')
+//     + '. Potwierdzenie przyjdzie na kanale logowym.'
+//
+// Przy materiale ZE SLOTEM zdanie jest prawdziwe i uzyteczne. Falszywa jest WYLACZNIE galaz
+// zapasowa: material bez slotu dostaje "za chwile", a CM przydziela mu slot sekunde pozniej -
+// czasem na jutro. Tomasz trafil w te galaz, bo material mial `scheduled_for = NULL`
+// (wyzerowany rano skryptem wycofania #344). Naprawa jest wiec o jedno slowo, nie o cale zdanie.
+//
+// Podmieniamy fragment Z DWUKROPKIEM I NAWIASEM, nie samo "za chwile": to czyni wzorzec
+// jednoznacznym i nie tknie zadnego innego zdania, gdyby kiedys doszlo.
+const WARIANTY = [": 'za chwile')"];
 
-// Zdanie zastepcze jest PRAWDZIWE W KAZDYM PRZYPADKU - i to jest cala robota tego patcha.
-// NIE obiecuje meldunku o godzinie: CM melduje slot tylko wtedy, gdy go WLASNIE przydzielil
-// (`slots.assign_if_needed` zwraca changed=False, gdy material slot juz mial). Obietnica
-// meldunku byla by tym samym bledem, tylko przesunietym o jedno zdanie.
-const NOWE = 'Materiał czeka na swój slot - publikacja nie idzie od razu.';
+// Nowa galaz zapasowa jest PRAWDZIWA: material bez slotu naprawde czeka na slot, ktory CM
+// zaraz przydzieli (`slots.assign_if_needed` przy `scheduled_for IS NULL`).
+// NIE obiecujemy meldunku o godzinie, choc akurat w tej galezi zwykle przychodzi: gdy
+// `next_slot` nie znajdzie wolnego gniazda, `changed` zostaje False i meldunek nie idzie.
+// Obietnica meldunku byla by tym samym bledem, tylko przesunietym o jedno zdanie.
+const NOWE = ": 'w slocie, ktory CM zaraz przydzieli')";
 
 const ALLOWED = ['saveDataErrorExecution', 'saveDataSuccessExecution', 'saveManualExecutions',
   'saveExecutionProgress', 'executionTimeout', 'errorWorkflow', 'timezone', 'executionOrder'];
@@ -142,8 +157,8 @@ async function patch(kierunek) {
     console.error('Odpal najpierw: node ... sprawdz  - i przeczytaj, co tam naprawde stoi.');
     process.exit(1);
   }
-  if (zrodlo.length > 3) {
-    console.error(`STOP: ${zrodlo.length} trafien to wiecej, niz ten patch zaklada (max 3).`);
+  if (zrodlo.length > 1) {
+    console.error(`STOP: ${zrodlo.length} trafien to wiecej, niz ten patch zaklada (odczyt 11/08: DOKLADNIE 1).`);
     console.error('Definicja jest inna, niz mysle. NIE zgaduj - przeczytaj ja recznie.');
     process.exit(1);
   }
