@@ -96,6 +96,49 @@ anty-regresja, zeby nastepna "uproszczajaca" poprawka od razu widziala, ze byly 
 Karta materialu nadal czyta sam material, wiec przy kolejce wypadajacej pozniej pokazuje o do
 15 minut za wczesnie. To reszta D-015 i osobna decyzja (wymaga wzorca `_stan_rozsylki` z D-006).
 
+## PRZEKLAD: kiedy publikuje, a kiedy jest tylko kopia (11/08/2026)
+
+`generate.translate_text` ma **cztery wywolania i dwa z nich pisza tekst, ktory WYCHODZI**:
+
+| wywolanie | co robi | `do_publikacji` |
+|---|---|---|
+| `channels.stage_variant` | straznik jezyka: polski wariant na kanale EN tlumaczony PRZED zapisem do kolejki (incydent 20/07) | **True** |
+| `conversation` (wklejka wlasnej tresci) | Tomasz wkleja po polsku, kanal publikuje po angielsku | **True** |
+| `worker._draft` | kopia PL do przegladu (`media.kind='review_pl'`) | False |
+| `conversation` (komentarze) | kontrola po polsku pod wklejka komentarza | False |
+
+Do 11/08 prompt mowil WSZYSTKIM czterem: *"To kopia do przegladu wlasciciela, nie do publikacji"*.
+W dwoch przypadkach **byla to nieprawda o przeznaczeniu wyniku** - i licencja na luz w miejscu,
+w ktorym luzu byc nie moze. To AP-312 w wersji dla modelu: etykieta klamie, tylko czytelnikiem
+jest maszyna. Od 11/08 prompt mowi prawde zaleznie od flagi i wprost zabrania dodawania zdan.
+
+### Kontrola wiernosci: `generate.sprawdz_przeklad`
+
+Prosba o wiernosc w promptcie nie jest kontrola. Trzy miary, ktore **przezywaja zmiane jezyka**
+(`pokrycie_slow` z bramki wyjscia filtra tu NIE dziala - przy poprawnym przekladzie byloby bliskie zeru):
+
+1. **liczba ZDAN** - najostrzejsza, prog 20% przy minimum dwoch zdan roznicy;
+2. liczba akapitow;
+3. zbior liczb (cyfry sa te same w kazdym jezyku) i proporcja dlugosci.
+
+**Kalibracja na prawdziwej parze, nie z teorii.** Pierwsza wersja miala tylko akapity, liczby
+i dlugosc - i **nie zlapala przypadku, dla ktorego powstala**. Kopia PL z karty 10/08 niosla
+zdanie, ktorego w zrodle nie bylo ("Albo: Agent A decyduje, czy w ogole odpowiadamy"), ale nie
+zmienilo to liczby akapitow, a 90 znakow w 700 miesci sie w pasmie dlugosci. Pomiar: wierny
+przeklad EN→PL dal **0%** roznicy w liczbie zdan, rozjazd z 10/08 **29%**.
+
+**Co sie dzieje z zastrzezeniami** - nigdzie nie znikaja po cichu, ale nigdzie tez nie blokuja:
+
+- straznik jezyka: wpis `warn` do `agent_logs` (blokada oznaczalaby polski tekst na kanale EN,
+  czyli powrot do incydentu 20/07);
+- kopia PL do przegladu: **dopisek NA KARCIE** - "TA KOPIA ROZJECHALA SIE ZE ZRODLEM (...)
+  Oceniaj po tekscie, ktory WYCHODZI, nie po tej kopii". Karta jest tym, co czlowiek czyta
+  zatwierdzajac, wiec rozjazd musi byc widoczny wlasnie tam, a nie w logu;
+- wklejka wlasnej tresci: zastrzezenie w paragonie, bo to tekst Tomasza i tylko on wie,
+  czy roznica jest w porzadku.
+
+Zachowanie: `cm-agent/tests/test_przeklad_wiernosc.py`.
+
 ## BRAMKA WYJSCIA FILTRA - przyczyna zrodlowa AP-315 (10/08/2026)
 
 `compliance._rewrite` obsluguje TRZY filtry (`polish_pl`, przepisanie zakazanego slownictwa,

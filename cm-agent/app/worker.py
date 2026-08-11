@@ -330,6 +330,14 @@ def _draft(item):
             if comm and any(p != comm for p in pubs):
                 review = generate.translate_text(canonical, comm, content_item_id=item["id"])
                 if review:
+                    # Kopia do przegladu to TEN tekst, ktory czlowiek czyta, zatwierdzajac -
+                    # wiec gdy rozjezdza sie ze zrodlem, musi to byc widoczne NA KARCIE, a nie
+                    # tylko w logu. Inaczej bramka ludzka ocenia nie ten tekst (AP-315).
+                    uwagi = generate.sprawdz_przeklad(canonical, review)
+                    if uwagi:
+                        review += ("\n\n⚠️ TA KOPIA ROZJECHALA SIE ZE ZRODLEM: "
+                                   + "; ".join(uwagi)
+                                   + ".\nOceniaj po tekscie, ktory WYCHODZI, nie po tej kopii.")
                     media.append({"kind": f"review_{comm}", "text": review})
         except Exception:
             traceback.print_exc()

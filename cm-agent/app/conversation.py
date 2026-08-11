@@ -2862,9 +2862,16 @@ def _apply_sub_edit(pid, brand, channel, raw):
     note, review_pl = "", None
     publish_text = raw
     if compliance.looks_polish(raw) and pub_lang != "pl":
-        publish_text = generate.translate_text(raw, pub_lang) or raw
+        # do_publikacji=True (11/08): to jest tekst, ktory WYCHODZI - patrz generate.translate_text.
+        publish_text = generate.translate_text(raw, pub_lang, do_publikacji=True) or raw
         review_pl = raw
         note = f" (Twoja wersja PL przetlumaczona do publikacji {pub_lang.upper()}; PL zachowany do przegladu)"
+        # Zastrzezenia do wiernosci ida do CZLOWIEKA w paragonie, nie do logu: to jego tekst
+        # i tylko on wie, czy roznica jest w porzadku. Cisza tutaj znaczylaby, ze przeklad
+        # rozjechany wyglada dokladnie tak samo jak wierny.
+        uwagi = generate.sprawdz_przeklad(raw, publish_text)
+        if uwagi:
+            note += " ⚠️ przeklad rozjechal sie ze zrodlem: " + "; ".join(uwagi)
     publish_text = compliance.fix_dashes(publish_text)
     _old = db.fetchone("SELECT content FROM post_queue WHERE id=%s AND brand=%s AND platform=%s",
                        (int(pid), brand, channel))

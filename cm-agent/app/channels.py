@@ -129,8 +129,26 @@ def stage_variant(item, channel_row, variant_text):
         from . import compliance as _comp, generate as _gen
         if (_gen._language_publish(item["brand_id"], channel_row["channel"]) == "en"
                 and _comp.looks_polish(variant_text or "")):
+            # do_publikacji=True (11/08): ten przeklad IDZIE DO KOLEJKI i wychodzi w tej postaci.
+            # Wczesniej prompt mowil modelowi, ze to kopia do przegladu - nieprawda i licencja
+            # na luz w miejscu, w ktorym luzu byc nie moze.
+            zrodlo = variant_text
             variant_text = _gen.translate_text(
-                variant_text, "en", content_item_id=item.get("id")) or variant_text
+                variant_text, "en", content_item_id=item.get("id"), do_publikacji=True) or variant_text
+            # Zastrzezenia NIE blokuja stagingu (tekst i tak jest lepszy niz polski na kanale EN,
+            # incydent 20/07), ale nie moga zniknac po cichu - inaczej rozjazd przekladu jest
+            # nieodroznialny od poprawnego tlumaczenia. To ta sama zasada co przy AP-306.
+            for uwaga in _gen.sprawdz_przeklad(zrodlo, variant_text):
+                print(f"[channels] PRZEKLAD ROZJECHANY {item.get('id')}: {uwaga}", flush=True)
+                try:
+                    db.execute(
+                        """INSERT INTO agent_logs (agent, level, message, context)
+                           VALUES ('CM','warn',%s,%s::jsonb)""",
+                        (f"przeklad do publikacji rozjechany: {uwaga}",
+                         json.dumps({"content_item_id": str(item.get("id")),
+                                     "kanal": channel_row.get("channel"), "uwaga": uwaga})))
+                except Exception:
+                    traceback.print_exc()
     except Exception:
         # AP-306: tlumaczenie nie blokuje stagingu, ale cicha awaria = polski tekst
         # w kanale angielskim (incydent 20/07). Karta HITL to zlapie, log mowi DLACZEGO.

@@ -103,6 +103,7 @@ przeszedl przez cztery kontrole, bo zadna nie pytala o to, czym ten tekst JEST.
 | 3 | `strip_meta_header` | czy pierwsze linie maja ksztalt naglowka | scina je | `compliance.strip_meta_header` |
 | 4 | `compliance.enforce` | myslniki, zakazane slownictwo, czysta polszczyzna | poprawia (LLM) | `compliance.enforce` |
 | 5 | walidacja dlugosci | czy tekst miesci sie w limicie kanalu | **TAK - wariant NIE wchodzi do kolejki**, z jawnym komunikatem | `channels._odrzuc_za_dlugi` |
+| 5b | wiernosc przekladu | czy przeklad jest przekladem, a nie osobna wersja | **NIE blokuje, zglasza** (log / karta / paragon) | `generate.sprawdz_przeklad` |
 | 6 | bramka duplikacji | czy temat byl juz publikowany (30 dni, pgvector) | **NIE blokuje, ostrzega** | `content_memory.dup_check` |
 | 7 | **czlowiek** (HITL) | czy to ma wyjsc | tak - kanon 19/07 | karty matreview + approval |
 | 8 | bramka slotu | czy nadszedl czas | trzyma material | `db.claim_item` |
@@ -193,6 +194,4 @@ Anty-wzorce: `anti-patterns/library.md` (indeks) + `docs/anti-patterns/AP-*.md` 
 - [ ] Diagram graficzny CALOSCI (pipeline + Researcher + siec agentow) - czesc pakietu
       sprzedazowego, renderowany gdy build skonczony.
 - [ ] `pg_dump` schema-only pozostalych tabel bazowych do `SCHEMA_ags_crd.md`.
-- [ ] `translate_text`: kopia PL nie jest tlumaczeniem, tylko osobna wersja (ma zdania,
-      ktorych nie ma w angielskiej). Nikt tego nie sprawdzal - patrz raport 10/08.
 - [ ] Podlaczenie rejestru operacji hurtowych do tras `reslot`, `outreach_cleanup`, `bulk_polish`.

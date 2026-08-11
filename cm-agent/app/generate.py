@@ -405,21 +405,92 @@ def generate_image(prompt):
 _LANG_NAME = {"pl": "polski", "en": "English", "de": "Deutsch"}
 
 
-def translate_text(text, target_lang, content_item_id=None):
-    """T8 (feedback 07/08): wierny przeklad tresci na jezyk komunikacji (kopia do przegladu/edycji).
-    Publikacja zostaje native w swoim jezyku; PL trzymamy obok, zeby Tomasz czytal/edytowal po polsku."""
+_CYFRY = re.compile(r"\d+")
+_KONIEC_ZDANIA = re.compile(r"(?<=[.!?])\s+")
+
+
+def _zdan(t):
+    return len([s for s in _KONIEC_ZDANIA.split((t or "").strip()) if len(s.strip()) > 2])
+
+
+def sprawdz_przeklad(zrodlo, wynik):
+    """Czy `wynik` wyglada na WIERNY przeklad `zrodla`. Zwraca liste zastrzezen (pusta = czysto).
+
+    Po co, skoro prompt juz prosi o wiernosc (11/08): prosba nie jest kontrola. Kopia PL z karty
+    z 10/08 niosla zdanie, ktorego w angielskim oryginale NIE BYLO ("Albo: Agent A decyduje,
+    czy w ogole odpowiadamy") - a ta kopia jest opisana na karcie jako "odpowiednik do przegladu",
+    czyli to JA czyta czlowiek, zatwierdzajac. Gdy rozni sie trescia od tego, co publikuje,
+    bramka ludzka ocenia nie ten tekst. To rodzina AP-315: kontrola pyta o co innego, niz wychodzi.
+
+    DLACZEGO NIE `pokrycie_slow` jak przy bramce wyjscia filtra: tam wejscie i wyjscie sa w TYM
+    SAMYM jezyku, tu z zalozenia w roznych - pokrycie slow bylo by bliskie zeru dla poprawnego
+    przekladu. Stad trzy miary, ktore JEZYK PRZEZYWAJA:
+      * **liczba ZDAN** - miara najostrzejsza i jedyna, ktora lapie przypadek z 10/08,
+      * liczba akapitow (prompt wprost zada ich zachowania),
+      * zbior liczb (cyfry sa te same w kazdym jezyku - "12 posts" i "12 postow"),
+      * proporcja dlugosci (PL wobec EN puchnie, ale nie dwukrotnie).
+    Zadna nie jest dowodem wiernosci. Kazda jest tania i lapie ROZJAZD, nie niuans.
+
+    KALIBRACJA NA PRAWDZIWEJ PARZE, nie z teorii (11/08). Pierwsza wersja miala tylko akapity,
+    liczby i dlugosc - i **nie zlapala przypadku, dla ktorego powstala**: dodane zdanie nie zmienia
+    liczby akapitow, a 90 znakow w 700 miesci sie w pasmie dlugosci. Pomiar na parze z karty:
+    wierne tlumaczenie EN->PL dalo **0%** roznicy w liczbie zdan, rozjazd z 10/08 **29%**.
+    Stad prog 20% przy minimum dwoch zdan roznicy - tolerancja na to, ze tlumacz legalnie
+    laczy i dzieli zdania."""
+    z, w = (zrodlo or "").strip(), (wynik or "").strip()
+    if not z or not w:
+        return []
+    uwagi = []
+    z_z, z_w = _zdan(z), _zdan(w)
+    if z_z and abs(z_w - z_z) >= 2 and abs(z_w - z_z) / z_z > 0.20:
+        uwagi.append(f"zdania: zrodlo {z_z}, przeklad {z_w}"
+                     + (" (przeklad DODAL zdania)" if z_w > z_z else " (przeklad ZGUBIL zdania)"))
+    a_z = len([p for p in z.split("\n\n") if p.strip()])
+    a_w = len([p for p in w.split("\n\n") if p.strip()])
+    if a_z and abs(a_w - a_z) > max(1, a_z // 3):
+        uwagi.append(f"akapity: zrodlo {a_z}, przeklad {a_w}")
+    c_z, c_w = set(_CYFRY.findall(z)), set(_CYFRY.findall(w))
+    zgubione = sorted(c_z - c_w)
+    if zgubione:
+        uwagi.append("zgubione liczby: " + ", ".join(zgubione[:6]))
+    dorobione = sorted(c_w - c_z)
+    if dorobione:
+        uwagi.append("liczby, ktorych nie bylo w zrodle: " + ", ".join(dorobione[:6]))
+    if len(z) >= 200:
+        p = len(w) / len(z)
+        if p < 0.6 or p > 1.8:
+            uwagi.append(f"dlugosc: przeklad to {p:.0%} zrodla")
+    return uwagi
+
+
+def translate_text(text, target_lang, content_item_id=None, do_publikacji=False):
+    """T8 (feedback 07/08): wierny przeklad tresci na inny jezyk.
+
+    `do_publikacji` DOLOZONE 11/08 i to nie jest kosmetyka. Ta funkcja ma PIEC wywolan i tylko
+    czesc z nich robi kopie do przegladu; **dwa produkuja tekst, ktory naprawde publikuje**:
+    straznik jezyka w `channels.stage_variant` (polski wariant na kanale EN tlumaczony PRZED
+    zapisem do kolejki) i wklejka wlasnej tresci w `conversation`. Prompt mowil im obu
+    "to kopia do przegladu wlasciciela, NIE do publikacji" - czyli model dostawal nieprawde
+    o przeznaczeniu swojego wyniku i licencje na luz. AP-312 w wersji dla modelu.
+
+    Wiernosc sprawdza `sprawdz_przeklad` - wolaj ja u siebie i zrob z zastrzezeniami cos
+    widocznego. Ta funkcja ich NIE ukrywa i NIE poprawia po cichu."""
     text = (text or "").strip()
     if not text:
         return ""
     model, tier, source = tasks.model_for("variant")  # haiku, tanie
     name = _LANG_NAME.get(target_lang, target_lang)
+    cel = ("To tekst, ktory PUBLIKUJE SIE w tej postaci - ma byc gotowy do wyjscia."
+           if do_publikacji else
+           "To kopia do przegladu wlasciciela, nie do publikacji.")
     resp = client().messages.create(
         model=model, max_tokens=2000, thinking={"type": "disabled"},
         messages=[{"role": "user", "content":
-                   f"Przetlumacz WIERNIE ponizszy tekst na jezyk: {name}. Zachowaj sens, ton, akapity i "
-                   f"dlugosc. Zero em-dash. To kopia do przegladu wlasciciela, nie do publikacji. Zwroc "
-                   f"WYLACZNIE tlumaczenie.\n\n{text}"}])
-    tasks.log_task("translate_review", tier, model, source, getattr(resp, "usage", None), content_item_id)
+                   f"Przetlumacz WIERNIE ponizszy tekst na jezyk: {name}. Zachowaj sens, ton, akapity, "
+                   f"liczby i dlugosc. NIE dodawaj zdan, ktorych nie ma w zrodle. Zero em-dash. {cel} "
+                   f"Zwroc WYLACZNIE tlumaczenie.\n\n{text}"}])
+    tasks.log_task("translate_publish" if do_publikacji else "translate_review",
+                   tier, model, source, getattr(resp, "usage", None), content_item_id)
     return _text(resp)
 
 
