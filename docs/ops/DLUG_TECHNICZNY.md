@@ -886,3 +886,65 @@ ona mierzy to, o co chodzilo: poziom zagniezdzenia.
 cos podobnego do tego, co mialy sprawdzac. To jest dokladnie ta sama klasa co AP-315 na poziomie
 testu: kontrola pyta o cos innego, niz mysli jej autor - i tylko celowe przywrocenie wady
 to pokazuje.
+
+## D-019: Petla nauki dopisuje nowe wpisy bez jezyka i rodzaju - ZAPIS DO WYLACZENIA
+
+**Zapisany 11/08/2026 (decyzja Managera Z-3, NIE wykonana - blok dla nastepnej sesji).**
+
+**Polecenie: wylaczyc ZAPIS nowych wpisow do `brand_config.style_learned`. Odczyt istniejacych,
+juz przefiltrowanych, ZOSTAJE.**
+
+Uzasadnienie Managera, mocniejsze od pytania, ktore zadalem: filtr jezykowy z AP-315 zamyka
+**droge**, ktora znamy, ale **klasa zostaje otwarta** - kazdy przyszly wpis nauczony moze byc
+POLECENIEM, nie preferencja. Koszt powtorki to publiczny post pod nazwiskiem Tomasza; mielismy
+dwa. **"Przy zerowym przychodzie nie potrzebujemy, zeby system uczyl sie szybciej. Potrzebujemy
+zera incydentow."** Wylaczenie kosztuje dzis prawie nic.
+
+**Warunek wlaczenia z powrotem:** wpis dostaje **jezyk i RODZAJ** (preferencja kontra polecenie)
+**PRZY ZAPISIE**, a nie jest zgadywany przy odczycie.
+
+Punkt zaczepienia: producent wpisow do `style_learned` (destylacja z korekt VOICE_EDIT);
+konsument `generate._learned_style` zostaje bez zmian.
+
+## D-020: Blokada `publish_mode='webhook'` ma byc W KODZIE, nie w dokumencie
+
+**Zapisany 11/08/2026 (decyzja Managera Z-4, NIE wykonana - blok dla nastepnej sesji).**
+**Manager ODRZUCIL moja rekomendacje "zostawic jako warunek twardy w dokumencie".**
+
+Powod jest w moim wlasnym raporcie z tego samego dnia: `DEPLOY_CHECKLIST` przez trzy tygodnie
+po incydencie AP-307 nadal instruowal, zeby ustawic `publish_mode='webhook'`. Nikt go nie oznaczyl
+jako nieaktualnego, bo wygladal swiezo. **Warunek zapisany w dokumencie jest zalozeniem,
+nie zabezpieczeniem - to jest AP-314 co do litery** (i AP-316, ktory z tego powstal).
+
+**Do zrobienia:** ustawienie `publish_mode='webhook'` ma **padac glosno w kodzie**, z komunikatem
+wskazujacym AP-307 i wymogiem swiadomego zdjecia blokady. Kilkanascie linii plus test.
+
+**Czego NIE ruszamy:** samej miny w callbacku publishera (oznacza `published` wszystkie wiersze
+materialu). Na to okna nie wydajemy - decyzja Managera bez zmian.
+
+## D-021: Manager nie ma drogi zapisu NOWEGO prospekta - lancuch peka przy nowym czlowieku
+
+**Zapisany 11/08/2026 (zgloszenie Managera Z-6; odczyt wykonany, budowa NIE).**
+
+**Zdarzenie:** Tomasz odwrocil rozmowe sprzedazowa z Rafalem Petrykowskim (kontakt pierwszego
+stopnia na LinkedInie). Wiadomosc poszla. **Manager nie mial jak tego zapisac** - wpis lezy
+w pliku na dysku.
+
+**Co Manager MA przez Lacznik:** `GET /lacznik/stan`, `GET /lacznik/teczka` (odczyt),
+`POST /lacznik/raport`, `POST /lacznik/zapisz-tekst` (zapis).
+
+**Dlaczego odmowilo:** `teczka.zapisz` ma w kontrakcie *"Nieznany identyfikator = blad z lista
+podobnych, NIGDY ciche zalozenie nowego wiersza"*. **To NIE jest wada, tylko swiadoma bramka** -
+ciche zakladanie wierszy zamienialoby kazda literowke w nazwisku w nowego prospekta.
+**Rozluznienie jej byloby bledem.**
+
+**Czego NIE MA:** endpointu zakladajacego prospekta. Zdolnosc **istnieje w kodzie**
+(`sales.py:626`, `INSERT INTO sales_pipeline`), ale nie jest wystawiona do Lacznika.
+
+**Prawdziwa trudnosc - bramka duplikatow:** dedup po samej domenie **zabija franczyzy**.
+W lejku stoja dzis `Grodzisk Mazowiecki Egurrola Dance Studio` i `Katowice Egurrola Dance Studio` -
+ta sama domena `egurrola.com`, dwa rozne prospekty, dwa rozne kontakty. Bramka musi patrzec
+na **pare (domena, oddzial/osoba)**, nie na sama domene.
+
+**Waga (sformulowanie Managera):** to nie jest wygoda. Baza ma byc zrodlem wiedzy, a lancuch peka
+dokladnie w chwili, w ktorej pojawia sie NOWY czlowiek - czyli w jedynym momencie, ktory buduje lejek.
