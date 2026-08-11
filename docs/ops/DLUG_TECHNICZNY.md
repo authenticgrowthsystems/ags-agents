@@ -711,8 +711,35 @@ te pare wiadomosci kilka razy dziennie. Zdanie, ktore systematycznie klamie, ucz
 CALY kanal logowy - a to jest ten sam kanal, ktorym ida alarmy zwisu i meldunki bezpiecznika
 gatunku. Koszt nie jest w tej jednej wiadomosci, tylko w zaufaniu do reszty.
 
-**Docelowo:** wezel `Cm Resolve Gate` ma odpowiadac neutralnie ("Zatwierdzono. CM przydzieli
-slot i zamelduje.") albo czytac `content_items.scheduled_for` i podac godzine. Pierwsze jest
-jednym napisem, drugie dodatkowym odczytem. **Osobne okno n8n** - po kazdym PUT trzeba
-deactivate + activate ([[project_n8n_reactivate_after_put]]), wiec nie doklada sie tego
-przy okazji.
+**PATCH GOTOWY 11/08, CZEKA NA URUCHOMIENIE:**
+`n8n-workflows/patches/d016-potwierdzenie-bez-obietnicy-11082026.cjs` (tryby `sprawdz`/`patch`/`cofnij`).
+
+Nowe zdanie: **"Materiał czeka na swój slot - publikacja nie idzie od razu."**
+Odrzucony wariant "CM przydzieli slot i zamelduje": **to bylby ten sam blad przesuniety o jedno
+zdanie.** CM melduje slot TYLKO wtedy, gdy go wlasnie przydzielil - `slots.assign_if_needed`
+zwraca `changed=False`, gdy material slot juz mial, i wtedy zaden meldunek nie idzie. Obietnica
+meldunku bylaby falszywa w dokladnie tych przypadkach, w ktorych czlowiek na nia czeka.
+
+**Dwie roznice wobec patcha D-008, obie wymuszone przez to, CO jest gaszone:**
+
+1. Tam gaszony byl Scheduler (cron). Tu gaszony jest HITL Handler, czyli **jedyny interfejs
+   Tomasza** - przez okno patcha guziki w bocie nie odpowiadaja. Dlatego skrypt gasi dopiero
+   PO przygotowaniu definicji w pamieci i **sam wraca do gry** na koncu, zamiast zostawiac
+   workflow wylaczony.
+2. Skrypt **NIE szuka wezla po nazwie**, tylko przeszukuje cala definicje rekurencyjnie po tresci.
+   Powod nizej.
+
+### Ustalenie uboczne: eksport n8n w repo jest o DWA MIESIACE do tylu
+
+`n8n-workflows/x-agent/ags-hitl-handler-v1.json` ma `updatedAt` **2026-06-11**, 143 wezly
+i **nie zawiera wezla `Cm Resolve Gate` w ogole**. Napisu "Publikacja za chwile" nie ma nigdzie
+w repozytorium - zyje wylacznie w definicji na serwerze.
+
+**Konsekwencja dla kogos, kto czyta repo:** pliki w `n8n-workflows/` opisuja warstwe transportowa,
+ktorej juz nie ma. Nie da sie z nich wywnioskowac, jak system dzis odpowiada. Kazdy patch musi
+czytac definicje ZYWA (tak robia wszystkie skrypty w `patches/`), a nie eksport.
+
+**Do nadrobienia osobno:** re-eksport zywych workflow do repo. Bez tego kolejny czytajacy powtorzy
+ta sama pomylke - ja zrobilem ja dwa razy w ciagu jednej sesji, najpierw zakladajac, ze napis jest
+w n8n (trafnie), potem ze jednak w Pythonie (blednie, bo `grep` po "za chwil" trafil w cztery INNE
+zdania w `cm-agent/app/`). Odczyt precyzyjny rozstrzygnal; odczyt zgrubny wprowadzil w blad.

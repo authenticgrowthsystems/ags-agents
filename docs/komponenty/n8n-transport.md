@@ -43,6 +43,30 @@ za chwile." - takze wtedy, gdy CM sekunde pozniej melduje slot za dobe. To AP-31
 czasowym i **nie da sie tego naprawic rebuildem kontenera**, bo napis siedzi w definicji
 workflow. Szukajac zrodla mylacej wiadomosci w bocie: sprawdz n8n, ZANIM zaczniesz czytac
 `cm-agent/app`. Wpis: `docs/ops/DLUG_TECHNICZNY.md` D-016.
+Patch: `n8n-workflows/patches/d016-potwierdzenie-bez-obietnicy-11082026.cjs`.
+
+## ⚠️ EKSPORTY W `n8n-workflows/` SA PRZESTARZALE - nie czytaj ich jak stanu systemu
+
+Ustalone 11/08. `x-agent/ags-hitl-handler-v1.json` ma `updatedAt` **2026-06-11**, 143 wezly
+i **nie zawiera wezla `Cm Resolve Gate`**, ktory na produkcji obsluguje guziki zatwierdzania.
+Napisu "Publikacja za chwile" nie ma NIGDZIE w repozytorium.
+
+**Zasada praktyczna:** eksporty sa migawka z dnia eksportu, nie zrodlem prawdy. Zrodlem prawdy
+jest definicja w n8n. Wszystkie skrypty w `patches/` czytaja ZYWA definicje przez API i to jest
+powod, dla ktorego dzialaja mimo dryfu - `d016-*` idzie krok dalej i nie szuka wezla nawet
+po nazwie, tylko po tresci, bo nazwa tez mogla sie zmienic.
+
+**Re-eksport zywego workflow do repo** (Bash, ze srodowiskiem jak przy patchach):
+
+```bash
+curl -s -H "X-N8N-API-KEY: $N8N_API_KEY" "$N8N_BASE_URL/api/v1/workflows/U5pUZjy2yAhR1sWg" \
+  | python -m json.tool > n8n-workflows/x-agent/ags-hitl-handler-v1.json
+```
+
+Identyfikatory pozostalych: Scheduler `x1jJEbcWAe3FnpCa`, Lacznik `yxJUJmZpSUe0tw9K`.
+**Eksport ZAWIERA nazwy poswiadczen, ale nie ich wartosci** - sekrety zyja w `app_secrets`
+i w credentialach n8n, wiec plik jest bezpieczny do commitu. Przejrzyj diff przed zapisem,
+bo `webhookId` zmienia sie przy imporcie i produkuje szum.
 
 **Pulapka wezla `Mark Published`:** ma w JEDNYM zapytaniu wartosci z DWOCH roznych slownikow -
 `ci.status` (material) i `q.status IN (...)` (kolejka), obie do 03/08 o tej samej nazwie
