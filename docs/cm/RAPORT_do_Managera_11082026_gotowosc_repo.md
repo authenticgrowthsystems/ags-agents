@@ -80,7 +80,22 @@ Czternascie kart materialow wisi **dwanascie dni**, trzy followupy sprzedazowe d
 czternastu, plus `#179` (lista 21 materialow X do przerobienia) jedenascie. To nie jest dlug
 techniczny - to **stojaca kolejka tresci** przy jednoczesnej zapasci zasiegu.
 
-**Rekomendacja: przejrzec je hurtem w jednym posiedzeniu** (wyciagne pogrupowane, z rekomendacja
+**USTALENIE Z 16:22, ZMIENIA TO ZAPYTANIE.** Pozycja `#173 stale_approval "Granica miedzy d..."`
+wisi 14 dni jako "czeka na Twoja decyzje" - a to jest decyzja dla materialu, ktory WLASNIE
+zostal opublikowany. Material przeszedl cala sciezke (zatwierdzony, wycofany, napisany od nowa,
+zatwierdzony ponownie, opublikowany), a wpis w rejestrze stoi nietkniety.
+
+**Rejestr decyzji nie zamyka sie, gdy material idzie dalej.** Czyli lista dwudziestu pozycji jest
+CZESCIOWO NIEPRAWDZIWA i nie wiadomo, w ktorej czesci. To ta sama rodzina co AP-311: wpis
+czytany jako fakt o swiecie, gdy jest tylko faktem o rejestrze. Konsekwencja praktyczna:
+przegladanie tej listy "na piechote" oznacza podejmowanie decyzji o rzeczach, ktore juz sie
+rozstrzygnely - czyli marnowanie jedynego zasobu, ktorego brakuje.
+
+**Rekomendacja zmieniona: NAJPIERW odczyt, ktory powie, ile z tych dwudziestu jest martwych**
+(zestawienie `agent_decisions` z aktualnym `content_items.status` per material), DOPIERO POTEM
+przeglad tego, co zostanie. Podejrzewam, ze lista skurczy sie istotnie.
+
+Pierwotna rekomendacja, jesli lista okaze sie zywa: **przejrzec je hurtem w jednym posiedzeniu** (wyciagne pogrupowane, z rekomendacja
 per pozycja), zamiast czternastu osobnych kart. Alternatywa uczciwa: wygasic je jawnie
 i przyznac, ze plan z 30/07 sie zdezaktualizowal - to tez jest decyzja, byle nie przez milczenie.
 
@@ -132,9 +147,13 @@ i pytanie o GATUNEK tekstu. Zgodnie z kanonem nie pisze tresci sam.
 
 ## 5. CO CZEKA
 
-- **11/08 ok. 16:00** - publikacja materialu "Granica miedzy dwoma agentami". Domyka D-015
-  end-to-end i jest pierwszym tekstem tego systemu powstalym bez polskiej instrukcji w promptcie.
-  **To jedyny dowod z dzisiaj, ktorego jeszcze nie mam** - raport zostanie o niego uzupelniony.
+- **DOPISANE 11/08 16:22: publikacja BYLA, o 16:01.** `urn:li:share:7492943159539298304`.
+  **D-015 ZAMKNIETE END-TO-END, trzy razy ten sam ksztalt:** `#344` 04/08 16:01, `#358` 05/08 16:01,
+  "Granica miedzy dwoma agentami" 11/08 16:01 - za kazdym razem slot planu 16:00, czas kolejki
+  wczesniejszy, publikacja o slocie planu plus tik Schedulera. Regula `max(slot, kolejka)`
+  potwierdzona na trzech niezaleznych materialach.
+  To takze **pierwszy tekst tego systemu powstaly bez polskiej instrukcji w promptcie** - czysty
+  prompt dal czysta tresc za pierwszym razem, co potwierdza diagnoze AP-315 empirycznie.
 - Potwierdzenie zachowaniem dla D-016: przy najblizszym zatwierdzeniu materialu BEZ slotu guzik
   ma odpowiedziec "Publikacja w slocie, ktory CM zaraz przydzieli".
 
