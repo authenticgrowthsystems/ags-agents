@@ -74,7 +74,7 @@ i tak trzeba dotknac 44 miejsc, zrobienie tego raz z NOWYM tokenem kosztuje tyle
 
 **Rekomendacja: odhardkodowac przy najblizszym oknie n8n, z rotacja w tym samym przebiegu.**
 
-### Z-2. Dwadziescia gnijacych decyzji - co z nimi
+### Z-2. [ROZWIAZANE 11/08 16:47] Dwadziescia gnijacych decyzji okazalo sie piecioma
 
 Czternascie kart materialow wisi **dwanascie dni**, trzy followupy sprzedazowe dziesiec do
 czternastu, plus `#179` (lista 21 materialow X do przerobienia) jedenascie. To nie jest dlug
@@ -91,9 +91,28 @@ czytany jako fakt o swiecie, gdy jest tylko faktem o rejestrze. Konsekwencja pra
 przegladanie tej listy "na piechote" oznacza podejmowanie decyzji o rzeczach, ktore juz sie
 rozstrzygnely - czyli marnowanie jedynego zasobu, ktorego brakuje.
 
-**Rekomendacja zmieniona: NAJPIERW odczyt, ktory powie, ile z tych dwudziestu jest martwych**
-(zestawienie `agent_decisions` z aktualnym `content_items.status` per material), DOPIERO POTEM
-przeglad tego, co zostanie. Podejrzewam, ze lista skurczy sie istotnie.
+**ODCZYT WYKONANY, ZAPYTANIE ZAMKNIETE.** Zestawienie po `context->>'content_item_id'`
+(klucz, ktorego straznik uzywa do throttlingu - nie trzeba bylo niczego dopasowywac po tekscie):
+
+```
+kart 'pending': 15  |  MARTWE (material poszedl dalej): 15  |  ZYWE: 0
+```
+
+**Pietnascie na pietnascie.** Jedenascie materialow odrzuconych, cztery opublikowane.
+Naprawa w `worker._stale_approval_watch` (zamykanie PRZED otwieraniem, D-018) wdrozona
+tego samego dnia; przy pierwszym przebiegu petli log kontenera pokazal
+`wygaszone karty stale_approval: 15`, a lista otwartych decyzji nie ma juz ANI JEDNEJ takiej karty.
+
+**Co zostalo NAPRAWDE** (odczyt 16:47): dziewiec pozycji, wszystkie prawdziwe - `#162`
+(gotowiec outreach StandART, 15 dni), `#179` (21 materialow X, 12 dni) oraz siedem
+`sales_followup`, z czego trzy powstaly dzisiaj. **`#179` jest teraz czwarte od gory zamiast
+utopione wsrod czternastu falszywych** - i to bylo cale sedno tej naprawy.
+
+**Nowe zapytanie, wezsze i uczciwsze:** to nie decyzje sa problemem, tylko LEJEK.
+Cztery pozycje `qualified` maja termin nastepnego kontaktu PO TERMINIE (Wroclawska Stepownia
+30/07, StandART 29/07, adamietz.pl 28/07), trzy prospekty stoja na 10/08 20:00, a dziesiec
+czeka na PIERWSZY kontakt. **To jest kolejka sprzedazowa, nie kolejka decyzji** - i ona
+rzeczywiscie stoi.
 
 Pierwotna rekomendacja, jesli lista okaze sie zywa: **przejrzec je hurtem w jednym posiedzeniu** (wyciagne pogrupowane, z rekomendacja
 per pozycja), zamiast czternastu osobnych kart. Alternatywa uczciwa: wygasic je jawnie
