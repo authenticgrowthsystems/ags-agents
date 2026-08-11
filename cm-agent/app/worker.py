@@ -713,7 +713,33 @@ def _stale_approval_watch():
     """KANON 19/07 (zastepuje USUNIETY stan awaryjny 11c/D-F2-3b): niezatwierdzone NIGDY nie
     wychodzi samo. Material czekajacy na approve >24h = ESKALACJA Z PYTANIEM (decisions.ask,
     guziki + nauka), nie auto-zatwierdzenie. Throttle w DB: jedna otwarta/swieza decyzja per item.
-    Incydent 13-19/07: autopilot opublikowal serie niezatwierdzonych meta-postow na X i LinkedIn."""
+    Incydent 13-19/07: autopilot opublikowal serie niezatwierdzonych meta-postow na X i LinkedIn.
+
+    ZAMYKANIE PRZED OTWIERANIEM (11/08, zgloszenie z odczytu). Ten straznik zakladal karty
+    i NIC ich nigdy nie zamykalo. Odczyt produkcji: **15 kart `pending` na 15 dotyczylo materialow
+    juz rozstrzygnietych** - 11 odrzuconych, 4 OPUBLIKOWANE, w tym jeden opublikowany godzine
+    wczesniej. Lista "otwartych decyzji" pokazywala czternascie pozycji czekajacych na czlowieka,
+    a czekala zero.
+
+    To jest AP-311 od strony zapisu: wpis czytany jako fakt o swiecie, gdy jest faktem o rejestrze.
+    Rejestr, ktory tylko rosnie, po miesiacu przestaje byc lista zadan i staje sie szumem -
+    a wtedy przestaje sie go czytac razem z tym, co w nim wazne.
+
+    `expired`, nie `answered`: Tomasz nie odpowiedzial. Nie `auto`: system nie zdecydowal.
+    Pytanie po prostu przestalo byc pytaniem. Bez powiadomienia - to jest sprzatanie po sobie,
+    a nie zdarzenie warte przerywania komus dnia."""
+    wygasle = db.fetchall(
+        """SELECT d.id FROM agent_decisions d
+             JOIN content_items ci ON ci.id = (d.context->>'content_item_id')::uuid
+            WHERE d.decision_type='stale_approval' AND d.status='pending'
+              AND ci.status <> 'needs_approval'
+              AND d.context->>'content_item_id' ~ '^[0-9a-fA-F-]{36}$'""")
+    if wygasle:
+        ids = [r["id"] for r in wygasle]
+        db.execute("UPDATE agent_decisions SET status='expired', answered_at=NOW() WHERE id = ANY(%s)",
+                   (ids,))
+        print(f"[cm] wygaszone karty stale_approval (material poszedl dalej): {len(ids)}", flush=True)
+
     rows = db.fetchall(
         """SELECT id, brand_id, master_theme FROM content_items
            WHERE status='needs_approval' AND approval_requested_at IS NOT NULL

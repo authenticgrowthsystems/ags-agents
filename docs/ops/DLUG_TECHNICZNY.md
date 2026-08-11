@@ -830,3 +830,59 @@ na wzor `patches/*.cjs`, z bramka na liczbe podmian i kopia sprzed zmiany.
 **Decyzja do podjecia przy okazji:** czy rotowac token. Nie wyciekl poza serwer i maszyne
 Tomasza, wiec rotacja nie jest wymuszona - ale skoro i tak trzeba dotknac 44 wezlow,
 zrobienie tego raz z nowym tokenem kosztuje tyle samo, co ze starym.
+
+## D-018 [ZAMKNIETE 11/08/2026]: rejestr decyzji tylko rosl - karty nie wygasaly, gdy material szedl dalej
+
+**Znaleziony i zamkniety 11/08/2026**, godzine po publikacji materialu "Granica miedzy dwoma agentami".
+
+Lista OTWARTYCH DECYZJI w `stan_gry` pokazywala od dwoch tygodni czternascie kart
+"Material czeka na Twoja decyzje ponad 24h". Odczyt zestawiajacy je z aktualnym stanem
+materialu (`context->>'content_item_id'`, klucz, ktorego straznik uzywa do throttlingu):
+
+```
+kart 'pending': 15  |  MARTWE (material poszedl dalej): 15  |  ZYWE: 0
+```
+
+**Piętnascie na pietnascie martwych. Jedenascie materialow odrzuconych, CZTERY OPUBLIKOWANE** -
+w tym karta `#173` dla materialu opublikowanego **godzine wczesniej**, wiszaca 14 dni.
+
+### Przyczyna
+
+`worker._stale_approval_watch` zakladal karty przy materiale czekajacym >24 h i **nic ich nigdy
+nie zamykalo**. Material szedl dalej swoja sciezka (approve, reject, publikacja), wpis w rejestrze
+stal nietkniety. Nie bylo zadnego konsumenta zamykajacego - tak samo jak przy `next_followup_at`
+w diagnozie lejka 26/07.
+
+To **AP-311 od strony ZAPISU**: wpis czytany jako fakt o swiecie, gdy jest tylko faktem
+o rejestrze. Rejestr, ktory tylko rosnie, po miesiacu przestaje byc lista zadan i staje sie
+szumem - a wtedy przestaje sie go czytac razem z tym, co w nim wazne. Przy czternastu falszywych
+pozycjach `#179` (prawdziwe pytanie o 21 materialow X) jest nie do zauwazenia.
+
+### Naprawa
+
+Zamykanie **PRZED** otwieraniem, w tej samej funkcji, ktora karty zaklada. Karta `pending`,
+ktorej material nie jest juz `needs_approval`, dostaje `status='expired'`.
+
+- **`expired`, nie `answered`** - Tomasz nie odpowiedzial. Nie `auto` - system nie zdecydowal.
+  Pytanie przestalo byc pytaniem. Wartosc jest w slowniku od DDL 024, tylko nikt jej nie uzywal.
+- **Bez powiadomienia.** To sprzatanie po sobie, a nie zdarzenie warte przerywania komus dnia;
+  slad idzie do logu kontenera.
+- **Bramka na ksztalt uuid** przy rzutowaniu `context->>'content_item_id'` - jeden zly wpis
+  bez niej wywraca CALEGO straznika, czyli takze eskalacje niezatwierdzonych materialow.
+
+Piętnascie istniejacych kart **zamknie sie samo przy pierwszym przebiegu petli po rebuildzie** -
+nie ma osobnego SQL-a do wykonania.
+
+Zachowanie: `cm-agent/tests/test_wygasanie_decyzji.py`.
+
+### Lekcja z pisania testu do tej poprawki
+
+Asercja o kolejnosci przeszla na ZEPSUTYM kodzie (blok wygaszania wewnatrz petli daje te sama
+sekwencje zdarzen). Druga wersja, liczaca `for ` miedzy blokiem a petla, padla na ZDROWYM kodzie,
+bo w bloku stoi wyrazenie listowe `[r["id"] for r in wygasle]`. Trzecia mierzy WCIECIE i dopiero
+ona mierzy to, o co chodzilo: poziom zagniezdzenia.
+
+**Dwie zle asercje pod rzad przy jednej poprawce.** Obie wygladaly rozsadnie i obie sprawdzaly
+cos podobnego do tego, co mialy sprawdzac. To jest dokladnie ta sama klasa co AP-315 na poziomie
+testu: kontrola pyta o cos innego, niz mysli jej autor - i tylko celowe przywrocenie wady
+to pokazuje.

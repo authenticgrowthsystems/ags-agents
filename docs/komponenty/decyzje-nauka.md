@@ -2,6 +2,20 @@
 
 **STATUS GOTOWOSCI: CZESCIOWY (mechanizm LIVE; nauka mloda - progi semi-auto nieosiagniete)** (macierz: docs/GOTOWOSC_PRODUKTU.md; aktualizuj przy kazdej zmianie zachowania)
 
+## WYGASANIE KART (11/08/2026, D-018)
+
+Karta `stale_approval`, ktorej material nie jest juz `needs_approval`, dostaje `status='expired'`
+przy najblizszym przebiegu `worker._stale_approval_watch` - **zamykanie idzie PRZED otwieraniem**.
+
+Powod: przez dwa tygodnie rejestr tylko rosl. Odczyt 11/08 pokazal **15 kart `pending`
+na 15 dotyczacych materialow juz rozstrzygnietych** (11 odrzuconych, 4 opublikowane, w tym jedna
+dla materialu opublikowanego godzine wczesniej). Lista "otwartych decyzji" pokazywala czternascie
+pozycji czekajacych na czlowieka, a czekala zero - i topila w sobie `#179`, jedyne prawdziwe
+pytanie na tej liscie.
+
+`expired`, nie `answered`: czlowiek nie odpowiedzial, system nie zdecydowal, pytanie przestalo
+byc pytaniem. Bez powiadomienia - slad tylko w logu kontenera.
+
 ## Co robi
 
 Kazda decyzja operacyjna CM/subagenta, ktorej agent nie moze podjac sam, idzie
