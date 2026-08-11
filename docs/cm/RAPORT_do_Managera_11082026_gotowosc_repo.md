@@ -124,7 +124,16 @@ Historia jest mocna i prawdziwa: agent opublikowal wlasna notatke recenzyjna pod
 wlasciciela, zyla szesc dni, a naprawa nie byla czarna lista slow, tylko bramka wyjscia
 i pytanie o GATUNEK tekstu. Zgodnie z kanonem nie pisze tresci sam.
 
-**Pytanie: przygotowac fakty do masterpromptu CM teraz, czy po publikacji o 16:00?**
+Publikacja o 16:01 dolozyla do tej historii ostatni element i **jest nim dowod, nie deklaracja**:
+czysty prompt dal czysta tresc za pierwszym razem, a post o granicy miedzy agentami opisuje
+awarie 29/07-03/08, w ktorej dwa agenty czekaly na siebie cztery dni. System opublikowal lekcje,
+ktora sam przerobil na sobie.
+
+**Pytanie: przygotowac fakty do masterpromptu CM?** Jesli tak, potrzebuje jednej decyzji
+brzegowej: **czy wpadka z 04/08 wchodzi do materialu publicznego.** Moja rekomendacja -
+NIE w tresci publicznej (zgodnie z Twoim rozstrzygnieciem z 10/08: tamto bylo zaprzeczeniem
+obietnicy produktu), ale TAK jako powod, dla ktorego bramki powstaly, opisany bez podawania
+tresci tamtego posta.
 
 ---
 
