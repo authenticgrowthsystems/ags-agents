@@ -780,3 +780,53 @@ czytac definicje ZYWA (tak robia wszystkie skrypty w `patches/`), a nie eksport.
 ta sama pomylke - ja zrobilem ja dwa razy w ciagu jednej sesji, najpierw zakladajac, ze napis jest
 w n8n (trafnie), potem ze jednak w Pythonie (blednie, bo `grep` po "za chwil" trafil w cztery INNE
 zdania w `cm-agent/app/`). Odczyt precyzyjny rozstrzygnal; odczyt zgrubny wprowadzil w blad.
+
+## D-017: Token bota Telegrama wpisany NA SZTYWNO w 44 wezlach HITL Handlera
+
+**Zapisany 11/08/2026** (skan przed pierwszym re-eksportem workflow do repo).
+
+Kanon tego projektu, powtorzony w trzech miejscach (`SYSTEM_DATAFLOW`, `DEPLOY_CHECKLIST`,
+`komponenty/n8n-transport`), brzmi: **sekrety wylacznie w `app_secrets`, zero literalow
+w definicjach n8n**. Odczyt zywej definicji pokazal, ze dla HITL Handlera to jest ZASADA,
+a nie stan faktyczny:
+
+| workflow | literaly sekretow w `parameters` |
+|---|---|
+| `AGS Scheduler v1` | **0** (de-hardkod 02/07, zrobiony i utrzymany) |
+| `AGS Lacznik Chat Tools` | **0** |
+| **`AGS HITL Handler v1.0`** | **44** - token w `parameters.url`, adres `api.telegram.org/bot<TOKEN>/...` |
+
+**Poswiadczenia n8n nie sa problemem** - `node.credentials` to referencje `{id, name}`.
+Problem jest w PARAMETRZE: adres HTTP z tokenem w sciezce.
+
+### Czym to grozi
+
+1. **Kazdy eksport workflow do repo publikuje dzialajacy token.** Dokumentacja z 10/08 podawala
+   na to gotowa komende (`curl > plik`) razem ze zdaniem, ze plik jest bezpieczny do commitu.
+   Gdyby ktos ja wykonal, token trafilby na publiczny GitHub. **Sprawdzone: token NIE JEST
+   w historii gita** - ani w zacommitowanych eksportach, ani w zadnym wczesniejszym commicie.
+2. **Rotacja tokenu wymaga edycji 44 wezlow**, a nie jednego wiersza w `app_secrets`.
+   To zamienia piecio-minutowa czynnosc w okno serwisowe na jedynym interfejsie Tomasza.
+3. Kopie robocze patchow (`bk_*.json`) sa surowymi zrzutami, wiec **zawieraja token bez maski**.
+   Regula `.gitignore` na `n8n-workflows/**/bk_*.json` robi od 11/08 takze robote bezpieczenstwa,
+   nie tylko porzadkowa - i jest tam o tym komentarz.
+
+### Co zrobiono 11/08 (obejscie, NIE naprawa)
+
+`n8n-workflows/eksport-do-repo.cjs`: eksport maskuje znane wzorce sekretow i **odmawia zapisu**,
+gdy po maskowaniu zostanie cokolwiek podejrzanego (bramka pada zamknieta, AP-314). Trzy zywe
+workflow sa dzieki temu w repo aktualne i czyste: HITL 254 wezly z 44 placeholderami
+`<TELEGRAM_BOT_TOKEN>`, Scheduler 10, Lacznik 11.
+
+**To chroni REPOZYTORIUM, nie produkcje.** Token nadal siedzi w definicji.
+
+### Docelowo
+
+Token wychodzi z `parameters.url` do poswiadczenia n8n albo do odczytu z `app_secrets`
+w locie - dokladnie tak, jak zrobiono w Schedulerze 02/07. 44 wezly, wiec skrypt patchujacy
+na wzor `patches/*.cjs`, z bramka na liczbe podmian i kopia sprzed zmiany.
+**Osobne okno**: HITL Handler to jedyny interfejs Tomasza, a po PUT trzeba deactivate+activate.
+
+**Decyzja do podjecia przy okazji:** czy rotowac token. Nie wyciekl poza serwer i maszyne
+Tomasza, wiec rotacja nie jest wymuszona - ale skoro i tak trzeba dotknac 44 wezlow,
+zrobienie tego raz z nowym tokenem kosztuje tyle samo, co ze starym.

@@ -1,10 +1,10 @@
 {
-  "updatedAt": "2026-06-11T09:31:02.515Z",
+  "updatedAt": "2026-08-03T19:38:39.394Z",
   "createdAt": "2026-06-11T09:30:08.505Z",
   "id": "x1jJEbcWAe3FnpCa",
   "name": "AGS Scheduler v1",
   "description": null,
-  "active": false,
+  "active": true,
   "isArchived": false,
   "nodes": [
     {
@@ -30,7 +30,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT id, content, platform FROM post_queue WHERE status='scheduled' AND scheduled_for <= NOW() ORDER BY scheduled_for ASC LIMIT 5;",
+        "query": "SELECT id, content, platform, media FROM post_queue WHERE status='scheduled' AND scheduled_for <= NOW() ORDER BY scheduled_for ASC LIMIT 5;",
         "options": {}
       },
       "id": "n-fetch-due",
@@ -50,7 +50,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const crypto = require(\"crypto\");\nconst https = require(\"https\");\nconst tweetText = ($json.content || '').toString();\nconst postId = $json.id;\nif (!tweetText) { return [{ json: { skipped: true, postId, error: 'empty content' } }]; }\n\nconst consumerKey = \"__X_CONSUMER_KEY__\";\nconst consumerSecret = \"__X_CONSUMER_SECRET__\";\nconst accessToken = \"__X_ACCESS_TOKEN__\";\nconst accessTokenSecret = \"__X_ACCESS_TOKEN_SECRET__\";\n\nconst method = \"POST\";\nconst url = \"https://api.twitter.com/2/tweets\";\nconst oauthTimestamp = Math.floor(Date.now() / 1000).toString();\nconst oauthNonce = crypto.randomBytes(16).toString(\"hex\");\n\nconst oauthParams = {\n  oauth_consumer_key: consumerKey,\n  oauth_nonce: oauthNonce,\n  oauth_signature_method: \"HMAC-SHA1\",\n  oauth_timestamp: oauthTimestamp,\n  oauth_token: accessToken,\n  oauth_version: \"1.0\"\n};\n\nconst sortedParams = Object.keys(oauthParams).sort().map(k =>\n  `${encodeURIComponent(k)}=${encodeURIComponent(oauthParams[k])}`\n).join(\"&\");\n\nconst sigBase = `${method}&${encodeURIComponent(url)}&${encodeURIComponent(sortedParams)}`;\nconst sigKey = `${encodeURIComponent(consumerSecret)}&${encodeURIComponent(accessTokenSecret)}`;\nconst signature = crypto.createHmac(\"sha1\", sigKey).update(sigBase).digest(\"base64\");\n\nconst authHeader = \"OAuth \" + Object.keys(oauthParams).sort().map(k =>\n  `${encodeURIComponent(k)}=\"${encodeURIComponent(oauthParams[k])}\"`\n).join(\", \") + `, oauth_signature=\"${encodeURIComponent(signature)}\"`;\n\nconst body = JSON.stringify({ text: tweetText });\n\nconst result = await new Promise((resolve, reject) => {\n  const req = https.request({\n    hostname: \"api.twitter.com\",\n    path: \"/2/tweets\",\n    method: \"POST\",\n    headers: {\n      \"Authorization\": authHeader,\n      \"Content-Type\": \"application/json\",\n      \"Content-Length\": Buffer.byteLength(body)\n    }\n  }, (res) => {\n    let data = \"\";\n    res.on(\"data\", chunk => data += chunk);\n    res.on(\"end\", () => resolve({ status: res.statusCode, body: JSON.parse(data) }));\n  });\n  req.on(\"error\", reject);\n  req.write(body);\n  req.end();\n});\n\nconst tweetId = result.body?.data?.id || \"\";\nconst tweetUrl = tweetId ? `https://x.com/i/web/status/${tweetId}` : \"\";\n\nreturn [{ json: { tweet_id: tweetId, tweet_url: tweetUrl, tweet_text: tweetText, postId: postId, x_status: result.status, ok: (result.status === 200 || result.status === 201) } }];"
+        "jsCode": "// Scheduler \"Publish To X\" v3 (media + NITKI, 06/07): kontrakt wyjscia 1:1 + media_ids/media_errors/thread_ids.\n// Nitka: content dzielony po liniach ===TWEET===, kazdy kolejny post = reply do poprzedniego.\nconst rawText = ($json.content || '').toString();\nconst postId = $json.id;\nif (!rawText.trim()) { return [{ json: { skipped: true, postId, error: 'empty content' } }]; }\nconst K0 = $('Get Keys').first().json;\nconst K = { ck: K0.ck, cs: K0.cs, at: K0.at, ats: K0.ats };\nconst TG = K0.tg || '';\n\n// WSPOLNE HELPERY MEDIA v2 (21/07/2026, docs.x.com media-upload-chunked): Telegram getFile/download\n// -> X v2 POST /2/media/upload. KONTRAKT: WSZYSTKIE parametry (command/media_type/total_bytes/\n// media_category/media_id/segment_index) w multipart/form-data BODY - nie w query stringu\n// (query dawal INIT 400 \"query parameter [media_type] is not one of []\"). STATUS = GET z query.\n// OAuth1: przy multipart sygnatura obejmuje wylacznie oauth_* (body poza sygnatura).\n// Fakty: docs/research/X_MEDIA_API_2026 (v1.1 DEAD, v2 chunked, OAuth1 dziala, Telegram 20MB getFile).\nfunction _enc(s){return encodeURIComponent(s);}\nfunction oauthAuth(method, url, K, extraParams){\n  const crypto=require(\"crypto\");\n  const op={oauth_consumer_key:K.ck,oauth_nonce:crypto.randomBytes(16).toString(\"hex\"),\n    oauth_signature_method:\"HMAC-SHA1\",oauth_timestamp:Math.floor(Date.now()/1000).toString(),\n    oauth_token:K.at,oauth_version:\"1.0\"};\n  const all=Object.assign({},op,extraParams||{});\n  const sorted=Object.keys(all).sort().map(function(k){return _enc(k)+\"=\"+_enc(all[k]);}).join(\"&\");\n  const sigBase=method+\"&\"+_enc(url)+\"&\"+_enc(sorted);\n  const sig=require(\"crypto\").createHmac(\"sha1\",_enc(K.cs)+\"&\"+_enc(K.ats)).update(sigBase).digest(\"base64\");\n  return \"OAuth \"+Object.keys(op).sort().map(function(k){return _enc(k)+'=\"'+_enc(op[k])+'\"';}).join(\", \")\n    +', oauth_signature=\"'+_enc(sig)+'\"';\n}\nfunction _req(opts, bodyBuf){\n  const https=require(\"https\");\n  return new Promise(function(resolve,reject){\n    const r=https.request(opts,function(res){\n      const d=[];res.on(\"data\",function(c){d.push(c);});\n      res.on(\"end\",function(){const buf=Buffer.concat(d);let j={};\n        try{j=JSON.parse(buf.toString(\"utf8\"));}catch(e){}\n        resolve({status:res.statusCode,json:j,buf:buf});});});\n    r.on(\"error\",reject); if(bodyBuf){r.write(bodyBuf);} r.end();});\n}\nasync function tgFetch(tg, fileId){\n  const gf=await _req({hostname:\"api.telegram.org\",path:\"/bot\"+tg+\"/getFile?file_id=\"+_enc(fileId),method:\"GET\"});\n  const fp=gf.json&&gf.json.result&&gf.json.result.file_path; if(!fp){return null;}\n  const dl=await _req({hostname:\"api.telegram.org\",path:\"/file/bot\"+tg+\"/\"+fp,method:\"GET\"});\n  if(dl.status!==200||!dl.buf||!dl.buf.length){return null;}\n  let mime=\"image/jpeg\";\n  if(fp.endsWith(\".png\")){mime=\"image/png\";}\n  else if(fp.endsWith(\".webp\")){mime=\"image/webp\";}\n  else if(fp.endsWith(\".mp4\")||fp.endsWith(\".mov\")){mime=\"video/mp4\";}\n  return {buf:dl.buf,mime:mime};\n}\nfunction _sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}\nfunction _mid(j){return (j&&((j.data&&(j.data.id||j.data.media_id))||j.media_id_string))||null;}\nfunction _mpb(fields, fileBuf){\n  const bnd=\"agsb\"+Date.now()+Math.floor(Math.random()*1e6);\n  const parts=[];\n  for(const k of Object.keys(fields)){\n    parts.push(Buffer.from(\"--\"+bnd+\"\\r\\nContent-Disposition: form-data; name=\\\"\"+k+\"\\\"\\r\\n\\r\\n\"+fields[k]+\"\\r\\n\"));\n  }\n  if(fileBuf){\n    parts.push(Buffer.from(\"--\"+bnd+\"\\r\\nContent-Disposition: form-data; name=\\\"media\\\"; filename=\\\"m\\\"\\r\\nContent-Type: application/octet-stream\\r\\n\\r\\n\"));\n    parts.push(fileBuf); parts.push(Buffer.from(\"\\r\\n\"));\n  }\n  parts.push(Buffer.from(\"--\"+bnd+\"--\\r\\n\"));\n  return {buf:Buffer.concat(parts), ct:\"multipart/form-data; boundary=\"+bnd};\n}\nasync function xUpload(K, media){\n  const isVideo=media.mime.indexOf(\"video\")===0;\n  // v3 (22/07): chunked przez pod-sciezki initialize/append/finalize (kontrakt docs.x.com;\n  // /2/media/upload BEZ pod-sciezki to prosty upload i INIT tam dawal 400 \"Missing media field\").\n  const ib=JSON.stringify({media_type:media.mime,total_bytes:media.buf.length,\n                           media_category:isVideo?\"tweet_video\":\"tweet_image\"});\n  const iu=\"https://api.x.com/2/media/upload/initialize\";\n  const ir=await _req({hostname:\"api.x.com\",path:\"/2/media/upload/initialize\",method:\"POST\",\n    headers:{Authorization:oauthAuth(\"POST\",iu,K,null),\"Content-Type\":\"application/json\",\n             \"Content-Length\":Buffer.byteLength(ib)}},Buffer.from(ib));\n  const mid=_mid(ir.json);\n  if(!mid){return {error:\"INIT \"+ir.status+\" \"+JSON.stringify(ir.json).slice(0,180)};}\n  // APPEND w kawalkach po 4MB (wideo do ~20MB z Telegrama = do 5 kawalkow)\n  const CH=4*1024*1024;\n  for(let seg=0; seg*CH<media.buf.length; seg++){\n    const part=media.buf.slice(seg*CH,(seg+1)*CH);\n    const ap=_mpb({segment_index:String(seg)},part);\n    const au=\"https://api.x.com/2/media/upload/\"+mid+\"/append\";\n    const ar=await _req({hostname:\"api.x.com\",path:\"/2/media/upload/\"+mid+\"/append\",method:\"POST\",\n      headers:{Authorization:oauthAuth(\"POST\",au,K,null),\"Content-Type\":ap.ct,\"Content-Length\":ap.buf.length}},ap.buf);\n    if(ar.status<200||ar.status>=300){return {error:\"APPEND seg\"+seg+\" \"+ar.status+\" \"+JSON.stringify(ar.json).slice(0,150)};}\n  }\n  const fu=\"https://api.x.com/2/media/upload/\"+mid+\"/finalize\";\n  const fr=await _req({hostname:\"api.x.com\",path:\"/2/media/upload/\"+mid+\"/finalize\",method:\"POST\",\n    headers:{Authorization:oauthAuth(\"POST\",fu,K,null),\"Content-Length\":0}});\n  if(fr.status<200||fr.status>=300){return {error:\"FINALIZE \"+fr.status+\" \"+JSON.stringify(fr.json).slice(0,180)};}\n  // wideo: przetwarzanie asynchroniczne - poll STATUS do succeeded (max ~100s)\n  let pi=(fr.json&&(fr.json.processing_info||(fr.json.data&&fr.json.data.processing_info)))||null;\n  let waited=0;\n  while(pi&&pi.state&&pi.state!==\"succeeded\"){\n    if(pi.state===\"failed\"){return {error:\"processing failed\"};}\n    const wait=Math.min((pi.check_after_secs||3),10)*1000;\n    if(waited>100000){return {error:\"processing timeout\"};}\n    await _sleep(wait); waited+=wait;\n    const sp={command:\"STATUS\",media_id:String(mid)};\n    const sq=Object.keys(sp).map(function(k){return _enc(k)+\"=\"+_enc(sp[k]);}).join(\"&\");\n    const sr=await _req({hostname:\"api.x.com\",path:\"/2/media/upload?\"+sq,method:\"GET\",\n      headers:{Authorization:oauthAuth(\"GET\",\"https://api.x.com/2/media/upload\",K,sp)}});\n    pi=(sr.json&&(sr.json.processing_info||(sr.json.data&&sr.json.data.processing_info)))||null;\n    if(!pi){break;}\n  }\n  return {media_id:String(_mid(fr.json)||mid)};\n}\nasync function collectMediaIds(K, tg, mediaField){\n  let list=mediaField;\n  if(typeof list===\"string\"){try{list=JSON.parse(list);}catch(e){list=[];}}\n  if(!Array.isArray(list)){list=[];}\n  const ids=[],errs=[];\n  for(const m of list.slice(0,4)){\n    if(!(m&&m.file_id)){continue;}\n    if(!tg){errs.push(\"brak tg tokena\");continue;}\n    const dl=await tgFetch(tg,m.file_id);\n    if(!dl){errs.push(\"tg download fail\");continue;}\n    const up=await xUpload(K,dl);\n    if(up.media_id){ids.push(up.media_id);}else{errs.push(up.error||\"upload fail\");}\n  }\n  return {ids:ids,errs:errs};\n}\n\n\nasync function postTweet(text, mediaIds, replyTo) {\n  const payload = { text: text };\n  if (mediaIds && mediaIds.length) { payload.media = { media_ids: mediaIds }; }\n  if (replyTo) { payload.reply = { in_reply_to_tweet_id: replyTo }; }\n  const body = JSON.stringify(payload);\n  const auth = oauthAuth(\"POST\", \"https://api.twitter.com/2/tweets\", K, null);\n  return await _req({ hostname: \"api.twitter.com\", path: \"/2/tweets\", method: \"POST\",\n    headers: { \"Authorization\": auth, \"Content-Type\": \"application/json\", \"Content-Length\": Buffer.byteLength(body) } },\n    Buffer.from(body));\n}\n\nconst mediaRes = await collectMediaIds(K, TG, $json.media);\nconst parts = rawText.split(/\\n?\\s*===TWEET===\\s*\\n?/).map(function(s){return s.trim();}).filter(Boolean);\nconst threadIds = [];\nlet firstStatus = 0;\nfor (let i = 0; i < parts.length; i++) {\n  // media tylko na pierwszym poscie nitki\n  const r = await postTweet(parts[i], i === 0 ? mediaRes.ids : [], threadIds.length ? threadIds[threadIds.length - 1] : null);\n  if (i === 0) { firstStatus = r.status; }\n  const tid = (r.json && r.json.data && r.json.data.id) || \"\";\n  if (!tid) { break; }\n  threadIds.push(tid);\n}\nconst tweetId = threadIds[0] || \"\";\nconst tweetUrl = tweetId ? (\"https://x.com/i/web/status/\" + tweetId) : \"\";\nreturn [{ json: { tweet_id: tweetId, tweet_url: tweetUrl, tweet_text: parts[0] || rawText, postId: postId,\n  x_status: firstStatus, ok: (firstStatus === 200 || firstStatus === 201) && threadIds.length === parts.length,\n  media_ids: mediaRes.ids, media_errors: mediaRes.errs, thread_ids: threadIds, thread_len: parts.length } }];\n"
       },
       "id": "n-publish-x",
       "name": "Publish To X",
@@ -67,7 +67,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "UPDATE post_queue SET status = CASE WHEN {{ $json.ok }} THEN 'published' ELSE 'failed' END, updated_at=NOW() WHERE id = {{ $json.postId }};",
+        "query": "UPDATE post_queue SET status = CASE WHEN {{ $json.ok }} THEN 'published' ELSE 'failed' END, updated_at=NOW() WHERE id = {{ $json.postId }};\nINSERT INTO published_posts (platform, brand, content, topic, post_url, post_id, published_at, content_item_id, metadata)\nSELECT pq.platform, pq.brand, pq.content, pq.topic, '{{ $json.tweet_url }}', '{{ $json.tweet_id }}', NOW(), pq.content_item_id, '{\"source\":\"scheduler\"}'::jsonb\nFROM post_queue pq WHERE pq.id = {{ $json.postId }} AND {{ $json.ok }};\nINSERT INTO agent_messages (from_agent_id, to_agent_id, message_type, payload, status)\nSELECT (SELECT agent_id FROM agent_registry WHERE agent_name='x-agent'),\n       (SELECT agent_id FROM agent_registry WHERE agent_name='content-manager'),\n       'response',\n       jsonb_build_object('channel', pq.platform, 'ok', {{ $json.ok }}, 'tweet_url', '{{ $json.tweet_url }}', 'content_item_id', pq.content_item_id::text, 'pq_id', pq.id, 'source', 'scheduler'),\n       'unread'\nFROM post_queue pq\nWHERE pq.id = {{ $json.postId }}\n  AND (SELECT agent_id FROM agent_registry WHERE agent_name='x-agent') IS NOT NULL;\nUPDATE content_items ci SET status='published'\nWHERE ci.id = (SELECT content_item_id FROM post_queue WHERE id = {{ $json.postId }})\n  AND ci.status='handed_off'\n  AND NOT EXISTS (SELECT 1 FROM post_queue q WHERE q.content_item_id=ci.id AND q.status IN ('review','scheduled','queued','dispatching'));",
         "options": {}
       },
       "id": "n-mark-pub",
@@ -88,7 +88,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+        "url": "=https://api.telegram.org/bot{{ $('Get Keys').first().json.tg }}/sendMessage",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ chat_id: 2106351328, text: ($('Publish To X').item.json.ok ? '\\u2705 Opublikowano zaplanowany post:\\n' + $('Publish To X').item.json.tweet_url : '\\u26a0\\ufe0f Nie udalo sie opublikowac zaplanowanego posta (status ' + $('Publish To X').item.json.x_status + ')') }) }}",
@@ -109,6 +109,119 @@
         880,
         0
       ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT max(CASE WHEN key='x_consumer_key' THEN value END) AS ck, max(CASE WHEN key='x_consumer_secret' THEN value END) AS cs, max(CASE WHEN key='x_access_token' THEN value END) AS at, max(CASE WHEN key='x_access_token_secret' THEN value END) AS ats, max(CASE WHEN key='telegram_bot_token' THEN value END) AS tg, max(CASE WHEN key='linkedin_access_token' THEN value END) AS li_token, max(CASE WHEN key='linkedin_author_urn' THEN value END) AS li_author FROM app_secrets;",
+        "options": {}
+      },
+      "id": "getkeys01",
+      "name": "Get Keys",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        180,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "rp1",
+              "leftValue": "={{ $json.platform }}",
+              "rightValue": "x",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "routeplat1",
+      "name": "Route Platform",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Scheduler \"Publish To LinkedIn\" (22/07): kanon 'zatwierdzone publikuje sie ZAWSZE'\n// wraca na LinkedIn PRZEZ SCHEDULER. Kod przeniesiony 1:1 z Subagent LinkedIn Publisher v2\n// (registerUpload feedshare-image -> PUT -> ugcPosts). Kontrakt wyjscia jak Publish To X.\nconst K0=$('Get Keys').first().json;\nconst token=K0.li_token, author=K0.li_author, TG=K0.tg||'';\nconst text=($json.content||'').toString();\nconst postId=$json.id;\nif(!text.trim()){ return [{json:{ok:false,postId:postId,error:'empty content'}}]; }\nif(!token||!author){ return [{json:{ok:false,postId:postId,error:'missing linkedin_access_token/linkedin_author_urn in app_secrets'}}]; }\nconst https=require('https');\nfunction req(opts, bodyBuf){\n  return new Promise(function(resolve,reject){\n    const r=https.request(opts,function(res){\n      const d=[];res.on('data',function(c){d.push(c);});\n      res.on('end',function(){const buf=Buffer.concat(d);let j={};\n        try{j=JSON.parse(buf.toString('utf8'));}catch(e){}\n        resolve({status:res.statusCode,json:j,buf:buf,hdr:res.headers});});});\n    r.on('error',reject); if(bodyBuf){r.write(bodyBuf);} r.end();});\n}\nasync function tgFetch(fileId){\n  if(!TG){return null;}\n  const gf=await req({hostname:'api.telegram.org',path:'/bot'+TG+'/getFile?file_id='+encodeURIComponent(fileId),method:'GET'});\n  const fp=gf.json&&gf.json.result&&gf.json.result.file_path; if(!fp){return null;}\n  const dl=await req({hostname:'api.telegram.org',path:'/file/bot'+TG+'/'+fp,method:'GET'});\n  if(dl.status!==200||!dl.buf||!dl.buf.length){return null;}\n  return dl.buf;\n}\nasync function liUpload(buf, isVideo){\n  const recipe=isVideo?'urn:li:digitalmediaRecipe:feedshare-video':'urn:li:digitalmediaRecipe:feedshare-image';\n  const regBody=JSON.stringify({registerUploadRequest:{recipes:[recipe],\n    owner:author,serviceRelationships:[{relationshipType:'OWNER',identifier:'urn:li:userGeneratedContent'}]}});\n  const reg=await req({hostname:'api.linkedin.com',path:'/v2/assets?action=registerUpload',method:'POST',\n    headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json',\n             'X-Restli-Protocol-Version':'2.0.0','Content-Length':Buffer.byteLength(regBody)}},Buffer.from(regBody));\n  const v=reg.json&&reg.json.value; if(!v){return {error:'registerUpload '+reg.status};}\n  const asset=v.asset;\n  const mech=v.uploadMechanism&&v.uploadMechanism['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'];\n  const up=mech&&mech.uploadUrl; if(!(asset&&up)){return {error:'no uploadUrl'};}\n  const mu=up.match(/^https:\\/\\/([^\\/]+)(\\/.*)$/); if(!mu){return {error:'bad uploadUrl'};}\n  const put=await req({hostname:mu[1],path:mu[2],method:'PUT',\n    headers:{'Authorization':'Bearer '+token,'Content-Type':'application/octet-stream','Content-Length':buf.length}},buf);\n  if(put.status<200||put.status>=300){return {error:'PUT '+put.status};}\n  return {asset:asset};\n}\nlet mediaList=$json.media; if(typeof mediaList==='string'){try{mediaList=JSON.parse(mediaList);}catch(e){mediaList=[];}}\nif(!Array.isArray(mediaList)){mediaList=[];}\nconst vids=mediaList.filter(function(m){return m&&m.file_id&&m.kind==='video';});\nconst pics=mediaList.filter(function(m){return m&&m.file_id&&m.kind!=='video';});\nconst useList=vids.length?[vids[0]]:pics.slice(0,4);\nconst isVideoPost=vids.length>0;\nconst assets=[],merrs=[];\nfor(const md of useList){\n  const buf=await tgFetch(md.file_id); if(!buf){merrs.push('tg download fail');continue;}\n  const upd=await liUpload(buf,isVideoPost); if(upd.asset){assets.push(upd.asset);}else{merrs.push(upd.error||'upload fail');}\n}\nconst share={shareCommentary:{text:text},shareMediaCategory:assets.length?(isVideoPost?'VIDEO':'IMAGE'):'NONE'};\nif(assets.length){share.media=assets.map(function(a){return {status:'READY',media:a};});}\nconst payload=JSON.stringify({author:author,lifecycleState:'PUBLISHED',\n  specificContent:{'com.linkedin.ugc.ShareContent':share},\n  visibility:{'com.linkedin.ugc.MemberNetworkVisibility':'PUBLIC'}});\nconst result=await req({hostname:'api.linkedin.com',path:'/v2/ugcPosts',method:'POST',\n  headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json',\n           'X-Restli-Protocol-Version':'2.0.0','Content-Length':Buffer.byteLength(payload)}},Buffer.from(payload));\nconst urn=(result.json&&result.json.id)||(result.hdr&&result.hdr['x-restli-id'])||'';\nconst url=urn?('https://www.linkedin.com/feed/update/'+urn):'';\nreturn [{json:{ok:(result.status===201||result.status===200),postId:postId,\n  tweet_id:String(urn),tweet_url:url,tweet_text:text.slice(0,120),x_status:result.status,\n  li_err:(result.json&&result.json.message)||null,media_assets:assets,media_errors:merrs}}];"
+      },
+      "id": "lipub1",
+      "name": "Publish To LinkedIn (Scheduler)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE post_queue SET status = CASE WHEN {{ $json.ok }} THEN 'published' ELSE 'failed' END, updated_at=NOW() WHERE id = {{ $json.postId }};\nINSERT INTO published_posts (platform, brand, content, topic, post_url, post_id, published_at, content_item_id, metadata)\nSELECT pq.platform, pq.brand, pq.content, pq.topic, '{{ $json.tweet_url }}', '{{ $json.tweet_id }}', NOW(), pq.content_item_id, '{\"source\":\"scheduler\"}'::jsonb\nFROM post_queue pq WHERE pq.id = {{ $json.postId }} AND {{ $json.ok }};\nINSERT INTO agent_messages (from_agent_id, to_agent_id, message_type, payload, status)\nSELECT (SELECT agent_id FROM agent_registry WHERE agent_name='x-agent'),\n       (SELECT agent_id FROM agent_registry WHERE agent_name='content-manager'),\n       'response',\n       jsonb_build_object('channel', pq.platform, 'ok', {{ $json.ok }}, 'tweet_url', '{{ $json.tweet_url }}', 'content_item_id', pq.content_item_id::text, 'pq_id', pq.id, 'source', 'scheduler'),\n       'unread'\nFROM post_queue pq\nWHERE pq.id = {{ $json.postId }}\n  AND (SELECT agent_id FROM agent_registry WHERE agent_name='x-agent') IS NOT NULL;\nUPDATE content_items ci SET status='published'\nWHERE ci.id = (SELECT content_item_id FROM post_queue WHERE id = {{ $json.postId }})\n  AND ci.status='handed_off'\n  AND NOT EXISTS (SELECT 1 FROM post_queue q WHERE q.content_item_id=ci.id AND q.status IN ('review','scheduled','queued','dispatching'));",
+        "options": {}
+      },
+      "id": "limark1",
+      "name": "Mark Published LI",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        660,
+        220
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "aHDeZ1ywfPihvVxH",
+          "name": "PostgreSQL CRD ags-agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $('Get Keys').first().json.tg }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: 2106351328, text: ($('Publish To LinkedIn (Scheduler)').item.json.ok ? '\\u2705 Opublikowano zaplanowany post LinkedIn:\\n' + $('Publish To LinkedIn (Scheduler)').item.json.tweet_url : '\\u26a0\\ufe0f Nie udalo sie opublikowac posta LinkedIn (status ' + $('Publish To LinkedIn (Scheduler)').item.json.x_status + ': ' + ($('Publish To LinkedIn (Scheduler)').item.json.li_err || 'brak szczegolow') + ')') }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "liconf1",
+      "name": "LI Confirm",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        220
+      ]
     }
   ],
   "connections": {
@@ -116,7 +229,7 @@
       "main": [
         [
           {
-            "node": "Fetch Due",
+            "node": "Get Keys",
             "type": "main",
             "index": 0
           }
@@ -127,7 +240,7 @@
       "main": [
         [
           {
-            "node": "Publish To X",
+            "node": "Route Platform",
             "type": "main",
             "index": 0
           }
@@ -155,38 +268,79 @@
           }
         ]
       ]
+    },
+    "Get Keys": {
+      "main": [
+        [
+          {
+            "node": "Fetch Due",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Platform": {
+      "main": [
+        [
+          {
+            "node": "Publish To X",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Publish To LinkedIn (Scheduler)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish To LinkedIn (Scheduler)": {
+      "main": [
+        [
+          {
+            "node": "Mark Published LI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Published LI": {
+      "main": [
+        [
+          {
+            "node": "LI Confirm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
     "executionOrder": "v1"
   },
-  "staticData": null,
+  "staticData": {
+    "node:Every Minute": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    }
+  },
   "meta": null,
   "nodeGroups": [],
   "pinData": null,
-  "versionId": "9d93f540-63bc-4c2c-91e4-015e433c11f6",
-  "activeVersionId": null,
-  "versionCounter": 2,
-  "triggerCount": 0,
-  "shared": [
-    {
-      "updatedAt": "2026-06-11T09:30:08.505Z",
-      "createdAt": "2026-06-11T09:30:08.505Z",
-      "role": "workflow:owner",
-      "workflowId": "x1jJEbcWAe3FnpCa",
-      "projectId": "AVGJSTgEgAPPwXHX",
-      "project": {
-        "updatedAt": "2026-04-18T08:31:32.266Z",
-        "createdAt": "2026-04-18T08:22:28.807Z",
-        "id": "AVGJSTgEgAPPwXHX",
-        "name": "Tomasz Nawrocki <mr.tomasz.nawrocki@gmail.com>",
-        "type": "personal",
-        "icon": null,
-        "description": null,
-        "creatorId": "c804b804-01e6-4f71-83c2-0494b200789b"
-      }
-    }
-  ],
-  "tags": [],
-  "activeVersion": null
+  "versionId": "15da1a31-7e72-4b44-b2d7-8f6e2e7666f2",
+  "activeVersionId": "15da1a31-7e72-4b44-b2d7-8f6e2e7666f2",
+  "versionCounter": 10,
+  "triggerCount": 1,
+  "sourceWorkflowId": null,
+  "tags": []
 }

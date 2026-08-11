@@ -56,3 +56,8 @@ docs/research/prospekci/MATERIAL_DLA_PIOTRA_*.md
 # w drzewie roboczym i KAZDA sesja widziala je jako "niezacommitowana praca", co za kazdym
 # razem kosztowalo odczyt i decyzje. Kopia z okna nalezy do katalogu roboczego, nie do repo.
 n8n-workflows/**/bk_*.json
+# ^ UWAGA 11/08: ta regula robi teraz takze robote BEZPIECZENSTWA, nie tylko porzadkowa.
+# Kopia `bk_hitl_d016_*.json` zawiera 88 wystapien ZYWEGO tokenu bota Telegrama, bo jest
+# surowym zrzutem definicji sprzed patcha (D-017). Eksporty w repo sa maskowane
+# (`n8n-workflows/eksport-do-repo.cjs`), kopie robocze NIE SA. Nie przenos ich, nie wysylaj
+# i nie wklejaj - zyja tylko na dysku i tak ma zostac.

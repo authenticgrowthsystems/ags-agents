@@ -72,17 +72,25 @@ jest definicja w n8n. Wszystkie skrypty w `patches/` czytaja ZYWA definicje prze
 powod, dla ktorego dzialaja mimo dryfu - `d016-*` idzie krok dalej i nie szuka wezla nawet
 po nazwie, tylko po tresci, bo nazwa tez mogla sie zmienic.
 
-**Re-eksport zywego workflow do repo** (Bash, ze srodowiskiem jak przy patchach):
+**Re-eksport zywego workflow do repo** - patrz nizej. **NIE rob tego zwyklym `curl > plik`.**
+Poprzednia wersja tego dokumentu podawala wlasnie taka komende razem ze zdaniem, ze plik jest
+bezpieczny do commitu:
 
-```bash
-curl -s -H "X-N8N-API-KEY: $N8N_API_KEY" "$N8N_BASE_URL/api/v1/workflows/U5pUZjy2yAhR1sWg" \
-  | python -m json.tool > n8n-workflows/x-agent/ags-hitl-handler-v1.json
-```
+> **TO ZDANIE BYLO NIEPRAWDZIWE (napisane 10/08, obalone 11/08).** Twierdzilem, ze eksport
+> niesie tylko NAZWY poswiadczen i jest bezpieczny do commitu. Skan przed pierwszym zapisem
+> pokazal w zywym HITL Handlerze **44 wystapienia tokenu bota Telegrama wpisanego na sztywno
+> w `parameters.url`**. Zwykly `curl > plik` wpisalby dzialajacy token do publicznego repo.
+> Token nie byl wczesniej w historii gita - sprawdzone - i ma tam nie trafic.
 
-Identyfikatory pozostalych: Scheduler `x1jJEbcWAe3FnpCa`, Lacznik `yxJUJmZpSUe0tw9K`.
-**Eksport ZAWIERA nazwy poswiadczen, ale nie ich wartosci** - sekrety zyja w `app_secrets`
-i w credentialach n8n, wiec plik jest bezpieczny do commitu. Przejrzyj diff przed zapisem,
-bo `webhookId` zmienia sie przy imporcie i produkuje szum.
+**Poswiadczenia n8n (`node.credentials`) faktycznie sa tylko referencjami** (`{id, name}`) i te
+sa bezpieczne. Problem jest gdzie indziej: sekret wklejony do PARAMETRU wezla, np. do adresu
+`https://api.telegram.org/bot<TOKEN>/sendMessage`. Scheduler przeszedl de-hardkod 02/07 i ma
+zero takich miejsc; HITL Handler ma ich 44 (D-017).
+
+**Eksportuj TYLKO przez `n8n-workflows/eksport-do-repo.cjs`** (`sprawdz` / `zapisz`). Skrypt
+maskuje wzorce, ktore zna, i **odmawia zapisu**, gdy zostanie cokolwiek wygladajacego na sekret -
+bramka pada zamknieta. Zdejmuje tez `activeVersion` (pelna kopia definicji, podwaja rozmiar
+i zabija czytelnosc diffow). `webhookId` zmienia sie przy imporcie i produkuje szum w diffie.
 
 **Pulapka wezla `Mark Published`:** ma w JEDNYM zapytaniu wartosci z DWOCH roznych slownikow -
 `ci.status` (material) i `q.status IN (...)` (kolejka), obie do 03/08 o tej samej nazwie
@@ -109,7 +117,12 @@ to chirurgicznie i sam odmawia, gdy liczby sie nie zgadzaja.
 ## Konfiguracja i sekrety
 
 - Sekrety WYLACZNIE z `app_secrets` (Lookup/Get Key wezlami Postgres w locie);
-  zero literalow w definicjach; `saveData` OFF na adapterach z kluczami.
+  `saveData` OFF na adapterach z kluczami.
+- **"Zero literalow w definicjach" to ZASADA, NIE STAN FAKTYCZNY (sprawdzone 11/08).**
+  Scheduler i Lacznik: zero. **HITL Handler: 44 wystapienia tokenu bota Telegrama wklejonego
+  w `parameters.url`** (adres `api.telegram.org/bot<TOKEN>/...`). Scheduler przeszedl de-hardkod
+  02/07, HITL Handler nigdy. Wpis: `docs/ops/DLUG_TECHNICZNY.md` **D-017**. Dopoki to zyje,
+  eksport do repo idzie WYLACZNIE przez maskujacy `eksport-do-repo.cjs`.
 - Endpointy cm-agent (FastAPI :8089, guard X-Researcher-Secret): /message
   /matnav /plannav /cmt /decnav /docmsg /metrics/xlsx /wake /request /plan
   /reports/<kind> /health.
