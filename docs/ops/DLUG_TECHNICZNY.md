@@ -1100,3 +1100,34 @@ kazdym wyczerpaniu srodkow, niezaleznie od jakosci kodu.
 
 **Punkt zaczepienia:** `cm-agent/app/proactive.py` (`tick`, `_propose_for_gap`),
 `cm-agent/app/conversation.py` (`_discuss`), wspolny klient modelu w `generate.client`.
+
+## D-024: Drugi magazyn regul (`channels.config.rules`) bez filtra, rodzaju i pochodzenia - BLOK H
+
+**Zapisany 19/08/2026 (znalezisko z bloku B; decyzja Managera Z-2 z 19/08).**
+
+Rownolegly do `style_learned` magazyn regul: `channels.config.rules`, pisany narzedziem
+`subagent_remember_rule` z rozmowy, czytany przez `generate._channel_rules` (`generate.py:208`)
+i wstrzykiwany do **KAZDEGO wariantu kanalowego** jako:
+
+`OWNER RULES FOR THIS ACCOUNT (obey strictly, override defaults if conflict): ...`
+
+Do 20 pozycji per kanal. **Bez filtra jezykowego**, ktory `style_learned` dostal 10/08 po AP-315,
+**bez rodzaju** (preferencja kontra polecenie) i **bez pochodzenia**. Sformulowanie jest mocniejsze
+niz wszystko, co stalo kiedykolwiek w `style_learned`: to wprost polecenie posluszenstwa z prawem
+nadpisania domyslnych zasad.
+
+**Decyzja Managera Z-2 (19/08): to OSOBNA sprawa, D-019 NIE rozciaga sie na nia wprost.**
+Uzasadnienie: tu pisze **czlowiek przez narzedzie**, nie model z destylacji, a to jest **legalna
+droga konfiguracji subagenta**. Wylaczenie zapisu boli tu bardziej niz przy stylu, bo odbiera
+jedyna droge konfigurowania kanalu. **Zapis zostaje WLACZONY do czasu bloku H.**
+
+**Zakres bloku H (po D+E), cztery pozycje:**
+1. ten sam **filtr jezykowy**, ktory `style_learned` dostal po AP-315;
+2. **ksztalt wpisu** (jezyk, rodzaj, pochodzenie) PRZY ZAPISIE, nie zgadywany przy odczycie;
+3. **zmiana prefiksu** tak, zeby zaden zbior regul kanalowych nie mial prawa nadpisac walidatora
+   jezyka i gatunku - dzisiejszy prefiks daje mu to prawo wprost;
+4. **wykaz WSZYSTKICH obecnych wpisow** `config.rules` do przegladu Managera.
+
+**Punkty zaczepienia:** `cm-agent/app/generate.py:208` (`_channel_rules`),
+`cm-agent/app/conversation.py` (narzedzie `subagent_remember_rule`, zapis do `channels.config`
+przez `jsonb_set` na kluczu `rules`, ~linia 2717).
