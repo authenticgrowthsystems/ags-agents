@@ -40,8 +40,32 @@ Przypadki, w ktorych dane BYLY, ale ich nazwa albo etykieta wprowadzala w blad, 
 je rozdzielil i mial racje - to sa dwie rozne diagnozy i dwie rozne naprawy.
 
 Test rozstrzygajacy, gdy nie wiesz, ktory to przypadek: **czy dane w bazie byly?**
-Nie byly, albo byly poza zasiegiem systemu - to AP-311. Byly i widok je pokazal, tylko pod nazwa,
-ktora znaczy co innego - to AP-312.
+Nie byly - to AP-311. Byly i widok je pokazal, tylko pod nazwa, ktora znaczy co innego -
+to AP-312.
+
+## Granica z AP-317 (rozstrzygnieta przez Managera 19/08)
+
+**POPRAWKA do zdania wyzej.** Do 19/08 stalo tu "Nie byly, albo byly **poza zasiegiem systemu** -
+to AP-311". Ten drugi czlon zostal STAD ZDJETY i nalezy do **AP-317**. Manager, ktory jest strona
+wpisu z 14/08, zatwierdzil rozdzielenie 19/08.
+
+Roznica nie idzie po osi wewnatrz kontra na zewnatrz systemu, tylko po **NAPRAWIALNOSCI**:
+
+> **Czy istnieje poprawka, po ktorej ta pustka stalaby sie wiarygodna?**
+> **Tak** - to AP-311, szukaj wady w systemie.
+> **Nie**, bo kanal nie ma zadnego polaczenia z baza - to AP-317, zmieniasz sposob czytania,
+> nie system.
+
+Wszystkie trzy dowody AP-311 to **defekty do naprawienia**: kolizja wersji, brak wierszy `sent`,
+import wyrzucajacy duplikaty. W kazdym istnieje poprawka, po ktorej ta sama pustka zaczyna cos
+znaczyc. Przypadek trzeci (dane w pliku na dysku) tylko WYGLADA na "poza zasiegiem" - plik
+przeszedl przez import, import go wyrzucil, wiec system mial te dane w rekach.
+
+W AP-317 defektu nie ma: baza odpowiada poprawnie, a odpowiedz jest nieprawda, bo kanal (SMS,
+WhatsApp, telefon, wiadomosci z LinkedIn i X) nigdy nie mial polaczenia i nie bedzie mial,
+dopoki nie powstanie warstwa 0. **Nie ma czego nakarmic zlym wsadem i nie ma co naprawiac** -
+zamiast bramki w kodzie wchodzi staly protokol pytania do czlowieka. Pelny opis:
+[AP-317](AP-317_brak_wpisu_nie_jest_dowodem_ciszy.md).
 
 ## Why bad
 
