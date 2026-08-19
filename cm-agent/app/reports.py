@@ -174,13 +174,28 @@ def _decisions_since(brand_id, channel, hours):
 
 
 def _queue_upcoming(brand_id, channel, limit=10):
+    # D-015 (19/08): `ci.scheduled_for` dojechalo do tego odczytu, bo sam czas kolejki NIE jest
+    # godzina publikacji. Bramka `db.claim_item` trzyma material do slotu planu, wiec kolejka
+    # wypadajaca WCZESNIEJ niz slot podaje godzine, ktora nie nastapi. Liczy `_godzina_wiersza`.
     return db.fetchall(
-        """SELECT pq.id, pq.status, pq.content, pq.scheduled_for, ci.status AS item_status
+        """SELECT pq.id, pq.status, pq.content, pq.scheduled_for, ci.status AS item_status,
+                  ci.scheduled_for AS slot_planu
            FROM post_queue pq LEFT JOIN content_items ci ON ci.id = pq.content_item_id
            WHERE pq.brand=%s AND pq.platform=%s
              AND pq.status IN ('review','scheduled','queued','held')
            ORDER BY pq.scheduled_for NULLS LAST, pq.id LIMIT %s""",
         (brand_id, channel, limit))
+
+
+def _godzina_wiersza(r):
+    """Godzina publikacji wiersza kolejki, liczona TYM SAMYM kodem, co meldunek bota i karta
+    materialu: `worker._godzina_publikacji` (D-015). Zwraca datetime albo None.
+
+    Wpis dlugu z 03/08 uznawal raport i `stan_gry` za powierzchnie mowiace prawde, bo pokazuja
+    czas z kolejki. KOREKTA z 10/08 pokazala, ze czas kolejki sam w sobie jest polprawda tak
+    samo jak slot planu - myli sie w drugiej polowie przypadkow. Stad ta sama regula tutaj."""
+    from .worker import _godzina_publikacji  # lokalnie: worker importuje reports (cykl)
+    return _godzina_publikacji(r.get("slot_planu"), r.get("scheduled_for"))
 
 
 def _pq_label(r):
@@ -228,7 +243,8 @@ def daily_report(brand_id, channel):
         lines.append(f"- {d['rationale'][:100]}")
     lines.append(f"\nKOLEJKA (najblizsze): {len(queue)}")
     for q in queue[:5]:
-        when = q["scheduled_for"].astimezone(WARSAW).strftime("%d/%m %H:%M") if q.get("scheduled_for") else "brak slotu"
+        _kiedy = _godzina_wiersza(q)   # D-015: max(slot planu, czas kolejki), nie sam czas kolejki
+        when = _kiedy.astimezone(WARSAW).strftime("%d/%m %H:%M") if _kiedy else "brak slotu"
         lines.append(f"- #{q['id']} [{_pq_label(q)}] {(q['content'] or '')[:50]} | {when}")
     text = "\n".join(lines)
     db.execute(
@@ -423,8 +439,8 @@ def kontekst_text(scope="all"):
             q = _queue_upcoming("AGS", ch)
             lines.append(f"## KOLEJKA {ch.upper()} ({len(q)}):")
             for r in q:
-                when = (r["scheduled_for"].astimezone(WARSAW).strftime("%d/%m %H:%M")
-                        if r.get("scheduled_for") else "bez slotu")
+                _kiedy = _godzina_wiersza(r)   # D-015: ta sama regula, co karta i meldunek
+                when = (_kiedy.astimezone(WARSAW).strftime("%d/%m %H:%M") if _kiedy else "bez slotu")
                 lines.append(f"- #{r['id']} [{_pq_label(r)}] {when} | {_flat(r['content'], 70)}")
             if not q:
                 lines.append("- (pusto)")

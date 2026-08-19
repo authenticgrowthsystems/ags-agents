@@ -224,12 +224,65 @@ def _stan_rozsylki(item_id):
     return "\n⏳ " + ", ".join(czesci)
 
 
+def _czas_kolejki(item_id):
+    """Godzina, na ktora stoi WIERSZ KOLEJKI tego materialu. None = nie wiemy (D-015, 19/08).
+
+    Karta czytala dotad wylacznie `content_items.scheduled_for`, czyli SLOT PLANU. Post wychodzi
+    o `max(slot planu, czas kolejki)` - regula, dowod i dwie bramki `<= NOW()` opisane sa
+    w `worker._godzina_publikacji`. Przy kolejce wypadajacej POZNIEJ niz slot karta obiecywala
+    godzine do 15 minut za wczesna, czyli mowila Tomaszowi co innego niz meldunek bota o tym
+    samym materiale. Dwie powierzchnie, jedna sprawa, dwie liczby - to AP-312 w wydaniu liczbowym.
+
+    Zwraca czas z wiersza CZEKAJACEGO, a gdy zaden juz nie czeka (material poszedl) - czas
+    dowolnego wiersza, bo to nadal jest godzina, o ktorej ten material stal w kolejce.
+    `None` znaczy DOKLADNIE "nie wiem", a nie "brak" - wolajacy ma to powiedziec wprost
+    zamiast podstawiac slot planu (AP-317: brak wpisu nie jest dowodem, a domysl zapisany
+    jak fakt jest gorszy niz brak danych).
+
+    Jedno zapytanie na karte, wzorzec `_stan_rozsylki` z D-006 (nie N+1)."""
+    try:
+        r = db.fetchone(
+            f"""SELECT MIN(scheduled_for) FILTER (WHERE status IN {_PQ_CZEKA}) AS czeka,
+                       MIN(scheduled_for) AS dowolny
+                  FROM post_queue WHERE content_item_id=%s::uuid""", (str(item_id),))
+    except Exception:
+        traceback.print_exc()
+        return None
+    if not r:
+        return None
+    return r.get("czeka") or r.get("dowolny")
+
+
+# Dopisek dla przypadku, w ktorym kolejki jeszcze nie ma. Karta mowi, CZEGO NIE WIE, i podaje
+# przedzial, ktory ZNA: realna publikacja nie wypadnie przed slotem planu (bramka `claim_item`)
+# ani pozniej niz 15 minut po nim (`humanize_slot` ma taki maksymalny rozrzut).
+_GODZINA_NIEPEWNA = " planowo (dokladnej nie znam - brak wpisu w kolejce; realna wypadnie do 15 minut pozniej)"
+
+
+def _godzina_karty(it):
+    """(datetime|None, pewna:bool) - godzina, o ktorej material NAPRAWDE wyjdzie.
+
+    Liczona TA SAMA regula i TYM SAMYM kodem, co meldunek bota: `worker._godzina_publikacji`.
+    Rozstrzygniecie 19/08: karta ma pokazywac dokladnie to, co meldunek, a nie druga liczbe
+    obok (AP-309 - jedna prawda, jedno zrodlo). "Oba czasy na karcie" przerzucalyby na Tomasza
+    liczenie, ktore ma wykonac kod.
+
+    `pewna=False` znaczy, ze wiersza kolejki jeszcze nie ma i zwrocony czas jest SLOTEM PLANU,
+    czyli dolna granica przedzialu - nigdy nie wolno pokazac go jak pewnika."""
+    from .worker import _godzina_publikacji  # lokalnie: worker importuje matreview (cykl)
+    kolejka = _czas_kolejki(it["id"])
+    return _godzina_publikacji(it.get("scheduled_for"), kolejka), kolejka is not None
+
+
 def _view_card(it, brand_id="AGS"):
     """Karta PODGLADU materialu po decyzji (view-only): bez guzikow decyzji, z pelna trescia
     na zadanie (guzik 📄 -> matnav:fulltext)."""
     from .planner import _DAYS_PL, _target_label
-    dt = it["scheduled_for"].astimezone(WARSAW) if it.get("scheduled_for") else None
-    when = f"{_DAYS_PL[dt.weekday()]} {dt.strftime('%d/%m %H:%M')}" if dt else "-"
+    # D-015 (19/08): godzina liczona regula meldunku, nie czysty slot planu.
+    kiedy, pewna = _godzina_karty(it)
+    dt = kiedy.astimezone(WARSAW) if kiedy else None
+    when = (f"{_DAYS_PL[dt.weekday()]} {dt.strftime('%d/%m %H:%M')}"
+            + ("" if pewna else _GODZINA_NIEPEWNA)) if dt else "-"
     ch = " + ".join(_target_label(brand_id, c) for c in (it.get("target_channels") or []))
     body = (it.get("canonical_body") or "(brak tresci)").strip()
     n_media = sum(1 for m in (it.get("media") or []) if (m or {}).get("file_id"))
@@ -418,8 +471,14 @@ def _card(item_id=None, brand_id=None, full=False):
                 break
     it = items[idx]
     now = datetime.datetime.now(WARSAW)
-    dt = it["scheduled_for"].astimezone(WARSAW) if it.get("scheduled_for") else None
-    when = f"{_DAYS_PL[dt.weekday()]} {dt.strftime('%d/%m %H:%M')}" if dt else "zaraz po zatwierdzeniu"
+    # D-015 (19/08): karta pokazuje godzine liczona TA SAMA regula, co meldunek bota
+    # (`worker._godzina_publikacji`), a nie czysty slot planu z `content_items`. Ta sama
+    # wartosc steruje naglowkiem dnia i ostrzezeniem o minionym slocie ponizej - inaczej
+    # przy roznicy kwadransa naglowek pokazywalby inny dzien niz godzina pod nim.
+    kiedy, pewna = _godzina_karty(it)
+    dt = kiedy.astimezone(WARSAW) if kiedy else None
+    when = (f"{_DAYS_PL[dt.weekday()]} {dt.strftime('%d/%m %H:%M')}"
+            + ("" if pewna else _GODZINA_NIEPEWNA)) if dt else "zaraz po zatwierdzeniu"
     # (d): nagłówek dnia - DZIŚ/JUTRO/nazwa dnia, do szybkiego skanowania kart
     if dt:
         _dd = dt.date()
@@ -876,7 +935,11 @@ def handle(payload, wake_event=None):
         db.set_item_status(arg, "approved")
         if wake_event:
             wake_event.set()
-        when = f"{slot.strftime('%d/%m %H:%M')}"
+        # D-015 (19/08): paragon podaje te sama godzine, co karta i meldunek. Wiersze kolejki
+        # przy tej trasie zostaja na starym czasie (UPDATE wyzej dotyka tylko `content_items`),
+        # wiec bez reguly `max` paragon obiecywalby godzine sprzed przesuniecia.
+        _kiedy, _pewna = _godzina_karty({"id": arg, "scheduled_for": slot})
+        when = f"{_kiedy.strftime('%d/%m %H:%M')}" + ("" if _pewna else _GODZINA_NIEPEWNA)
         row = db.fetchone("SELECT master_theme FROM content_items WHERE id=%s", (arg,))
         _tg("sendMessage", {"chat_id": chat_id,
                             "text": f"✅⏭ Zatwierdzone na koniec kolejki: "
@@ -1047,8 +1110,11 @@ def apply_edit(new_text, wake_event=None):
     db.set_item_status(iid, "approved")
     if wake_event:
         wake_event.set()
-    dt = item.get("scheduled_for")
-    when = dt.astimezone(WARSAW).strftime("%a %d/%m %H:%M") if dt else "najblizszy wolny slot (CM przydzieli)"
+    # D-015 (19/08): paragon po edycji podaje te sama godzine, co karta i meldunek. Wiersze
+    # kolejki zostaly wlasnie odtworzone przez `stage_variant`, wiec czas kolejki JUZ jest.
+    _kiedy, _pewna = _godzina_karty({"id": iid, "scheduled_for": item.get("scheduled_for")})
+    when = (_kiedy.astimezone(WARSAW).strftime("%a %d/%m %H:%M") + ("" if _pewna else _GODZINA_NIEPEWNA)
+            ) if _kiedy else "najblizszy wolny slot (CM przydzieli)"
     extra = ("\n📚 Wyuczone z tej korekty: " + "; ".join(rules)) if rules else ""
     return (f"✏️ Przyjete i ZATWIERDZONE (Twoja edycja = akceptacja). Warianty kanalow "
             f"przegenerowane z Twojej wersji, publikacja: {when}.{extra}")

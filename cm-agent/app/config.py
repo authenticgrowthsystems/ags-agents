@@ -81,6 +81,17 @@ DISPATCH_TIMEOUT_H = _i("DISPATCH_TIMEOUT_H", 2)
 PUBLISH_POST_QUEUE = "post_queue"  # write a post_queue row; the existing per-minute Scheduler publishes (X)
 PUBLISH_DRAFT = "draft"            # write a draft row; Tomasz publishes manually (LinkedIn for now)
 PUBLISH_WEBHOOK = "webhook"        # POST the channel's adapter_path (ZABRONIONY - blokada nizej)
+PUBLISH_NONE = "none"              # kanal CELOWO wylaczony z publikacji (D-022) - nazwany wylacznik
+
+# --- D-022 (19/08/2026): tryb WYLACZONY to co innego niz tryb NIEZNANY ---
+# `AGS/sprzedaz` ma na produkcji `publish_mode='none'`. Do dzis zaden konsument tej wartosci nie
+# znal, wiec wpadala do galezi zbiorczej w `channels.dispatch_item` i stawala sie po cichu trybem
+# recznym: wiersz szedl na 'held', a Tomasz dostawal gotowiec do wklejenia dla kanalu, ktory ma
+# byc WYLACZONY. To AP-312 - zachowanie nie mowilo tego, co ustawienie.
+# Rozstrzygniecie Managera 19/08: `none` zostaje jako wylacznik, ale ma byc NAZWANY i obsluzony
+# jawna galezia. Wartosc spoza tej listy (literowka, tryb z przyszlosci, napis wpisany recznie)
+# NIE jest wylacznikiem i nie wolno jej cicho zamieniac na cokolwiek innego - ma meldowac glosno.
+TRYBY_PUBLIKACJI = (PUBLISH_POST_QUEUE, PUBLISH_DRAFT, PUBLISH_WEBHOOK, PUBLISH_NONE)
 
 # --- D-020 (19/08/2026): blokada trybu 'webhook' stoi TU, w kodzie, nie w dokumencie ---
 # Powod, doslownie: `DEPLOY_CHECKLIST` przez trzy tygodnie po incydencie AP-307 nadal instruowal,
@@ -130,6 +141,15 @@ def sprawdz_tryb_publikacji(tryb, gdzie=""):
     return (f"UWAGA: {czyje}blokada trybu 'webhook' jest ZDJETA zmienna PUBLISH_WEBHOOK_ODBLOKOWANY. "
             "Publikacja idzie teraz sciezka delegata: sloty i media sa pomijane (AP-307). "
             "Sprawdz, czy callback publishera oznacza JEDEN wiersz, a nie caly material.")
+
+
+def tryb_publikacji_znany(tryb):
+    """Bramka D-022: czy `publish_mode` jest wartoscia, ktora dispatch UMIE obsluzyc.
+
+    Rozdziela dwa przypadki, ktore do 19/08 wygladaly identycznie: kanal celowo WYLACZONY
+    (`none`, wartosc z listy) i tryb NIEZNANY (wartosc spoza listy, czyli blad konfiguracji).
+    Pierwszy pomija publikacje spokojnie i z paragonem, drugi ma obudzic czlowieka."""
+    return str(tryb or "").strip().lower() in TRYBY_PUBLIKACJI
 
 # brand voice prompt-cache: voice_bible is a stable system block we mark cache_control ephemeral.
 USD_PLN = _f("USD_PLN", 4.0)

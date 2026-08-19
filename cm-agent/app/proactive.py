@@ -306,7 +306,9 @@ def subagent_briefs(brand_id="AGS"):
             lines.append("Publikacje spoza systemu sa dla mnie niewidzialne - jesli cos wyszlo "
                          "recznie, napisz `wyszlo <kanal> <link>`, dopisze do ksiegi.")
         if nast:
-            kiedy = nast["scheduled_for"].astimezone(WARSAW).strftime("%d/%m %H:%M")
+            # D-015 (19/08): ta sama regula, co karta i meldunek - max(slot planu, czas kolejki).
+            _k = reports._godzina_wiersza(nast) or nast["scheduled_for"]
+            kiedy = _k.astimezone(WARSAW).strftime("%d/%m %H:%M")
             lines.append(f"Czeka: {len(kolejka)} w kolejce, najblizszy slot {kiedy}"
                          + (f"; {len(czeka)} do zatwierdzenia" if czeka else ""))
         else:

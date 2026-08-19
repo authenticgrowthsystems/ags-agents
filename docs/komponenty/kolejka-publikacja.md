@@ -33,7 +33,22 @@ Przypomnij jutro), nigdy auto-decyzja.
 - `channels.config.publish_mode` decyduje droga: `webhook` (POST adapter
   subagenta n8n -> publikacja NATYCHMIAST -> callback), `post_queue` (status
   'scheduled', bierze Scheduler n8n co minute WG SLOTU wiersza), `draft`
-  (status 'held', recznie).
+  (status 'held', recznie), `none` (kanal WYLACZONY, nic nie publikuje).
+- TRYB WYLACZONY I TRYB NIEZNANY od 19/08 (dlug D-022): `none` ma wlasna,
+  jawna galaz w `channels.dispatch_item` - wiersz idzie na `rejected`, powod
+  laduje w `agent_logs`, a na kanal logowy leci paragon "KANAL WYLACZONY".
+  **Sprostowanie do opisu dlugu, zrobione odczytem:** `none` NIE przechodzilo
+  wczesniej bez sladu. Galaz `else` nie jest galezia trybu `draft`, tylko
+  lapaczem wszystkiego, wiec wiersz konczyl na `held` - i `worker._send_manual_paste_kits`
+  przysylal Tomaszowi pelna tresc z poleceniem "wklej recznie i odpisz
+  `wklejone <id>`" dla kanalu, ktory ma nie publikowac. To bylo gorsze niz cisza.
+  Wartosc SPOZA listy `config.TRYBY_PUBLIKACJI` (literowka, tryb z przyszlosci)
+  to osobny przypadek: wiersz zostaje NIETKNIETY w `review`, wpis w dzienniku ma
+  poziom `error`, a meldunek podaje doslownie wartosc, ktorej kod nie zna. Nie
+  publikujemy, bo nie wiemy czym; nie poprawiamy po cichu, bo cicha korekta
+  wyglada jak sukces. Stan nieterminalny sprawia, ze `_dispatch_timeout_alert`
+  odezwie sie ponownie, jesli nikt nie zareaguje.
+  Test: `cm-agent/tests/test_tryb_publikacji_wylaczony.py`.
 - STAN 22/07 (decyzja Tomasza "zatwierdzone ma isc samo"): AGS/x ORAZ
   AGS/linkedin = `post_queue` - OBA kanaly publikuje Scheduler per slot wiersza.
   Scheduler ma ROUTER platformy (Route Platform, if 2.2): x -> Publish To X,
@@ -87,11 +102,27 @@ Wniosek: czas kolejki liczy sie **tylko wtedy, gdy jest pozniejszy** niz slot pl
 `humanize_slot` wylosuje wczesniej (a losuje symetrycznie +/-15 min, wiec w polowie przebiegow),
 ta wczesniejsza godzina jest MARTWA.
 
+**STAN OD 19/08/2026 (D-015 ZAMKNIETY): kazda powierzchnia liczy `max(slot, kolejka)` TYM SAMYM
+kodem `worker._godzina_publikacji`.** Zadna nie ma juz wlasnego rachunku (AP-309).
+
 | powierzchnia | pokazuje | prawda o publikacji |
 |---|---|---|
 | meldunek bota "CM przydzielil slot" | `max(slot, kolejka)` (od 10/08/2026) | TAK |
-| raport dzienny, `stan_gry` | czas z kolejki | tylko gdy kolejka wypadla POZNIEJ |
-| karta materialu (`/karty`) | czysty slot z `content_items` | tylko gdy kolejka wypadla WCZESNIEJ |
+| karta materialu i podglad (`/karty`) | `max(slot, kolejka)` (od 19/08/2026) | TAK |
+| paragony: po edycji, po "na koniec kolejki" | `max(slot, kolejka)` (od 19/08/2026) | TAK |
+| raport dzienny, `stan_gry`, meldunek dnia | `max(slot, kolejka)` (od 19/08/2026) | TAK |
+
+Wiersz "raport dzienny, `stan_gry`" mial w tej tabeli **TAK** przy samym czasie kolejki. To bylo
+dziedzictwo tabeli z 03/08: korekta z 10/08 udowodnila, ze sam czas kolejki myli sie dokladnie
+tak samo czesto jak sam slot planu, tylko w druga strone. Poprawiono wtedy meldunek, a raportu
+nikt nie przeliczyl, bo tabela nadal mowila o nim "TAK". Wspolna funkcja: `reports._godzina_wiersza`
+(odczyt `_queue_upcoming` dowozi juz `ci.scheduled_for`).
+
+**Czego karta NIE robi: nie zgaduje.** Material widziany PRZED wysylka moze nie miec jeszcze
+wiersza w kolejce. Wtedy karta pokazuje slot planu i dopisuje wprost, ze dokladnej godziny nie
+zna, razem z przedzialem, ktory zna: realna wypadnie miedzy slotem a 15 minutami po nim.
+Podstawienie slotu jako pewnika byloby domyslem zapisanym jak fakt (AP-317). Odczyt kolejki:
+`matreview._czas_kolejki`, jedno zapytanie na karte, wzorzec `_stan_rozsylki` z D-006.
 
 **DOWOD, NIE TEORIA (10/08, dwa na dwa):** `#344` kolejka 15:49, slot planu 16:00, opublikowane
 04/08 o **16:01**; `#358` kolejka 15:50, slot 16:00, opublikowane 05/08 o **16:01**. Poszlaka
@@ -105,8 +136,8 @@ myla sie w polowie przypadkow, kazda w druga strone. Regula i dowod: `worker._go
 zachowanie: `cm-agent/tests/test_godzina_publikacji.py` (200 losowan + obie stare wersje jako
 anty-regresja, zeby nastepna "uproszczajaca" poprawka od razu widziala, ze byly juz probowane).
 
-Karta materialu nadal czyta sam material, wiec przy kolejce wypadajacej pozniej pokazuje o do
-15 minut za wczesnie. To reszta D-015 i osobna decyzja (wymaga wzorca `_stan_rozsylki` z D-006).
+Zachowanie kart i paragonow: `cm-agent/tests/test_godzina_na_karcie.py` (sciezka alarmu, czyli
+kolejka POZNIEJ niz slot, sciezka odwrotna oraz brak kolejki).
 
 ## PRZEKLAD: kiedy publikuje, a kiedy jest tylko kopia (11/08/2026)
 

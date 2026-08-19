@@ -275,6 +275,88 @@ def sprawdz_gatunek(item):
     return zle
 
 
+def _slad_w_dzienniku(poziom, wiadomosc, kontekst):
+    """Wpis do `agent_logs` - ten sam sposob zostawiania sladu, ktorego uzywa `_odrzuc_za_dlugi`.
+    Dziennik jest tu po to, zeby dalo sie PO FAKCIE odpowiedziec na pytanie "czemu ten material
+    nie wyszedl", gdy wiadomosc na Telegramie dawno zniknela z ekranu."""
+    try:
+        db.execute(
+            """INSERT INTO agent_logs (agent, level, message, context)
+               VALUES ('CM',%s,%s,%s::jsonb)""",
+            (poziom, wiadomosc[:400], json.dumps(kontekst, ensure_ascii=False)))
+    except Exception:
+        traceback.print_exc()
+
+
+def _melduj(tekst):
+    """Paragon na kanal logowy. Import lokalny jak w `_odrzuc_za_dlugi` (logbot ciagnie config)."""
+    try:
+        from . import logbot as _logbot
+        _logbot.send(tekst, silent=False)
+    except Exception:
+        traceback.print_exc()   # AP-306: powiadomienie moze pasc, ale NIE cicho
+
+
+def _pomin_kanal_wylaczony(item, r):
+    """D-022 (19/08/2026): kanal z `publish_mode='none'` jest CELOWO wylaczony z publikacji.
+
+    CO BYLO DO 19/08 - i to jest sprostowanie do opisu dlugu. Wartosc `none` NIE przechodzila
+    przez dispatch bez sladu. Wpadala do galezi zbiorczej `else`, ktora nie jest galezia trybu
+    'draft', tylko lapaczem wszystkiego - i wiersz konczyl na 'held'. Skutek byl gorszy niz cisza:
+    `worker._send_manual_paste_kits` przysylal Tomaszowi PELNA TRESC z poleceniem "wklej recznie
+    i odpisz `wklejone <id>`" dla kanalu, ktory ma byc wylaczony. Ustawienie mowilo "nie publikuj",
+    a system prosil czlowieka o reczna publikacje. To AP-312 co do znaku.
+
+    CO ROBIMY TERAZ. Wiersz dostaje stan terminalny 'rejected' - wartosc, ktora juz istnieje
+    w slowniku kolejki i ktora system pisze przy odrzuceniu karty, wiec zadnej migracji ani nowej
+    wartosci tu nie ma. 'rejected' znaczy dokladnie tyle: ten wiersz nie pojdzie. Dzieki temu
+    nie ma gotowca do wklejania i nie ma alarmu o zwisie, bo stan jest terminalny.
+
+    Paragon idzie na kanal logowy, a powod do dziennika - dokladnie tak, jak przy odrzuceniu
+    wariantu za dlugiego. Kanal wylaczony ma MOWIC, ze jest wylaczony."""
+    db.execute("UPDATE post_queue SET status='rejected' WHERE id=%s", (r["id"],))
+    print(f"[channels] KANAL WYLACZONY (publish_mode=none): {r['platform']} "
+          f"material {str(item.get('id'))} wiersz {r['id']}", flush=True)
+    _slad_w_dzienniku("warn", f"kanal wylaczony (publish_mode=none): {r['platform']}",
+                      {"content_item_id": str(item.get("id")), "queue_id": r["id"],
+                       "platform": r["platform"], "dlug": "D-022"})
+    _melduj(f"🚫 KANAL WYLACZONY - nie publikuje tam nic.\n"
+            f"Kanal: {r['platform']} (ustawienie publish_mode='none').\n"
+            f"Material: {str(item.get('master_theme') or '')[:120]}\n"
+            f"Wpis w kolejce zamkniety bez publikacji. To NIE jest awaria - tak jest ustawione.\n"
+            f"Jesli ten kanal ma znowu publikowac, zmien mu tryb na 'post_queue' (Scheduler) "
+            f"albo 'draft' (gotowiec do recznej wklejki).")
+
+
+def _tryb_publikacji_nieznany(item, r, tryb):
+    """D-022 (19/08/2026): tryb publikacji, ktorego kod NIE ZNA. To co innego niz wylaczenie.
+
+    DLACZEGO OSOBNY PRZYPADEK. Do 19/08 kazda nieznana wartosc - literowka, tryb z przyszlosci,
+    napis wklepany recznie do `channels.config` - zachowywala sie jak 'draft'. Blad konfiguracji
+    byl wiec nieodroznialny od swiadomego ustawienia, a system sam wybieral za czlowieka, co ta
+    wartosc "pewnie znaczy". Domysl podstawiony za decyzje to AP-317 w warstwie konfiguracji.
+
+    CO ROBIMY. Wiersz zostaje NIETKNIETY w stanie 'review'. To jest wybor, nie zaniechanie:
+      * nie publikujemy, bo nie wiemy czym - bramka pada ZAMKNIETA (AP-314);
+      * nie zamieniamy trybu po cichu na zaden inny, bo cicha korekta wyglada jak sukces (AP-306);
+      * nie kasujemy wiersza, bo po poprawieniu ustawienia material ma pojsc bez regeneracji;
+      * stan nieterminalny sprawia, ze `worker._dispatch_timeout_alert` odezwie sie ponownie,
+        jesli nikt nie zareaguje na pierwszy meldunek. Alarm, ktory sam sie powtarza, jest
+        tanszy niz material, ktory po cichu nie wyszedl."""
+    print(f"[channels] NIEZNANY TRYB PUBLIKACJI: {r['platform']} tryb={str(tryb)[:40]!r} "
+          f"material {str(item.get('id'))} wiersz {r['id']}", flush=True)
+    _slad_w_dzienniku("error", f"nieznany publish_mode: {r['platform']}={str(tryb)[:60]}",
+                      {"content_item_id": str(item.get("id")), "queue_id": r["id"],
+                       "platform": r["platform"], "publish_mode": str(tryb)[:60], "dlug": "D-022"})
+    _melduj(f"⚠️ NIE WIEM, JAK OPUBLIKOWAC - wstrzymalem ten wpis.\n"
+            f"Kanal: {r['platform']}, ustawienie publish_mode: '{str(tryb)[:60]}'.\n"
+            f"Material: {str(item.get('master_theme') or '')[:120]}\n"
+            f"Tej wartosci nie zna zaden konsument, wiec nie zgaduje, o co chodzilo. Wpis czeka "
+            f"w kolejce nietkniety i pojdzie sam, gdy ustawienie bedzie poprawne.\n"
+            f"Dozwolone tryby: 'post_queue' (publikuje Scheduler), 'draft' (gotowiec do recznej "
+            f"wklejki), 'none' (kanal wylaczony).")
+
+
 def dispatch_item(item):
     """On approval: publish this item's staged 'review' rows by channel publish_mode.
     webhook mode -> DELEGATE to the channel sub-agent adapter (e.g. X); post_queue mode -> 'scheduled'
@@ -282,7 +364,11 @@ def dispatch_item(item):
     NOTE (backlog b): dispatch is NOT publishing. Every mode here just HANDS OFF - the real publish
     happens later (Scheduler minute-cron / sub-agent callback / Tomasz pasting). Returns a per-channel
     handoff summary so the caller reports the truth ('wyslane/zaplanowane/czeka recznie'), not a premature
-    'opublikowal'. reconcile_publications fires the real success/failure report on the callback."""
+    'opublikowal'. reconcile_publications fires the real success/failure report on the callback.
+
+    D-022 (19/08/2026): tryb 'none' (kanal WYLACZONY) i tryb NIEZNANY maja wlasne, jawne galezie
+    NA POCZATKU rozgalezienia. Wczesniej obie wartosci wpadaly do zbiorczego 'else' - a to nie
+    jest galaz trybu 'draft', tylko lapacz wszystkiego - i po cichu stawaly sie trybem recznym."""
     rows = db.fetchall(
         """SELECT pq.id, pq.platform, pq.content, pq.media, c.config, c.adapter_path
            FROM post_queue pq JOIN channels c ON c.brand_id=pq.brand AND c.channel=pq.platform
@@ -298,7 +384,15 @@ def dispatch_item(item):
         content = r.get("content") or ""
         if (r["platform"] == "x" and len(content) > 600 and "===TWEET===" not in content):
             mode = config.PUBLISH_DRAFT
-        if mode == config.PUBLISH_WEBHOOK and r.get("adapter_path"):
+        if mode == config.PUBLISH_NONE:
+            # D-022: kanal WYLACZONY. Jawna galaz zamiast wpadania do zbiorczego 'else'.
+            _pomin_kanal_wylaczony(item, r)
+        elif not config.tryb_publikacji_znany(mode):
+            # D-022: tryb NIEZNANY. Wiersz zostaje w 'review' - nietkniety i naprawialny -
+            # a czlowiek dowiaduje sie od razu. Cicha zamiana na tryb reczny byla dotad
+            # domyslem zapisanym jak decyzja (AP-306, AP-312).
+            _tryb_publikacji_nieznany(item, r, mode)
+        elif mode == config.PUBLISH_WEBHOOK and r.get("adapter_path"):
             _delegate(item, r)
         elif mode == config.PUBLISH_POST_QUEUE:
             # 24/07 parytet: nie "if linkedin", tylko flaga auto_image per kanal (domyslnie

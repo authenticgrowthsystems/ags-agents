@@ -30,6 +30,26 @@ Dwa widoki decyzyjne w Telegramie:
   (`handed_off` do 03/08/2026 nazywalo sie `dispatching` - D-008; etykieta
   widoczna dla czlowieka to "ROZESLANY DO KOLEJKI" plus liczba wierszy
   oczekujacych i ich terminy - D-006).
+- GODZINA PUBLIKACJI NA KARCIE (od 19/08/2026, domkniecie dlugu D-015): linia
+  `🕐` pokazuje godzine, o ktorej material NAPRAWDE wyjdzie, czyli
+  **`max(slot planu, czas kolejki)`** - te sama liczbe, co meldunek bota
+  "CM przydzielil slot". Do 19/08 karta czytala sam `content_items.scheduled_for`,
+  czyli CZYSTY SLOT PLANU, wiec przy kolejce wypadajacej pozniej obiecywala
+  godzine do 15 minut za wczesnie. Tomasz widzial wtedy dwie rozne liczby dla
+  jednego posta i musial zgadywac, ktora obowiazuje (AP-312 w wydaniu liczbowym).
+  Regula NIE jest tu przepisana drugi raz: `matreview._godzina_karty` wola
+  `worker._godzina_publikacji`, czyli ten sam kod, co meldunek (AP-309).
+  Ta sama liczba steruje naglowkiem dnia (DZIS/JUTRO) i ostrzezeniem "SLOT MINAL",
+  a takze paragonem po edycji i po "✅⏭ Na koniec kolejki" oraz karta podgladu 🔒.
+- GDY KOLEJKI JESZCZE NIE MA, KARTA MOWI, ZE NIE WIE. Material bywa ogladany
+  przed wysylka i wtedy wiersza kolejki nie ma, wiec dokladnej godziny NIE MA.
+  Karta pisze slot planu z dopiskiem "planowo (dokladnej nie znam - brak wpisu
+  w kolejce; realna wypadnie do 15 minut pozniej)". Przedzial jest znany (bramka
+  `claim_item` od dolu, `humanize_slot` +15 min od gory), sama godzina nie - i tak
+  ma to brzmiec, bo domysl zapisany jak fakt jest gorszy niz brak danych (AP-317).
+  Odczyt: `matreview._czas_kolejki`, JEDNO zapytanie na karte (wzorzec
+  `_stan_rozsylki` z D-006, nie N+1).
+  Test: `cm-agent/tests/test_godzina_na_karcie.py`.
 - Guziki intake przy zapisie materialu: Kolejka / Teraz / Odrzuc
   (`send_intake_buttons`).
 - 🎨 Generuj (grafika na zadanie), ➕ Media (dolaczenie zdjecia; galeria tylko
@@ -66,7 +86,8 @@ Dwa widoki decyzyjne w Telegramie:
 
 - `cm-agent/app/compliance.py`: `pl_comma_flags` (heurystyka interpunkcji PL, flaga).
 - `cm-agent/app/matreview.py`: `_card` (render karty, w tym linie ⚠️ DUPLIKACJA
-  i ⚠️ INTERPUNKCJA),
+  i ⚠️ INTERPUNKCJA), `_czas_kolejki` + `_godzina_karty` (godzina publikacji,
+  D-015), `_view_card` (podglad 🔒),
   `send_review_card`, `handle` (callbacki matnav, akcje ok/no/okq/fulltext),
   `send_intake_buttons`, `apply_edit`, `apply_angle_guidance`,
   `_distill_style_rules`, `log_learning`, `_tg_send_document`,

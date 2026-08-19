@@ -555,6 +555,13 @@ def _dispatch_ack(item, handoff):
                          f"{stxt[:300] or 'wg harmonogramu'} (potwierdze kazda publikacje)")
         elif mode == config.PUBLISH_WEBHOOK:
             lines.append(f"   • {lab}{czesci}: zlecone subagentowi (potwierdze po jego callbacku)")
+        elif mode == config.PUBLISH_NONE:
+            # D-022: kanal wylaczony mial tu do 19/08 ten sam napis, co tryb reczny - meldunek
+            # prosil o wklejenie tresci na kanale, ktory z zalozenia nie publikuje.
+            lines.append(f"   • {lab}{czesci}: kanal WYLACZONY, nic tam nie poszlo (publish_mode='none')")
+        elif not config.tryb_publikacji_znany(mode):
+            lines.append(f"   • {lab}{czesci}: WSTRZYMANE - nieznany tryb publikacji "
+                         f"'{str(mode)[:40]}', wpis czeka nietkniety w kolejce")
         else:
             lines.append(f"   • {lab}{czesci}: gotowiec czeka na Twoje reczne wklejenie")
     return "\n".join(lines)

@@ -358,7 +358,50 @@ na ten plik.
 **Warunek wejscia:** minal co najmniej jeden PELNY cykl publikacji na nowym obrazie
 (`approved -> handed_off -> published` bez recznej pomocy) i nikt nie planuje juz cofac obrazu.
 
-## D-015 [CZESCIOWO ZAMKNIETE 10/08/2026]: ktora godzine widzi czlowiek
+## D-015 [ZAMKNIETE 19/08/2026]: ktora godzine widzi czlowiek
+
+**Zapisany 03/08/2026, meldunek zamkniety 10/08, KARTA I RESZTA POWIERZCHNI ZAMKNIETE 19/08.**
+
+**Wszystkie SIEDEM powierzchni pokazujacych godzine publikacji licza ja TYM SAMYM kodem**
+`worker._godzina_publikacji`, czyli `max(slot planu, czas kolejki)`.
+
+Rozstrzygniecie 19/08 (koordynator): karta pokazuje DOKLADNIE to, co meldunek. Nie czas kolejki,
+nie oba czasy obok siebie, nie slot planu. Powod: dwa organy pokazujace czlowiekowi te sama rzecz
+roznymi liczbami to gotowy AP-312, a "oba czasy" przenosi na Tomasza rachunek, ktory ma wykonac
+kod. Jedna prawda, jedno zrodlo (AP-309).
+
+Poprawione: karta decyzyjna `/karty` (`matreview._card`), karta podgladu (`_view_card`), paragon
+po "Na koniec kolejki", paragon po edycji (`apply_edit`), raport dzienny i `stan_gry`
+(`reports._godzina_wiersza`), meldunek dnia subagenta (`proactive.subagent_briefs`). Meldunek bota
+byl poprawny od 10/08 i nie zostal tkniety. Widoki PLANU (`planner`) zostaja przy slocie swiadomie
+- dotycza materialow `proposed`, ktore nie maja jeszcze wiersza kolejki, wiec slot jest tam jedyna
+i poprawna prawda.
+
+**ODCZYT OBALIL POLOWE TABELI Z 03/08.** Wpis mowil, ze raport dzienny i `stan_gry` pokazuja
+prawde, bo pokazuja czas z kolejki. Korekta z 10/08 udowodnila, ze sam czas kolejki myli sie
+dokladnie tak samo czesto jak sam slot planu, tylko w druga strone. Meldunek poprawiono wtedy,
+**a raportu nikt nie przeliczyl, bo tabela nadal mowila o nim "TAK"** - i ta polowa przelezala
+jeszcze dziewiec dni. To ta sama lekcja co AP-316, o warstwe wyzej: **tabela stanu starzeje sie
+grozniej niz opis problemu, bo wyglada na sprawdzona.**
+
+**CZEGO KARTA NIE ROBI: NIE ZGADUJE (AP-317).** Material bywa ogladany PRZED wysylka i wtedy
+wiersza kolejki jeszcze nie ma, czyli dokladnej godziny NIE MA. Karta pisze wtedy slot planu
+z dopiskiem, ze dokladnej nie zna, i podaje przedzial, ktory naprawde znamy (bramka `claim_item`
+od dolu, `humanize_slot` +15 min od gory). Podstawienie slotu jako pewnika byloby domyslem
+zapisanym jak fakt.
+
+Odczyt: `matreview._czas_kolejki`, JEDNO zapytanie na wyrenderowana karte, wzorzec `_stan_rozsylki`
+z D-006. Raporty nie placa nic dodatkowego, bo `ci.scheduled_for` przyszlo istniejacym JOIN-em.
+
+Zachowanie: `cm-agent/tests/test_godzina_na_karcie.py` (sciezka alarmu = kolejka POZNIEJ niz slot,
+sciezka odwrotna z dowodow #344 i #358, brak kolejki, plus anty-regresja pilnujaca, ze regula nie
+zostala przepisana w karcie; przy cofnietej poprawce pada siedem kontroli, sprawdzone przez
+koordynatora). Zestaw 37/37. Dokumentacja: `docs/komponenty/karty-hitl.md`,
+`docs/komponenty/kolejka-publikacja.md`.
+
+---
+
+## D-015 (tresc oryginalna z 03/08, zostawiona dla kontekstu)
 
 **Zapisany 03/08/2026** (zgloszenie Tomasza: "powinienem tez realna godzine miec w meldunku").
 **MELDUNEK ZAMKNIETY 10/08. KARTA w `/karty` zostaje otwarta.**
@@ -1046,7 +1089,63 @@ na **pare (domena, oddzial/osoba)**, nie na sama domene.
 **Waga (sformulowanie Managera):** to nie jest wygoda. Baza ma byc zrodlem wiedzy, a lancuch peka
 dokladnie w chwili, w ktorej pojawia sie NOWY czlowiek - czyli w jedynym momencie, ktory buduje lejek.
 
-## D-022: Kanal z trybem publikacji, ktorego nie zna zaden konsument
+## D-022 [ZAMKNIETE 19/08/2026]: Kanal z trybem publikacji, ktorego nie zna zaden konsument
+
+**NAPRAWIONE W KODZIE 19/08. Danych produkcyjnych nie ruszano** - `AGS/sprzedaz` zostaje z `none`,
+zgodnie z decyzja Managera Z-3.
+
+**SPROSTOWANIE DO WLASNEGO OPISU, ZROBIONE ODCZYTEM.** Wpis nizej mowi, ze `none` "przechodzi
+przez cala funkcje i nie dzieje sie nic, bez wyjatku, bez wpisu w dzienniku, bez sladu".
+**To nieprawda i mylilo w bezpieczna strone.** Galaz `else` w `dispatch_item` nie byla galezia
+trybu `draft`, tylko **lapaczem wszystkiego**, wiec wiersz konczyl na `status='held'`. A `held`
+uruchamia `worker._send_manual_paste_kits`, ktory przysyla Tomaszowi PELNA TRESC z poleceniem
+"wklej recznie i odpisz `wklejone <id>`".
+
+**Skutek byl wiec GORSZY niz cisza: ustawienie mowilo "nie publikuj", a system prosil czlowieka
+o reczna publikacje na tym kanale.** Sprawdzone przez koordynatora w trzech ogniwach: stara galaz
+`else` (`git show`), selekcja `held` w `_send_manual_paste_kits:665`, i test cofniety do stanu
+sprzed poprawki. Drugie sprostowanie: `channels.for_item` nie istnieje, selektorem kanalow jest
+`channels.active_targets`.
+
+Co zrobione:
+
+1. `config.PUBLISH_NONE` obok pozostalych `PUBLISH_*`, krotka `TRYBY_PUBLIKACJI` i bramka
+   `config.tryb_publikacji_znany` w konwencji `sprawdz_tryb_publikacji` z D-020.
+2. `channels.dispatch_item`: **dwie jawne galezie PRZED lapaczem.**
+   - **WYLACZONY** (`none`): wiersz na `rejected` (wartosc JUZ ISTNIEJACA w slowniku kolejki,
+     zero migracji), powod do `agent_logs` poziom `warn`, paragon mowiacy wprost, ze kanal jest
+     wylaczony, ze to NIE awaria i czym to odkrecic. Stan terminalny, wiec nie ma juz gotowca
+     do wklejania ani alarmu o zwisie.
+   - **NIEZNANY** (literowka, tryb z przyszlosci): wiersz **zostaje NIETKNIETY w `review`**,
+     dziennik poziom `error`, meldunek podaje DOSLOWNIE wartosc, ktorej kod nie zna. Nie
+     publikujemy, bo nie wiemy czym (bramka pada zamknieta, AP-314); nie poprawiamy po cichu,
+     bo cicha korekta wyglada jak sukces (AP-306); nie kasujemy wiersza, bo po poprawieniu
+     ustawienia material ma pojsc bez regeneracji. Stan nieterminalny sprawia, ze
+     `_dispatch_timeout_alert` odezwie sie ponownie, jesli nikt nie zareagowal.
+3. `worker._dispatch_ack`: osobne linie dla obu trybow zamiast wspolnego "gotowiec czeka na Twoje
+   reczne wklejenie".
+
+**DLACZEGO WYLACZONY I NIEZNANY TO DWA PRZYPADKI, A NIE JEDEN:** do 19/08 kazda nieznana wartosc
+zachowywala sie jak wylaczenie, czyli **blad konfiguracji byl nieodroznialny od swiadomego
+ustawienia**, a system sam wybieral za czlowieka, co ta wartosc "pewnie znaczy". Domysl
+podstawiony za decyzje to AP-317 w warstwie konfiguracji.
+
+**CZEGO NIE ZROBIONO, POWIEDZIANE WPROST:** `channels.active_targets` nadal WYBIERA kanal z trybem
+`none` jako cel, wiec wariant dla wylaczonego kanalu jest generowany i stagowany, a dopiero
+dispatch go zamyka. Czystsza naprawa jest o warstwe wyzej (nie stagowac wcale), ale zmienia,
+ktore kanaly dostaja warianty, i nalezy do osobnej decyzji. Osobno: gdy material celuje WYLACZNIE
+w kanal wylaczony, `reconcile_publications` awansuje go potem na `published`, bo wszystkie wiersze
+sa terminalne. To istniejaca slabosc reconcile przy wierszach nieudanych, nie nowa - ale D-022
+dokłada jej nowe wystapienie i warto to nazwac.
+
+Zachowanie: `cm-agent/tests/test_tryb_publikacji_wylaczony.py` (tryb wylaczony, tryb nieznany
+oraz REGRESJA trybow zwyklych: `post_queue`, `draft`, brak klucza, `webhook` z adapterem i bez;
+przy obu galeziach wylaczonych pada pietnascie kontroli, sprawdzone przez koordynatora).
+Zestaw 37/37. Dokumentacja: `docs/komponenty/kolejka-publikacja.md`.
+
+---
+
+## D-022 (tresc oryginalna z 19/08, zostawiona dla kontekstu - w czesci NIEPRAWDZIWA, patrz sprostowanie wyzej)
 
 **Zapisany 19/08/2026 (znalezisko przy blokach B i C, decyzja Managera: do kolejki, nie ruszac teraz).**
 

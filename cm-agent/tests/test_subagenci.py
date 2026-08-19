@@ -45,7 +45,12 @@ _stub("httpx", post=lambda *a, **k: _Any(), get=lambda *a, **k: _Any(), Client=_
       TransportError=Exception)
 _stub("anthropic", Anthropic=_Any)
 _stub("openai", OpenAI=_Any)
-_stub("fastapi", FastAPI=_Any, Request=_Any, BackgroundTasks=_Any, Body=lambda *a, **k: None)
+# Header/HTTPException doszly 19/08 (D-015): meldunek dnia liczy godzine publikacji
+# `reports._godzina_wiersza`, a ta siega po regule do `worker._godzina_publikacji` - czyli
+# importuje `worker`, ktory czyta te dwie nazwy z fastapi. Ten sam ksztalt zaslepki co
+# w test_godzina_publikacji.py.
+_stub("fastapi", FastAPI=_Any, Request=_Any, BackgroundTasks=_Any, Body=lambda *a, **k: None,
+      Header=lambda *a, **k: None, HTTPException=Exception)
 _stub("uvicorn", run=lambda *a, **k: None)
 _stub("openpyxl", load_workbook=lambda *a, **k: _Any())
 
