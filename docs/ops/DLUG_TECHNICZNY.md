@@ -1045,3 +1045,25 @@ na **pare (domena, oddzial/osoba)**, nie na sama domene.
 
 **Waga (sformulowanie Managera):** to nie jest wygoda. Baza ma byc zrodlem wiedzy, a lancuch peka
 dokladnie w chwili, w ktorej pojawia sie NOWY czlowiek - czyli w jedynym momencie, ktory buduje lejek.
+
+## D-022: Kanal z trybem publikacji, ktorego nie zna zaden konsument
+
+**Zapisany 19/08/2026 (znalezisko przy blokach B i C, decyzja Managera: do kolejki, nie ruszac teraz).**
+
+`AGS/sprzedaz` ma na produkcji `config->>'publish_mode' = 'none'`. Taka wartosc nie pasuje do
+zadnej galezi w `channels.dispatch_item`: nie jest `webhook`, nie jest `post_queue`, a domyslka
+`config.PUBLISH_DRAFT` dziala tylko przy BRAKU klucza, nie przy kluczu z nieznana wartoscia.
+Kanal ma status `draft`, wiec `channels.for_item` go WYBIERA - i wtedy nie dzieje sie nic.
+
+**Why bad:** to rodzina "cisza wyglada jak sukces" (AP-306, AP-310, AP-314). Material trafia do
+kanalu, kanal go przyjmuje, nie leci wyjatek, nie ma wpisu w dzienniku, a publikacja nie nastepuje.
+Z zewnatrz nieodroznialne od kanalu, ktory nie mial czego opublikowac. Jesli `none` jest CELOWYM
+sposobem wylaczenia kanalu, to jest tez AP-312: nazwa nie mowi, ze to wylacznik, a zachowanie nie
+mowi, ze cos zostalo pominiete.
+
+**Do zrobienia:** nieznany tryb ma **padac glosno albo meldowac pominiecie**, nigdy milczec.
+Jesli `none` ma zostac jako wylacznik, nazwac go wprost i obsluzyc jawna galezia z paragonem.
+Do rozstrzygniecia przy okazji, ktora i tak otwiera `channels.py` - **osobnego okna na to nie
+wydajemy** (decyzja Managera 19/08).
+
+**Punkt zaczepienia:** `cm-agent/app/channels.py`, `dispatch_item` (~linia 294) i `for_item` (~19).
