@@ -1067,3 +1067,36 @@ Do rozstrzygniecia przy okazji, ktora i tak otwiera `channels.py` - **osobnego o
 wydajemy** (decyzja Managera 19/08).
 
 **Punkt zaczepienia:** `cm-agent/app/channels.py`, `dispatch_item` (~linia 294) i `for_item` (~19).
+
+## D-023: Wyczerpanie srodkow API nie ma alarmu - kazda sciezka LLM pada po cichu do logu
+
+**Zapisany 19/08/2026 (znalezisko z okna serwerowego B+C).**
+
+**Dowod produkcyjny.** Podczas weryfikacji okna 19/08 bot odpowiedzial `Blad przetwarzania
+wiadomosci`. W logu:
+`anthropic.BadRequestError: 400 - 'Your credit balance is too low to access the Anthropic API.'`
+
+Log pokazywal **powtarzalne** padanie `proactive.tick` w petli, nie pojedynczy przypadek - czyli
+awaria trwala JAKIS CZAS PRZED oknem. Nikt sie o niej nie dowiedzial, dopoki czlowiek nie napisal
+do bota. `/health` zwracalo `{"status":"ok"}` przez caly ten czas, bo nie dotyka modelu.
+
+**Why bad:** to rodzina "cisza wyglada jak sukces" (AP-306, AP-310, AP-314, AP-315), ale grozniejsza
+od typowego przypadku, bo **jedna przyczyna wycina naraz WSZYSTKIE organy oparte na modelu**:
+generacje, subagentow, rozmowe, planer, filtry tresci. Deterministyczne sciezki (`/karty`, kolejka,
+Scheduler) chodza dalej i system wyglada na zywy. Sonda zdrowia jest slepa z definicji, bo pyta
+o proces, nie o zdolnosc do pracy. Do tego przyczyna jest ZEWNETRZNA i odnawialna: wroci przy
+kazdym wyczerpaniu srodkow, niezaleznie od jakosci kodu.
+
+**Malo prawdopodobne, ale warte nazwania:** awaria byla widoczna dla Tomasza dopiero jako
+"blad przetwarzania", czyli komunikat, ktory nie mowi, co sie stalo ani co zrobic.
+
+**Do zrobienia (do rozstrzygniecia przez Managera):**
+1. rozpoznawac `credit balance is too low` osobno od innych bledow modelu i meldowac Tomaszowi
+   WPROST, z nazwa przyczyny i linkiem do doladowania, zamiast generycznego "blad przetwarzania";
+2. alarm po stronie systemu przy pierwszym takim bledzie, nie po N-tym, i BEZ powtarzania
+   przy kazdym tiku (inaczej zaleje kanal);
+3. rozwazyc, czy `/health` ma odrozniac "proces chodzi" od "system jest zdolny do pracy" - to
+   ta sama roznica, ktora AP-315 nazwal miedzy forma a gatunkiem.
+
+**Punkt zaczepienia:** `cm-agent/app/proactive.py` (`tick`, `_propose_for_gap`),
+`cm-agent/app/conversation.py` (`_discuss`), wspolny klient modelu w `generate.client`.

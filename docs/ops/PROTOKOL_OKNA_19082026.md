@@ -51,6 +51,82 @@ zatrzymać, gdyby którykolwiek `webhook` siedział na kanale `active`.
 
 Stan zgodny z odczytem sprzed okna, więc między jednym a drugim nic się nie zmieniło.
 
-## KROK 4 i dalej
+## KROK 4 - obraz zbudowany bez przestoju
 
-Do uzupełnienia w trakcie okna.
+`prev-bc` = `latest` = `d018` = `8fd96be70f13` (identyfikatory zgodne, warunek kroku spełniony).
+Nowy `cm-agent:bc` = `33c2ea551ca5`, build 106 s.
+
+## KROK 5 - pisarz zatrzymany
+
+`docker stop cm-agent`. Przestój trwał od tego momentu do kroku 7.
+
+## KROK 6 - UPDATE w transakcji, bramka przepuściła
+
+```
+NOTICE:  BRAMKA OK: 9 wierszy do poprawienia, zero aktywnych.
+UPDATE 9
+NOTICE:  KONTROLA OK: zero wierszy z trybem webhook.
+COMMIT
+```
+
+Stan PO: dziewięć wierszy `ready` stoi na `draft`. `AGS/x` i `AGS/linkedin` nietknięte
+(`active`, `post_queue`). `AGS/sprzedaz` został z `none` zgodnie z decyzją Managera (D-022).
+
+## KROK 7 - nowy obraz podniesiony
+
+`cm-agent:bc` wstał, `/health` zwrócił `{"status":"ok"}`.
+
+## KROK 8 - weryfikacja prawdziwą wiadomością: ZROBIŁA SWOJE
+
+**`/health` mówiło `ok`, a system był częściowo niesprawny.** Pierwsza próba:
+
+- `/karty` odpowiedziało normalnie (`Brak materialow do przegladu`),
+- `zapamiętaj na zawsze: nie używaj słowa ekosystem` zwróciło
+  **`Blad przetwarzania wiadomosci`**.
+
+Log kontenera pokazał przyczynę i **nie był to nasz kod**:
+
+```
+anthropic.BadRequestError: Error code: 400 - 'Your credit balance is too low
+to access the Anthropic API.'
+```
+
+Skończyły się środki na API. `/karty` przeszło, bo jest deterministyczne; padła każda ścieżka
+wołająca model, w tym `proactive.tick` (powtarzalnie, w pętli). Rebuild był zdrowy przez cały
+ten czas i cofanie nie było potrzebne.
+
+**To jest dowód wart zapamiętania osobno: gdyby weryfikacja skończyła się na kodzie 200,
+zamknęlibyśmy okno jako udane, mając niesprawny system.** Wymóg 3 z Z-1 zarobił na siebie
+w pierwszym oknie, w którym go zastosowaliśmy - i zadziałał na awarii, której nikt nie planował
+tym testem złapać.
+
+Po doładowaniu kredytów przez Tomasza druga próba dała **dokładnie zaprojektowany komunikat**:
+
+> Odkładam tę regułę.
+> Muszę Ci to przekazać wprost, bez upiększania:
+> Nie zapisałem tej reguły do stylu i nie chcę, żebyś na nią liczył.
+> Uczenie stylu mam wyłączone (dług D-019). Powód: taka reguła szła potem do KAŻDEGO pisanego
+> tekstu, a dwa razy skończyło się to publicznym postem, który był wypowiedzią modelu zamiast treści.
+> Twoja reguła nie przepadła. Odłożyłem ją na bok razem z językiem i datą, żebyś miał ją przed
+> oczami w dniu, w którym uczenie odblokujemy.
+> Jeśli ma działać już teraz, powiedz mi to przy konkretnym tekście. W tym jednym zastosuję ją od ręki.
+
+Model przekazał go dosłownie, bez własnej narracji i bez twierdzenia, że reguła działa - czyli
+instrukcja `PRZEKAZ TOMASZOWI DOSLOWNIE` zadziałała. Po powrocie API subagenci wznowili pracę
+i zaczęły przychodzić karty materiałów.
+
+## WYNIK OKNA
+
+**Zamknięte, oba cele osiągnięte.** Kod bloków B i C na produkcji (`cm-agent:bc`), dziewięć
+wierszy wyprostowanych na `draft`, weryfikacja przeprowadzona zachowaniem, nie kodem odpowiedzi.
+
+Cofnięcie o krok: `cm-agent:prev-bc` (= `d018`). Kopia tabeli: `~/kopia_channels_19082026.sql`,
+12 wierszy, zweryfikowana dwoma mechanizmami.
+
+## DO ODNOTOWANIA POZA ZAKRESEM OKNA
+
+Awaria kredytów API trwała **jakiś czas przed oknem** - log pokazuje powtarzalne padanie
+`proactive.tick` w pętli, nie pojedynczy przypadek. Nikt się o tym nie dowiedział, dopóki
+człowiek nie napisał do bota. **System nie ma alarmu na wyczerpanie środków API**, a każda
+ścieżka LLM pada wtedy po cichu do logu. To rodzina "cisza wygląda jak sukces" i zasługuje
+na osobne zgłoszenie do Managera.
