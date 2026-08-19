@@ -1,6 +1,6 @@
 # Komponent: GLOS MARKI (voice_dna_core + Voice Bible w promptach)
 
-**STATUS GOTOWOSCI: LIVE, po naprawie ucinania 24/07 (czeka rebuild cm-agent)** (macierz: docs/GOTOWOSC_PRODUKTU.md; aktualizuj przy kazdej zmianie zachowania)
+**STATUS GOTOWOSCI: LIVE, po naprawie ucinania 24/07 (czeka rebuild cm-agent); nauka stylu ma ZAPIS wylaczony od 19/08 (D-019), odczyt bez zmian** (macierz: docs/GOTOWOSC_PRODUKTU.md; aktualizuj przy kazdej zmianie zachowania)
 
 ## Co robi
 
@@ -10,6 +10,67 @@ Zrodlem prawdy jest `brand_config` (kanon SSOT #71), nie plik w repo.
 
 Jeden brand = jeden glos; nakladki marek (AGS/TNM/RDC) siedza w tresci Voice Bible,
 nie w kodzie (kanon: glos RDC = TNM = AGS, bo to ten sam czlowiek).
+
+## NAUKA STYLU: ZAPIS WYLACZONY, ODCZYT ZOSTAJE (19/08/2026, D-019)
+
+Do `brand_config.style_learned` pisaly DWA organy, oba przez `matreview._state_set`:
+
+- `matreview.add_style_rule` - regula podana WPROST przez Tomasza w rozmowie ("zapamietaj
+  na zawsze"),
+- `matreview._distill_style_rules` - 1 do 3 regulek, ktore MODEL destyluje z pary przed/po
+  po recznej korekcie w karcie.
+
+**Od 19/08 zadna z tych drog nie dopisuje juz nic do stylu.** Odczyt istniejacych wpisow
+(`generate._learned_style`, wraz z filtrem jezykowym z AP-315) jest NIETKNIETY.
+
+**Bramka stoi w JEDNYM miejscu: `matreview._state_set`**, na kluczu `style_learned`. Nie w kazdym
+organie osobno, bo obie drogi i tak tamtedy przechodza, a dwie latki mozna ominac trzecim
+pisarzem (AP-309). Predykat, ktory o tym decyduje, to `matreview.zapis_stylu_wolno()`; flaga
+`ZAPIS_STYLU_WYLACZONY` siedzi w KODZIE, a nie w ustawieniu, bo warunek zapisany poza kodem
+jest zalozeniem, nie zabezpieczeniem (AP-314, AP-316). `_distill_style_rules` pyta o ten sam
+predykat wczesniej, ale wylacznie po to, zeby nie placic za wywolanie modelu, ktorego wynik
+i tak nie wejdzie - gwarancji nie daje to sprawdzenie, tylko `_state_set`.
+
+**Powod (decyzja Managera Z-3 z 11/08).** Filtr jezykowy z AP-315 zamknal DROGE, ktora znamy,
+ale klasa zostala otwarta: kazdy wpis nauczony moze byc POLECENIEM, nie preferencja, a z samego
+pola nie da sie tego odczytac. Koszt powtorki to publiczny post pod nazwiskiem Tomasza; mielismy
+dwa. "Przy zerowym przychodzie nie potrzebujemy, zeby system uczyl sie szybciej. Potrzebujemy
+zera incydentow."
+
+**Droga zastepcza zamiast cichej odmowy** (rozstrzygniecie Managera P2 z 19/08). Gdy Tomasz
+powie "zapamietaj na zawsze", regula laduje jako NOTATKA pod kluczem `style_rules_parked`,
+a bot mowi mu wprost, ze do stylu nie weszla, podaje powod i mowi, gdzie jest. Cicha odmowa
+byla wykluczona - to cala rodzina AP-306, AP-310, AP-314, AP-315. Tresc komunikatu:
+`matreview.KOMUNIKAT_D019`.
+
+**Ksztalt notatki zapisujemy juz teraz** (P3), zeby przy odblokowaniu petli zostal sam PRZEGLAD,
+bez drugiej migracji. Miesci sie w istniejacej strukturze `brand_config` - **zero DDL**:
+
+```json
+{"regula": "...", "jezyk": "pl", "rodzaj": "nieokreslony", "pochodzenie": "czlowiek",
+ "ustalenie": {"jezyk": "wywnioskowane", "rodzaj": "nieustalone", "pochodzenie": "zaobserwowane"},
+ "jezyk_wykrywacz": "generate._wyglada_na_angielski", "powod": "D-019", "ts": "..."}
+```
+
+Pole `ustalenie` jest tam z powodu AP-317 (stopien trzeci): bledny odczyt zapisany do bazy
+przestaje byc pomylka i staje sie DANYMI, bo wiersz nie niesie informacji o tym, skad sie wzial.
+Dlatego notatka mowi o KAZDEJ wlasnosci osobno:
+
+- `pochodzenie` = ZAOBSERWOWANE. Ta droga zaczyna sie od zdania Tomasza, innego wejscia nie ma.
+- `jezyk` = WYWNIOSKOWANY, tym samym wykrywaczem, ktory decyduje o wstrzykiwaniu regulek
+  do promptu (`generate._wyglada_na_angielski`; AP-309, jedno zrodlo). Wykrywacz jest celowo
+  NIEsymetryczny, wiec "pl" znaczy tu takze "nie rozpoznano".
+- `rodzaj` = NIEUSTALONY. Preferencji od polecenia nie odroznia dzis nic, co umiemy zmierzyc,
+  a rodzaj zgadniety po cichu czytaloby sie przy przegladzie jako fakt. Wypelnia go czlowiek.
+
+**Nikt tych notatek nie czyta** i tak ma byc do czasu odblokowania petli - to depozyt, nie
+kolejne zrodlo promptu.
+
+**Warunek powrotu (bez zmian od Z-3):** wpis dostaje jezyk i RODZAJ **przy zapisie**, a nie jest
+zgadywany przy odczycie. Samo zdjecie flagi to NIE jest spelnienie tego warunku.
+
+Test: `cm-agent/tests/test_bramka_nauki_stylu.py` (sciezka alarmu: obie drogi plus wolanie
+`_state_set` z pominieciem obu organow; osobno regresja odczytu).
 
 ## BUG NAPRAWIONY 24/07: glos szedl UCIETY (zgloszenie Managera)
 
@@ -39,7 +100,9 @@ bledu, co ucinanie.
 ## Wejscia-wyjscia i tabele
 
 - `brand_config` (per brand): `voice_bible` (wersjonowana bumpem, UNIQUE
-  (brand_id, config_key)), `voice_dna_core`, `banned_vocab`, `style_learned`.
+  (brand_id, config_key)), `voice_dna_core`, `banned_vocab`, `style_learned`
+  (TYLKO do odczytu od 19/08, D-019), `style_rules_parked` (notatki z drogi
+  zastepczej; nikt ich dzis nie czyta).
 - `brand_strategy`: audytorium i filary do bloku roli.
 - `content_items.voice_hash` - md5 Voice Bible uzytej przy generacji (audyt
   i odtwarzalnosc: po zmianie glosu wiadomo, ktore teksty powstaly na starym).

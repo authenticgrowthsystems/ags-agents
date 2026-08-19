@@ -17,7 +17,7 @@ import traceback
 import json
 import re
 
-from . import db
+from . import config, db
 
 _CMD_RE = re.compile(r"^/(brands|brand_on|brand_off|brand_add|brand_remove|brand_config|brand_export)"
                      r"(?:\s+([A-Za-z0-9_-]{2,30}))?\s*$", re.IGNORECASE)
@@ -84,12 +84,18 @@ def _add(name):
     if db.fetchone("SELECT 1 AS x FROM brands WHERE brand_id=%s", (name,)):
         return f"Marka {name} juz istnieje - /brand_config {name}."
     db.execute("INSERT INTO brands (brand_id, brand_name, status) VALUES (%s,%s,'paused')", (name, name))
+    # D-020 (19/08): do dzis stalo tu na sztywno 'webhook' - tryb zabroniony od 22/07 (AP-307).
+    # Znaczylo to, ze KAZDA nowa marka, takze zakladana u klienta, rodzila sie w konfiguracji,
+    # ktora wywolala incydent publikacyjny. Domyslnie 'draft': cel czeka na reczna wklejke,
+    # dopoki Tomasz swiadomie nie przelaczy go na 'post_queue'.
+    cfg = {"language_publish": "pl", "secret_prefix": f"linkedin_{name.lower()}",
+           "publish_mode": config.PUBLISH_DRAFT, "publish_windows": "08:00-18:00"}
+    config.sprawdz_tryb_publikacji(cfg["publish_mode"], f"{name}/linkedin")
     db.execute(
         """INSERT INTO channels (brand_id, channel, status, adapter_path, config, supervised)
            VALUES (%s,'linkedin','ready','/webhook/subagent-linkedin-publish',%s,true)
            ON CONFLICT (brand_id, channel) DO NOTHING""",
-        (name, json.dumps({"language_publish": "pl", "secret_prefix": f"linkedin_{name.lower()}",
-                           "publish_mode": "webhook", "publish_windows": "08:00-18:00"})))
+        (name, json.dumps(cfg)))
     return (f"🆕 Marka {name} utworzona (paused) + cel linkedin (ready).\n"
             f"Checklista kompletnosci (wizard krok po kroku):\n"
             f"1. Glos: przygotuj voice_bible -> BE wgra bumpem do brand_config\n"

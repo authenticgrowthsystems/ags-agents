@@ -15,12 +15,19 @@ INSERT INTO brand_strategy (brand_id, target_audience, content_pillars, core_top
 ON CONFLICT (brand_id) DO NOTHING;
 
 -- AGS channels: X active (publish via post_queue + existing Scheduler), LinkedIn draft-only, rest ready-to-plug.
+-- 19/08/2026 (D-020): the three sleeping channels were seeded with publish_mode 'webhook' - the mode
+-- BANNED since 22/07 after AP-307 (4-5 X posts in one hour, media dropped, a Polish post on the
+-- English-only profile, a callback marking EVERY row of the item 'published'). The install playbook says
+-- "do not set webhook" in step 6 while step 3 applies this file and set it for you. Seeds are now 'draft'.
+-- This INSERT is idempotent (ON CONFLICT DO NOTHING), so re-applying it changes NOTHING in an existing
+-- database: rows seeded before today keep 'webhook' and must be checked by hand -
+--   SELECT brand_id, channel, status, config->>'publish_mode' FROM channels ORDER BY 1,2;
 INSERT INTO channels (brand_id, channel, status, config) VALUES
  ('AGS','x',        'active', '{"publish_mode":"post_queue"}'::jsonb),
  ('AGS','linkedin', 'draft',  '{"publish_mode":"draft"}'::jsonb),
- ('AGS','youtube',  'ready',  '{"publish_mode":"webhook"}'::jsonb),
- ('AGS','facebook', 'ready',  '{"publish_mode":"webhook"}'::jsonb),
- ('AGS','instagram','ready',  '{"publish_mode":"webhook"}'::jsonb)
+ ('AGS','youtube',  'ready',  '{"publish_mode":"draft"}'::jsonb),
+ ('AGS','facebook', 'ready',  '{"publish_mode":"draft"}'::jsonb),
+ ('AGS','instagram','ready',  '{"publish_mode":"draft"}'::jsonb)
 ON CONFLICT (brand_id, channel) DO NOTHING;
 
 -- register the CM agent (network member; capped to low/medium per critical-restriction db/007)

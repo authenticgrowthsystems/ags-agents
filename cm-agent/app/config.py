@@ -80,7 +80,56 @@ DISPATCH_TIMEOUT_H = _i("DISPATCH_TIMEOUT_H", 2)
 # --- channel publish modes (channels.config.publish_mode) ---
 PUBLISH_POST_QUEUE = "post_queue"  # write a post_queue row; the existing per-minute Scheduler publishes (X)
 PUBLISH_DRAFT = "draft"            # write a draft row; Tomasz publishes manually (LinkedIn for now)
-PUBLISH_WEBHOOK = "webhook"        # POST the channel's adapter_path (future YT/FB/IG once wired)
+PUBLISH_WEBHOOK = "webhook"        # POST the channel's adapter_path (ZABRONIONY - blokada nizej)
+
+# --- D-020 (19/08/2026): blokada trybu 'webhook' stoi TU, w kodzie, nie w dokumencie ---
+# Powod, doslownie: `DEPLOY_CHECKLIST` przez trzy tygodnie po incydencie AP-307 nadal instruowal,
+# zeby ten tryb ustawic, i wygladal przy tym swiezo. Warunek zapisany w dokumencie jest
+# ZALOZENIEM, nie zabezpieczeniem (AP-314, AP-316). Kazda droga ustawiajaca publish_mode
+# przechodzi przez sprawdz_tryb_publikacji() i przy 'webhook' pada glosno, z powodem przy sobie.
+WEBHOOK_HASLO_ODBLOKOWANIA = "AP-307-callback-naprawiony"
+
+
+class TrybPublikacjiZabroniony(ValueError):
+    """Proba ustawienia publish_mode='webhook' bez swiadomego zdjecia blokady (D-020)."""
+
+
+ZAKAZ_WEBHOOK = (
+    "Nie ustawie publish_mode='webhook'. Ten tryb jest zabroniony od 22/07/2026 po incydencie "
+    "AP-307: delegat strzela do adaptera NATYCHMIAST przy dispatchu i sloty ignoruje w calosci.\n"
+    "Skutki byly cztery, wszystkie publiczne tego samego dnia: 4-5 postow X w ciagu godziny "
+    "zamiast rozproszenia; wiersze z mediami wyszly BEZ mediow, bo delegat przekazuje sam tekst; "
+    "polski wariant wyszedl na anglojezycznym profilu LinkedIn mimo language_publish='en'; "
+    "a callback publishera oznaczyl 'published' WSZYSTKIE wiersze materialu, takze te ze slotami "
+    "kilka godzin pozniej, wiec baza klamala o wlasnym stanie.\n"
+    "Callback per wiersz do dzis NIE jest naprawiony (swiadoma decyzja, uzbrojona mina), wiec "
+    "czwarty skutek wrocilby co do znaku.\n"
+    "Uzyj 'post_queue' (publikuje Scheduler per slot wiersza, razem z mediami) albo 'draft' "
+    "(gotowiec do recznej wklejki, domykasz go poleceniem 'wklejone <id>').\n"
+    "Swiadome zdjecie blokady: w srodowisku workera ustaw "
+    "PUBLISH_WEBHOOK_ODBLOKOWANY=" + WEBHOOK_HASLO_ODBLOKOWANIA + " i zrestartuj kontener. "
+    "Wartosc 'true' ani '1' NIE zadziala, celowo - haslo nazywa warunek, ktory ma byc spelniony. "
+    "Przedtem przeczytaj docs/anti-patterns/AP-307_nowy_kontrakt_bez_przelaczenia_konsumenta.md."
+)
+
+
+def sprawdz_tryb_publikacji(tryb, gdzie=""):
+    """Bramka D-020. Kazda droga ustawiajaca publish_mode przechodzi TEDY.
+
+    Zwraca napis-ostrzezenie do doklejenia do paragonu (pusty = nie ma o czym mowic).
+    Przy 'webhook' bez zdjetej blokady rzuca TrybPublikacjiZabroniony - nigdy nie poprawia
+    wartosci po cichu, bo cicha korekta wyglada jak sukces (AP-306).
+
+    Zmienna srodowiskowa czytana przy KAZDYM wywolaniu, nie przy imporcie: blokada ma odpowiadac
+    stanowi srodowiska, a nie chwili startu procesu."""
+    if str(tryb or "").strip().lower() != PUBLISH_WEBHOOK:
+        return ""
+    czyje = f"{gdzie}: " if gdzie else ""
+    if os.getenv("PUBLISH_WEBHOOK_ODBLOKOWANY", "").strip() != WEBHOOK_HASLO_ODBLOKOWANIA:
+        raise TrybPublikacjiZabroniony(czyje + ZAKAZ_WEBHOOK)
+    return (f"UWAGA: {czyje}blokada trybu 'webhook' jest ZDJETA zmienna PUBLISH_WEBHOOK_ODBLOKOWANY. "
+            "Publikacja idzie teraz sciezka delegata: sloty i media sa pomijane (AP-307). "
+            "Sprawdz, czy callback publishera oznacza JEDEN wiersz, a nie caly material.")
 
 # brand voice prompt-cache: voice_bible is a stable system block we mark cache_control ephemeral.
 USD_PLN = _f("USD_PLN", 4.0)

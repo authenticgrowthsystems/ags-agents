@@ -42,6 +42,18 @@ Przypomnij jutro), nigdy auto-decyzja.
   Mark Published LI (ta sama ksiega per-wiersz) -> LI Confirm. Patch:
   scheduler-linkedin-branch-22072026.cjs. Tryb `draft` (gotowce + 'wklejone <id>')
   zostaje dostepny per kanal; `webhook` NIE respektuje slotow - nie uzywac.
+- BLOKADA W KODZIE od 19/08 (dlug D-020): `config.sprawdz_tryb_publikacji`
+  rzuca `TrybPublikacjiZabroniony` przy probie ustawienia `webhook`, z pelnym
+  opisem czterech skutkow z 20/07. Pytaja ja PRZED zapisem dwa punkty wejscia:
+  `conversation._target_update` (fraza "ustaw publish_mode dla ..." oraz
+  narzedzie target_update z LLM) i `conversation._target_create` (dziedziczenie
+  configu przez copy_from_channel). Domyslny tryb NOWEGO celu i nowej marki to
+  od 19/08 `draft`, nie `webhook` - do tego dnia kod rodzil kazdy nowy cel
+  w trybie zabronionym od 22/07. Zdjecie blokady: zmienna srodowiskowa workera
+  `PUBLISH_WEBHOOK_ODBLOKOWANY=AP-307-callback-naprawiony` + restart; wtedy
+  paragon dopisuje ostrzezenie, ze sloty i media sa pomijane. Blokada dotyczy
+  USTAWIANIA trybu - wierszy `channels` juz stojacych w bazie nie czyta.
+  Test: `cm-agent/tests/test_blokada_webhook.py`.
 - Callback publikacji: post_queue 'published' + INSERT published_posts +
   agent_messages RESPONSE + potwierdzenie na kanal logowy (bot #2).
 

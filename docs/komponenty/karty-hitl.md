@@ -40,6 +40,9 @@ Dwa widoki decyzyjne w Telegramie:
   W approval: kazdy wariant >3500 znakow leci dodatkowo jako plik .md.
 - Edycja ('edytuj' -> `apply_edit`): zapis final_content + destylacja regul
   stylu (`_distill_style_rules`) + wpis learning_log.
+  **Destylacja WYLACZONA od 19/08 (D-019)**: zwraca pusto, wiec paragon nie ma juz
+  linii "📚 Wyuczone z tej korekty" - i dobrze, bo nauki nie ma. Wpis do learning_log
+  i zapis final_content zostaja bez zmian. Szczegoly: [glos-marki.md](glos-marki.md).
 - Inny kat: `apply_angle_guidance` - regeneracja z wytyczna; czysci stare
   dup_warning.
 - Po KAZDEJ decyzji: paragon NOWA wiadomoscia + nastepna karta NOWA wiadomoscia

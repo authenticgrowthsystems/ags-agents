@@ -607,7 +607,16 @@ def _target_create(inp):
         row = db.fetchone("SELECT config FROM channels WHERE brand_id=%s AND channel=%s",
                           (brand, str(inp["copy_from_channel"]).strip()))
         base = dict((row or {}).get("config") or {})
-    base.setdefault("publish_mode", "webhook")
+    # D-020 (19/08): domyslnym trybem NOWEGO celu jest 'draft', nie 'webhook'. Do dzis stalo tu
+    # 'webhook' - tryb zabroniony od 22/07 po AP-307 - wiec kazdy nowy cel rodzil sie wprost
+    # w tej konfiguracji, ktora wywolala incydent. 'draft' to zarazem awaryjna wartosc konsumenta
+    # (channels.dispatch_item), wiec cel zachowuje sie tak samo z kluczem i bez niego.
+    base.setdefault("publish_mode", config.PUBLISH_DRAFT)
+    # Bramka: 'webhook' moze tu jeszcze wejsc przez copy_from_channel, czyli bez niczyjej decyzji.
+    try:
+        ostrzezenie = config.sprawdz_tryb_publikacji(base.get("publish_mode"), f"{brand}/{channel}")
+    except config.TrybPublikacjiZabroniony as e:
+        return f"⛔ {e}"
     if inp.get("language_publish"):
         base["language_publish"] = str(inp["language_publish"]).strip().lower()
     base["secret_prefix"] = str(inp.get("secret_prefix") or f"{brand.lower()}_{channel}").strip()
@@ -619,7 +628,9 @@ def _target_create(inp):
     if not row:
         return f"Cel {brand}/{channel} juz istnieje - uzyj target_update."
     return (f"🎯 Nowy cel {brand}/{channel} dodany jako USPIONY (ready), jezyk: {base.get('language_publish', '?')}, "
-            f"klucze pod prefiksem '{base['secret_prefix']}'. Wlaczysz go w ⚙️ Cele gdy wgramy tokeny.")
+            f"tryb publikacji: {base['publish_mode']}, "
+            f"klucze pod prefiksem '{base['secret_prefix']}'. Wlaczysz go w ⚙️ Cele gdy wgramy tokeny."
+            + (f"\n{ostrzezenie}" if ostrzezenie else ""))
 
 
 def _target_update(inp):
@@ -629,6 +640,14 @@ def _target_update(inp):
     val = str(inp.get("value") or "").strip()
     if key in ("welcomed",):
         return "Tego pola nie zmieniamy recznie."
+    # D-020: TO jest droga, ktora czlowiek SWIADOMIE wlacza tryb publikacji - i regexem
+    # ("ustaw publish_mode dla AGS x na ..."), i narzedziem target_update z LLM. Bramka stoi
+    # PRZED zapisem, zeby odmowa nie zostawiala polowicznie zmienionego celu.
+    try:
+        ostrzezenie = config.sprawdz_tryb_publikacji(val if key == "publish_mode" else "",
+                                                     f"{brand}/{channel}")
+    except config.TrybPublikacjiZabroniony as e:
+        return f"⛔ {e}"
     if val.lower() in ("true", "false"):
         val_json = val.lower() == "true"
     else:
@@ -639,7 +658,9 @@ def _target_update(inp):
     row = db.fetchone(
         "UPDATE channels SET config = config || %s WHERE brand_id=%s AND channel=%s RETURNING channel",
         (Jsonb({key: val_json}), brand, channel))
-    return f"⚙️ {brand}/{channel}: {key} = {val}." if row else f"Nie znam celu {brand}/{channel}."
+    if not row:
+        return f"Nie znam celu {brand}/{channel}."
+    return f"⚙️ {brand}/{channel}: {key} = {val}." + (f"\n{ostrzezenie}" if ostrzezenie else "")
 
 
 # PORZADKI 19/07 (A): komendy konfiguracyjne deterministycznie, PRZED LLM. Incydent 19/07:
@@ -896,9 +917,11 @@ TOOL_REVIEW_CARDS = {
 
 TOOL_STYLE_RULE = {
     "name": "add_style_rule",
-    "description": ("Zapisz NA STALE regule stylu/jezyka podana wprost przez Tomasza (np. 'przed i nie "
+    "description": ("Odbierz regule stylu/jezyka podana wprost przez Tomasza (np. 'przed i nie "
                     "stawia sie przecinkow', 'nie uzywaj slowa X'). Wywoluj ZAWSZE gdy Tomasz mowi "
-                    "'zapamietaj' o stylu pisania - sama rozmowa NIE jest trwala pamiecia."),
+                    "'zapamietaj' o stylu pisania - sama rozmowa NIE jest trwala pamiecia. "
+                    "UWAGA: uczenie stylu jest WYLACZONE (D-019). Narzedzie ODKLADA regule i zwraca "
+                    "komunikat do przekazania Tomaszowi doslownie. NIE twierdz, ze regula juz dziala."),
     "input_schema": {"type": "object", "properties": {
         "rule": {"type": "string", "description": "Regula w 1 zdaniu, po polsku."}},
         "required": ["rule"]},
@@ -1534,8 +1557,10 @@ def _dispatch_tool(name, inp, chat_id):
     if name == "attach_last_photo":
         return _attach_last_photo(inp)
     if name == "add_style_rule":
-        n = matreview.add_style_rule(inp.get("rule"))
-        return f"Regula stylu zapisana na stale (lacznie {n})."
+        # D-019 (19/08): narzedzie oddaje komunikat matreview BEZ wlasnej narracji. Do 19/08 stalo
+        # tu "Regula stylu zapisana na stale" - po wylaczeniu zapisu bylo to FALSZYWE POTWIERDZENIE,
+        # czyli gorzej niz cicha odmowa: Tomasz liczylby na regule, ktorej nie ma.
+        return matreview.add_style_rule(inp.get("rule"))
     if name == "reschedule_material":
         return _reschedule_material(inp)
     if name == "replace_material":

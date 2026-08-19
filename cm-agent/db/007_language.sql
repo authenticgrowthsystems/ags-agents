@@ -12,4 +12,8 @@ WHERE brand_id='AGS' AND channel IN ('x', 'linkedin') AND NOT (config ? 'languag
 
 -- 3) przyszle cele (dojda z App 2 CMA - wiersze channels z jezykiem od razu w config):
 --    LinkedIn strona AGS = en, LinkedIn TNM = pl, LinkedIn Royal Dance Center = pl
---    (INSERT przy aktywacji celu; wzor: config = '{"publish_mode":"webhook","language_publish":"pl", ...}')
+--    (INSERT przy aktywacji celu; wzor: config = '{"publish_mode":"draft","language_publish":"pl", ...}')
+--    POPRAWIONE 19/08/2026 (D-020): wzor podawal 'webhook' - tryb ZABRONIONY od 22/07 po AP-307
+--    (4-5 postow X w godzine, zgubione media, polski post na anglojezycznym profilu, baza klamiaca
+--    o stanie). Wzor w komentarzu jest WYKONYWANY, nie oceniany (AP-316). Kod od 19/08 odmawia
+--    ustawienia 'webhook': config.sprawdz_tryb_publikacji.

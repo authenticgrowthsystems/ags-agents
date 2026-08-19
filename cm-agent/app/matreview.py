@@ -83,6 +83,24 @@ def _admin_chat():
 
 
 # ---------------- stan (brand_config, klucz per funkcja) ----------------
+KLUCZ_STYLU = "style_learned"                # nauczone reguly stylu, wstrzykiwane do KAZDEJ generacji
+KLUCZ_STYLU_ODLOZONE = "style_rules_parked"  # D-019: notatki do przegladu przy odblokowaniu petli
+
+# D-019: petla nauki stylu ma ZAPIS wylaczony, ODCZYT nietkniety. Flaga stoi w kodzie, a nie
+# w ustawieniu, swiadomie: warunek zapisany poza kodem jest zalozeniem, nie zabezpieczeniem
+# (AP-314, AP-316). Zdjecie jej to NIE jest samo odblokowanie petli - najpierw wpis musi
+# dostawac jezyk i rodzaj PRZY ZAPISIE.
+ZAPIS_STYLU_WYLACZONY = True
+
+
+def zapis_stylu_wolno():
+    """Jedyne miejsce w kodzie, ktore odpowiada na pytanie 'czy wolno dopisac nowa regule
+    do nauczonego stylu'. Pyta o to bramka w `_state_set` - ta, ktora naprawde zatrzymuje zapis -
+    oraz destylacja, ta druga wylacznie po to, zeby nie placic za wywolanie modelu, ktorego wynik
+    i tak nie wejdzie. Gwarancji nie daje zaden z pytajacych, tylko `_state_set`."""
+    return not ZAPIS_STYLU_WYLACZONY
+
+
 def _state_get(key):
     r = db.fetchone("SELECT config_value FROM brand_config WHERE brand_id='AGS' AND config_key=%s", (key,))
     try:
@@ -92,12 +110,30 @@ def _state_get(key):
 
 
 def _state_set(key, obj):
+    """Zwraca True, gdy zapis poszedl do bazy, i False, gdy zatrzymala go bramka.
+
+    BRAMKA D-019 (19/08/2026, decyzja Managera Z-3 z 11/08, zakres rozstrzygniety 19/08).
+    Do `style_learned` pisaly DWA organy: `add_style_rule` (regula podana wprost przez Tomasza)
+    oraz `_distill_style_rules` (regulki destylowane przez model z recznej korekty). Obie drogi
+    przechodza TEDY, wiec bramka stoi w tym jednym miejscu, a nie w kazdej z nich osobno: dwie
+    latki mozna ominac trzecim pisarzem, jednego wspolnego przejscia nie (AP-309). Odczyt
+    istniejacych regul (`generate._learned_style`) zostaje NIETKNIETY.
+
+    Dlaczego zamkniete, chociaz funkcja dziala: regula z tego pola idzie do KAZDEJ generacji,
+    a z samego pola nie da sie odczytac, czy jest preferencja, czy POLECENIEM. Dwa razy
+    skonczylo sie to publicznym postem, ktory byl wypowiedzia modelu zamiast tresci (AP-315).
+    Warunek powrotu: wpis dostaje jezyk i RODZAJ PRZY ZAPISIE, a nie przy odczycie."""
+    if key == KLUCZ_STYLU and not zapis_stylu_wolno():
+        print(f"[cm] D-019: zapis do '{key}' zatrzymany przez bramke "
+              f"(petla nauki stylu wylaczona; odczyt istniejacych regul bez zmian)", flush=True)
+        return False
     db.execute(
         """INSERT INTO brand_config (brand_id, config_key, config_value, version, updated_by, updated_at)
            VALUES ('AGS',%s,%s,1,'cm-matreview',NOW())
            ON CONFLICT (brand_id, config_key) DO UPDATE SET config_value=EXCLUDED.config_value,
              version=brand_config.version+1, updated_by='cm-matreview', updated_at=NOW()""",
         (key, json.dumps(obj, ensure_ascii=False)))
+    return True
 
 
 # ---------------- S2: intake (matdec:) ----------------
@@ -290,18 +326,79 @@ def send_review_card(chat_id=None, theme_fragment=None, only_with_media=False, d
     return bool(r and r.get("ok"))
 
 
+KOMUNIKAT_D019 = (
+    "Nie zapisalem tej reguly do stylu i nie chce, zebys na nia liczyl.\n\n"
+    "Uczenie stylu mam wylaczone (dlug D-019). Powod: taka regula szla potem do KAZDEGO "
+    "pisanego tekstu, a dwa razy skonczylo sie to publicznym postem, ktory byl wypowiedzia "
+    "modelu zamiast tresci.\n\n"
+    "Twoja regula nie przepadla. Odlozylem ja na bok razem z jezykiem i data, zebys mial ja "
+    "przed oczami w dniu, w ktorym uczenie odblokujemy.\n\n"
+    "Jesli ma dzialac juz teraz, powiedz mi to przy konkretnym tekscie. W tym jednym "
+    "zastosuje ja od reki.")
+
+
+def _jezyk_reguly(tekst):
+    """Jezyk notatki bierzemy z TEGO SAMEGO wykrywacza, ktory decyduje o wstrzykiwaniu regulek
+    do promptu (AP-309: jedno zrodlo, nie drugie wykrywanie jezyka obok pierwszego).
+    `generate._wyglada_na_angielski` jest celowo NIEsymetryczny: 'pl' znaczy tu 'nie rozpoznano
+    jako angielskie', a wiec takze 'nie wiem'. To jest domysl i notatka mowi o tym wprost."""
+    from .generate import _wyglada_na_angielski
+    return "en" if _wyglada_na_angielski(tekst) else "pl"
+
+
+def _zaparkuj_regule_stylu(rule):
+    """DROGA ZASTEPCZA z D-019 (rozstrzygniecie Managera P2 i P3): regula, ktora nie wchodzi
+    do stylu, laduje jako notatka do przegladu. Miesci sie w istniejacej strukturze
+    `brand_config` pod wlasnym kluczem - zero DDL, zadnego okna migracyjnego.
+
+    Ksztalt pola zapisujemy JUZ TERAZ (jezyk, rodzaj, pochodzenie), zeby przy odblokowaniu
+    petli zostal sam PRZEGLAD, bez drugiej migracji.
+
+    AP-317, stopien trzeci: bledny odczyt zapisany do bazy przestaje byc pomylka i staje sie
+    DANYMI, bo wiersz nie niesie informacji o tym, skad sie wzial. Dlatego kazda notatka ma
+    pole `ustalenie` i mowi o KAZDEJ wlasnosci osobno, czy jest zaobserwowana, czy wywnioskowana:
+    - pochodzenie 'czlowiek' - ZAOBSERWOWANE. Ta droga zaczyna sie od zdania Tomasza w rozmowie,
+      innego wejscia nie ma, wiec tu nie zgadujemy.
+    - jezyk - WYWNIOSKOWANY z tresci reguly (patrz `_jezyk_reguly`), wraz z nazwa wykrywacza,
+      zeby przy przegladzie dalo sie sprawdzic, czym zostal ustalony.
+    - rodzaj - NIEUSTALONY. Preferencji od polecenia nie odroznia dzis nic, co umiemy zmierzyc,
+      a rodzaj zgadniety po cichu czytaloby sie przy przegladzie jako fakt. Zostaje pusty slot
+      i czlowiek, ktory go wypelni."""
+    notatka = {
+        "regula": rule[:600],
+        "jezyk": _jezyk_reguly(rule),
+        "rodzaj": "nieokreslony",
+        "pochodzenie": "czlowiek",
+        "ustalenie": {"jezyk": "wywnioskowane", "rodzaj": "nieustalone", "pochodzenie": "zaobserwowane"},
+        "jezyk_wykrywacz": "generate._wyglada_na_angielski",
+        "powod": "D-019",
+        "ts": datetime.datetime.now(WARSAW).isoformat(),
+    }
+    st = _state_get(KLUCZ_STYLU_ODLOZONE)
+    arr = (st.get("notatki") or []) if isinstance(st, dict) else []
+    if any((n or {}).get("regula") == notatka["regula"] for n in arr if isinstance(n, dict)):
+        return len(arr)
+    arr = (arr + [notatka])[-60:]
+    _state_set(KLUCZ_STYLU_ODLOZONE, {"notatki": arr})
+    return len(arr)
+
+
 def add_style_rule(rule):
-    """Regula stylu podana WPROST przez Tomasza w rozmowie ('zapamietaj na zawsze') -> style_learned
-    (trwale; kazda generacja dostaje regulki w prompcie)."""
+    """Regula stylu podana WPROST przez Tomasza w rozmowie ('zapamietaj na zawsze').
+
+    D-019 (19/08/2026): regula NIE wchodzi juz do nauczonego stylu - zatrzymuje ja bramka
+    w `_state_set`, ta sama, ktora zatrzymuje destylacje. Zamiast cichej odmowy jest DROGA
+    ZASTEPCZA: regula laduje jako notatka do przegladu, a Tomasz dostaje o tym zdanie wprost
+    (cicha odmowa to cala rodzina AP-306, AP-310, AP-314, AP-315).
+
+    ZWRACA TEKST dla rozmowy, nie licznik regul jak przed 19/08. Jedyny wolajacy to narzedzie
+    `add_style_rule` w `conversation._run_tool`."""
     rule = (rule or "").strip()
     if not rule:
-        return 0
-    cur = _state_get("style_learned")
-    arr = (cur.get("rules") or []) if isinstance(cur, dict) else []
-    if rule not in arr:
-        arr = (arr + [rule])[-30:]
-        _state_set("style_learned", {"rules": arr})
-    return len(arr)
+        return "Nie widze tresci reguly. Powtorz ja jednym zdaniem, to ja odloze."
+    _zaparkuj_regule_stylu(rule)
+    return ("PRZEKAZ TOMASZOWI DOSLOWNIE, nie streszczaj i nie dopisuj, ze regula juz dziala:\n"
+            + KOMUNIKAT_D019)
 
 
 def _card(item_id=None, brand_id=None, full=False):
@@ -959,8 +1056,15 @@ def apply_edit(new_text, wake_event=None):
 
 def _distill_style_rules(brand, old, new, item_id):
     """Nauka poziom 2 (06/07): z pary przed/po destyluj 1-3 regulki stylu i doloz do
-    brand_config 'style_learned' (ostatnie 30) - kazda generacja dostaje je w prompcie."""
+    brand_config 'style_learned' (ostatnie 30) - kazda generacja dostaje je w prompcie.
+
+    D-019 (19/08/2026): organ WYLACZONY. Bramka, ktora naprawde tego pilnuje, siedzi
+    w `_state_set` - sprawdzenie ponizej jest tylko po to, zeby nie placic za wywolanie modelu,
+    ktorego wynik i tak nie wejdzie. Gdyby ktos je usunal, zapis nadal nie przejdzie."""
     if not old or not new or old == new:
+        return []
+    if not zapis_stylu_wolno():
+        print("[cm] D-019: destylacja regul stylu pominieta (petla nauki stylu wylaczona)", flush=True)
         return []
     try:
         from .generate import client
@@ -979,10 +1083,12 @@ def _distill_style_rules(brand, old, new, item_id):
                  "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").split("\n")
                  if ln.strip().startswith("-")][:3]
         if rules:
-            cur = _state_get("style_learned")
+            cur = _state_get(KLUCZ_STYLU)
             arr = (cur.get("rules") or []) if isinstance(cur, dict) else []
-            arr = (arr + rules)[-30:]
-            _state_set("style_learned", {"rules": arr})
+            if not _state_set(KLUCZ_STYLU, {"rules": (arr + rules)[-30:]}):
+                # Bramka zatrzymala zapis, wiec Tomasz NIE moze dostac meldunku
+                # "Wyuczone z tej korekty" o nauce, ktorej nie ma (AP-315 na poziomie paragonu).
+                return []
         return rules
     except Exception:
         return []

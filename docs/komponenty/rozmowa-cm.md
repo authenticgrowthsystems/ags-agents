@@ -106,7 +106,10 @@ propozycje (stara sciezka); 'odpowiedz na ten DM' = `subagent_reply_dm`
    (agent_logs CONVERSATION_SUMMARY) i wstrzykuje ostatnie skroty do kontekstu
    ("pamietasz o czym wczoraj" dziala).
 3. Trwale (nigdy nie wygasa): channels.config.rules (subagent_remember_rule,
-   max 20), reguly stylu (add_style_rule + style_learned), engagement_log
+   max 20), reguly stylu (`style_learned` - TYLKO odczyt od 19/08, D-019;
+   `add_style_rule` nie dopisuje juz nic do stylu, tylko odklada regule jako
+   notatke i mowi o tym Tomaszowi wprost - patrz [glos-marki.md](glos-marki.md)),
+   engagement_log
    (ostatnie 5 interakcji), content_memory/pgvector (archiwum semantyczne),
    inspirations (schowek), agent_messages (ustalenia z CM), agent_logs.
    Kontekst wstrzykiwany swiezo: kolejka, plan, cele, Voice Bible (cache).

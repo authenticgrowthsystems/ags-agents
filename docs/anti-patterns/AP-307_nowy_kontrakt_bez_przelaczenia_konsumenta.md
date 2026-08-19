@@ -60,11 +60,20 @@ Cztery skutki jednego niezmienionego wiersza konfiguracji:
 4. Gdy nowa droga wchodzi obok starej, **stara musi miec date wylaczenia albo jawny powod, dla
    ktorego zostaje**. "Zostawmy na wszelki wypadek" to wlasnie ten anty-wzorzec.
 
-## Co z tego zyje DZISIAJ (stan 11/08/2026)
+## Co z tego zyje DZISIAJ (stan 19/08/2026)
 
 - **Oba kanaly AGS chodza na `publish_mode='post_queue'`** - publikuje Scheduler per slot wiersza,
   z mediami. Tryb `draft` (gotowce do recznej wklejki) zostaje dostepny per kanal.
-- **`webhook` jest zabroniony** - `docs/komponenty/kolejka-publikacja.md` mowi wprost "nie uzywac".
+- **`webhook` jest zabroniony, a od 19/08 blokada stoi W KODZIE, nie w dokumencie** (dlug D-020,
+  decyzja Managera Z-4). `config.sprawdz_tryb_publikacji` rzuca wyjatek z opisem tych czterech
+  skutkow; pytaja ja PRZED zapisem `conversation._target_update` (droga, ktora czlowiek swiadomie
+  ustawia tryb) i `_target_create` (dziedziczenie przez `copy_from_channel`). Swiadome zdjecie
+  blokady = zmienna srodowiskowa `PUBLISH_WEBHOOK_ODBLOKOWANY=AP-307-callback-naprawiony`
+  plus restart workera. **Przy okazji wyszlo, ze `webhook` byl WARTOSCIA DOMYSLNA** przy
+  zakladaniu celu (`_target_create`) i marki (`brands_ui._add`): przez cztery tygodnie po zakazie
+  kazdy nowy cel, takze u nowego klienta, rodzil sie w konfiguracji, ktora wywolala incydent.
+  Domyslna wartoscia jest teraz `draft`. Blokada dotyczy USTAWIANIA trybu - wierszy juz
+  stojacych w bazie nie czyta, wiec stan produkcji sprawdza sie zapytaniem, nie testem.
 - **UZBROJONA MINA, swiadomie niezalatana:** callback per-wiersz nadal oznacza `published`
   wszystkie wiersze materialu. Adaptery po przelaczeniu trybow sa nieuzywane, wiec dzis to nie boli -
   ale **powrot do trybu `webhook` bez wczesniejszej naprawy callbacku odtworzy skutek numer trzy

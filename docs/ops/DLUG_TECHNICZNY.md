@@ -887,7 +887,48 @@ cos podobnego do tego, co mialy sprawdzac. To jest dokladnie ta sama klasa co AP
 testu: kontrola pyta o cos innego, niz mysli jej autor - i tylko celowe przywrocenie wady
 to pokazuje.
 
-## D-019: Petla nauki dopisuje nowe wpisy bez jezyka i rodzaju - ZAPIS DO WYLACZENIA
+## D-019 [ZAMKNIETE 19/08/2026]: Petla nauki dopisuje nowe wpisy bez jezyka i rodzaju
+
+**Zamkniete 19/08/2026** wedlug decyzji Managera Z-3 (11/08) i rozstrzygniecia zakresu z 19/08
+(`docs/cm/ODPOWIEDZ_Managera_19082026_blok_B.md`).
+
+**Odczyt kodu obalil zdanie z tego wpisu, ze producent jest jeden.** Pisarzy bylo DWOCH:
+`matreview.add_style_rule` (regula dyktowana przez Tomasza) i `matreview._distill_style_rules`
+(destylacja modelu z korekty VOICE_EDIT). Manager rozstrzygnal: bramka obejmuje OBIE drogi
+w JEDNYM wspolnym miejscu, bo roznica miedzy preferencja a poleceniem lezy w SFORMULOWANIU,
+nie w autorstwie. Bramka stoi w `matreview._state_set` na kluczu `style_learned`, wiec nie ominie
+jej takze trzeci pisarz, gdyby powstal (AP-309); flaga `ZAPIS_STYLU_WYLACZONY` jest W KODZIE,
+nie w ustawieniu (AP-314). Odczyt `generate._learned_style` NIETKNIETY.
+
+Zamiast cichej odmowy jest droga zastepcza: regula podyktowana przez Tomasza laduje jako notatka
+w `brand_config.style_rules_parked` (jezyk, rodzaj, pochodzenie plus pole `ustalenie`, ktore
+rozroznia ZAOBSERWOWANE od WYWNIOSKOWANEGO per wlasnosc - AP-317). `rodzaj` zapisuje sie jako
+jawnie nieustalony, bo preferencji od polecenia nie odroznia dzis nic mierzalnego, a zgadniety
+rodzaj czytaloby sie przy odblokowaniu petli jako fakt. Bot mowi Tomaszowi wprost, ze regula
+do stylu nie weszla, i proponuje zastosowanie jej do jednego konkretnego tekstu. Zero DDL,
+zadnego okna migracyjnego.
+
+Domkniete przez koordynatora w tym samym commicie: `conversation._run_tool` skladal
+`"Regula stylu zapisana na stale"`, czyli po wylaczeniu zapisu **falszywe potwierdzenie - gorsze
+niz cicha odmowa**; opis `TOOL_STYLE_RULE` obiecywal modelowi zapis na stale. Oba poprawione.
+
+**Warunek powrotu bez zmian:** wpis dostaje jezyk i RODZAJ PRZY ZAPISIE. Samo zdjecie flagi tego
+warunku NIE spelnia.
+
+Zachowanie: `cm-agent/tests/test_bramka_nauki_stylu.py` (63 kontrole; przy celowo przywroconej
+wadzie pada piec, sprawdzone przez koordynatora). Opis: `docs/komponenty/glos-marki.md`.
+
+**ZNALEZISKO POZA ZAKRESEM, ta sama klasa, prawdopodobnie ostrzejsze - CZEKA NA MANAGERA:**
+istnieje DRUGI trwaly magazyn regul, `channels.config.rules`, pisany narzedziem
+`subagent_remember_rule` z rozmowy i wstrzykiwany przez `generate._channel_rules` do KAZDEGO
+wariantu kanalowego jako `OWNER RULES FOR THIS ACCOUNT (obey strictly, override defaults if
+conflict)`. To jest wprost polecenie posluszenstwa z prawem nadpisania domyslnych zasad, bez
+filtra jezykowego, bez rodzaju, bez pochodzenia, do 20 pozycji per kanal. Mechanizm, przed ktorym
+Z-3 zamknal `style_learned`, w tym magazynie stoi otwarty. NIE TKNIETY - poza zakresem D-019.
+
+---
+
+## D-019 (tresc oryginalna z 11/08, zostawiona dla kontekstu)
 
 **Zapisany 11/08/2026 (decyzja Managera Z-3, NIE wykonana - blok dla nastepnej sesji).**
 
@@ -906,9 +947,9 @@ zera incydentow."** Wylaczenie kosztuje dzis prawie nic.
 Punkt zaczepienia: producent wpisow do `style_learned` (destylacja z korekt VOICE_EDIT);
 konsument `generate._learned_style` zostaje bez zmian.
 
-## D-020: Blokada `publish_mode='webhook'` ma byc W KODZIE, nie w dokumencie
+## D-020 [ZAMKNIETE 19/08/2026]: Blokada `publish_mode='webhook'` ma byc W KODZIE, nie w dokumencie
 
-**Zapisany 11/08/2026 (decyzja Managera Z-4, NIE wykonana - blok dla nastepnej sesji).**
+**Zapisany 11/08/2026 (decyzja Managera Z-4). Wykonany 19/08/2026.**
 **Manager ODRZUCIL moja rekomendacje "zostawic jako warunek twardy w dokumencie".**
 
 Powod jest w moim wlasnym raporcie z tego samego dnia: `DEPLOY_CHECKLIST` przez trzy tygodnie
@@ -921,6 +962,62 @@ wskazujacym AP-307 i wymogiem swiadomego zdjecia blokady. Kilkanascie linii plus
 
 **Czego NIE ruszamy:** samej miny w callbacku publishera (oznacza `published` wszystkie wiersze
 materialu). Na to okna nie wydajemy - decyzja Managera bez zmian.
+
+### Co dokladnie blokuje kod (19/08/2026)
+
+**Bramka: `config.sprawdz_tryb_publikacji(tryb, gdzie)`** w `cm-agent/app/config.py`, tuz pod
+stalymi trybow. Jedna funkcja, jedna decyzja; wolajace pliki tylko ja pytaja. Przy `webhook`
+rzuca `config.TrybPublikacjiZabroniony` z komunikatem, ktory **nazywa AP-307 i cztery skutki
+z 20/07** (4-5 postow X w godzine, wiersze wyslane bez mediow, polski post na anglojezycznym
+profilu, baza oznaczajaca `published` wszystkie wiersze materialu). Nigdy nie poprawia wartosci
+po cichu - cicha korekta wygladalaby jak sukces (AP-306).
+
+**Dwa punkty wejscia, oba w drodze do zapisu, nie po nim:**
+
+1. `conversation._target_update` - **jedyna droga, ktora czlowiek SWIADOMIE ustawia tryb**:
+   fraza `ustaw publish_mode dla <marka> <cel> na ...` (regex przed LLM) oraz narzedzie
+   `target_update` wolane przez model. Odmowa wraca jako tekst z `⛔`, zapisu nie ma.
+2. `conversation._target_create` - bo `copy_from_channel` potrafi wciagnac `webhook`
+   z configu innego celu, **bez niczyjej decyzji**.
+
+**Osobne, powazniejsze znalezisko przy okazji: `webhook` byl WARTOSCIA DOMYSLNA w dwoch
+miejscach zakladajacych cele.** `conversation._target_create` (`base.setdefault`) i
+`brands_ui._add` (`/brand_add`, konfiguracja celu linkedin wpisana na sztywno). Zakaz obowiazywal
+od 22/07, a kod **przez cztery tygodnie rodzil kazdy nowy cel i kazda nowa marke wprost w tej
+konfiguracji, ktora wywolala incydent** - u nowego klienta tez. Oba miejsca stoja teraz na
+`config.PUBLISH_DRAFT`, czyli na tej samej wartosci, ktora konsument (`channels.dispatch_item`)
+i tak przyjmuje przy braku klucza. Nowy cel czeka na reczna wklejke, dopoki Tomasz swiadomie
+nie przelaczy go na `post_queue`.
+
+**To samo znalezisko w migracjach, czyli u KAZDEGO nowego klienta.** `002_seed_ags.sql` zakladal
+cele `youtube`, `facebook`, `instagram` wprost z `"publish_mode":"webhook"`, a `007_language.sql`
+podawal w komentarzu **wzor konfiguracji nowego celu z tym samym trybem**. `DEPLOY_CHECKLIST`
+w kroku 6 pisze "DO NOT set webhook", a w kroku 3 kazal zaaplikowac plik, ktory ustawial go za
+instalatora - dokladnie AP-316. Oba pliki poprawione na `draft`. **Produkcji to nie rusza**: seed
+ma `ON CONFLICT DO NOTHING`, wiec wiersze zasiane wczesniej zostaja takie, jakie sa.
+
+**Swiadome zdjecie blokady:** zmienna srodowiskowa workera
+`PUBLISH_WEBHOOK_ODBLOKOWANY=AP-307-callback-naprawiony` plus restart kontenera. Trzy powody
+tego ksztaltu: (1) zyje **poza repozytorium**, wiec zaden dokument, commit ani rozmowa z botem
+jej nie przestawi - trzeba dostac sie do serwera; (2) **nie jest logiczna** - `true`, `1`, `TAK`
+nie dzialaja, wiec nie da sie jej odbebnic odruchem; (3) **haslo nazywa warunek** z AP-307
+(callback per wiersz), wiec zeby je wpisac, trzeba wiedziec, czego dotyczy. Zdjecie blokady tez
+nie jest ciche: paragon dopisuje ostrzezenie, ze sloty i media sa pomijane.
+
+**Test:** `cm-agent/tests/test_blokada_webhook.py`. Pilnuje SCIEZKI ALARMU (zly wsad -> odmowa
+**i zero zapisow do bazy**), obejsc (`WEBHOOK`, spacje, `true` w zmiennej), drogi zdjecia blokady
+oraz tego, ze `/brand_add` i `target_create` dalej dzialaja - bezpiecznik, ktory zabija dzialajaca
+sciezke, sam bylby awaria (AP-312). Sprawdzony przez celowe wylaczenie bramki: 25 kontroli
+na czerwono, w tym obie kontrole "do bazy nic nie poszlo".
+
+**Czego kod NIE wie i musi sprawdzic czlowiek:** jaka wartosc `publish_mode` maja WIERSZE
+NA PRODUKCJI. Blokada dotyczy **ustawiania** trybu, nie czyta istniejacych wierszy `channels`.
+Kanal, ktory dzis siedzi w bazie z `webhook`, dalej pojdzie sciezka delegata i **zaden test tego
+nie zobaczy**. Do sprawdzenia recznie (AP-307 punkt 3 - pytaj o konfiguracje, nie tylko o kod):
+
+```sql
+SELECT brand_id, channel, status, config->>'publish_mode' AS tryb FROM channels ORDER BY 1,2;
+```
 
 ## D-021: Manager nie ma drogi zapisu NOWEGO prospekta - lancuch peka przy nowym czlowieku
 

@@ -1,6 +1,6 @@
 # AI Content Manager - Deployment Playbook (v3)
 
-> **Last verified against the codebase: 10/08/2026.** v2 was written 10/06 and had drifted in two ways
+> **Last verified against the codebase: 19/08/2026.** v2 was written 10/06 and had drifted in two ways
 > that would have broken or endangered a fresh install: it told the installer to apply **8** migrations
 > when there are **42**, and to set `publish_mode` to a value this project has **banned since 22/07**
 > (it ignores scheduling - see AP-307). Both corrected below.
@@ -119,6 +119,15 @@ a separate log channel. Every fact lives in one relational PostgreSQL database -
    > a callback that marked EVERY row of the item `published` - including rows scheduled hours later -
    > so the database lied about system state. Full account: `anti-patterns/library.md` AP-307.
    > `post_queue` is the mode both live channels use; `draft` (manual paste) stays available per channel.
+   >
+   > **Since 19/08/2026 the code enforces this, so you cannot get it wrong by following a stale doc**
+   > (debt D-020): `config.sprawdz_tryb_publikacji` raises on any attempt to set `webhook` through CM
+   > (`target_update`, `target_create`), and channels created by `/brand_add` or `target_create` now
+   > default to `draft` instead of `webhook`. Lifting the block is deliberate and lives outside the
+   > repo: worker env `PUBLISH_WEBHOOK_ODBLOKOWANY=AP-307-callback-naprawiony` plus a restart.
+   > The block covers SETTING the mode - it does not read `channels` rows that already exist, so an
+   > install migrating an old database still has to check them:
+   > `SELECT brand_id, channel, config->>'publish_mode' FROM channels;`
 7. **Seed `brand_config`:** voice_bible, banned_vocab, language_comm, admin_chat_ids, optional per-task
    model tiers (`cm_tier_<task>`).
 8. **Telegram wiring:** point the conversation bot webhook at n8n; run setMyCommands sync so the command
