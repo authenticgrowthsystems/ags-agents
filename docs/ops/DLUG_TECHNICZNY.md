@@ -826,6 +826,48 @@ zdania w `cm-agent/app/`). Odczyt precyzyjny rozstrzygnal; odczyt zgrubny wprowa
 
 ## D-017: Token bota Telegrama wpisany NA SZTYWNO w 44 wezlach HITL Handlera
 
+### Przygotowane 19/08/2026 (WYKONANIE CZEKA NA OKNO - dlug NIE jest zamkniety)
+
+Skrypt `n8n-workflows/patches/d017-token-bez-hardkodu-19082026.cjs` (piec trybow: `sprawdz`,
+`sucho`, `sucho-z-pliku`, `zapisz`, `cofnij`) plus procedura `docs/ops/OKNO_D017_przygotowane.md`
+z komendami w skladni PowerShella 5.1.
+
+**Liczba 44 potwierdzona dwoma niezaleznymi przeliczeniami** (podwykonawca i koordynator, osobnymi
+skryptami) na eksporcie z 11/08: 44 wezly `httpRequest` z twardym tokenem, JEDEN literal,
+36 adresow wyrazeniowych i 8 zwyklych. Dlug sie NIE zestarzal.
+
+**Trzy pulapki, ktorych NIE BYLO w tym wpisie, a kazda po cichu rozwalilaby naiwny patch:**
+1. **osiem z 44 adresow to zwykle napisy, nie wyrazenia** - bez dopisania prefiksu `=` n8n
+   wstawi klamry DOSLOWNIE do URL, Telegram odda 404, a bot **zamilknie bez zadnego bledu**;
+2. **dwa adresy maja odmiane `/file/bot<TOKEN>/`** (pobieranie plikow) - podmiana po
+   `https://api.telegram.org/bot` ominelaby je;
+3. **galaz rownolegla dla wezla z tokenem dalaby blad LOSOWY**, bo przy `executionOrder: v1`
+   kolejnosc galezi zalezy od polozenia wezlow na plotnie. Stad lancuch
+   `Telegram Trigger -> TG Token -> Detect Update Type`, a nie galaz.
+
+**Poswiadczenie n8n ODPADA, wbrew pierwotnemu zapisowi tego dlugu.** Poswiadczenia wstrzykuja sie
+w NAGLOWKI, a Telegram trzyma token w SCIEZCE URL. Zostaje `app_secrets`, klucz
+`telegram_bot_token` - wiersz JUZ tam jest i JUZ jest czytany (Scheduler, `PostgreSQL Lookup
+Session`). Zadnego czwartego mechanizmu.
+
+**Wpis nie odnotowal, ze robota jest w polowie zrobiona:** szesc wezlow tego samego workflow
+czyta token z wyrazenia od dawna. To zmienia charakter zadania z "wymysl mechanizm" na
+"dokoncz zaczete", a bramka pilnuje, zeby te szesc przeszlo NIETKNIETYCH.
+
+**Bramka zlapala blad swojego autora.** Pierwsza wersja wzorca URL wykluczala klamry i po
+przemianie widziala zero podmienionych wezlow. Kontrola wyniku zatrzymala przebieg na sucho,
+offline, zanim cokolwiek dotknelo produkcji.
+
+**Sprawdzone przez koordynatora, nie przyjete z raportu:** przebieg offline daje 8 bramek
+i 10 kontroli wyniku na zielono (exit 0, zero sieci); przy wsadzie z 43 wezlami zamiast 44
+bramka **pada ZAMKNIETA** (`STOP liczba wezlow do podmiany: 43, oczekiwana 44`,
+`KONIEC: bramka zamknieta, przemiany nawet nie probuje`, exit 1).
+
+**Rekomendacja co do rotacji tokenu przy tej okazji: NIE w tym oknie.** Argument "skoro i tak
+trzeba dotknac 44 wezlow" po tej zmianie przestaje obowiazywac - rotacja staje sie jednym
+`UPDATE` w `app_secrets`. Mieszanie dwoch zmian w jednym oknie na JEDYNYM interfejsie Tomasza
+kosztuje mozliwosc odroznienia, ktora z nich zawiodla, gdy bot zamilknie. Decyzja Managera.
+
 **Zapisany 11/08/2026** (skan przed pierwszym re-eksportem workflow do repo).
 
 Kanon tego projektu, powtorzony w trzech miejscach (`SYSTEM_DATAFLOW`, `DEPLOY_CHECKLIST`,
