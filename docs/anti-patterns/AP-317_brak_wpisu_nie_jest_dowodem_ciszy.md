@@ -47,9 +47,25 @@ sortuje po kolumnie WYJSCIOWEJ, czyli po samej godzinie bez daty; kosztowalo fal
 "znikajacych wierszy". Godzina odcieta od daty klamie tak samo, kiedy odcina ja rzutowanie
 w SQL, jak wtedy, kiedy odcina ja kadr zrzutu ekranu.
 
-**Przypis, nierozstrzygniete:** spotkanie z Markiem Sroka jest 03.09.2026 o 9:00 (potwierdzone
-przez Tomasza 15/08), a w bazie wisi 11:00. Skad wzielo sie 11:00, **w repo nie jest zapisane** -
-nie przypisuje tego temu anty-wzorcowi, notuje jako rozjazd do sprawdzenia przy poprawce.
+**Przypis, nierozstrzygniete:** spotkanie z **Grupa Chwalinski** jest 03.09.2026 o 9:00,
+ul. Wroclawska (potwierdzone przez Tomasza 15/08), a w bazie wisi 11:00. Skad wzielo sie 11:00,
+**w repo nie jest zapisane** - nie przypisuje tego temu anty-wzorcowi, notuje jako rozjazd
+do sprawdzenia przy poprawce.
+
+> **POPRAWKA 19/08, i to jest przypadek TEGO anty-wzorca na nim samym.** Do 19/08 stalo tu
+> "spotkanie z Markiem Sroka". **To bylo zmyslone przypisanie.** Zrodlo
+> (`PAMIEC_MANAGERA_dlug_i_decyzje.md`, wpisy z 15.08) mowi wyraznie `CHWALINSKI`, a Marek Sroka
+> wystepuje w TYM SAMYM dokumencie, ale w innej sprawie i pod inna data (`17.08 powrot Marka
+> Sroki`). Dwa sasiadujace fakty zostaly scalone w jeden, a wynik zapisany do kanonu jako fakt.
+> Zlapane dopiero przy budowie D-021, gdy inny podwykonawca porownal ten przypis ze zrodlem.
+> Sygnalem byla NIESPOJNOSC WEWNETRZNA: sekcja "Punkty zaczepienia" tego samego pliku mowila
+> poprawnie "rozjazd godziny u Chwalinskiego".
+>
+> **Doslownie stopien trzeci opisany wyzej: domysl wpisany do zrodla prawdy przestaje wygladac
+> jak domysl.** Roznica polega tylko na tym, ze zrodlem prawdy byl tu kanon anty-wzorcow,
+> a nie baza. Wniosek praktyczny: **przy nazwisku w dokumencie kanonicznym wracaj do zrodla,
+> nawet gdy zdanie brzmi spojnie** - a przy dwoch sasiadujacych faktach o roznych ludziach
+> zakladaj, ze latwo je skleic.
 
 ## Why bad
 

@@ -68,7 +68,7 @@ ags-agents/
 ├── cm-agent/              # THE SYSTEM. Content Manager: FastAPI + state-machine loop.
 │   ├── app/               #   worker.py (petla), generate.py, compliance.py, channels.py, slots.py
 │   ├── db/                #   DDL numerowane 001..042 - uruchamiane po kolei
-│   └── tests/             #   31 plikow, stdlib only. Uruchamiaj `python -X utf8 <plik>`:
+│   └── tests/             #   38 plikow, stdlib only. Uruchamiaj `python -X utf8 <plik>`:
 │                          #   bez tego padajacy test wywala UnicodeEncodeError na emoji
 │                          #   w konsoli Windows i NIE POKAZUJE, co sie zepsulo
 ├── ags-researcher/        # Researcher: 6 zrodel, cost-cascade, wolany przez cm-agent

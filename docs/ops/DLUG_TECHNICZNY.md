@@ -1104,7 +1104,62 @@ nie zobaczy**. Do sprawdzenia recznie (AP-307 punkt 3 - pytaj o konfiguracje, ni
 SELECT brand_id, channel, status, config->>'publish_mode' AS tryb FROM channels ORDER BY 1,2;
 ```
 
-## D-021: Manager nie ma drogi zapisu NOWEGO prospekta - lancuch peka przy nowym czlowieku
+## D-021 [ZAMKNIETE CZESCIOWO 19/08/2026]: Manager nie ma drogi zapisu NOWEGO prospekta
+
+**KOD GOTOWY 19/08. Narzedzie w n8n NIE jest zarejestrowane** - do czasu okna Manager nadal nie ma
+jak zalozyc prospekta, mimo ze serwer juz to potrafi. **To jest AP-307 co do litery: nowy kontrakt
+zbudowany bez przelaczenia zywego konsumenta.** Opis rejestracji:
+`docs/ops/D021_NARZEDZIE_N8N_NOWY_PROSPEKT.md`.
+
+**SPROSTOWANIE DO WLASNEGO OPISU.** Wpis nizej wskazuje `sales.py:626` jako "zdolnosc, ktora
+istnieje w kodzie". Ta funkcja (`_ensure_pipeline`) wstawia PIEC kolumn i **nie ma pol
+kontaktowych**, wiec zdarzenia zrodlowego tego dlugu - Petrykowskiego z dojsciem - **nie dalaby
+rady zapisac**. Prawdziwym pisarzem byl `_pipeline_add:1545` (dziesiec kolumn, z wlasna slaba
+bramka). INSERT-ow do `sales_pipeline` byly wiec DWA, nie jeden.
+
+Co zrobione:
+
+1. `sales._wstaw_prospekta` - **jedyny** pisarz nowego wiersza w module. Wolaja go trzy drogi:
+   research, narzedzie rozmowy i Lacznik. Trzeci INSERT bylby trzecia okazja do rozjazdu (AP-309).
+2. `sales.sprawdz_duplikaty` - **jedna** bramka dla narzedzia `pipeline_add` i dla Lacznika.
+   Porownuje **pare (domena, oddzial)**, nigdy sama domene: dedup po domenie zabija franczyzy
+   (Grodzisk i Katowice Egurrola, jedna domena, dwa prawdziwe prospekty). **Trzy stany, nie dwa:**
+   ten sam / inny / **niepewne**. Ogonki normalizowane po OBU stronach istniejacym mechanizmem
+   (`teczka._bez_ogonkow` plus `teczka._jak_nazwa`), bo `ILIKE '%Chwalin%'` NIE trafia
+   w "Chwaliński" (AP-313). **Pada ZAMKNIETA** (AP-314): przy niepewnosci nie zaklada. Droga
+   wyjscia jedna i jawna, pole `oddzial` - i nie jest wytrychem, bo oddzial stojacy w nazwie
+   wiersza z lejka to nadal duplikat.
+3. Odrzucenie mowi **KTORY** wiersz uznano za ten sam (nazwa plus identyfikator), **DLACZEGO**,
+   i **CO PRZEPADNIE** przy porzuceniu wpisu. To jest AP-311: import z 23/07 wyrzucil dwanascie
+   rekordow pytajac tylko "czy nazwa jest w lejku", a nie "czy wnosi cos, czego lejek nie ma" -
+   mail i telefon dziewieciu prospektow lezaly na dysku, gdy lejek pokazywal "brak kontaktu".
+4. Zapis rozroznia **ZOBACZONE od WYWNIOSKOWANEGO** (AP-317). Oddzial podany wprost dostaje
+   etykiete `miasto:`, ktora automat importu czyta jako FAKT; oddzial wywnioskowany z nazwy tej
+   etykiety **nie dostaje** i jest nazwany wprost jako domysl.
+5. `worker.lacznik_nowy_prospekt` (`POST /lacznik/nowy-prospekt`) za tym samym guardem co reszta
+   Lacznika, blad 400 z trescia dla czlowieka.
+
+**ZERO migracji bazy** - `sales_pipeline` ma wszystkie potrzebne kolumny (sprawdzone).
+
+Zachowanie: `cm-agent/tests/test_nowy_prospekt.py`. Przypadek franczyzy przechodzi OBA oddzialy
+(sprawdzone: Katowice i Warszawa przy tej samej domenie co Grodzisk). Przy wylaczonej bramce pada
+**28 kontroli**, a kontrole franczyzy zostaja zielone - test odroznia wade bramki od sciezki,
+ktora ma przechodzic (sprawdzone przez koordynatora). Zestaw 38/38.
+Dokumentacja: `docs/komponenty/lacznik.md`, `docs/komponenty/agent-sprzedazy.md`.
+
+**CO ZOSTAJE OTWARTE:**
+- rejestracja narzedzia w n8n plus tap-test na zywym (okno z Tomaszem);
+- **luka `next_step_date`** - brak drogi zmiany samego terminu bez wpisu tekstu. NIE zalatana
+  tym endpointem i **nie nalezy**: danie drzwiom zakladajacym semantyki "a jak juz jest, to popraw"
+  przywraca find-or-create, czyli dokladnie to, przed czym stoi bramka. Osobne pytanie do Managera;
+- **zywa dziura AP-313 poza zakresem D-021:** `sales._find_pipeline` (po nim chodza `pipeline_move`,
+  `outreach_sent`, `offer_for`, `draft_outreach`) **nadal nie normalizuje ogonkow**, wiec
+  `pipeline_move("Chwalinski")` nie trafi w "Grupa Chwaliński". Ma znaczenie dokladnie przy
+  poprawce terminu z punktu wyzej.
+
+---
+
+## D-021 (tresc oryginalna z 11/08, zostawiona dla kontekstu - `sales.py:626` wskazane BLEDNIE, patrz sprostowanie)
 
 **Zapisany 11/08/2026 (zgloszenie Managera Z-6; odczyt wykonany, budowa NIE).**
 

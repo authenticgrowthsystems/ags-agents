@@ -250,6 +250,33 @@ def lacznik_teczka(kontakt: str = "", x_lacznik_secret: str = Header(default="")
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:200]}")
 
 
+# ---- Nowy prospekt (D-021, 19/08/2026): jedyna droga, ktora zaklada wiersz w lejku z zewnatrz ----
+# Manager nie mial jak zapisac NOWEGO czlowieka, a lancuch peka dokladnie w tej chwili - w jedynej,
+# ktora buduje lejek. `teczka.zapisz` odmawia zalozenia wiersza i to zostaje bez zmian: tamta droga
+# ma NIGDY nie zakladac po cichu. Ta zaklada, bo o zalozenie poproszono WPROST.
+@api.post("/lacznik/nowy-prospekt")
+def lacznik_nowy_prospekt(body: dict, x_lacznik_secret: str = Header(default=""), secret: str = ""):
+    """Zaklada nowego prospekta w lejku. Bramka duplikatow patrzy na PARE (domena, oddzial),
+    nigdy na sama domene - franczyza to nie duplikat, tylko tylu klientow, ile oddzialow.
+    Przy niepewnosci NIE zaklada, tylko odmawia z lista wierszy i z tym, co przy odrzuceniu
+    przepadnie. Puste ciagi znacza brak (n8n nie umie parametru opcjonalnego)."""
+    _lacznik_guard(x_lacznik_secret or secret)
+    try:
+        return {"ok": True, "potwierdzenie": sales.zaloz_prospekta(
+            nazwa=body.get("nazwa") or body.get("prospect_name"),
+            url=body.get("url") or body.get("strona"),
+            oddzial=body.get("oddzial"), osoba=body.get("osoba"), email=body.get("email"),
+            telefon=body.get("telefon"), notatka=body.get("notatka") or body.get("note"),
+            etap=body.get("etap") or body.get("stage"))}
+    except sales.BladLejka as e:
+        # 400 z trescia DLA CZLOWIEKA - tak samo jak przy teczce: lista wierszy i lista danych,
+        # ktore przepadna, jest tu WARTOSCIA, a nie opisem bledu.
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:200]}")
+
+
 def _brand_tokens_tick():
     """#84: lazy import (modul sync/ ma zaleznosci ladowane przy starcie notion_workera)."""
     from .sync import brand_tokens_pull

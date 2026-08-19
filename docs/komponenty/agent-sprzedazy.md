@@ -47,6 +47,16 @@ pipeline_move (paragon 📊 przy kazdej zmianie), sales_knowledge_search (pgvect
 fallback ILIKE), outreach_sent (propozycja -> 'sent', follow-up +3 dni; od 26/07 cienka
 nakladka na wspolny rdzen `mark_outreach_sent`).
 
+**ZMIANA 19/08 (dlug D-021), dotyczy `pipeline_add`:** bramka duplikatow tego narzedzia to
+od teraz **ta sama** funkcja, ktorej uzywa Lacznik (`sales.sprawdz_duplikaty`). Wczesniej
+stalo tu samo `_find_pipeline(name)`, czyli podciag nazwy: nie widzial ogonkow (AP-313,
+`ILIKE '%Chwalin%'` NIE trafia w "Chwaliński"), nie widzial domeny i przy odrzuceniu nie
+mowil, co przepada (AP-311). Narzedzie ma tez nowe pole `oddzial` - miasto albo nazwisko,
+ktore odroznia franczyze od duplikatu. Kontrakt wyjscia bez zmian: przy odmowie nadal wraca
+TEKST, nie wyjatek. Sam INSERT ma teraz **jedno** miejsce w calym module
+(`_wstaw_prospekta`), wolane przez research, narzedzie rozmowy i Lacznik (AP-309).
+Pelny opis bramki: `docs/komponenty/lacznik.md`, sekcja "Etap 4".
+
 ## Wejscia-wyjscia i tabele (DDL 027)
 
 - `sales_pipeline`: id UUID, contact_id FK contacts, prospect_name/url, stage CHECK

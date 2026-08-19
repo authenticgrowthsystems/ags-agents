@@ -133,6 +133,59 @@ w sciezce triggera, wiec **dolozenie jednego narzedzia zmienialoby adres konekto
 i rozjezdzalo go z app_secrets**. Od 31/07 skrypt PRZEJMUJE sekret z zywego workflow; nowy
 generuje tylko wtedy, gdy workflow nie istnieje. Jawna rotacja nadal przez `LACZNIK_E2_SECRET`.
 
+## Etap 4: nowy prospekt (19/08/2026, dlug D-021) - piate narzedzie
+
+**Kod na produkcji od 19/08; rejestracja narzedzia w n8n czeka na okno z Tomaszem**
+(gotowy opis: `docs/ops/D021_NARZEDZIE_N8N_NOWY_PROSPEKT.md`).
+
+Manager nie mial ZADNEJ drogi zapisu **nowego** prospekta. Lancuch pekal dokladnie w chwili,
+w ktorej pojawia sie nowy czlowiek, czyli w jedynym momencie, ktory buduje lejek: Tomasz
+odwrocil rozmowe z Rafalem Petrykowskim, wiadomosc poszla, a wpis zostal w pliku na dysku.
+
+- `nowy_prospekt(nazwa, url, oddzial, osoba, email, telefon, notatka, etap)`
+  -> POST cm-agent `/lacznik/nowy-prospekt` -> `sales.zaloz_prospekta`.
+
+**`teczka.zapisz` nadal odmawia zalozenia wiersza i tak ma zostac.** Tamta bramka nie jest
+wada, tylko decyzja: ciche zakladanie zamienialoby kazda literowke w nazwisku w nowego
+prospekta. Dlatego to jest droga OSOBNA i JAWNA - zaklada wylacznie wtedy, gdy ktos poprosil
+o zalozenie wprost.
+
+**Bramka duplikatow patrzy na PARE (domena, oddzial), nigdy na sama domene.** Dedup po samej
+domenie zabija franczyzy: w lejku stoja `Grodzisk Mazowiecki Egurrola Dance Studio` i
+`Katowice Egurrola Dance Studio`, jedna domena `egurrola.com`, dwa oddzialy, dwa kontakty,
+oba prawdziwe. Trzy stany zamiast dwoch:
+
+| stan | kiedy | co robi |
+|---|---|---|
+| ten sam | ten sam mail, albo ta sama domena i te same czlony nazwy, albo oba oddzialy zaobserwowane i rowne | odmawia, wskazuje wiersz |
+| inny | kazda nazwa ma wlasny czlon, albo oddzialy zaobserwowane i rozne, albo inna domena | **zaklada** |
+| niepewne | jedna nazwa zawiera sie w drugiej, wyrozniki roznia sie o literowke, ta sama nazwa przy roznych domenach, ta sama domena bez wspolnego czlonu | odmawia, prosi o pole `oddzial` |
+
+**Bramka pada ZAMKNIETA** (AP-314): przy niepewnosci nie zaklada. Latwiej dolozyc prospekta
+swiadomie niz posprzatac lejek ze smieci. Droga wyjscia jest jedna i jawna: podac `oddzial`
+(miasto albo nazwisko). Nazwany wyroznik nie jest wytrychem - jesli stoi w nazwie wiersza,
+ktory juz jest w lejku, to nadal duplikat.
+
+**Odrzucenie mowi trzy rzeczy naraz** (AP-311, import z 23/07 wyrzucil dwanascie rekordow
+pytajac tylko "czy nazwa jest w lejku"): KTORY wiersz uznano za ten sam wraz z jego
+identyfikatorem, POWOD, oraz CO przy odrzuceniu przepadnie (mail, telefon, osoba, strona,
+notatka - kazde z adnotacja "w lejku pusto" albo z wartoscia, ktora tam stoi). Odrzucenie
+bez tej listy jest gorsze niz brak bramki, bo wyglada na zalatwione.
+
+**Wpis rozroznia ZOBACZONE od WYWNIOSKOWANEGO** (AP-317). Oddzial podany wprost laduje
+w notatce jako `oddzial: X (ZAOBSERWOWANY...) | miasto: X`. Oddzial wywnioskowany z nazwy
+laduje jako `oddzial WYWNIOSKOWANY z nazwy (czlony: ...)` i **nie dostaje etykiety
+`miasto:`**, bo ta etykieta jest czytana jako FAKT przez bramke importu prospektow
+(`prospect_import._istniejace`). Domysl zapisany pod etykieta faktu przestaje byc pomylka
+i staje sie danymi.
+
+**Ogonki po OBU stronach** (AP-313): wzorzec rozogonkowuje Python (`teczka._bez_ogonkow`),
+kolumne SQL (`teczka._jak_nazwa`, `translate()` bez rozszerzenia unaccent). `ILIKE '%Chwalin%'`
+NIE TRAFIA w "Chwaliński" - w tym slowie nie ma zwyklego "n".
+
+**Czego to narzedzie NIE robi:** nie ustawia nastepnego kroku ani terminu (`pipeline_move`
+albo `zapisz_tekst`), nie ustawia wartosci i oferty, nie zaklada kontaktu w `contacts`.
+
 ## Wejscia-wyjscia i tabele
 
 - `engagement_log`: wpisy z raportu (status wg typu: sent/logged; idempotencja
@@ -190,6 +243,13 @@ generuje tylko wtedy, gdy workflow nie istnieje. Jawna rotacja nadal przez `LACZ
   `cm-agent/app/sync/notion_worker.py` (`_loop`, po `_drain`).
 - `cm-agent/app/worker.py` (Etap 2): `_lacznik_guard`, `lacznik_stan`
   (GET /lacznik/stan), `lacznik_raport` (POST /lacznik/raport).
+- `cm-agent/app/worker.py` (Etap 4): `lacznik_nowy_prospekt` (POST /lacznik/nowy-prospekt).
+- `cm-agent/app/sales.py` (Etap 4): `zaloz_prospekta` (droga jawna), `sprawdz_duplikaty`
+  (bramka), `_werdykt_kandydata`, `_werdykt_nazwy`, `_tokeny_nazwy`, `_oddzial_wiersza`,
+  `_co_nowego`, `_kandydaci_duplikatu`, `BladLejka`; `_wstaw_prospekta` = **jedyny** pisarz
+  nowego wiersza w lejku (wolaja go research, narzedzie rozmowy i Lacznik).
+- `cm-agent/tests/test_nowy_prospekt.py`: franczyza (dwa oddzialy jednej domeny przechodza
+  OBA) plus sciezka alarmu - `python -X utf8 cm-agent/tests/test_nowy_prospekt.py`.
 
 ## Kanony ktore go dotycza
 

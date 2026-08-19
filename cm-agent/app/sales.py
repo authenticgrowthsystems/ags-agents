@@ -17,6 +17,7 @@ klasa incydentow 'Zrobione bez wykonania').
 Frameworki sprzedazowe destylowane z Anthropic sales skills (draft-outreach, account-research,
 pipeline-review) sa OSADZONE w promptcie systemowym (server-side nie ma Skill toola)."""
 import datetime
+import difflib
 import io
 import json
 import re
@@ -24,7 +25,7 @@ import traceback
 
 import httpx
 
-from . import db, config, tasks, research, content_memory, compliance
+from . import db, config, tasks, research, content_memory, compliance, teczka, prospect_import
 from .brand import load_brand
 from .generate import client
 from zoneinfo import ZoneInfo
@@ -557,6 +558,11 @@ TOOL_PIPELINE_ADD = {
     "input_schema": {"type": "object", "properties": {
         "prospect_name": {"type": "string"},
         "url": {"type": ["string", "null"]},
+        "oddzial": {"type": ["string", "null"],
+                    "description": ("Miasto oddzialu albo nazwisko osoby, ktore ODROZNIA ten podmiot "
+                                    "od innego o tej samej domenie (franczyza: Egurrola Katowice kontra "
+                                    "Egurrola Grodzisk). Podawaj TYLKO to, co wiesz - zapisze sie jako "
+                                    "wartosc zaobserwowana.")},
         "stage": {"type": ["string", "null"], "enum": list(_STAGES) + [None],
                   "description": "Default prospect."},
         "value": {"type": ["number", "null"], "description": "Szacowana wartosc wspolpracy (PLN)."},
@@ -619,14 +625,16 @@ _MODEL_ONLY = {"offer_for"}
 
 # ---------------- research prospekta (kontrakt /request Researchera) ----------------
 def _ensure_pipeline(name, url=None, source="conversation"):
+    """Znajdz albo zaloz - droga RESEARCHU, ktora ma prawo zalozyc wiersz po cichu, bo nazwa
+    przyszla z komendy `/prospect`, czyli od czlowieka, ktory wlasnie ja napisal.
+
+    Sam INSERT wykonuje `_wstaw_prospekta` (D-021, 19/08): do 19/08 lejek mial DWA rozne
+    zapisy wstawiajace wiersz (tutaj i w `_pipeline_add`), rozniace sie liczba kolumn.
+    Trzeci, dolozony dla Lacznika, bylby trzecia okazja do rozjazdu (AP-309)."""
     row = _find_pipeline(name) or (_find_pipeline(url) if url else None)
     if row:
         return row, False
-    row = db.fetchone(
-        """INSERT INTO sales_pipeline (brand_id, prospect_name, prospect_url, stage, source)
-           VALUES ('AGS',%s,%s,'prospect',%s) RETURNING *""",
-        (name.strip()[:200], (url or None), source))
-    return row, True
+    return _wstaw_prospekta({"prospect_name": name, "url": url, "source": source}), True
 
 
 def _identity_hint(row):
@@ -1533,23 +1541,359 @@ def _offer_for(inp):
             f"akceptacji zapisz przez pipeline_move (offer_tier).")
 
 
+# ============================ lejek: zakladanie nowego prospekta ============================
+# D-021 (zgloszenie Managera Z-6 z 11/08, zbudowane 19/08). Lancuch pekal dokladnie w chwili,
+# w ktorej pojawia sie NOWY czlowiek, czyli w jedynym momencie, ktory buduje lejek: Tomasz
+# odwrocil rozmowe z Rafalem Petrykowskim, wiadomosc poszla, a wpis zostal w pliku na dysku,
+# bo Manager nie mial czym go zapisac.
+#
+# `teczka.zapisz` odmawia zalozenia wiersza i to NIE jest wada, tylko bramka SWIADOMA: ciche
+# zakladanie zamienialoby kazda literowke w nazwisku w nowego prospekta. Dlatego nie
+# rozluzniamy jej, tylko budujemy droge OSOBNA I JAWNA, ktora zaklada wiersz wylacznie wtedy,
+# gdy ktos poprosil o to WPROST.
+
+
+class BladLejka(Exception):
+    """Blad kontraktu zakladania prospekta. Tresc jest DLA CZLOWIEKA i wraca do czatu -
+    wzorzec `teczka.Blad`: lista podobnych wierszy jest tu WARTOSCIA, nie ozdoba komunikatu."""
+
+
+# Slowa, ktore w nazwie podmiotu nie rozrozniaja niczego. Bez ich odjecia "Studio Tanca Rytm"
+# i "Studio Tanca Fala" maja dwa czlony wspolne z trzech i kazda para wyglada na rodzine.
+_SLOWA_RODZAJOWE = frozenset((
+    "szkola", "szkoly", "szkole", "studio", "studia", "studios", "klub", "klubu", "centrum",
+    "akademia", "akademii", "grupa", "grupy", "firma", "spolka", "sp", "zoo", "sa", "taniec",
+    "tanca", "taneczna", "taneczne", "taneczny", "dance", "school", "the", "and", "oraz", "i",
+    "pl", "com", "www",
+))
+# Prog podobienstwa dwoch wyroznikow. Ponizej to dwa rozne oddzialy, powyzej literowka
+# w tym samym - a literowka NIE przechodzi, tylko zatrzymuje (bramka pada zamknieta).
+_PROG_LITEROWKI = 0.85
+_ZRODLO_LACZNIK = "lacznik"
+
+
+def _wstaw_prospekta(inp):
+    """JEDYNY pisarz nowego wiersza w lejku. Wolaja go trzy drogi: research (`_ensure_pipeline`),
+    narzedzie rozmowy (`_pipeline_add`) i Lacznik (`zaloz_prospekta`).
+
+    Do 19/08 zapisy byly DWA i rozne (jeden na piec kolumn, drugi na dziesiec). Dolozenie
+    trzeciego pod Lacznik byloby trzecia okazja do rozjazdu - AP-309 mowi wprost, ze jedna
+    poprawka ma jedno miejsce. Bramka duplikatow stoi OSOBNO (`sprawdz_duplikaty`), bo drogi
+    roznia sie tym, ile wolno im zalozyc po cichu, a nie tym, co zapisuja."""
+    name = str(inp.get("prospect_name") or "").strip()
+    stage = inp.get("stage") if inp.get("stage") in _STAGES else "prospect"
+    return db.fetchone(
+        """INSERT INTO sales_pipeline (brand_id, prospect_name, prospect_url, stage, value, currency,
+                                       notes, contact_person, contact_email, contact_phone, source)
+           VALUES ('AGS',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
+        (name[:200], (inp.get("url") or None), stage, inp.get("value"),
+         (inp.get("currency") or "PLN")[:10], (inp.get("note") or None),
+         (inp.get("contact_person") or None), (inp.get("contact_email") or None),
+         (inp.get("contact_phone") or None), (str(inp.get("source") or "manual"))[:40]))
+
+
+# ----------------------------------------------------------- bramka duplikatow (pare, nie domene)
+def _tokeny_nazwy(nazwa):
+    """Czlony ROZROZNIAJACE nazwy: bez ogonkow, male litery, bez slow rodzajowych.
+
+    AP-313: rozogonkowanie idzie przez `teczka._bez_ogonkow`, czyli te sama pare znakow,
+    ktorej uzywa SQL-owy `translate()` w `teczka._jak_nazwa`. Wlasna tabelka rozjechalaby sie
+    z ta w bazie przy pierwszej zmianie i porownanie zaczeloby klamac po cichu."""
+    baza = teczka._bez_ogonkow(str(nazwa or "")).lower()
+    surowe = [t for t in re.split(r"[^0-9a-z]+", baza) if len(t) >= 2]
+    istotne = [t for t in surowe if t not in _SLOWA_RODZAJOWE]
+    # Nazwa zlozona z samych slow rodzajowych ("Szkola Tanca") nie moze zostac bez czlonow -
+    # pusty zbior porownywalby sie z kazdym innym pustym jako identyczny.
+    return set(istotne or surowe)
+
+
+def _oddzial_wiersza(row):
+    """Oddzial istniejacego wiersza: (wartosc, ustalenie). AP-317 - wartosc ZOBACZONA i wartosc
+    WYWNIOSKOWANA nie moga wygladac tak samo, bo za tydzien nikt nie odtworzy, skad sie wziely.
+
+    ZAOBSERWOWANY: napis "miasto: X" w notatkach, ktory ktos tam wpisal (import list prospektow
+    albo ta droga). WYWNIOSKOWANY: czlony nazwy, czyli nasz domysl - uzywamy go do porownan,
+    ale nigdy nie podajemy jako faktu."""
+    m = re.search(r"miasto:\s*([^|\n]+)", (row or {}).get("notes") or "")
+    if m and m.group(1).strip():
+        return prospect_import._norm(m.group(1)), "zaobserwowany"
+    return None, "wywnioskowany"
+
+
+def _werdykt_nazwy(nowe, stare):
+    """Trzy stany, nie dwa. Zwraca (werdykt, powod, wspolne, tylko_stare).
+
+    'ten sam'  - te same czlony rozrozniajace.
+    'inny'     - KAZDA strona ma czlon, ktorego druga nie ma (Grodzisk kontra Katowice).
+                 To jest wlasnie franczyza i ona ma PRZECHODZIC.
+    'niepewne' - jedna nazwa zawiera sie w drugiej albo wyrozniki roznia sie o literowke."""
+    tylko_n, tylko_s = nowe - stare, stare - nowe
+    wspolne = nowe & stare
+    if not tylko_n and not tylko_s:
+        return "ten sam", "ta sama nazwa po odjeciu ogonkow i slow rodzajowych", wspolne, tylko_s
+    if not tylko_n or not tylko_s:
+        return ("niepewne", "jedna nazwa zawiera sie w drugiej, wiec nie wiem, czy to oddzial, "
+                "czy skrot", wspolne, tylko_s)
+    for a in sorted(tylko_n):
+        for b in sorted(tylko_s):
+            if difflib.SequenceMatcher(None, a, b).ratio() >= _PROG_LITEROWKI:
+                return "niepewne", f"wyrozniki roznia sie o literowke ({a} kontra {b})", wspolne, tylko_s
+    return "inny", "kazda nazwa ma wlasny czlon, ktorego druga nie ma", wspolne, tylko_s
+
+
+def _werdykt_kandydata(dane, row):
+    """Czy `row` to ten sam podmiot co zakladany. Zwraca (werdykt, powod).
+
+    PARA (domena, oddzial), nigdy sama domena. Dedup po samej domenie ZABIJA FRANCZYZY:
+    w lejku stoja dzis "Grodzisk Mazowiecki Egurrola Dance Studio" i "Katowice Egurrola Dance
+    Studio" - jedna domena egurrola.com, dwa oddzialy, dwa kontakty, oba prawdziwe. Pierwszy
+    dry importu 27/07 wyrzucil trzy takie wiersze jako duplikaty."""
+    mail_n = (dane.get("email") or "").strip().lower()
+    mail_s = (row.get("contact_email") or "").strip().lower()
+    if mail_n and mail_s and mail_n == mail_s:
+        return "ten sam", f"ten sam adres mailowy ({mail_s})"
+
+    dom_n = prospect_import._domena(dane.get("url"))
+    dom_s = prospect_import._domena(row.get("prospect_url"))
+    odd_n = prospect_import._norm(dane.get("oddzial")) or None
+    odd_s, _ust_s = _oddzial_wiersza(row)
+    tokeny_s = _tokeny_nazwy(row.get("prospect_name"))
+    werdykt, powod, wspolne, tylko_s = _werdykt_nazwy(_tokeny_nazwy(dane.get("nazwa")), tokeny_s)
+
+    # Oba oddzialy ZAOBSERWOWANE rozstrzygaja same: to jedyny przypadek, w ktorym nie zgadujemy.
+    if odd_n and odd_s:
+        if odd_n != odd_s:
+            return "inny", f"oddzialy sa rozne i oba ZAOBSERWOWANE ({odd_n} kontra {odd_s})"
+        if dom_n and dom_s and dom_n == dom_s:
+            return "ten sam", f"ta sama domena {dom_s} i ten sam oddzial {odd_s}, oba ZAOBSERWOWANE"
+
+    # Oddzial podany WPROST kontra oddzial tamtego wiersza tylko wywnioskowany z nazwy. To jest
+    # ta droga wyjscia, ktora obiecuje komunikat odmowy: czlowiek nazywa wyroznik i wtedy
+    # zakladamy. Warunek `tylko_s` jest tu istotny - jesli tamten wiersz NIE MA wlasnego
+    # wyroznika ("Egurrola Dance Studio" bez miasta), to rownie dobrze moze BYC tym oddzialem
+    # i nie wolno tego przeskoczyc slowem od czlowieka.
+    if odd_n and not odd_s:
+        tokeny_odd = _tokeny_nazwy(odd_n)
+        if tokeny_odd & tokeny_s:
+            return "ten sam", f"podany oddzial {odd_n} stoi w nazwie tamtego wiersza"
+        if tokeny_odd and tylko_s:
+            return "inny", (f"podany wprost oddzial {odd_n} nie wystepuje w nazwie tamtego wiersza, "
+                            f"a tamten ma wlasny wyroznik ({', '.join(sorted(tylko_s))})")
+
+    if dom_n and dom_s:
+        if dom_n == dom_s:
+            if werdykt == "inny" and not wspolne:
+                # Ta sama domena, a nazwy nie maja ANI JEDNEGO wspolnego czlonu. Franczyza dzieli
+                # marke, wiec brak wspolnego czlonu znaczy, ze czegos tu nie rozumiem - a wtedy
+                # nie zakladam (AP-314: bramka pada ZAMKNIETA).
+                return "niepewne", f"ta sama domena {dom_s}, a nazwy nie maja wspolnego czlonu"
+            return werdykt, f"ta sama domena {dom_s}; {powod}"
+        if werdykt == "ten sam":
+            return "niepewne", f"ta sama nazwa przy roznych domenach ({dom_n} kontra {dom_s})"
+        return "inny", f"inna domena ({dom_s})"
+
+    # Bez domeny po ktorejkolwiek stronie zostaje sama nazwa. Dziewieciu z dwunastu prospektow
+    # w lejku ma tylko skrzynke na gmailu, wiec to NIE jest przypadek brzegowy.
+    return werdykt, powod + (" (zaden z wierszy nie ma domeny do porownania)"
+                             if not dom_n and not dom_s else " (brak domeny po jednej stronie)")
+
+
+def _co_nowego(dane, row):
+    """AP-311: duplikat NIE jest smieciem. Import z 23/07 wyrzucil dwanascie rekordow pytajac
+    tylko "czy nazwa jest w lejku", a nie "czy wnosi cos, czego lejek nie ma" - i mail oraz
+    telefon dziewieciu prospektow lezaly na dysku, podczas gdy lejek pokazywal "brak kontaktu".
+
+    Odrzucenie bez tej listy jest GORSZE niz brak bramki, bo wyglada na zalatwione."""
+    out = []
+    for kol, etykieta, wartosc in (("contact_email", "mail", dane.get("email")),
+                                   ("contact_phone", "telefon", dane.get("telefon")),
+                                   ("contact_person", "osoba", dane.get("osoba")),
+                                   ("prospect_url", "strona", dane.get("url"))):
+        nowa = str(wartosc or "").strip()
+        if not nowa:
+            continue
+        stara = str(row.get(kol) or "").strip()
+        if not stara:
+            out.append(f"{etykieta}: {nowa[:80]} (w lejku pusto)")
+        elif prospect_import._rozne(kol, stara, nowa):
+            out.append(f"{etykieta}: przychodzi {nowa[:60]}, a w lejku stoi {stara[:60]}")
+    notatka = str(dane.get("notatka") or "").strip()
+    if notatka:
+        out.append(f"notatka ({len(notatka)} znakow) nie ma gdzie wyladowac")
+    return out
+
+
+def _kandydaci_duplikatu(dane, limit=30):
+    """Wiersze, ktore MOGA byc tym samym podmiotem. Szeroko, bo taniej jest ocenic trzydziesci
+    wierszy niz przeoczyc jeden - ocena jest czysta arytmetyka na napisach, bez bazy i bez LLM.
+
+    Sufit jest wysoki SWIADOMIE. Lejek ma dzis 133 wiersze, a `ORDER BY updated_at` nie ma nic
+    wspolnego z trafnoscia: przy niskim sufitu prawdziwy duplikat wypadlby za krawedz i bramka
+    przepuscilaby go po cichu, czyli zachowalaby sie DOKLADNIE odwrotnie, niz obiecuje.
+
+    AP-313: obie strony porownania trace ogonki. Wzorzec rozogonkowuje Python
+    (`teczka._bez_ogonkow`), kolumne rozogonkowuje SQL (`teczka._jak_nazwa`, czyli translate()
+    bez rozszerzenia unaccent). Sam wzorzec bez ogonkow nie wystarczy: `ILIKE '%Chwalin%'`
+    NIE TRAFIA w "Chwaliński", bo w tym slowie nie ma zwyklego "n". Narzedzie do wykrycia
+    bledu mialoby wtedy ten sam blad."""
+    warunki, params = [], []
+    nazwa = re.sub(r"\s+", " ", str(dane.get("nazwa") or "")).strip()
+    warunki.append(f"{teczka._jak_nazwa('prospect_name')} ILIKE %s")
+    params.append(f"%{teczka._bez_ogonkow(nazwa)}%")
+    for token in sorted(t for t in _tokeny_nazwy(nazwa) if len(t) >= 3)[:5]:
+        warunki.append(f"{teczka._jak_nazwa('prospect_name')} ILIKE %s")
+        params.append(f"%{token}%")
+    dom = prospect_import._domena(dane.get("url"))
+    if dom:
+        warunki.append("COALESCE(prospect_url,'') ILIKE %s")
+        params.append(f"%{dom}%")
+    mail = (dane.get("email") or "").strip().lower()
+    if mail:
+        warunki.append("lower(COALESCE(contact_email,'')) = %s")
+        params.append(mail)
+    return db.fetchall(
+        f"""SELECT * FROM sales_pipeline WHERE brand_id='AGS' AND ({' OR '.join(warunki)})
+            ORDER BY updated_at DESC LIMIT {int(limit)}""", tuple(params)) or []
+
+
+def _opis_wiersza(row, powod):
+    dom = prospect_import._domena(row.get("prospect_url"))
+    odd, ust = _oddzial_wiersza(row)
+    L = [f"  - \"{row.get('prospect_name')}\" (id {row.get('id')}, etap {row.get('stage')}"
+         + (f", domena {dom}" if dom else ", bez domeny") + ")",
+         f"    powod: {powod}"]
+    if odd:
+        L.append(f"    oddzial tamtego wiersza: {odd} (ZAOBSERWOWANY, ktos go wpisal)")
+    else:
+        L.append("    oddzial tamtego wiersza: WYWNIOSKOWANY z nazwy, nikt go nie potwierdzil")
+    return L
+
+
+def sprawdz_duplikaty(dane):
+    """Bramka. Nie zapisuje NICZEGO - albo przechodzi, albo rzuca `BladLejka` z lista wierszy.
+
+    Pada ZAMKNIETA (AP-314): przy niepewnosci nie zaklada, tylko odmawia. Latwiej dolozyc
+    prospekta swiadomie niz posprzatac lejek ze smieci. Zwraca liczbe ocenionych wierszy,
+    zeby potwierdzenie moglo powiedziec, ile ich bylo - "sprawdzone" bez liczby brzmi
+    tak samo, gdy sprawdzonych bylo zero."""
+    kandydaci = _kandydaci_duplikatu(dane)
+    te_same, niepewne = [], []
+    for row in kandydaci:
+        werdykt, powod = _werdykt_kandydata(dane, row)
+        if werdykt == "ten sam":
+            te_same.append((row, powod))
+        elif werdykt == "niepewne":
+            niepewne.append((row, powod))
+    if not te_same and not niepewne:
+        return len(kandydaci)
+
+    nazwa = str(dane.get("nazwa") or "").strip()
+    L = [f"NIE zakladam nowego wiersza dla \"{nazwa[:80]}\".", ""]
+    if te_same:
+        L.append("Za TEN SAM podmiot uznalem:")
+        for row, powod in te_same[:6]:
+            L += _opis_wiersza(row, powod)
+    if niepewne:
+        L.append("Nie umiem rozstrzygnac, czy to ten sam podmiot, co ponizsze wiersze:")
+        for row, powod in niepewne[:6]:
+            L += _opis_wiersza(row, powod)
+
+    nowe = _co_nowego(dane, (te_same or niepewne)[0][0])
+    L.append("")
+    if nowe:
+        L.append("Nowe dane, ktorych tamten wiersz NIE MA:")
+        L += [f"  - {x}" for x in nowe]
+        L.append("To nie sa smieci. Jesli po prostu odrzucisz ten wpis, te dane przepadna, "
+                 "a lejek dalej bedzie pokazywal brak kontaktu.")
+    else:
+        L.append("Ten wpis nie wnosi nic, czego tamten wiersz juz nie ma.")
+    L += ["",
+          "Co z tym zrobic:",
+          f"  1. Ten sam podmiot: dopisz dane przez pipeline_move do wiersza "
+          f"{(te_same or niepewne)[0][0].get('id')}.",
+          "  2. Inny oddzial albo inna osoba: zawolaj mnie ponownie i podaj pole \"oddzial\" "
+          "(miasto albo nazwisko), ktore go odroznia. Zapisze je wtedy jako ZAOBSERWOWANE, "
+          "bo przyjdzie od Ciebie, a nie z mojego domyslu.",
+          "NIC nie zapisalem i niczego nie zalozylem."]
+    raise BladLejka("\n".join(L))
+
+
+# --------------------------------------------------------------------- droga jawna (Lacznik)
+def zaloz_prospekta(nazwa, url=None, oddzial=None, osoba=None, email=None, telefon=None,
+                    notatka=None, etap=None, zrodlo=_ZRODLO_LACZNIK):
+    """Zaklada NOWEGO prospekta w lejku. Droga JAWNA: wolana wtedy i tylko wtedy, gdy ktos
+    poprosil o zalozenie wprost. `teczka.zapisz` nadal odmawia i tak ma zostac.
+
+    Puste ciagi traktujemy jak brak - n8n oznacza KAZDY parametr `$fromAI` jako wymagany
+    i nie ma sposobu na opcjonalny (docs/komponenty/lacznik.md, pulapka 2), wiec opcjonalnosc
+    realizuje sie pustym ciagiem po stronie serwera."""
+    def _p(v):
+        return re.sub(r"\s+", " ", str(v or "")).strip() or None
+
+    dane = {"nazwa": _p(nazwa), "url": _p(url), "oddzial": _p(oddzial), "osoba": _p(osoba),
+            "email": (_p(email) or "").lower() or None, "telefon": _p(telefon),
+            "notatka": str(notatka or "").strip() or None}
+    if not dane["nazwa"]:
+        raise BladLejka("Podaj nazwe prospekta. Bez nazwy nie zakladam wiersza, bo wiersz bez "
+                        "nazwy jest nie do znalezienia i nie do sprzatniecia.")
+    stage = _p(etap)
+    if stage and stage not in _STAGES:
+        # Nieznany etap zatrzymuje zamiast wpasc w domyslny 'prospect': cicha podmiana wygladalaby
+        # jak sukces, a Manager zapisalby prospekta w innym etapie niz chcial (AP-306, AP-314).
+        raise BladLejka(f"Nie znam etapu \"{stage}\". Dozwolone: {', '.join(_STAGES)}. "
+                        f"NIC nie zapisalem - poprawy etapu nie robie po cichu.")
+
+    sprawdzonych = sprawdz_duplikaty(dane)
+
+    # AP-317, stopien trzeci: wpis do bazy rozroznia ZOBACZONE od WYWNIOSKOWANEGO. Napis
+    # "miasto: X" czyta jako FAKT bramka importu prospektow (`prospect_import._istniejace`),
+    # wiec wpisujemy go WYLACZNIE wtedy, gdy oddzial podal czlowiek. Oddzial wywnioskowany
+    # z nazwy zostaje w notatce pod wlasna etykieta i zaden automat nie wezmie go za dane.
+    dzis = datetime.datetime.now(WARSAW).strftime("%d/%m/%Y")
+    if dane["oddzial"]:
+        slad = (f"oddzial: {dane['oddzial']} (ZAOBSERWOWANY, podany wprost przy zakladaniu) "
+                f"| miasto: {dane['oddzial']} | zrodlo: {zrodlo}, {dzis}")
+    else:
+        wyroznik = ", ".join(sorted(_tokeny_nazwy(dane["nazwa"]))) or "brak"
+        slad = (f"oddzial WYWNIOSKOWANY z nazwy (czlony: {wyroznik}), nikt go nie potwierdzil "
+                f"| zrodlo: {zrodlo}, {dzis}")
+    notes = (dane["notatka"] + "\n" + slad) if dane["notatka"] else slad
+
+    row = _wstaw_prospekta({"prospect_name": dane["nazwa"], "url": dane["url"], "stage": stage,
+                            "note": notes, "contact_person": dane["osoba"],
+                            "contact_email": dane["email"], "contact_phone": dane["telefon"],
+                            "source": zrodlo})
+    dom = prospect_import._domena(dane["url"])
+    braki = [e for e, v in (("mail", dane["email"]), ("telefon", dane["telefon"]),
+                            ("osoba", dane["osoba"])) if not v]
+    return (f"📊 Zalozony w lejku: {dane['nazwa'][:80]} [{row.get('stage')}], id {row.get('id')}.\n"
+            f"Domena: {dom or 'brak'} | " + (
+                f"oddzial: {dane['oddzial']} (ZAOBSERWOWANY)" if dane["oddzial"]
+                else "oddzial: WYWNIOSKOWANY z nazwy") + "\n"
+            f"Bramka duplikatow obejrzala {sprawdzonych} " + (
+                "wierszy o zblizonej nazwie albo domenie i zaden nie okazal sie tym samym podmiotem."
+                if sprawdzonych else "wierszy - nic podobnego nie bylo w lejku.") + "\n"
+            + (f"Puste pola: {', '.join(braki)}. " if braki else "")
+            + "Nastepny krok NIE jest ustawiony - ustaw go przez pipeline_move albo zapisz_tekst, "
+              "inaczej prospekt zawisnie bez terminu.")
+
+
 # ---------------- lejek ----------------
 def _pipeline_add(inp):
     name = (inp.get("prospect_name") or "").strip()
     if not name:
         return "Podaj nazwe prospekta."
-    if _find_pipeline(name):
-        return f"\"{name[:60]}\" juz jest w lejku - uzyj pipeline_move."
-    stage = inp.get("stage") if inp.get("stage") in _STAGES else "prospect"
-    row = db.fetchone(
-        """INSERT INTO sales_pipeline (brand_id, prospect_name, prospect_url, stage, value, currency,
-                                       notes, contact_person, contact_email, contact_phone)
-           VALUES ('AGS',%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
-        (name[:200], inp.get("url"), stage, inp.get("value"),
-         (inp.get("currency") or "PLN")[:10], (inp.get("note") or None),
-         (inp.get("contact_person") or None), (inp.get("contact_email") or None),
-         (inp.get("contact_phone") or None)))
-    return f"📊 Dodane do lejka: {name[:80]} [{stage}]" + \
+    try:
+        # Ta sama bramka co w Lacznika (AP-309). Do 19/08 stalo tu samo `_find_pipeline(name)`,
+        # czyli podciag nazwy - nie widzial ogonkow (AP-313), nie widzial domeny i nie mowil,
+        # co przepada przy odrzuceniu (AP-311).
+        sprawdz_duplikaty({"nazwa": name, "url": inp.get("url"), "oddzial": inp.get("oddzial"),
+                           "email": inp.get("contact_email"), "telefon": inp.get("contact_phone"),
+                           "osoba": inp.get("contact_person"), "notatka": inp.get("note")})
+    except BladLejka as e:
+        return str(e)
+    row = _wstaw_prospekta(inp)
+    return f"📊 Dodane do lejka: {name[:80]} [{row.get('stage')}]" + \
            (f", {inp['value']:.0f} {inp.get('currency') or 'PLN'}" if inp.get("value") else "") + "."
 
 
