@@ -6,11 +6,11 @@ Agents must screen output against this library BEFORE HITL preview.
 
 ---
 
-## INDEKS AP-306..AP-316 - na czym ten projekt sie przejechal
+## INDEKS AP-306..AP-317 - na czym ten projekt sie przejechal
 
 **Jesli czytasz to pierwszy raz, zacznij tutaj.** Serie 001-104 i 201-203 dotycza glosu i tresci;
 seria 301+ dotyczy INZYNIERII i to ona tlumaczy, dlaczego kod wyglada tak, a nie inaczej.
-Ponizej jedenascie ostatnich, po kolei, jedno zdanie na kazdy. Pelne opisy z dowodami
+Ponizej dwanascie ostatnich, po kolei, jedno zdanie na kazdy. Pelne opisy z dowodami
 produkcyjnymi sa w `docs/anti-patterns/`.
 
 | AP | Jednym zdaniem | Pelny opis |
@@ -26,10 +26,11 @@ produkcyjnymi sa w `docs/anti-patterns/`.
 | **314** | Bramka bezpieczenstwa, ktorej nikt nie widzial PRZY PRACY, jest zalozeniem - odpal ja ze ZLYM wsadem, zanim zaufasz jej przy dobrym. | [AP-314](../docs/anti-patterns/AP-314_bramka_ktorej_nikt_nie_widzial.md) |
 | **315** | Walidator sprawdza FORME tekstu, a nie jego GATUNEK - notatka modelu ma forme bez zarzutu i przechodzi komplet kontroli, bo kazda pyta o cos innego. | [AP-315](../docs/anti-patterns/AP-315_walidator_formy_nie_gatunku.md) |
 | **316** | Dokument, ktory INSTRUUJE, starzeje sie grozniej niz ten, ktory OPISUJE - nieaktualny opis wprowadza w blad, nieaktualna instrukcja **kaze odtworzyc awarie** i wyglada przy tym swiezo. | [AP-316](../docs/anti-patterns/AP-316_instrukcja_starzeje_sie_grozniej_niz_opis.md) |
+| **317** | Brak wpisu w bazie nie jest dowodem ciszy, a godzina bez daty na zrzucie nie jest data dzisiejsza - baza nie widzi SMS, WhatsAppa ani telefonow, wiec pusta teczka znaczy "nie wiem", nie "nic nie bylo". | [AP-317](../docs/anti-patterns/AP-317_brak_wpisu_nie_jest_dowodem_ciszy.md) |
 
-### Wspolny mianownik tej jedenastki
+### Wspolny mianownik tej dwunastki
 
-Osiem z jedenastu to **jedna klasa: cisza wyglada jak sukces.** Filtr, ktory padl, oddaje tekst
+Dziewiec z dwunastu to **jedna klasa: cisza wyglada jak sukces.** Filtr, ktory padl, oddaje tekst
 niezmieniony (306). Straznik, ktory zaglodzil sie limitem, konczy z zerem (310). Pustka w widoku
 czytana jak fakt o swiecie (311). Bramka, ktora sie nie wykonala, nie zostawia sladu (314).
 Walidator, ktory zadal zle pytanie, swieci na zielono (315).
@@ -38,6 +39,13 @@ Walidator, ktory zadal zle pytanie, swieci na zielono (315).
 kontrola MIALA JAK zglosic problem"** - i sprawdz to, karmiac ja czyms zepsutym. W tym repo
 to nie jest rytual: 10/08 jedenascie celowych przywrocen wady zlapalo trzy realne bledy
 w bramkach, ktore chwile wczesniej swiecily na zielono.
+
+**AP-317 jest najostrzejszym przypadkiem tej klasy i jedynym, w ktorym recepta wyzej nie dziala.**
+W 306, 310 i 314 cisze produkuje komponent ZEPSUTY, wiec da sie ja wywolac zlym wsadem.
+W 317 cisze produkuje komponent SPRAWNY: baza nie zawiera SMS, WhatsAppa, rozmow telefonicznych
+ani wiadomosci z LinkedIn i X, wiec pusta teczka jest poprawna odpowiedzia na niepelne pytanie.
+Nie ma czego nakarmic i nie ma co naprawiac - zamiast bramki w kodzie wchodzi staly protokol:
+pytanie do czlowieka o kanaly poza zasiegiem, plus bramka na tym, co czlowiek przysle.
 
 Dwie kolejne to rodzina **"naprawilem, ale nie wszedzie"** (307, 309) i one tez maja wspolna
 recepte: `grep -rn` przed uznaniem poprawki za skonczona.
@@ -203,6 +211,9 @@ krotka celowo: ma sie dac przeczytac za jednym razem i zapamietac.
 
 ### AP-316: Dokument, ktory INSTRUUJE, starzeje sie grozniej niz dokument, ktory OPISUJE
 **Ustanowiony 11/08/2026 (Manager AGS, po przegladzie gotowosci repo).** Rodzina AP-312 na poziomie dokumentacji: tam etykieta stanu obiecuje co innego, niz znaczy; tu **instrukcja kaze odtworzyc awarie i wyglada przy tym swiezo**. Dokumentacja starzeje sie zawsze, ale koszt nie jest ten sam: nieaktualny OPIS wprowadza w blad (czytajacy traci czas i sprawdza w kodzie), nieaktualna INSTRUKCJA jest **WYKONYWANA**. **Dowod, trzy dokumenty, zaden nieoznaczony jako nieaktualny:** (1) `DEPLOY_CHECKLIST` - playbook instalacji U KLIENTA - kazal ustawic `publish_mode='webhook'`, tryb ZABRONIONY od 22/07 po incydencie AP-307 (4-5 postow X w godzine, zgubione media, polski post na anglojezycznym profilu, baza klamiaca o stanie), i zaaplikowac migracje "001..008", gdy jest ich 42; (2) `README` wymienial katalogi `skills/` i `mcps/`, ktore nie istnieja, a milczal o `cm-agent/`, czyli o CALYM systemie, i mowil ze X Agent jest PARKED a LinkedIn w BACKLOG, gdy oba sa od miesiecy jedynymi zywymi kanalami; (3) `SYSTEM_DATAFLOW` podawal "ostatni DDL 029" przy faktycznych 042. Anty-wzorzec AP-307 byl ZAPISANY 20/07, komponent poprawiony, produkcja przelaczona - a instrukcja instalacji przez trzy tygodnie dalej uczyla starego. **Why bad:** instrukcja jest WYKONYWANA, nie oceniana - wykonawca zaklada, ze skoro jest w repo, to obowiazuje; nieaktualnosc jest niewidoczna, bo dokument nie ma stanu i wyglada tak samo swiezo w dniu, w ktorym przestal byc prawdziwy; poprawka kodu nie propaguje sie sama, bo instrukcje mieszkaja gdzie indziej i **nikt ich nie kompiluje** - nie ma testu, ktory by padl; koszt jest ZEWNETRZNY, placi go klient albo nowy czlonek zespolu, nie autor. **Correct:** po zapisaniu anty-wzorca albo zmianie zachowania zrob `grep` po dokumentach INSTRUKTAZOWYCH (playbooki, runbooki, README) i sprawdz, czy ktorys nadal uczy starego; dokument instruktazowy nosi DATE WERYFIKACJI, nie powstania, plus regule "przy zmianie zachowania X ten plik zmienia sie w TYM SAMYM commicie"; instrukcja podaje POLECENIE, nie liczbe z przeszlosci (`ls cm-agent/db/*.sql | sort` zamiast "001..042" - liczba sie zestarzeje, polecenie nie); krok zabroniony ma przy sobie POWOD i odeslanie do anty-wzorca, zeby nikt nie cofnal go w dobrej wierze; **najmocniejsze - zamien warunek zapisany w dokumencie na BLOKADE W KODZIE, gdy tylko sie da**, bo warunek w dokumencie jest zalozeniem (AP-314). Pelny opis: docs/anti-patterns/AP-316_instrukcja_starzeje_sie_grozniej_niz_opis.md.
+
+### AP-317: Brak wpisu w bazie nie jest dowodem ciszy, a godzina bez daty nie jest data dzisiejsza
+**Ustanowiony 14/08/2026 (Manager AGS, na wlasnym bledzie), wpisany do kanonu 19/08/2026.** Blizniak AP-311, ale o innej diagnozie i innej naprawie: tam system MIAL JAK pokazac i zawiodl, tu **system dziala dokladnie tak, jak zaprojektowano, i nadal nie wie**, bo zdarzenie wydarzylo sie poza jego zasiegiem. Baza nie zawiera i nie bedzie zawierac SMS, WhatsAppa, rozmow telefonicznych ani wiadomosci z LinkedIn i X, dopoki ktos nie zbuduje warstwy 0, wiec **KAZDA teczka jest niepelna z definicji, nie przez wypadek**. **Dowod produkcyjny, trzy stopnie tego samego dnia (14/08):** (1) Manager przygotowal Tomaszowi SMS do posrednika (Piotr Hamryszak, cieple dojscie do Adamietz) po sprawdzeniu bazy, w ktorej tego posrednika NIE BYLO, choc watek SMS mial trzy tygodnie i cztery wiadomosci; nakladala sie na to druga luka - brak `pipeline_add` sprawia, ze dla kontaktu spoza lejka nie da sie zapisac wpisu nawet wtedy, gdy sie o nim wie; (2) luke zalatano zrzutem ekranu od Tomasza, a **Manager odczytal z niego godzine "08:31" jako dzisiejsza** i na tej podstawie kazal SMS WSTRZYMAC - godzina byla sprzed dwoch tygodni; (3) bledny odczyt zostal zapisany do bazy jako fakt. Rozstrzygniecie 15/08 (Q1 z meldunku): w kanalach niewidocznych poszedl WYLACZNIE SMS domykajacy do Hamryszaka, a NIC do szkol ani do Patrycji - czyli baza pokazywala cisze wobec jedynej osoby, wobec ktorej ciszy nie bylo. **Kontrprzyklad z tego samego dnia, domkniety poprawnie:** konektor Gmail nie zwracal korespondencji z grupachwalinski.pl, wiec wygladalo, ze mail do Miroslawa Damczyka nie poszedl; Manager zapisal "Nie zakladam, ze poszla, czekam na potwierdzenie", a zrzut o 11:09 pokazal wysylke 13/08 i odpowiedz tego samego dnia. Roznica nie lezy w narzedziu, tylko w tym, **czy odczyt zostal domkniety pytaniem do czlowieka, czy domyslem**. Ta sama wada zyje na poziomie maszyny: `SELECT created_at::time ... ORDER BY created_at` sortuje po kolumnie WYJSCIOWEJ, czyli po samej godzinie bez daty, i kosztowalo to falszywy trop "znikajacych wierszy" (20/07). **Why bad:** odczyt jest POPRAWNY, a wniosek falszywy, wiec nic nie zapala sie na czerwono - przy AP-311 da sie znalezc winny komponent (martwa kolumna, filtr), tu winnego nie ma i nikt nie zaczyna szukac; domysl jest tanszy niz pytanie, bo "dzis" nie kosztuje nic i nie zostawia sladu; **blad zapisany do bazy zmienia status z pomylki na dane** - wiersz nie niesie informacji o tym, czy powstal z obserwacji, czy z wnioskowania (to AP-312 od strony pochodzenia: nie klamie nazwa, klamie ZRODLO); szkoda jest zewnetrzna i relacyjna, bo wstrzymany SMS to nie linijka w logu, tylko cisza wobec czlowieka, ktorego poproszono o przysluge, w relacji prywatnej o juz naruszonym saldzie (D-F). **Correct:** (1) zanim podasz gotowy tekst do kogokolwiek, zapytaj czlowieka o kanaly, ktorych baza nie widzi - jedno zdanie "co ostatnio poszlo do tej osoby i kiedy", bez odpowiedzi nie piszesz nic (regula przyjeta przez Managera 14/08, w Sales Managerze v1 zaszyta jako rutyna R-2, czyli warstwa 0 zrobiona czlowiekiem zamiast integracja); (2) pusta teczka raportuje "nie wiem", nie "nic nie bylo", a widok nazywa swoj horyzont; (3) **godzina bez daty ZATRZYMUJE, nie domysla sie** - przy zrzucie bez naglowka dnia pytasz o date albo prosisz o szerszy kadr, bo domyslne "dzis" to odpowiednik porownania z NULL, ktore przepuszcza po cichu (AP-314 punkt 2); (4) wpis do bazy rozroznia ZOBACZONE od WYWNIOSKOWANEGO, inaczej za tydzien nikt nie odtworzy, skad sie wzial; (5) **decyzja o WSTRZYMANIU wymaga tego samego dowodu co decyzja o WYSLANIU** - ten blad kosztowal przez asymetrie, bo wstrzymanie wyglada na ostrozne i przeszlo bez sprawdzenia; (6) luke strukturalna zglaszaj jako luke, nie obchodz jej po cichu. **Test rozstrzygajacy wobec AP-311:** czy istnieje poprawka, po ktorej ta pustka stalaby sie wiarygodna? Jesli tak - AP-311, szukaj wady. Jesli nie, bo kanal nie ma zadnego polaczenia z baza - AP-317, zmieniasz sposob czytania, nie system. Pelny opis: docs/anti-patterns/AP-317_brak_wpisu_nie_jest_dowodem_ciszy.md.
 
 ---
 
