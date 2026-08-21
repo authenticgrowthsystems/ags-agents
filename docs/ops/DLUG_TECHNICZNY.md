@@ -868,6 +868,10 @@ trzeba dotknac 44 wezlow" po tej zmianie przestaje obowiazywac - rotacja staje s
 `UPDATE` w `app_secrets`. Mieszanie dwoch zmian w jednym oknie na JEDYNYM interfejsie Tomasza
 kosztuje mozliwosc odroznienia, ktora z nich zawiodla, gdy bot zamilknie. Decyzja Managera.
 
+**ROZSTRZYGNIETE PRZEZ MANAGERA 19/08: rekomendacja PRZYJETA, tokenu w oknie NIE rotujemy.**
+Rotacja wchodzi jako **osobny krok, po 24 godzinach stabilnosci**, rowniez z weryfikacja
+prawdziwa wiadomoscia. Jedna zmiana, jeden dowod, jedna droga cofniecia.
+
 **Zapisany 11/08/2026** (skan przed pierwszym re-eksportem workflow do repo).
 
 Kanon tego projektu, powtorzony w trzech miejscach (`SYSTEM_DATAFLOW`, `DEPLOY_CHECKLIST`,
@@ -1327,3 +1331,45 @@ jedyna droge konfigurowania kanalu. **Zapis zostaje WLACZONY do czasu bloku H.**
 **Punkty zaczepienia:** `cm-agent/app/generate.py:208` (`_channel_rules`),
 `cm-agent/app/conversation.py` (narzedzie `subagent_remember_rule`, zapis do `channels.config`
 przez `jsonb_set` na kluczu `rules`, ~linia 2717).
+
+## D-025: Brak drogi zmiany SAMEGO terminu spotkania, bez wpisu tekstu
+
+**Zapisany 19/08/2026 (znalezisko z bloku E; decyzja Managera 19/08: rejestrujemy, wykonanie PO OKNIE n8n).**
+
+**Czekajacy przypadek, prawdziwy i przeterminowany:** spotkanie z **Grupa Chwalinski** jest
+03.09.2026 o **9:00**, ul. Wroclawska (potwierdzone przez Tomasza 15/08), a **w bazie wisi 11:00**.
+Nikt tego nie poprawil, bo nie ma czym.
+
+**Stan faktyczny (odczyt z 19/08):**
+- `/lacznik/zapisz-tekst` **umie** ustawic `next_step_date`, ale `teczka.zapisz` wymaga niepustej
+  `tresc` i kanalu ze slownika. **Zmiana samej godziny wymusza wiec wymyslenie fikcyjnego wpisu**
+  do `engagement_log`. To jest cala luka: zeby poprawic liczbe, trzeba sklamac w dzienniku.
+- `sales._pipeline_move` umie ustawic `next_followup_at` osobno, ale jest osiagalny WYLACZNIE
+  jako narzedzie LLM w rozmowie Sprzedawcy. Lacznik go nie ma.
+- `teczka._ustaw_krok` juz istnieje i obsluguje OBA rejestry (lejek `next_followup_at`,
+  kontakt `next_action_due`).
+
+**Dlaczego NIE zalatano tego endpointem z D-021** (swiadoma decyzja, nie przeoczenie):
+`/lacznik/nowy-prospekt` to **drzwi zakladajace**. Danie im semantyki "a jak juz jest, to popraw"
+przywraca find-or-create, czyli dokladnie to, przed czym stoi bramka D-021. Literowka w nazwie
+albo zalozylaby ducha, albo **po cichu przesunela termin komus innemu**.
+
+**Koszt osobnej drogi:** maly. `POST /lacznik/termin` (~15 linii w `worker.py`) plus publiczne
+`teczka.ustaw_krok` (~20 linii): `znajdz` (odporne na ogonki, odmawia przy wieloznacznosci, nigdy
+nie zaklada) plus `_ustaw_krok` plus jeden wezel w n8n.
+
+**Trzy rzeczy, ktorych przy tym NIE WOLNO pominac:**
+1. **Stara wartosc MUSI wrocic w potwierdzeniu** ("bylo 11:00, jest 9:00"). Dzis `_ustaw_krok`
+   nadpisuje po cichu, a **cicha zmiana daty to dokladnie mechanizm, ktorym 11:00 sie tam znalazlo**.
+2. **Skad wziela sie nowa godzina, musi zostac zapisane** (AP-317). `next_followup_at` nie niesie
+   pochodzenia. Minimum: dopisek "termin poprawiony 11:00 -> 9:00, zrodlo: potwierdzenie Tomasza 15/08".
+3. `_ustaw_krok` uzywa `COALESCE`, wiec **terminu NIE DA SIE skasowac** (NULL znaczy "bez zmian").
+   Kasuje tylko galaz `park` w `apply_followup`, z guzika. Do rozstrzygniecia, czy to wada.
+
+**ZALEZNOSC, ktora trzeba zamknac RAZEM z tym dlugiem:** `sales._find_pipeline` (po nim chodza
+`pipeline_move`, `outreach_sent`, `offer_for`, `draft_outreach`) **nadal nie normalizuje ogonkow**,
+wiec `pipeline_move("Chwalinski")` NIE trafi w "Grupa Chwaliński" (AP-313). To jest ta sama nazwa,
+ktorej dotyczy czekajacy przypadek - poprawka terminu bez tej naprawy nie zadziala.
+
+**Punkty zaczepienia:** `cm-agent/app/worker.py` (endpointy Lacznika), `cm-agent/app/teczka.py`
+(`_ustaw_krok`, `znajdz`), `cm-agent/app/sales.py` (`_find_pipeline`).

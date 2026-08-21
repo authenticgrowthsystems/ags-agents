@@ -63,8 +63,15 @@ po:     const item = $('Telegram Trigger').first().json;
    dziś buduje adres z wyrażenia. Robimy to samo, tylko dla pozostałych 44.
 
 Efekt uboczny, który jest właściwą nagrodą: **rotacja tokenu przestaje być oknem serwisowym.**
-Po tej zmianie wymiana tokenu to jeden `UPDATE` w `app_secrets`. Sama rotacja to osobna decyzja
-Managera i NIE wchodzi do tego okna.
+Po tej zmianie wymiana tokenu to jeden `UPDATE` w `app_secrets`.
+
+**ROZSTRZYGNIĘTE PRZEZ MANAGERA 19.08: w TYM oknie NIE rotujemy tokenu.** Rotacja wchodzi jako
+**osobny krok, po 24 godzinach stabilności**, i też z weryfikacją prawdziwą wiadomością.
+
+Powód, przyjęty przez Managera: argument z długu („skoro i tak trzeba dotknąć 44 węzłów")
+po tej zmianie przestaje obowiązywać. Mieszanie dwóch zmian w jednym oknie na **jedynym
+interfejsie Tomasza** kosztuje możliwość odróżnienia, która z nich zawiodła, gdyby bot zamilkł.
+Jedna zmiana, jeden dowód, jedna droga cofnięcia.
 
 ---
 
