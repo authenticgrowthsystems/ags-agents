@@ -16,6 +16,10 @@ ten sam KOD co CM (`_subagent_handle`), inna konfiguracja z channels.
 Telegram -> n8n HITL (Detect Update Type; przepustka komend /karty /schowek
   /decyzje /brand*) -> POST /message {chat_id, text, update_id, active_agent}
 conversation.handle:
+  0. SUFIKS GRUPY: w supergrupie klient Telegrama doklada do komendy nazwe bota
+     ('/karty@AGSbot'), wiec KAZDY wzorzec komendy ma '(?:@\w+)?' po nazwie -
+     bez tego komenda leci do LLM, ktory ja grzecznie kwituje (dowod:
+     cm-agent/tests/test_sufiks_bota_w_grupie.py).
   1. dedup update_id (processed_updates)
   2. brands_ui.try_handle (/brands, /brand_on|off|add|remove|config|export -
      deterministyczne, bez LLM)

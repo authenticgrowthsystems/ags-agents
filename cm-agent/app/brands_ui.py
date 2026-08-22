@@ -19,7 +19,11 @@ import re
 
 from . import config, db
 
+# '(?:@\w+)?' = sufiks, ktory klient Telegrama dokleja do komendy w GRUPIE ('/brands@AGSbot').
+# Bez niego wzorzec nie pasuje, tekst leci do LLM i dostajesz odpowiedz zamiast listy marek.
+# Notacja jak w conversation._KONTEKST_RE i sales.py (22/08, przed przenosinami do supergrupy).
 _CMD_RE = re.compile(r"^/(brands|brand_on|brand_off|brand_add|brand_remove|brand_config|brand_export)"
+                     r"(?:@\w+)?"
                      r"(?:\s+([A-Za-z0-9_-]{2,30}))?\s*$", re.IGNORECASE)
 
 _STATUS_ICO = {"active": "🟢", "paused": "⚪", "archived": "🗄"}

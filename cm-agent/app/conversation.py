@@ -27,14 +27,22 @@ HISTORY_MAX = 16      # conversation turns kept in fsm_data
 STATE_TTL_MIN = 30    # stale conversation resets (research verdict: TTL + /cancel exit every state)
 TG_LIMIT = 4096
 
-_PREVIEW_RE = re.compile(r"^\s*(/plan|/kolejka|plan|kolejka|status|poka[zż]\s+(plan|kolejk\w*))\s*\??\s*$", re.IGNORECASE)
-_SCHOWEK_RE = re.compile(r"^\s*(/schowek|schowek|baza\s+pomys\w*|poka[zż]\s+(schowek|baz\w*))\s*\??\s*$", re.IGNORECASE)
-_KARTY_RE = re.compile(r"^\s*(?:/karty|karty|przegl[aą]daj|poka[zż]\s+(?:karty|materia\w*)|materia[lł]y\s+do\s+przegl[aą]du)"
+# SUFIKS @nazwabota (22/08, przed przenosinami rozmowy do supergrupy z watkami).
+# W grupie klient Telegrama dokleja do komendy nazwe bota: tap w menu wysyla '/karty@AGSbot',
+# a przy wielu botach w grupie jest to WYMAGANE. Wzorzec zakotwiczony na '$' przestaje wtedy
+# pasowac, wiadomosc leci do LLM i model ja grzecznie kwituje: komenda nie dziala, ale COS
+# odpowiada, wiec czlowiek nie widzi awarii (rodzina AP-306/AP-310/AP-315, objaw gadatliwy).
+# Zapis '(?:@\w+)?' po KAZDEJ komendzie ze slashem - ten sam, ktory od dawna maja _KONTEKST_RE
+# ponizej i piec wzorcow w sales.py (AP-309: jedna notacja, nie drugi wynalazek).
+# Wariantow slownych (bez slasha) sufiks nie dotyczy - Telegram doklada go tylko do komend.
+_PREVIEW_RE = re.compile(r"^\s*(/plan(?:@\w+)?|/kolejka(?:@\w+)?|plan|kolejka|status|poka[zż]\s+(plan|kolejk\w*))\s*\??\s*$", re.IGNORECASE)
+_SCHOWEK_RE = re.compile(r"^\s*(/schowek(?:@\w+)?|schowek|baza\s+pomys\w*|poka[zż]\s+(schowek|baz\w*))\s*\??\s*$", re.IGNORECASE)
+_KARTY_RE = re.compile(r"^\s*(?:/karty(?:@\w+)?|karty|przegl[aą]daj|poka[zż]\s+(?:karty|materia\w*)|materia[lł]y\s+do\s+przegl[aą]du)"
                        r"(?:\s+do\s+przegl[aą]du)?"  # fix 12/07: 'karty do przegladu' szlo do LLM, ktory kwitowal 'Przyjete.'
                        r"(?:\s+(dzi[sś]|dzisiaj|jutro|jutrzejsze))?\s*\??\s*$", re.IGNORECASE)
-_DECYZJE_RE = re.compile(r"^\s*(/decyzje|decyzje|poka[zż]\s+decyzje|czekaj[aą]ce\s+decyzje)\s*\??\s*$", re.IGNORECASE)
+_DECYZJE_RE = re.compile(r"^\s*(/decyzje(?:@\w+)?|decyzje|poka[zż]\s+decyzje|czekaj[aą]ce\s+decyzje)\s*\??\s*$", re.IGNORECASE)
 _KONTEKST_RE = re.compile(r"^\s*/?kontekst(?:@\w+)?(?:\s+(x|linkedin|sprzedaz|all))?\s*$", re.IGNORECASE)
-_CANCEL_RE = re.compile(r"^\s*(/cancel|anuluj)\s*$", re.IGNORECASE)
+_CANCEL_RE = re.compile(r"^\s*(/cancel(?:@\w+)?|anuluj)\s*$", re.IGNORECASE)
 
 
 # ---------------- Telegram transport ----------------

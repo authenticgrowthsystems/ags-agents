@@ -1518,3 +1518,76 @@ bo klucze leza w repo i na origin.
 
 **Punkty zaczepienia:** `n8n-workflows/x-agent/ags-hitl-handler-v1.json` wezly `Post Edited To X`
 i `Post To X Approve`; wzorzec odczytu z bazy w tym samym pliku (`PostgreSQL Lookup Session`).
+
+## D-028 [ZAMKNIETY PO STRONIE cm-agenta 22/08]: Sufiks `@nazwabota` w grupie rozbraja komendy
+
+**Zapisany 22/08/2026 (znalezisko z przygotowania migracji do supergrupy).**
+
+**Mechanizm.** W grupie klient Telegrama doklada do komendy nazwe bota: tap w menu wysyla
+`/karty@AGSbot`, a przy wielu botach sufiks jest WYMAGANY. Wzorce komend byly zakotwiczone
+na `$`, wiec z sufiksem przestawaly pasowac.
+
+**Why bad:** to rodzina "cisza wyglada jak sukces" (AP-306, AP-310, AP-315), ale z GADATLIWYM
+objawem, czyli grozniejsza w odbiorze. Wiadomosc nie ginie: `Detect Update Type` przepuszcza ja
+jako `plain_text` (uzywa `startsWith`, wiec sufiks jej nie rusza), Python nie rozpoznaje komendy,
+a tekst trafia do LLM, ktory go grzecznie kwituje. **Czlowiek widzi ODPOWIEDZ, wiec nie ma powodu
+podejrzewac awarii** - dopiero brak skutku zdradza problem, i to po czasie.
+
+**Zamkniete 22/08 po stronie cm-agenta, SIEDEM miejsc:** `conversation._PREVIEW_RE`,
+`_SCHOWEK_RE`, `_KARTY_RE`, `_DECYZJE_RE`, `_CANCEL_RE`, `brands_ui._CMD_RE` oraz
+`sales.try_command` (bylo porownanie do krotki literalow, nie regex). Notacja `(?:@\w+)?` -
+ta sama, ktora od dawna mialy `_KONTEKST_RE` i piec wzorcow w `sales.py`.
+
+**To jest AP-309 w czystej postaci.** Ktos juz kiedys sie na tym przejechal i naprawil DWA
+miejsca punktowo. Wada zyla dalej w siedmiu pozostalych przez caly ten czas, **niewidoczna,
+bo w czacie prywatnym sufiksu nie ma**. Dlatego bramka nie jest lista przypadkow, tylko
+**SKANEM ZRODEL**: `cm-agent/tests/test_sufiks_bota_w_grupie.py` czyta wzorce z `app/*.py`
+i zada sufiksu po kazdej nazwie komendy. Osma komenda dopisana bez sufiksu zapali sie sama.
+
+**Najgrozniejszy pojedynczy przypadek (zamkniety):** `sales.try_command` wychodzil z uzbrojonego
+trybu `/add_sales_material` przez `low in ("/cancel","/anuluj","anuluj")`. `/anuluj@AGSbot` nie
+pasowal do krotki, a linijke nizej wypadal z galezi przez `not text.startswith("/")` - czyli
+**przelatywal BEZ SLADU, tryb zostawal uzbrojony na dwie godziny, a nastepna wklejka >= 200
+znakow wchodzila do bazy wiedzy jako material sprzedazowy.**
+
+**Bramka zaplacila za siebie natychmiast:** pierwsza wersja skanera przechodzila na zielono,
+BEDAC SLEPA na forme `/(alternatywa|...)` uzywana przez `brands_ui._CMD_RE`. Zlapala to asercja
+"skan faktycznie cos przejrzal". Sprawdzone niezaleznie przez koordynatora na innym wzorcu
+(`_DECYZJE_RE`): po cofnieciu poprawki test pada z DWOCH stron - przypadkiem funkcjonalnym
+i przegladem statycznym.
+
+**OTWARTE - jedno miejsce w n8n, do najblizszego okna (NIE otwieramy dla niego okna):**
+wezel `Parse And Authorize Set`: `reqText.trim().match(/^\/set\s+(\S+)\s+([\s\S]+)$/)`.
+Poprawka: `/^\/set(?:@\w+)?\s+.../`. Objaw do czasu patcha: `/set@AGSbot klucz wartosc` dostaje
+odpowiedz "Format: /set <klucz> <wartosc>" na POPRAWNA komende. Reszta n8n jest odporna:
+routing przez `startsWith` (23 dopasowania), `Parse Get Key` bierze `parts[1]`, osiem
+`Parse *Callback` czyta `callback_query.data`, do ktorej Telegram sufiksu nie doklada.
+
+**Punkty zaczepienia:** `cm-agent/app/conversation.py:30-45`, `cm-agent/app/brands_ui.py:22-27`,
+`cm-agent/app/sales.py:2187-2198`, `cm-agent/tests/test_sufiks_bota_w_grupie.py`.
+
+## D-029: `/anuluj` jest MARTWY od dawna i nie ma to zwiazku z grupa
+
+**Zapisany 22/08/2026 (znalezisko uboczne przy D-028).**
+
+Lista przepustowa w wezle `Detect Update Type` wymienia: `/plan /cancel /kolejka /raport /karty
+/schowek /decyzje /brand /prospect /oferta /pipeline /add_sales_material /dziennik /kontekst`.
+**`/anuluj` jej NIE MA** (sprawdzone: w calym pliku workflow wystepuje `/cancel`, nie `/anuluj`),
+a ostatnia regula to `if (txt && !txt.startsWith('/'))`. Czyli `/anuluj` dostaje `type: 'other'`
+i **jest wyrzucany w n8n - nigdy nie dociera do Pythona.**
+
+**TRZY miejsca w Pythonie obsluguja `/anuluj` i wszystkie sa MARTWYM KODEM.** Dziala wylacznie
+`anuluj` bez ukosnika (przechodzi torem `plain_text`) oraz `/cancel`.
+
+**Why bad:** to nie jest wada dzialania, tylko wada ZAUFANIA DO KODU. Trzy miejsca w repo
+twierdza, ze komenda jest obslugiwana; ktos czytajacy kod wyciaga wniosek racjonalny i falszywy
+(AP-312 na poziomie martwej sciezki). Do tego objaw dla czlowieka jest niemy: `/anuluj` nie robi
+nic i nic nie mowi.
+
+**Do zrobienia (jedna linia, przy najblizszym oknie n8n):** dopisac `/anuluj` do listy
+przepustowej w `Detect Update Type`. **Albo** decyzja odwrotna: usunac obsluge `/anuluj`
+z Pythona i zostawic sam `/cancel` - wtedy kod przestaje klamac. **Rekomendacja BE: dopisac
+do n8n**, bo `anuluj` bez ukosnika juz dziala i uzytkownik ma prawo oczekiwac, ze wersja
+z ukosnikiem tez.
+
+**Punkt zaczepienia:** `n8n-workflows/x-agent/ags-hitl-handler-v1.json`, wezel `Detect Update Type`.

@@ -2184,6 +2184,10 @@ _DZIENNIK_RE = re.compile(r"^/dziennik(?:@\w+)?\s*(.*)$", re.IGNORECASE | re.DOT
 _PIPELINE_RE = re.compile(r"^/pipeline(?:@\w+)?\s*$", re.IGNORECASE)
 _OFERTA_RE = re.compile(r"^/oferta(?:@\w+)?\s*(.*)$", re.IGNORECASE | re.DOTALL)
 _ADDMAT_RE = re.compile(r"^/add_sales_material(?:@\w+)?\s*(.*)$", re.IGNORECASE | re.DOTALL)
+# Wyjscie z uzbrojonego trybu materialu. Bylo porownanie do krotki literalow, wiec w GRUPIE
+# '/anuluj@AGSbot' nie wychodzilo z trybu, tylko - jako tekst ponizej 200 znakow zaczynajacy
+# sie od '/' - przelatywalo dalej bez sladu. Sufiks obsluzony ta sama notacja co wyzej (22/08).
+_ANULUJ_RE = re.compile(r"^\s*(?:/cancel(?:@\w+)?|/anuluj(?:@\w+)?|anuluj)\s*$", re.IGNORECASE)
 
 
 def try_command(chat_id, text, active):
@@ -2191,8 +2195,7 @@ def try_command(chat_id, text, active):
     Zwraca True gdy obsluzone (conversation.handle konczy). Dziala z KAZDYM aktywnym agentem."""
     st = _pending_armed()
     if st:
-        low = text.strip().lower()
-        if low in ("/cancel", "/anuluj", "anuluj"):
+        if _ANULUJ_RE.match(text or ""):
             clear_pending()
             _tg_send(chat_id, "Anulowane - nic nie zapisalem do bazy wiedzy.")
             return True

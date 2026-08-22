@@ -199,6 +199,11 @@ to chirurgicznie i sam odmawia, gdy liczby sie nie zgadzaja.
   a zachowanie stare".
 - Router komend POLYKAL nowe komendy (/karty) - kazda nowa komenda tekstowa =
   sprawdz Detect Update Type.
+- SUFIKS GRUPY: w supergrupie klient dokleja nazwe bota ('/set@AGSbot klucz
+  wartosc'). Routing w Detect Update Type przezyje (startsWith), ale regex w
+  **Parse And Authorize Set** (`/^\/set\s+(\S+)\s+([\s\S]+)$/`) NIE - odpowie
+  "Format: /set <klucz> <wartosc>" na poprawna komende. Strona Pythona
+  (cm-agent) jest juz odporna, ten wezel czeka na patcha przy najblizszym oknie n8n.
 - Allowlista /set nie zna nowych kluczy (cm_dup_threshold w backlogu) -
   do czasu patcha strojenie przez SQL na brand_config.
 - Stare wezly HITL maja HARDKODY tokena Telegram (rotacja tokena = przejrzec
