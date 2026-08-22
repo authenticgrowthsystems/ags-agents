@@ -1340,6 +1340,15 @@ przez `jsonb_set` na kluczu `rules`, ~linia 2717).
 03.09.2026 o **9:00**, ul. Wroclawska (potwierdzone przez Tomasza 15/08), a **w bazie wisi 11:00**.
 Nikt tego nie poprawil, bo nie ma czym.
 
+**AKTUALIZACJA 22/08: czekajacy przypadek PRZESTAL ISTNIEC.** Odczyt `stan_gry` pokazal wpis
+z 21/08: **Marek Sroka odwolal mailem spotkanie 3.09** (zebranie wszystkich pracownikow), prosi
+o kontakt po powrocie Miroslawa z urlopu 01/09. W lejku stoi juz `Grupa Chwalinski, nastepny
+kontakt 01/09 12:00`. **Sama luka zostaje** - drogi zmiany terminu bez wpisu tekstu nadal nie ma -
+ale straciła swoj dowod, wiec przy ustalaniu priorytetu nie wolno juz powolywac sie na "wisi
+przeterminowana poprawka". Przy okazji: Marek Sroka JEST kontaktem po stronie Chwalinskiego,
+co domyka zagadke nazwiska z AP-317 (korekta z 19/08 zostaje bez zmian - przypis ma mowic to,
+co bylo potwierdzone, a nie to, co pozniej okazalo sie trafnym domyslem).
+
 **Stan faktyczny (odczyt z 19/08):**
 - `/lacznik/zapisz-tekst` **umie** ustawic `next_step_date`, ale `teczka.zapisz` wymaga niepustej
   `tresc` i kanalu ze slownika. **Zmiana samej godziny wymusza wiec wymyslenie fikcyjnego wpisu**
