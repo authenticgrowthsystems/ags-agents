@@ -87,10 +87,41 @@ sa bezpieczne. Problem jest gdzie indziej: sekret wklejony do PARAMETRU wezla, n
 `https://api.telegram.org/bot<TOKEN>/sendMessage`. Scheduler przeszedl de-hardkod 02/07 i ma
 zero takich miejsc; HITL Handler ma ich 44 (D-017).
 
-**Eksportuj TYLKO przez `n8n-workflows/eksport-do-repo.cjs`** (`sprawdz` / `zapisz`). Skrypt
-maskuje wzorce, ktore zna, i **odmawia zapisu**, gdy zostanie cokolwiek wygladajacego na sekret -
-bramka pada zamknieta. Zdejmuje tez `activeVersion` (pelna kopia definicji, podwaja rozmiar
-i zabija czytelnosc diffow). `webhookId` zmienia sie przy imporcie i produkuje szum w diffie.
+**Eksportuj TYLKO przez `n8n-workflows/eksport-do-repo.cjs`** (`sprawdz` / `zapisz` / `skan`).
+Skrypt maskuje wzorce, ktore zna, i **odmawia zapisu**, gdy zostanie cokolwiek wygladajacego na
+sekret - bramka pada zamknieta. Zdejmuje tez `activeVersion` (pelna kopia definicji, podwaja
+rozmiar i zabija czytelnosc diffow). `webhookId` zmienia sie przy imporcie i produkuje szum
+w diffie.
+
+**Bramka zostala przepisana 22/08 (D-026), bo pytala o zle rzeczy.** Stara wersja szukala
+KSZTALTU PRZYPISANIA (`secret|token|api_key ... = "..."`) i nie miala prawa trafic w ksztalt,
+ktorego uzywa n8n: `{ "name": "X-Lacznik-Secret", "value": "<48 znakow hex>" }`. Slowo `secret`
+stoi po stronie NAZWY, wartosc pod kluczem `value`. Zywy sekret Lacznika przeszedl przez nia bez
+slowa. Nowa bramka pyta o WARTOSC: chodzi po drzewie JSON i szuka **litych blokow** `[A-Za-z0-9]`
+od 32 znakow (od 24, gdy blok jest czysto szesnastkowy). Separatory blok przerywaja, wiec UUID
+rozpada sie na czlony po najwyzej 12 znakow i zaden identyfikator wezla, `versionId` czy
+`webhookId` nie ma jak wywolac falszywego alarmu. Do tego dwie jawne biale listy: **klucze
+tozsamosci** (para klucz + ksztalt, nie sam klucz) i **konteksty opisane z nazwiska**
+(identyfikator zasobu Notion, zaslepka typu `__X_ACCESS_TOKEN__`). Komunikat odmowy podaje
+sciezke w JSON razem z nazwa wezla, dlugosc wartosci i jej dwanascie pierwszych znakow -
+nigdy calosc.
+
+**Tryb `skan <plik.json> [...]`** przepuszcza pliki Z DYSKU przez ten sam tor, bez sieci i bez
+zapisu. Do sprawdzenia eksportu, ktory juz lezy w repo, i do przetestowania bramki zlym wsadem,
+zanim sie jej zaufa (AP-314 punkt 1). PowerShell 5.1 nie zna `&&`:
+
+```powershell
+cd C:\Claude-CoWork\AGS\ags-agents
+node n8n-workflows\eksport-do-repo.cjs skan n8n-workflows\lacznik-chat-tools.json
+if ($LASTEXITCODE -eq 0) { "czysty" } else { "bramka by tego nie przepuscila" }
+```
+
+**Stan na 22/08: bramka zatrzymuje dwa z dziewieciu eksportow w repo** -
+`lacznik-chat-tools.json` (sekret `X-Lacznik-Secret` w pieciu miejscach, D-026) oraz
+`x-agent/ags-hitl-handler-v1.json` (cztery poswiadczenia OAuth1 do X wpisane na sztywno
+w `parameters.jsCode` wezlow `Post Edited To X` i `Post To X Approve`). Sprzatanie i rotacja
+to osobny krok, wymagajacy decyzji Managera - bramka jest naprawiona PRZED sprzataniem celowo,
+bo odwrotna kolejnosc to zamiatanie objawu: nastepny eksport wpisalby sekret z powrotem.
 
 **Pulapka wezla `Mark Published`:** ma w JEDNYM zapytaniu wartosci z DWOCH roznych slownikow -
 `ci.status` (material) i `q.status IN (...)` (kolejka), obie do 03/08 o tej samej nazwie
@@ -118,8 +149,11 @@ to chirurgicznie i sam odmawia, gdy liczby sie nie zgadzaja.
 
 - Sekrety WYLACZNIE z `app_secrets` (Lookup/Get Key wezlami Postgres w locie);
   `saveData` OFF na adapterach z kluczami.
-- **"Zero literalow w definicjach" to ZASADA, NIE STAN FAKTYCZNY (sprawdzone 11/08).**
-  Scheduler i Lacznik: zero. **HITL Handler: 44 wystapienia tokenu bota Telegrama wklejonego
+- **"Zero literalow w definicjach" to ZASADA, NIE STAN FAKTYCZNY (sprawdzone 11/08,
+  poprawione 22/08).** ~~Scheduler i Lacznik: zero.~~ **To zdanie bylo nieprawdziwe co do
+  Lacznika**: ma sekret `X-Lacznik-Secret` w pieciu miejscach otwartym tekstem (cztery naglowki
+  HTTP plus sciezka triggera MCP), D-026. Scheduler faktycznie ma zero. **HITL Handler: 44
+  wystapienia tokenu bota Telegrama wklejonego
   w `parameters.url`** (adres `api.telegram.org/bot<TOKEN>/...`). Scheduler przeszedl de-hardkod
   02/07, HITL Handler nigdy. Wpis: `docs/ops/DLUG_TECHNICZNY.md` **D-017**. Dopoki to zyje,
   eksport do repo idzie WYLACZNIE przez maskujacy `eksport-do-repo.cjs`.

@@ -1385,6 +1385,45 @@ ktorej dotyczy czekajacy przypadek - poprawka terminu bez tej naprawy nie zadzia
 
 ## D-026: Sekret Lacznika lezy otwartym tekstem w eksporcie w repo, a bramka eksportera patrzy obok
 
+**AKTUALIZACJA 22/08: krok 1 z czterech ZROBIONY - bramka naprawiona.**
+
+`n8n-workflows/eksport-do-repo.cjs` pyta teraz o WARTOSC, nie o nazwe pola. Chodzi po **DRZEWIE
+JSON**, nie po tekscie, i mierzy **lite bloki**: nieprzerwane ciagi `[A-Za-z0-9]` od 32 znakow
+(od 24, gdy blok jest czysto szesnastkowy). **Separatory blok przerywaja i to samo z siebie
+rozwiazuje problem falszywych alarmow:** UUID (8-4-4-4-12) rozpada sie na czlony po najwyzej
+12 znakow, wiec `id` wezla, `versionId`, `activeVersionId` i `webhookId` NIE MAJA JAK trafic
+w prog. Nie trzeba bylo wpisywac ich na zadna liste.
+
+Doszla regula, ktorej brakowalo wprost: **para nazwa/wartosc** - obiekt ma `name` brzmiace jak
+sekret i osobne `value`. Dokladnie ksztalt, o ktory ten dlug sie potknal.
+
+Biale listy sa dwie i obie jawne. Na KLUCZACH zwalniaja PARE (klucz, ksztalt), nie sam klucz:
+sekret 48-hex podlozony pod `id` nadal wpada. Progi zmierzone na dziewieciu prawdziwych
+eksportach: 32 daje 13 trafien i zero smiecia, 24 zaczyna lapac wlasne slownictwo n8n,
+20 lapie kilkanascie wyrazow. **Bramka, ktora krzyczy przy kazdym eksporcie, zostanie wylaczona
+i nie chroni niczego** - to bylo kryterium projektowe, nie estetyka.
+
+Komunikat odmowy jest DZIALALNY: podaje sciezke w JSON razem z NAZWA WEZLA, dlugosc wartosci
+i jej dwanascie pierwszych znakow, nigdy calosc, plus cztery kroki, co z tym zrobic. Nowy tryb
+`skan <plik.json>` przepuszcza pliki z dysku tym samym torem, bez sieci i bez zapisu.
+
+**PROBA ZLYM WSADEM WYLAPALA DWA BLEDY W SAMEJ BRAMCE (AP-314 punkt 1 zadzialal).**
+`meta.instanceId` (64 hex, odcisk instancji n8n) wpadal w regule base64 ZANIM biala lista miala
+szanse sie odezwac - bramka odmawialaby przy KAZDYM zywym eksporcie. **Ten sam blad mial
+oryginal.** Drugi: plik z samymi zaslepkami `__X_CONSUMER_SECRET__` byl odrzucany, choc nie ma
+w nim zadnego sekretu.
+
+**AP-309, przeliczone: sekret Lacznika NIE JEST jedynym miejscem.** Bramka zatrzymuje **dwa
+z dziewieciu** eksportow. Drugi to komplet poswiadczen OAuth1 do konta X - patrz **D-027**,
+wpis powazniejszy niz ten.
+
+**Sprostowanie liczby w tym wpisie:** sekret Lacznika stoi w PIECIU miejscach, nie czterech -
+cztery naglowki `X-Lacznik-Secret` plus **sciezka triggera MCP** (`nodes[0] "MCP Lacznik"
+.parameters.path`, ksztalt `lacznik-<48 hex>`).
+
+**Zostaje: kroki 2, 3 i 4** - wymiana sekretow i sprzatanie repo, wymagaja czlowieka i zgody
+Managera. Bramka naprawiona PRZED sprzataniem celowo.
+
 **Zapisany 22/08/2026 (znalezisko z okna n8n, faza 2).**
 
 `n8n-workflows/lacznik-chat-tools.json` zawiera **zywy sekret `X-Lacznik-Secret` w czterech
@@ -1429,3 +1468,53 @@ sie tak samo jak instrukcja, tylko nikt go nie odswieza, bo commit jest niezmien
 
 **Punkty zaczepienia:** `n8n-workflows/eksport-do-repo.cjs` (tablica wzorcow zabronionych),
 `n8n-workflows/lacznik-chat-tools.json`, `app_secrets` klucz `lacznik_e2_secret`.
+
+## D-027: Komplet poswiadczen OAuth1 do konta X wpisany na sztywno w eksporcie w repo
+
+**Zapisany 22/08/2026 (znalezisko przy naprawie bramki z D-026). POWAZNIEJSZY NIZ D-026.**
+
+`n8n-workflows/x-agent/ags-hitl-handler-v1.json` zawiera **cztery poswiadczenia OAuth1 do konta X**
+wpisane na sztywno w `parameters.jsCode` dwoch wezlow: `Post Edited To X` (nodes[16])
+i `Post To X Approve` (nodes[26]). Sa to: klucz aplikacji, sekret aplikacji, token dostepu
+i sekret tokenu - czyli **komplet wystarczajacy do publikowania na koncie Tomasza**.
+
+**Zasieg (sprawdzony):** plik jest sledzony przez gita, **jest na origin**, a w historii dotykalo
+go **jedenascie commitow**. Repozytorium jest PRYWATNE, wiec krag jest ograniczony - ale
+poswiadczenia nalezy uznac za ujawnione.
+
+**Pierwszy commit, ktory wprowadzil ten plik, nazywa sie `Sync production workflows +
+SECURITY SANITIZATION + cleanup`** (`3340d7c`). To drugi raz tego samego dnia, gdy opis commita
+swiadczy o czyms, czego w tresci nie ma - przy D-026 bylo "bez sekretu, sanityzowana".
+**Komunikat commita jest deklaracja autora, nie wlasnoscia tresci**, a wyglada jak swiadectwo.
+
+**Dlaczego stara bramka eksportera tego nie widziala, mimo ze miala regule na `token = "..."`.**
+Bo dzialala na TEKSCIE pliku, a w JSON-ie kod wezla ma cudzyslowy uciekane:
+`consumerSecret = \"...\"`. Wzorzec `[:=]\s*["']` trafial na ukosnik odwrotny i nie dopasowywal sie.
+**To trzecie wcielenie tej samej choroby** - po AP-315 i po samym D-026: sprawdzanie FORMY ZAPISU
+zamiast tego, czym jest wartosc. Nowa bramka (D-026 krok 1) chodzi po sparsowanym drzewie,
+gdzie znakow ucieczki juz nie ma, i widzi to od razu.
+
+**Waga wyzsza niz D-026, z dwoch powodow:**
+1. to nie sekret wewnetrznego lacznika, tylko **poswiadczenia konta w serwisie zewnetrznym**;
+2. **konto X bylo juz raz zablokowane 25/07** (403, przejsciowa blokada) - drugie zdarzenie
+   na tym koncie ma inna wage niz pierwsze.
+
+**Za to TANSZE w naprawie niz D-026:** rotacja kluczy X idzie po stronie `developer.x.com`
+i **NIE przestawia adresu konektora MCP**, wiec nie zrywa Managerowi narzedzi. Wymaga natomiast
+podmiany wartosci w dwoch wezlach n8n - czyli **okna**, i najlepiej tego samego, w ktorym
+wykonamy D-017.
+
+**Do zrobienia:**
+1. rotacja kompletu kluczy X po stronie `developer.x.com`;
+2. wyjecie ich z `jsCode` do `app_secrets` albo poswiadczenia n8n - **wzorzec jest juz w repo**,
+   bo `Post To X Approve` czyta token Telegrama przez `$('PostgreSQL Lookup Session')...tg_token`,
+   czyli ten wezel UMIE juz siegac do bazy;
+3. ponowny eksport przez naprawiona bramke - ma przejsc bez znalezisk;
+4. decyzja o historii gita (jedenascie commitow) wspolnie z ta sama decyzja dla D-026.
+
+**NIEUSTALONE, wymaga okna:** kopia w repo ma 143 wezly, a zywa definicja 254, wiec **nie wiadomo,
+czy produkcja nadal ma te klucze w `jsCode`**. Niezaleznie od odpowiedzi rotacja jest potrzebna,
+bo klucze leza w repo i na origin.
+
+**Punkty zaczepienia:** `n8n-workflows/x-agent/ags-hitl-handler-v1.json` wezly `Post Edited To X`
+i `Post To X Approve`; wzorzec odczytu z bazy w tym samym pliku (`PostgreSQL Lookup Session`).
