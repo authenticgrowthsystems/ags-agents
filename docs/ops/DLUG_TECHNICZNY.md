@@ -1373,3 +1373,50 @@ ktorej dotyczy czekajacy przypadek - poprawka terminu bez tej naprawy nie zadzia
 
 **Punkty zaczepienia:** `cm-agent/app/worker.py` (endpointy Lacznika), `cm-agent/app/teczka.py`
 (`_ustaw_krok`, `znajdz`), `cm-agent/app/sales.py` (`_find_pipeline`).
+
+## D-026: Sekret Lacznika lezy otwartym tekstem w eksporcie w repo, a bramka eksportera patrzy obok
+
+**Zapisany 22/08/2026 (znalezisko z okna n8n, faza 2).**
+
+`n8n-workflows/lacznik-chat-tools.json` zawiera **zywy sekret `X-Lacznik-Secret` w czterech
+miejscach**, otwartym tekstem. Plik jest **sledzony przez gita i wypchniety na origin**.
+Repozytorium jest **prywatne** (potwierdzone przez Tomasza 22/08), wiec ekspozycja ogranicza sie
+do osob z dostepem - ale sekret nalezy uznac za ujawniony i wymienic.
+
+**Dlaczego bramka eksportera go nie zlapala - i to jest wlasciwa lekcja.**
+`n8n-workflows/eksport-do-repo.cjs` ma liste wzorcow ZABRONIONYCH, ktorych trafienie ma odmowic
+zapisu. Jeden z nich to `(?:secret|password|passwd|apikey|api_key|token)\s*[:=]\s*["'][^"']{16,}["']`.
+Wyglada na komplet, a **nie ma szansy trafic w ksztalt, ktorego uzywa n8n**:
+
+```
+"name": "X-Lacznik-Secret",
+"value": "<48 znakow hex>"
+```
+
+Slowo `secret` stoi po stronie **nazwy naglowka**, a wartosc siedzi pod kluczem `value`.
+Bramka pytala o KSZTALT PRZYPISANIA, a nie o to, CZY TO JEST SEKRET - **AP-315 co do litery,
+tylko o warstwe nizej**: tam walidator sprawdzal forme tekstu zamiast gatunku, tu maskownik
+sprawdza forme przypisania zamiast tego, czym jest wartosc.
+
+**Druga polowa: opis commita klamal i nikt tego nie zauwazyl.** Commit `67b6190` nazywa sie
+"Kopia definicji Lacznika po dolozeniu pary teczki (**bez sekretu, sanityzowana**)". Pozniejszy
+`c1dc6a1` wpisal sekret z powrotem, a **tytul tamtego commita zostal w historii jako swiadectwo,
+ktore juz nie obowiazuje**. To AP-316 przeniesione na komunikaty commitow: opis stanu starzeje
+sie tak samo jak instrukcja, tylko nikt go nie odswieza, bo commit jest niezmienny.
+
+**Do zrobienia (kolejnosc ma znaczenie):**
+1. **Najpierw naprawic bramke**, potem czyscic. Odwrotnie to zamiatanie objawu: nastepny eksport
+   wpisze sekret ponownie. Bramka ma pytac o WARTOSC, nie o nazwe pola - kandydat: kazdy ciag
+   hex dlugosci >= 32 poza znanymi identyfikatorami, plus jawna biala lista.
+2. Wymienic sekret `lacznik_e2_secret` w `app_secrets` i w definicji workflow. **UWAGA: sekret
+   siedzi w sciezce triggera MCP**, wiec zmiana przestawia adres konektora w claude.ai - trzeba
+   go zaktualizowac po stronie Tomasza, inaczej Manager traci wszystkie cztery narzedzia.
+3. Rozstrzygnac, czy czyscic HISTORIE gita (przepisanie historii repo wspoldzielonego z serwerem
+   i galeziami), czy uznac wymiane sekretu za wystarczajaca. **Rekomendacja: wymiana wystarczy**,
+   bo po niej stary ciag jest bezwartosciowy, a przepisanie historii ma wlasne ryzyko i dotyka
+   klonu na Mikrusie.
+4. Sprawdzic POZOSTALE eksporty w `n8n-workflows/` tym samym pytaniem - nie zakladac, ze to
+   jedyny plik (AP-309: policz miejsca, zanim uznasz poprawke za zrobiona).
+
+**Punkty zaczepienia:** `n8n-workflows/eksport-do-repo.cjs` (tablica wzorcow zabronionych),
+`n8n-workflows/lacznik-chat-tools.json`, `app_secrets` klucz `lacznik_e2_secret`.

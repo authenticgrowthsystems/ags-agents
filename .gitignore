@@ -56,6 +56,13 @@ docs/research/prospekci/MATERIAL_DLA_PIOTRA_*.md
 # w drzewie roboczym i KAZDA sesja widziala je jako "niezacommitowana praca", co za kazdym
 # razem kosztowalo odczyt i decyzje. Kopia z okna nalezy do katalogu roboczego, nie do repo.
 n8n-workflows/**/bk_*.json
+bk_*.json
+# ^ DRUGA LINIA DOPISANA 22/08 i to nie jest ozdobnik. Regula wyzej chroni WYLACZNIE katalog
+# `n8n-workflows/`, a skrypty patchujace zapisuja kopie przez `path.resolve('bk_...')`, czyli
+# do KATALOGU BIEZACEGO - a ten przy wolaniu z korzenia repo jest korzeniem repo. Kopia ladowala
+# poza zasiegiem reguly, ktora "przeciez ja obejmuje". Zlapane 22/08 przy pisaniu skryptu D-021,
+# kilka minut po znalezieniu D-026 (zywy sekret Lacznika w eksporcie). Ta sama klasa wady:
+# zabezpieczenie ISTNIALO i patrzylo obok tego, co mialo chronic.
 # ^ UWAGA 11/08: ta regula robi teraz takze robote BEZPIECZENSTWA, nie tylko porzadkowa.
 # Kopia `bk_hitl_d016_*.json` zawiera 88 wystapien ZYWEGO tokenu bota Telegrama, bo jest
 # surowym zrzutem definicji sprzed patcha (D-017). Eksporty w repo sa maskowane
