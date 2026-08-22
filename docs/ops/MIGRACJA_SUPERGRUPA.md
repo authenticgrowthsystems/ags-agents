@@ -35,6 +35,20 @@ tylko w **sprawdzeniu, że nic nie zamilkło**.
 
 ---
 
+## WARUNEK WSTEPNY: dwie poprawki w n8n, PRZED migracja
+
+Obie sa jednolinijkowe i **musza wejsc w tym samym oknie n8n co D-017, przed przeniesieniem
+rozmowy**. Po migracji ich brak objawi sie jako zepsute komendy w grupie, a objaw bedzie
+mylacy: bot odpowie, tylko nie to, o co proszono.
+
+1. **`Parse And Authorize Set`** - `reqText.trim().match(/^\/set\s+(\S+)\s+([\s\S]+)$/)`
+   na `/^\/set(?:@\w+)?\s+(\S+)\s+([\s\S]+)$/`. Bez tego `/set@AGSbot klucz wartosc` dostaje
+   odpowiedz "Format: /set <klucz> <wartosc>" na **poprawna** komende (D-028, czesc n8n).
+2. **`Detect Update Type`** - dopisac `/anuluj` do listy przepustowej. Dzis go tam nie ma, wiec
+   komenda nigdy nie dociera do Pythona, mimo ze trzy miejsca w kodzie ja obsluguja (D-029).
+
+Strona cm-agenta jest juz naprawiona (siedem miejsc, `56d507e`), wiec zostaja wylacznie te dwie.
+
 ## PROCEDURA
 
 ### KROK 1 (Tomasz, Telegram): załóż supergrupę i włącz wątki
