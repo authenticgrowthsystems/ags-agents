@@ -1108,7 +1108,43 @@ nie zobaczy**. Do sprawdzenia recznie (AP-307 punkt 3 - pytaj o konfiguracje, ni
 SELECT brand_id, channel, status, config->>'publish_mode' AS tryb FROM channels ORDER BY 1,2;
 ```
 
-## D-021 [ZAMKNIETE CZESCIOWO 19/08/2026]: Manager nie ma drogi zapisu NOWEGO prospekta
+## D-021 [ZAMKNIETE 22/08/2026]: Manager nie ma drogi zapisu NOWEGO prospekta
+
+**TAP-TEST NA ZYWYM WYKONANY 22/08. DLUG ZAMKNIETY W CALOSCI.**
+
+**Zdarzenie zrodlowe tego dlugu wreszcie wyladowalo w bazie.** Rafal Petrykowski - czlowiek,
+na ktorym luka wyszla pierwszy raz 11/08 i ktorego wpis lezal od tego czasu w pliku na dysku -
+stoi w lejku jako `668d6152-b422-4b80-bac9-7ff3b8161112`, **z `source='lacznik'`**, czyli
+zalozony przez nowy endpoint. Zrobil to Manager, gdy tylko narzedzie pojawilo sie w jego liscie.
+
+**Obie sciezki sprawdzone na produkcji, przez dwa rozne organy:**
+- **zapis** - Manager, wiersz istnieje z wlasciwym zrodlem;
+- **odmowa** - koordynator, proba zalozenia tego samego podmiotu drugi raz.
+
+**Odmowa udowodnila na ZYWYCH DANYCH cos, czego test automatyczny udowodnic nie mogl (AP-313).**
+Podalem nazwe **bez ogonka** (`Rafal Petrykowski`), a w bazie stoi **z ogonkiem**
+(`Rafał Petrykowski`). Bramka trafila. Powod, ktory sama podala: *"ta sama nazwa po odjeciu
+ogonkow i slow rodzajowych"*. To jest dokladnie ten przypadek, dla ktorego powstal AP-313
+(`ILIKE '%Chwalin%'` NIE trafia w "Chwaliński") - tylko tym razem **normalizacja zadzialala
+po OBU stronach porownania, na prawdziwym wierszu, w produkcji.**
+
+Odmowa spelnila tez komplet wymogow z AP-311: podala **nazwe i identyfikator** wiersza uznanego
+za ten sam, **powod**, **co przepadnie** przy porzuceniu wpisu (osoba i notatka 65 znakow),
+**dwie drogi dalej** (dopisanie przez `pipeline_move` albo pole `oddzial`), i zakonczyla zdaniem
+`NIC nie zapisalem i niczego nie zalozylem`.
+
+**PRZYPADEK TESTOWY Z FRANCZYZA POPRAWIONY, bo instrukcja zestarzala sie przez zmiane DANYCH.**
+Procedura z 19/08 kazala zalozyc "Katowice Egurrola Dance Studio" i oczekiwac PRZEJSCIA.
+Odczyt lejka z 22/08 pokazuje, ze **Katowice juz tam stoja** (Martyna Jalocha), wiec dzis to samo
+wolanie ma dac ODMOWE. **Ktos wykonujacy test wedle pierwotnego brzmienia uznalby DZIALAJACA
+bramke za zepsuta.** To AP-316 w odmianie, ktorej wpis nie przewidywal: instrukcja starzeje sie
+takze wtedy, gdy kod sie nie zmienil, a zmienily sie DANE - i wyglada przy tym tak samo swiezo.
+Franczyze pokrywa test automatyczny; na zywym lejku nie zakladamy fikcyjnych prospektow, bo lejek
+jest zrodlem prawdy dla sprzedazy, nie poligonem.
+
+---
+
+## D-021 (zapis czesciowego zamkniecia z 19/08, zostawiony dla kontekstu)
 
 **KOD GOTOWY 19/08. Narzedzie w n8n NIE jest zarejestrowane** - do czasu okna Manager nadal nie ma
 jak zalozyc prospekta, mimo ze serwer juz to potrafi. **To jest AP-307 co do litery: nowy kontrakt

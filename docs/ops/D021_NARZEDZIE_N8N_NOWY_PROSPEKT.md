@@ -87,8 +87,20 @@ Managera, w tej kolejnosci:
 2. **Duplikat:** to samo wolanie drugi raz. Oczekiwane: odmowa, ktora podaje nazwe
    i identyfikator wiersza z punktu 1. Jesli wiersz doszedl drugi raz, bramka nie dziala
    i nie ma o czym rozmawiac.
-3. **Franczyza:** `nazwa` = "Katowice Egurrola Dance Studio", `url` = "https://egurrola.com".
-   Oczekiwane: **przechodzi**, mimo ze na tej samej domenie stoi juz Grodzisk Mazowiecki.
-   To jest ta wada, ktorej bramka ma NIE miec.
+3. **Franczyza:** ~~`nazwa` = "Katowice Egurrola Dance Studio"~~ **PRZYPADEK NIEAKTUALNY,
+   POPRAWIONY 22/08.**
 
-Po tescie skasowac wiersz z punktu 3, jesli Katowic naprawde nie ma w planie.
+   > **UWAGA, gdyby ktos wykonal ten test wedle pierwotnego brzmienia, uznalby DZIALAJACA bramke
+   > za zepsuta.** Odczyt lejka z 22/08 pokazuje, ze **Katowice Egurrola juz w nim stoja**
+   > (Martyna Jalocha, `katowice@egurrola.com`). Wiec dzis to wolanie ma dac **ODMOWE**, nie
+   > przejscie - i odmowa bedzie dowodem, ze bramka dziala, a nie ze jest zepsuta.
+   >
+   > To jest AP-316 w miniaturze: **instrukcja napisana 19/08 zestarzala sie przez zmiane
+   > DANYCH, nie kodu**, i wygladala przy tym tak samo swiezo.
+
+   **Franczyze pokrywa juz test automatyczny** (`cm-agent/tests/test_nowy_prospekt.py`), gdzie
+   dwa oddzialy tej samej domeny przechodza OBA. Powtarzanie tego na zywym lejku zalozyloby
+   **fikcyjnego prospekta**, ktorego trzeba by potem sprzatac - a lejek jest zrodlem prawdy
+   dla sprzedazy, nie poligonem. **Na zywym robimy wylacznie punkty 1 i 2.**
+
+Punkt 3 nie zaklada juz zadnego wiersza, wiec nie ma czego sprzatac.
